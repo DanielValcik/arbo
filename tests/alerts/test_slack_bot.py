@@ -41,6 +41,7 @@ def _arb_opp() -> ArbOpportunity:
         lay_odds=Decimal("2.14"),
         edge=Decimal("0.05"),
         commission=Decimal("0.04"),
+        matchbook_event_id=100,
     )
 
 

@@ -97,7 +97,8 @@ class TestPlacePaperBet:
 
 
 class TestSettlePaperBet:
-    async def test_settle_win(self, db_session: AsyncSession) -> None:
+    async def test_settle_win_bookmaker_no_commission(self, db_session: AsyncSession) -> None:
+        """Bookmaker back bets have no commission on winnings."""
         tracker = PaperTracker(session=db_session, bankroll=Decimal("2000"))
         bet_id = await tracker.place_paper_bet(_arb_opp(), event_id=1)
         await db_session.commit()
@@ -112,6 +113,24 @@ class TestSettlePaperBet:
         assert bet.actual_pnl is not None
         assert bet.actual_pnl > 0
         assert bet.settled_at is not None
+        assert bet.commission_paid == Decimal(0)  # No commission for bookmaker bets
+
+    async def test_settle_win_matchbook_with_commission(self, db_session: AsyncSession) -> None:
+        """Matchbook exchange bets have 4% commission on winnings."""
+        opp = _arb_opp()
+        opp = opp.model_copy(update={"back_source": "matchbook"})
+        tracker = PaperTracker(session=db_session, bankroll=Decimal("2000"))
+        bet_id = await tracker.place_paper_bet(opp, event_id=1)
+        await db_session.commit()
+
+        await tracker.settle_paper_bet(bet_id, won=True)
+        await db_session.commit()
+
+        result = await db_session.execute(select(Bet).where(Bet.id == bet_id))
+        bet = result.scalar_one()
+
+        assert bet.status == "settled"
+        assert bet.actual_pnl > 0
         assert bet.commission_paid > 0
 
     async def test_settle_loss(self, db_session: AsyncSession) -> None:

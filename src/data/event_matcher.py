@@ -7,7 +7,7 @@ based on team name similarity and start time proximity.
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -30,6 +30,13 @@ DEFAULT_THRESHOLD = 0.85
 
 # Max time difference for matching (2 hours)
 MAX_TIME_DELTA = timedelta(hours=2)
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (assume UTC if naive)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
 
 
 class MatchedEvent(BaseModel):
@@ -95,8 +102,10 @@ class EventMatcher:
                 if oa_event.id in used_oa_ids:
                     continue
 
-                # Check time proximity
-                if abs(mb_event.start_time - oa_event.commence_time) > MAX_TIME_DELTA:
+                # Check time proximity (ensure both timezone-aware)
+                mb_time = _ensure_utc(mb_event.start_time)
+                oa_time = _ensure_utc(oa_event.commence_time)
+                if abs(mb_time - oa_time) > MAX_TIME_DELTA:
                     continue
 
                 # Score team name similarity
@@ -128,10 +137,21 @@ class EventMatcher:
         return matched
 
     def _score_match(self, mb: ExchangeEvent, oa: OddsApiEvent) -> float:
-        """Score match between two events. Average of home + away name similarity."""
+        """Score match between two events. Average of home + away name similarity.
+
+        Tries both normal and swapped home/away to handle sources that
+        list teams in different order.
+        """
         home_score = self._name_similarity(mb.home_team, oa.home_team)
         away_score = self._name_similarity(mb.away_team, oa.away_team)
-        return (home_score + away_score) / 2.0
+        normal = (home_score + away_score) / 2.0
+
+        # Also try swapped (some sources swap home/away)
+        home_swap = self._name_similarity(mb.home_team, oa.away_team)
+        away_swap = self._name_similarity(mb.away_team, oa.home_team)
+        swapped = (home_swap + away_swap) / 2.0
+
+        return max(normal, swapped)
 
     def _name_similarity(self, name_a: str, name_b: str) -> float:
         """Compare two team names after alias expansion and normalization."""

@@ -77,8 +77,12 @@ class PaperTracker:
 
         if won:
             actual_pnl = bet.stake * (bet.odds - Decimal(1))
-            commission_paid = actual_pnl * Decimal("0.04")  # Matchbook commission
-            actual_pnl -= commission_paid
+            # Commission only applies to Matchbook exchange bets, not bookmaker back bets
+            if bet.platform == "matchbook":
+                commission_paid = actual_pnl * Decimal("0.04")
+                actual_pnl -= commission_paid
+            else:
+                commission_paid = Decimal(0)
         else:
             actual_pnl = -bet.stake
             commission_paid = Decimal(0)
@@ -117,7 +121,7 @@ class PaperTracker:
             func.count(Bet.id).label("num_bets"),
             func.count(Bet.id).filter(Bet.actual_pnl > 0).label("num_wins"),
             func.coalesce(func.sum(Bet.stake), 0).label("total_staked"),
-            func.coalesce(func.sum(Bet.actual_pnl), 0).label("gross_pnl"),
+            func.coalesce(func.sum(Bet.actual_pnl), 0).label("net_pnl"),
             func.coalesce(func.sum(Bet.commission_paid), 0).label("total_commission"),
         ).where(
             Bet.is_paper.is_(True),
@@ -127,7 +131,9 @@ class PaperTracker:
         result = await self._session.execute(stmt)
         row = result.one()
 
-        net_pnl = row.gross_pnl - row.total_commission
+        # actual_pnl is already net (commission deducted in settle_paper_bet)
+        net_pnl = row.net_pnl
+        gross_pnl = net_pnl + row.total_commission
         bankroll_end = bankroll_start + net_pnl
         roi_pct = (net_pnl / bankroll_start * 100) if bankroll_start > 0 else Decimal(0)
 
@@ -143,7 +149,7 @@ class PaperTracker:
                     num_bets=row.num_bets,
                     num_wins=row.num_wins,
                     total_staked=row.total_staked,
-                    gross_pnl=row.gross_pnl,
+                    gross_pnl=gross_pnl,
                     total_commission=row.total_commission,
                     net_pnl=net_pnl,
                     bankroll_start=bankroll_start,
@@ -157,7 +163,7 @@ class PaperTracker:
                 num_bets=row.num_bets,
                 num_wins=row.num_wins,
                 total_staked=row.total_staked,
-                gross_pnl=row.gross_pnl,
+                gross_pnl=gross_pnl,
                 total_commission=row.total_commission,
                 net_pnl=net_pnl,
                 bankroll_start=bankroll_start,

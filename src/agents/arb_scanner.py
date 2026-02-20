@@ -9,6 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from pydantic import BaseModel
+from rapidfuzz import fuzz
 
 from src.data.event_matcher import MatchedEvent  # noqa: TC001
 from src.utils.logger import get_logger
@@ -27,6 +28,7 @@ class ArbOpportunity(BaseModel):
     lay_odds: Decimal
     edge: Decimal
     commission: Decimal
+    matchbook_event_id: int = 0
     recommended_stake: Decimal | None = None
 
 
@@ -101,6 +103,7 @@ class ArbScanner:
                                             lay_odds=lay.odds,
                                             edge=edge,
                                             commission=self._commission,
+                                            matchbook_event_id=mb.event_id,
                                         )
                                     )
                                     log.info(
@@ -155,6 +158,7 @@ class ArbScanner:
                             lay_odds=Decimal(0),
                             edge=edge,
                             commission=self._commission,
+                            matchbook_event_id=mb.event_id,
                         )
                     )
                     log.info(
@@ -180,4 +184,14 @@ class ArbScanner:
     @staticmethod
     def _selections_match(mb_name: str, oa_name: str) -> bool:
         """Check if two selection names refer to the same outcome."""
-        return mb_name.lower().strip() == oa_name.lower().strip()
+        a = mb_name.lower().strip()
+        b = oa_name.lower().strip()
+        if a == b:
+            return True
+        # Strip common prefixes/suffixes
+        a = a.removeprefix("the ").strip()
+        b = b.removeprefix("the ").strip()
+        if a == b:
+            return True
+        # Fuzzy match for team name variations (e.g. "Man Utd" vs "Manchester United")
+        return fuzz.token_sort_ratio(a, b) >= 85

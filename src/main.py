@@ -61,6 +61,7 @@ class Arbo:
 
         # Shared state between pollers
         self._matchbook_events: list[ExchangeEvent] = []
+        self._event_id_map: dict[int, int] = {}  # external_id → DB id
         self._last_odds_api_poll: float = 0.0
 
     async def startup(self) -> None:
@@ -239,8 +240,13 @@ class Arbo:
         session_factory = get_session_factory()
         async with session_factory() as session:
             for arb in arbs:
-                # Try to find event_id from the arb event name
-                event_id = next(iter(id_map.values()), 0)
+                event_id = id_map.get(arb.matchbook_event_id, 0)
+                if event_id == 0:
+                    log.warning(
+                        "store_opp_missing_event",
+                        matchbook_event_id=arb.matchbook_event_id,
+                    )
+                    continue
 
                 opp = Opportunity(
                     event_id=event_id,
@@ -283,6 +289,7 @@ class Arbo:
 
             # Upsert events
             id_map = await self._upsert_events(events)
+            self._event_id_map.update(id_map)
 
             # For markets without embedded prices, fetch them individually
             for event in events:
@@ -298,7 +305,6 @@ class Arbo:
             all_events.extend(events)
 
         self._matchbook_events = all_events
-        self._consecutive_errors = 0
         log.info("matchbook_poll_complete", snapshots_written=total_snapshots)
 
         # Update Slack bot state
@@ -334,20 +340,17 @@ class Arbo:
                     if arbs:
                         log.info("arbs_detected", count=len(arbs))
 
-                        # Store opportunities
-                        # Build a rough id_map from existing events
-                        id_map: dict[int, int] = {}
-                        for mb_ev in self._matchbook_events:
-                            id_map[mb_ev.event_id] = mb_ev.event_id
-                        await self._store_opportunities(arbs, id_map)
-
-                        # Log paper bets
-                        await self._log_paper_bets(arbs, id_map)
+                        # Store opportunities + paper bets using DB id map
+                        await self._store_opportunities(arbs, self._event_id_map)
+                        await self._log_paper_bets(arbs, self._event_id_map)
 
                         # Alert via Slack
                         if self.slack_bot:
                             for arb in arbs:
                                 await self.slack_bot.send_arb_alert(arb)
+
+            # Full Odds API cycle succeeded — reset error counter
+            self._consecutive_errors = 0
 
         except Exception as e:
             log.error("odds_api_poll_error", error=str(e))
@@ -365,7 +368,16 @@ class Arbo:
                 bankroll=Decimal(str(self.config.bankroll)),
             )
             for arb in arbs:
-                event_id = next(iter(id_map.values()), 0)
+                # Same-exchange arbs (back_odds=0) can't be paper-bet as single leg
+                if arb.back_odds <= 1:
+                    continue
+                event_id = id_map.get(arb.matchbook_event_id, 0)
+                if event_id == 0:
+                    log.warning(
+                        "paper_bet_missing_event",
+                        matchbook_event_id=arb.matchbook_event_id,
+                    )
+                    continue
                 try:
                     bet_id = await tracker.place_paper_bet(arb, event_id=event_id)
                     log.info("paper_bet_logged", bet_id=bet_id, selection=arb.selection)

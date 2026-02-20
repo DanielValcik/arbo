@@ -208,6 +208,16 @@ class TestEventMatcherEdgeCases:
         result = matcher.match_events(mb, oa)
         assert len(result) == 0
 
+    def test_home_away_swapped(self) -> None:
+        """Sources listing teams in swapped order should still match."""
+        matcher = EventMatcher()
+        mb = [_mb_event(home="Arsenal", away="Liverpool")]
+        oa = [_oa_event(home="Liverpool", away="Arsenal")]
+
+        result = matcher.match_events(mb, oa)
+        assert len(result) == 1
+        assert result[0].match_score == 1.0
+
     def test_empty_inputs(self) -> None:
         matcher = EventMatcher()
         assert matcher.match_events([], []) == []
