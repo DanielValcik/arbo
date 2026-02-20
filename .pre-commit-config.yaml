@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: "24.10.0"
+    hooks:
+      - id: black
+        args: ["--line-length=100"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.8.6"
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.14.1"
+    hooks:
+      - id: mypy
+        args: ["--strict"]
+        additional_dependencies:
+          - pydantic>=2.5
+          - types-PyYAML>=6.0
+          - types-redis>=4.6
+          - sqlalchemy>=2.0

@@ -1,0 +1,6 @@
+# Live mode overrides
+# All defaults from settings.yaml apply; only list differences here.
+
+# Tighter polling when real money is on the line
+polling:
+  matchbook: 5

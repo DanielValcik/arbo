@@ -1,0 +1,28 @@
+[Unit]
+Description=Arbo Sports Betting Intelligence System
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=arbo
+Group=arbo
+WorkingDirectory=/opt/arbo
+ExecStart=/opt/arbo/.venv/bin/python -m src.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=arbo
+
+# Environment
+EnvironmentFile=/opt/arbo/.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/arbo/models /opt/arbo/logs
+
+[Install]
+WantedBy=multi-user.target

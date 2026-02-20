@@ -1,0 +1,77 @@
+bankroll: 2000.00
+currency: EUR
+
+# --- Target sports/leagues (only fetch these) ---
+sports:
+  football:
+    leagues: ["EPL", "Champions League", "La Liga", "Bundesliga", "Serie A"]
+    markets: ["h2h", "spreads", "totals"]
+  basketball:
+    leagues: ["NBA", "Euroleague"]
+    markets: ["h2h", "spreads", "totals"]
+
+# --- Polling intervals (seconds) ---
+polling:
+  matchbook: 8
+  odds_api_batch: 300
+  news: 300
+  betinasia: 60
+
+# --- Agent weights (Phase 1: arb-only) ---
+weights:
+  arb: 1.0
+  value: 0.0
+  situational: 0.0
+
+# --- LLM provider ---
+llm:
+  provider: gemini
+  gemini_model: gemini-2.0-flash
+  claude_model: claude-haiku-4-5-20251001
+  max_calls_per_day: 100
+
+# --- Thresholds ---
+thresholds:
+  min_edge: 0.02
+  arb_margin: 0.04
+  value_gap: 0.05
+  llm_confidence: 0.7
+  llm_magnitude: 5
+
+# --- Matchbook connection ---
+matchbook:
+  base_url: "https://api.matchbook.com/edge/rest"
+  auth_url: "https://api.matchbook.com/bpapi/rest"
+  commission_pct: 0.04
+  session_ttl_seconds: 18000
+  max_retries: 3
+  timeout_seconds: 10
+  unmatched_cancel_after: 30
+  min_fill_pct: 0.60
+
+# --- Risk limits: DOCUMENTATION ONLY ---
+# Actual limits hardcoded in src/engine/risk.py
+# Cannot be overridden by config. See brief Section 7.
+risk:
+  max_bet_pct: 0.05
+  daily_loss_pct: 0.10
+  weekly_loss_pct: 0.20
+  max_concurrent_bets: 3
+  max_per_event: 1
+  max_sport_exposure_pct: 0.40
+
+# --- News feeds ---
+news_feeds:
+  rss:
+    - url: "https://feeds.bbci.co.uk/sport/football/rss.xml"
+      name: "BBC Sport Football"
+    - url: "https://www.espn.com/espn/rss/soccer/news"
+      name: "ESPN Soccer"
+    - url: "https://news.google.com/rss/search?q=premier+league+injury&hl=en"
+      name: "Google News EPL Injuries"
+    - url: "https://news.google.com/rss/search?q=champions+league+injury&hl=en"
+      name: "Google News UCL Injuries"
+    - url: "https://news.google.com/rss/search?q=NBA+injury+report&hl=en"
+      name: "Google News NBA Injuries"
+  reddit_subreddits: ["soccer", "sportsbook", "nba", "PremierLeague"]
+  gnews_enabled: false
