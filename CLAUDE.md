@@ -7,6 +7,12 @@
 
 AI-powered sports betting intelligence system. Detects arbitrage, value bets, and situational edge opportunities across Matchbook exchange and 20+ bookmakers. Single-user, runs on VPS, interfaces via Slack + PostgreSQL.
 
+## Repository
+
+- GitHub: https://github.com/DanielValcik/arbo.git
+- Branch: `main`
+- Remote: `origin`
+
 ## Authoritative Documents
 
 - `arbo_devbrief_v4_final.md` — THE source of truth. Every technical detail lives here.
@@ -116,14 +122,17 @@ Sprint 1 COMPLETE. Implemented:
 - Matchbook REST client (auth, events, markets, prices, betting, rate limiter)
 - Main polling loop with error handling + kill switch
 - systemd service + VPS deploy scripts
-- 16/16 tests passing, ruff + black clean
+- 16/16 tests passing (now 107/107 with Sprint 2), ruff + black clean
 
-Sprint 2 Focus:
-1. The Odds API v4 client
-2. Fuzzy event matching (rapidfuzz)
-3. Arb scanner
-4. Slack bot (slash commands + alerts)
-5. Paper trading
+Sprint 2 COMPLETE. Implemented:
+- Odds conversion + arb math utilities (src/utils/odds.py) — 35 tests
+- The Odds API v4 client (src/data/odds_api.py) — quota tracking, sport key mapping — 12 tests
+- Fuzzy event matcher (src/data/event_matcher.py) — rapidfuzz + team aliases — 13 tests
+- Arb scanner (src/agents/arb_scanner.py) — cross-platform + same-exchange — 10 tests
+- Paper trading tracker (src/execution/position_tracker.py) — half-Kelly sizing — 9 tests
+- Slack bot (src/alerts/slack_bot.py) — 5 slash commands + Block Kit alerts — 12 tests
+- Main loop wired with all Sprint 2 components
+- 107/107 tests passing, ruff + black clean
 
 DO NOT START: LLM, BetInAsia, Value Model, Polymarket
 
