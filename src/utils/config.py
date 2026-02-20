@@ -65,6 +65,14 @@ class MatchbookConfig(BaseModel):
     min_fill_pct: float = 0.60
 
 
+class OddsApiConfig(BaseModel):
+    base_url: str = "https://api.the-odds-api.com/v4"
+    regions: str = "eu"
+    markets: str = "h2h,spreads,totals"
+    odds_format: str = "decimal"
+    min_remaining_quota: int = 50
+
+
 class RiskConfig(BaseModel):
     """Documentation-only config. Actual limits are HARDCODED in src/engine/risk.py."""
 
@@ -135,6 +143,7 @@ class ArboConfig(BaseSettings):
     llm: LLMConfig = LLMConfig()
     thresholds: ThresholdsConfig = ThresholdsConfig()
     matchbook: MatchbookConfig = MatchbookConfig()
+    odds_api: OddsApiConfig = OddsApiConfig()
     risk: RiskConfig = RiskConfig()
     news_feeds: NewsFeedsConfig = NewsFeedsConfig()
 
