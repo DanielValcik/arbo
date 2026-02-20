@@ -38,6 +38,14 @@ thresholds:
   llm_confidence: 0.7
   llm_magnitude: 5
 
+# --- The Odds API ---
+odds_api:
+  base_url: "https://api.the-odds-api.com/v4"
+  regions: "eu"
+  markets: "h2h,spreads,totals"
+  odds_format: "decimal"
+  min_remaining_quota: 50
+
 # --- Matchbook connection ---
 matchbook:
   base_url: "https://api.matchbook.com/edge/rest"

@@ -1,6 +1,7 @@
 """Arbo main entry point.
 
-Asyncio event loop running Matchbook poller at configured interval.
+Asyncio event loop running Matchbook + Odds API pollers, event matching,
+arb scanning, paper bet logging, and Slack bot.
 Handles graceful shutdown, error recovery, and kill switch.
 """
 
@@ -12,17 +13,25 @@ import signal
 import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import redis.asyncio as aioredis
 from sqlalchemy import insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from src.agents.arb_scanner import ArbScanner
+from src.alerts.slack_bot import ArboSlackBot
+from src.data.event_matcher import EventMatcher, load_aliases
+from src.data.odds_api import OddsApiClient
+from src.exchanges.base import ExchangeEvent  # noqa: TC001
 from src.exchanges.matchbook import MatchbookClient, MatchbookError
+from src.execution.position_tracker import PaperTracker
 from src.utils.config import get_config
 from src.utils.db import (
     Event,
     OddsSnapshot,
+    Opportunity,
     get_engine,
     get_session_factory,
 )
@@ -41,11 +50,21 @@ class Arbo:
         self.config = get_config()
         self.matchbook: MatchbookClient | None = None
         self.redis: aioredis.Redis | None = None  # type: ignore[type-arg]
+        self.odds_api: OddsApiClient | None = None
+        self.matcher: EventMatcher | None = None
+        self.arb_scanner: ArbScanner | None = None
+        self.slack_bot: ArboSlackBot | None = None
         self._shutdown_event = asyncio.Event()
         self._error_tracker: dict[str, list[float]] = defaultdict(list)
+        self._consecutive_errors: int = 0
+        self._background_tasks: set[asyncio.Task[Any]] = set()
+
+        # Shared state between pollers
+        self._matchbook_events: list[ExchangeEvent] = []
+        self._last_odds_api_poll: float = 0.0
 
     async def startup(self) -> None:
-        """Initialize all connections."""
+        """Initialize all connections and Sprint 2 components."""
         log.info("arbo_starting", mode=self.config.mode)
 
         # Redis
@@ -62,17 +81,55 @@ class Arbo:
         await self.matchbook.login()
         log.info("matchbook_connected")
 
+        # Odds API
+        if self.config.odds_api_key:
+            self.odds_api = OddsApiClient()
+            log.info("odds_api_initialized")
+
+        # Event matcher
+        aliases = load_aliases()
+        self.matcher = EventMatcher(aliases=aliases)
+        log.info("event_matcher_initialized", alias_count=len(aliases))
+
+        # Arb scanner
+        self.arb_scanner = ArbScanner(
+            commission=Decimal(str(self.config.matchbook.commission_pct)),
+            min_edge=Decimal(str(self.config.thresholds.min_edge)),
+        )
+
+        # Slack bot
+        if self.config.slack_bot_token and self.config.slack_app_token:
+            self.slack_bot = ArboSlackBot(
+                bot_token=self.config.slack_bot_token,
+                app_token=self.config.slack_app_token,
+                channel_id=self.config.slack_channel_id,
+            )
+            self.slack_bot._on_kill = self._activate_kill_switch
+            task = asyncio.create_task(self.slack_bot.start())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+            log.info("slack_bot_started")
+
     async def shutdown(self) -> None:
         """Gracefully close all connections."""
         log.info("arbo_shutting_down")
         if self.matchbook:
             await self.matchbook.close()
+        if self.odds_api:
+            await self.odds_api.close()
         if self.redis:
             await self.redis.close()
 
         engine = get_engine()
         await engine.dispose()
         log.info("arbo_shutdown_complete")
+
+    def _activate_kill_switch(self) -> None:
+        """Activate kill switch (called from Slack /kill command)."""
+        global KILL_SWITCH
+        KILL_SWITCH = True
+        self._shutdown_event.set()
+        log.critical("kill_switch_activated")
 
     def _check_repeated_errors(self, error_type: str) -> bool:
         """Check if same error type occurred 3x in 10 minutes. Returns True if should kill."""
@@ -82,6 +139,13 @@ class Arbo:
         ]
         self._error_tracker[error_type].append(now)
         return len(self._error_tracker[error_type]) >= 3
+
+    async def _send_error_if_slack(self, error: str) -> None:
+        """Send error alert via Slack if bot is configured."""
+        self._consecutive_errors += 1
+        if self.slack_bot and self._consecutive_errors >= 3:
+            await self.slack_bot.send_error_alert(error)
+            self._consecutive_errors = 0
 
     async def _upsert_events(self, events: list[Any]) -> dict[int, int]:
         """Upsert events into database. Returns mapping of external_id -> db_id."""
@@ -150,7 +214,9 @@ class Arbo:
                                 "back_stake": (
                                     float(best_back.available_amount) if best_back else None
                                 ),
-                                "lay_stake": float(best_lay.available_amount) if best_lay else None,
+                                "lay_stake": (
+                                    float(best_lay.available_amount) if best_lay else None
+                                ),
                                 "bookmaker": None,
                             }
                         )
@@ -165,12 +231,45 @@ class Arbo:
 
         return len(snapshots)
 
+    async def _store_opportunities(self, arbs: list[Any], id_map: dict[int, int]) -> None:
+        """Store detected arb opportunities in the database."""
+        if not arbs:
+            return
+
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            for arb in arbs:
+                # Try to find event_id from the arb event name
+                event_id = next(iter(id_map.values()), 0)
+
+                opp = Opportunity(
+                    event_id=event_id,
+                    strategy="arb",
+                    expected_edge=arb.edge,
+                    details={
+                        "event_name": arb.event_name,
+                        "market_type": arb.market_type,
+                        "selection": arb.selection,
+                        "back_source": arb.back_source,
+                        "back_odds": str(arb.back_odds),
+                        "lay_source": arb.lay_source,
+                        "lay_odds": str(arb.lay_odds),
+                        "commission": str(arb.commission),
+                    },
+                    status="detected",
+                )
+                session.add(opp)
+
+            await session.commit()
+
     async def poll_matchbook(self) -> None:
-        """Single polling cycle: fetch events → write snapshots."""
+        """Single Matchbook polling cycle: fetch events -> write snapshots."""
         if self.matchbook is None:
-            raise RuntimeError("Matchbook client not initialized — call startup() first")
+            raise RuntimeError("Matchbook client not initialized")
 
         total_snapshots = 0
+        all_events: list[ExchangeEvent] = []
+
         for sport in self.config.sports:
             now = datetime.now(UTC)
             events = await self.matchbook.get_events(
@@ -196,8 +295,84 @@ class Arbo:
             # Write snapshots
             count = await self._write_odds_snapshots(events, id_map)
             total_snapshots += count
+            all_events.extend(events)
 
-        log.info("poll_cycle_complete", snapshots_written=total_snapshots)
+        self._matchbook_events = all_events
+        self._consecutive_errors = 0
+        log.info("matchbook_poll_complete", snapshots_written=total_snapshots)
+
+        # Update Slack bot state
+        if self.slack_bot:
+            self.slack_bot._last_poll_time = datetime.now(UTC).strftime("%H:%M:%S")
+            self.slack_bot._daily_get_count = getattr(self.matchbook, "_daily_get_count", 0)
+
+    async def poll_odds_api(self) -> None:
+        """Fetch odds from The Odds API (runs less frequently than Matchbook)."""
+        if self.odds_api is None:
+            return
+
+        now = time.monotonic()
+        interval = self.config.polling.odds_api_batch
+        if now - self._last_odds_api_poll < interval:
+            return  # Not time yet
+
+        self._last_odds_api_poll = now
+
+        try:
+            oa_events = await self.odds_api.get_all_odds()
+            log.info("odds_api_poll_complete", events=len(oa_events))
+
+            # Update Slack bot quota
+            if self.slack_bot and self.odds_api.remaining_quota is not None:
+                self.slack_bot._odds_api_quota = self.odds_api.remaining_quota
+
+            # Match events + scan for arbs
+            if self._matchbook_events and oa_events and self.matcher and self.arb_scanner:
+                matched = self.matcher.match_events(self._matchbook_events, oa_events)
+                if matched:
+                    arbs = self.arb_scanner.scan(matched)
+                    if arbs:
+                        log.info("arbs_detected", count=len(arbs))
+
+                        # Store opportunities
+                        # Build a rough id_map from existing events
+                        id_map: dict[int, int] = {}
+                        for mb_ev in self._matchbook_events:
+                            id_map[mb_ev.event_id] = mb_ev.event_id
+                        await self._store_opportunities(arbs, id_map)
+
+                        # Log paper bets
+                        await self._log_paper_bets(arbs, id_map)
+
+                        # Alert via Slack
+                        if self.slack_bot:
+                            for arb in arbs:
+                                await self.slack_bot.send_arb_alert(arb)
+
+        except Exception as e:
+            log.error("odds_api_poll_error", error=str(e))
+            await self._send_error_if_slack(f"Odds API error: {e}")
+
+    async def _log_paper_bets(self, arbs: list[Any], id_map: dict[int, int]) -> None:
+        """Log paper bets for detected arbs."""
+        if self.config.mode != "paper":
+            return
+
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            tracker = PaperTracker(
+                session=session,
+                bankroll=Decimal(str(self.config.bankroll)),
+            )
+            for arb in arbs:
+                event_id = next(iter(id_map.values()), 0)
+                try:
+                    bet_id = await tracker.place_paper_bet(arb, event_id=event_id)
+                    log.info("paper_bet_logged", bet_id=bet_id, selection=arb.selection)
+                except Exception as e:
+                    log.error("paper_bet_error", error=str(e))
+
+            await session.commit()
 
     async def run_polling_loop(self) -> None:
         """Main polling loop with error handling per Section 8."""
@@ -210,6 +385,7 @@ class Arbo:
             except MatchbookError as e:
                 error_type = type(e).__name__
                 log.error("poll_error", error_type=error_type, error=str(e))
+                await self._send_error_if_slack(f"Matchbook {error_type}: {e}")
 
                 if self._check_repeated_errors(error_type):
                     log.critical("repeated_errors_kill_switch", error_type=error_type)
@@ -218,6 +394,7 @@ class Arbo:
             except Exception as e:
                 error_type = type(e).__name__
                 log.error("poll_unhandled_error", error_type=error_type, error=str(e))
+                await self._send_error_if_slack(f"Unhandled {error_type}: {e}")
 
                 if self._check_repeated_errors(error_type):
                     log.critical("repeated_errors_kill_switch", error_type=error_type)
@@ -227,6 +404,9 @@ class Arbo:
                 # Sleep 60s before resuming on unhandled exception
                 await asyncio.sleep(60)
                 continue
+
+            # Poll Odds API (respects its own interval internally)
+            await self.poll_odds_api()
 
             try:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=interval)
@@ -240,7 +420,7 @@ class Arbo:
 
 
 async def fetch_test() -> None:
-    """One-shot fetch test: login, fetch events, print to stdout, exit."""
+    """One-shot fetch test: login, fetch events from both sources, print matches."""
     setup_logging(log_level="INFO", json_output=False)
     log.info("fetch_test_starting")
 
@@ -253,6 +433,8 @@ async def fetch_test() -> None:
         redis_client = None
 
     client = MatchbookClient(redis_client=redis_client)
+    odds_api = OddsApiClient() if config.odds_api_key else None
+
     try:
         await client.login()
 
@@ -262,7 +444,9 @@ async def fetch_test() -> None:
         for s in sports:
             print(f"  {s.get('name', '?')}: id={s.get('id', '?')}")
 
-        # Fetch events
+        all_mb_events: list[ExchangeEvent] = []
+
+        # Fetch Matchbook events
         for sport in config.sports:
             now = datetime.now(UTC)
             events = await client.get_events(
@@ -284,8 +468,49 @@ async def fetch_test() -> None:
                             f"back={back.odds if back else '-'} "
                             f"lay={lay.odds if lay else '-'}"
                         )
+            all_mb_events.extend(events)
+
+        # Fetch Odds API events and match
+        if odds_api:
+            oa_events = await odds_api.get_all_odds()
+            print(f"\n=== Odds API Events ({len(oa_events)}) ===")
+            for ev in oa_events[:10]:
+                print(f"  [{ev.id}] {ev.home_team} vs {ev.away_team} ({ev.sport_key})")
+                print(f"    Bookmakers: {len(ev.bookmakers)}")
+
+            # Match events
+            aliases = load_aliases()
+            matcher = EventMatcher(aliases=aliases)
+            matched = matcher.match_events(all_mb_events, oa_events)
+            print(f"\n=== Matched Events ({len(matched)}) ===")
+            for m in matched:
+                mb = m.matchbook_event
+                oa = m.odds_api_event
+                print(
+                    f"  {mb.home_team} vs {mb.away_team} <-> "
+                    f"{oa.home_team} vs {oa.away_team} "
+                    f"(score={m.match_score:.3f})"
+                )
+
+            # Scan for arbs
+            scanner = ArbScanner(
+                commission=Decimal(str(config.matchbook.commission_pct)),
+                min_edge=Decimal(str(config.thresholds.min_edge)),
+            )
+            arbs = scanner.scan(matched)
+            print(f"\n=== Arb Opportunities ({len(arbs)}) ===")
+            for arb in arbs:
+                print(
+                    f"  {arb.event_name} | {arb.selection} | "
+                    f"back={arb.back_odds}@{arb.back_source} | "
+                    f"lay={arb.lay_odds}@{arb.lay_source} | "
+                    f"edge={float(arb.edge) * 100:.2f}%"
+                )
+
     finally:
         await client.close()
+        if odds_api:
+            await odds_api.close()
         if redis_client:
             await redis_client.close()
 
