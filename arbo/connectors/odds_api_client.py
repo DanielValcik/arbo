@@ -268,6 +268,91 @@ class OddsApiClient:
 
         return events
 
+    async def get_historical_odds(
+        self,
+        sport_key: str,
+        date: str,
+        markets: str = "h2h",
+    ) -> tuple[list[OddsEvent], str | None, str | None]:
+        """Fetch historical odds snapshot for a sport at a specific point in time.
+
+        Uses The Odds API v4 historical endpoint. Each call consumes quota.
+        No caching — each historical point in time is unique.
+
+        Args:
+            sport_key: The Odds API sport key (e.g. "soccer_epl").
+            date: ISO-8601 timestamp for the snapshot (e.g. "2025-10-01T12:00:00Z").
+            markets: Comma-separated market types (default "h2h").
+
+        Returns:
+            Tuple of (events, previous_timestamp, next_timestamp).
+            previous_timestamp/next_timestamp are None if not provided by the API.
+        """
+        # Check quota
+        if self._remaining_quota is not None and self._remaining_quota < self._min_remaining_quota:
+            logger.warning(
+                "odds_api_historical_quota_low",
+                remaining=self._remaining_quota,
+                min_required=self._min_remaining_quota,
+            )
+            return [], None, None
+
+        session = await self._get_session()
+        url = f"{self._base_url}/historical/sports/{sport_key}/odds"
+        params = {
+            "apiKey": self._api_key,
+            "regions": self._regions,
+            "markets": markets,
+            "date": date,
+            "oddsFormat": self._odds_format,
+        }
+
+        try:
+            async with session.get(url, params=params) as resp:
+                remaining = resp.headers.get("x-requests-remaining")
+                if remaining is not None:
+                    self._remaining_quota = int(remaining)
+                    logger.info(
+                        "odds_api_historical_quota",
+                        remaining=self._remaining_quota,
+                        used=resp.headers.get("x-requests-used"),
+                    )
+
+                if resp.status == 401:
+                    logger.error("odds_api_historical_auth_error", status=401)
+                    return [], None, None
+                if resp.status == 422:
+                    logger.error("odds_api_historical_invalid_date", date=date)
+                    return [], None, None
+                if resp.status != 200:
+                    text = await resp.text()
+                    logger.error(
+                        "odds_api_historical_error",
+                        status=resp.status,
+                        body=text[:200],
+                    )
+                    return [], None, None
+
+                response = await resp.json()
+
+        except Exception as e:
+            logger.error("odds_api_historical_exception", error=str(e))
+            return [], None, None
+
+        data = response.get("data", [])
+        previous_timestamp = response.get("previous_timestamp")
+        next_timestamp = response.get("next_timestamp")
+
+        events = self._parse_events(data, sport_key)
+
+        logger.info(
+            "odds_api_historical_fetched",
+            sport_key=sport_key,
+            date=date,
+            events=len(events),
+        )
+        return events, previous_timestamp, next_timestamp
+
     async def get_outrights(self, sport_key: str) -> dict[str, Decimal]:
         """Fetch outright/futures odds for a sport key.
 

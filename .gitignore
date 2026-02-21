@@ -63,3 +63,9 @@ temp/
 # Arbo_DevBrief_FINAL.md
 # arbo_devbrief_v4_final.md
 # arbo_cto_handoff_memo.md
+
+# Backtest data
+data/
+
+# Scripts cache
+scripts/__pycache__/

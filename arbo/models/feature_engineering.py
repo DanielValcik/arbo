@@ -40,6 +40,9 @@ FEATURE_COLUMNS: list[str] = [
     "fee_enabled",
     "team_form_5g",
     "h2h_home_win_pct",
+    "odds_movement_24h",
+    "total_goals_line",
+    "closing_vs_opening_ratio",
 ]
 
 
@@ -62,6 +65,10 @@ class MarketFeatures:
     # Soccer-specific (optional)
     team_form_5g: float | None = None
     h2h_home_win_pct: float | None = None
+    # Historical odds features
+    odds_movement_24h: float | None = None
+    total_goals_line: float | None = None
+    closing_vs_opening_ratio: float | None = None
 
 
 def extract_feature_vector(features: MarketFeatures) -> dict[str, float]:
@@ -106,6 +113,17 @@ def extract_feature_vector(features: MarketFeatures) -> dict[str, float]:
         "team_form_5g": features.team_form_5g if features.team_form_5g is not None else nan,
         "h2h_home_win_pct": (
             features.h2h_home_win_pct if features.h2h_home_win_pct is not None else nan
+        ),
+        "odds_movement_24h": (
+            features.odds_movement_24h if features.odds_movement_24h is not None else nan
+        ),
+        "total_goals_line": (
+            features.total_goals_line if features.total_goals_line is not None else nan
+        ),
+        "closing_vs_opening_ratio": (
+            features.closing_vs_opening_ratio
+            if features.closing_vs_opening_ratio is not None
+            else nan
         ),
     }
 

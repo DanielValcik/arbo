@@ -152,6 +152,20 @@ class RiskConfig(BaseModel):
     min_paper_weeks: int = 4
 
 
+class OrchestratorConfig(BaseModel):
+    """Orchestrator runtime configuration."""
+
+    health_check_interval_s: int = 30
+    heartbeat_timeout_s: int = 120
+    max_restart_count: int = 10
+    signal_batch_timeout_s: float = 2.0
+    dashboard_update_interval_s: int = 60
+    snapshot_interval_s: int = 3600
+    daily_report_hour_utc: int = 23
+    weekly_report_day: int = 6  # Sunday
+    weekly_report_hour_utc: int = 20
+
+
 class PollingConfig(BaseModel):
     """Polling intervals for various data sources."""
 
@@ -222,6 +236,7 @@ class ArboConfig(BaseSettings):
     odds_api: OddsApiConfig = OddsApiConfig()
     llm: LLMConfig = LLMConfig()
     risk: RiskConfig = RiskConfig()
+    orchestrator: OrchestratorConfig = OrchestratorConfig()
     polling: PollingConfig = PollingConfig()
     news_feeds: NewsFeedsConfig = NewsFeedsConfig()
 

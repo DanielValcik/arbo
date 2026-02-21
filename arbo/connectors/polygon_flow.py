@@ -15,6 +15,7 @@ import json
 import math
 import time
 from collections import deque
+from collections.abc import Callable  # noqa: TC003 — used at runtime in __init__
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -267,13 +268,14 @@ class OrderFlowMonitor:
     - Cumulative delta trending (consistent directional flow)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_signal: Callable[[Signal], None] | None = None) -> None:
         config = get_config()
         self._alchemy_key = config.alchemy_key
         self._ctf_exchange = config.order_flow.ctf_exchange
         self._zscore_threshold = config.order_flow.volume_zscore_threshold
         self._imbalance_threshold = Decimal(str(config.order_flow.flow_imbalance_threshold))
         self._min_converging = config.order_flow.min_converging_signals
+        self._on_signal = on_signal
         self._windows: dict[str, RollingWindow] = {}
         self._session: aiohttp.ClientSession | None = None
         self._ws: aiohttp.ClientWebSocketResponse | None = None
@@ -366,6 +368,8 @@ class OrderFlowMonitor:
                             token_id=signal.token_id[:20],
                             edge=str(signal.edge),
                         )
+                        if self._on_signal is not None:
+                            self._on_signal(signal)
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     break
         except asyncio.CancelledError:

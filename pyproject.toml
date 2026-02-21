@@ -107,6 +107,8 @@ ignore = [
 # ML convention: X for feature matrix, X_train/X_test etc.
 "arbo/models/*.py" = ["N803", "N806", "TC002"]
 "arbo/tests/test_value_model.py" = ["N803", "N806", "TC002"]
+"arbo/tests/test_backtest_pipeline.py" = ["N803", "N806", "TC002"]
+"scripts/*.py" = ["N803", "N806", "TC002"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["arbo"]

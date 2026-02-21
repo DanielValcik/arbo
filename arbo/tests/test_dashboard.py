@@ -151,11 +151,11 @@ class TestReportGenerator:
         ]
 
         weekly = gen.generate_weekly(dailies)
-        assert weekly["total_trades"] == 19
-        assert weekly["total_pnl"] == Decimal("22.00")
-        assert weekly["best_day_pnl"] == Decimal("15.00")
-        assert weekly["worst_day_pnl"] == Decimal("-3.00")
-        assert weekly["days"] == 3
+        assert weekly.total_trades == 19
+        assert weekly.total_pnl == Decimal("22.00")
+        assert weekly.best_day.total_pnl == Decimal("15.00")
+        assert weekly.worst_day.total_pnl == Decimal("-3.00")
+        assert len(weekly.daily_reports) == 3
 
     def test_csv_export(self) -> None:
         """CSV export creates valid file."""
