@@ -122,6 +122,8 @@ def generate_report(
     n_train_matches: int,
     n_test_matches: int,
     tuned: bool,
+    edge_threshold: float = 0.03,
+    kelly_fraction: float = 0.5,
 ) -> dict[str, Any]:
     """Generate CEO report with pass/fail gates.
 
@@ -132,6 +134,8 @@ def generate_report(
         n_train_matches: Number of matches in training set.
         n_test_matches: Number of matches in test set.
         tuned: Whether Optuna tuning was used.
+        edge_threshold: Edge threshold used in backtest.
+        kelly_fraction: Kelly fraction used in backtest.
 
     Returns:
         Report dict suitable for JSON serialization.
@@ -202,8 +206,8 @@ def generate_report(
         "config": {
             "optuna_tuned": tuned,
             "time_series_split": "70/30 chronological",
-            "edge_threshold": 0.03,
-            "kelly_fraction": 0.5,
+            "edge_threshold": edge_threshold,
+            "kelly_fraction": kelly_fraction,
         },
     }
 
@@ -220,6 +224,9 @@ def run_pipeline(
     output_path: Path,
     tune: bool = False,
     n_trials: int = 50,
+    edge_threshold: float = 0.03,
+    kelly_fraction: float = 0.5,
+    flat_staking: bool = False,
 ) -> dict[str, Any]:
     """Run the full backtest pipeline.
 
@@ -228,6 +235,9 @@ def run_pipeline(
         output_path: Path to save model .joblib.
         tune: Whether to run Optuna hyperparameter tuning.
         n_trials: Number of Optuna trials.
+        edge_threshold: Minimum edge to place bet.
+        kelly_fraction: Kelly fraction for position sizing.
+        flat_staking: Use flat staking (no compounding).
 
     Returns:
         CEO report dict.
@@ -282,8 +292,9 @@ def run_pipeline(
         y_test=y_test,
         market_prices=prices_test,
         fee_rates=fees_test,
-        edge_threshold=0.03,
-        kelly_fraction=0.5,
+        edge_threshold=edge_threshold,
+        kelly_fraction=kelly_fraction,
+        flat_staking=flat_staking,
     )
     logger.info("backtest_done", **backtest_results)
 
@@ -295,6 +306,8 @@ def run_pipeline(
         n_train_matches=train_ds.n_matches,
         n_test_matches=test_ds.n_matches,
         tuned=tune,
+        edge_threshold=edge_threshold,
+        kelly_fraction=kelly_fraction,
     )
 
     # 9. Save model
@@ -346,6 +359,23 @@ def main() -> None:
         default=50,
         help="Number of Optuna trials",
     )
+    parser.add_argument(
+        "--edge-threshold",
+        type=float,
+        default=0.05,
+        help="Minimum edge to place bet (default 0.05)",
+    )
+    parser.add_argument(
+        "--kelly-fraction",
+        type=float,
+        default=0.25,
+        help="Kelly fraction for position sizing (default 0.25)",
+    )
+    parser.add_argument(
+        "--flat-staking",
+        action="store_true",
+        help="Use flat staking (% of initial bankroll, no compounding)",
+    )
     args = parser.parse_args()
 
     report = run_pipeline(
@@ -353,6 +383,9 @@ def main() -> None:
         output_path=Path(args.output),
         tune=args.tune,
         n_trials=args.n_trials,
+        edge_threshold=args.edge_threshold,
+        kelly_fraction=args.kelly_fraction,
+        flat_staking=args.flat_staking,
     )
 
     sys.exit(0 if report.get("overall_verdict") == "PASS" else 1)

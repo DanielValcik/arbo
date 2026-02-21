@@ -126,9 +126,10 @@ class OddsApiConfig(BaseModel):
 
     base_url: str = "https://api.the-odds-api.com/v4"
     regions: str = "eu"
-    markets: str = "h2h,spreads,totals"
+    markets: str = "h2h"
     odds_format: str = "decimal"
-    min_remaining_quota: int = 50
+    min_remaining_quota: int = 100
+    cache_ttl: int = 900
 
 
 class LLMConfig(BaseModel):

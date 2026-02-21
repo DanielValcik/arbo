@@ -336,10 +336,11 @@ def backtest_strategy(
     edge_threshold: float = 0.03,
     kelly_fraction: float = 0.5,
     initial_bankroll: float = 10000.0,
+    flat_staking: bool = False,
 ) -> dict[str, Any]:
     """Simulate betting strategy on historical data.
 
-    For each sample where edge > threshold, place a bet sized by half-Kelly.
+    For each sample where edge > threshold, place a bet sized by Kelly.
 
     Args:
         model: Trained ValueModel.
@@ -350,6 +351,7 @@ def backtest_strategy(
         edge_threshold: Minimum edge to place bet (PM-101: 0.03).
         kelly_fraction: Kelly fraction (hardcoded 0.5).
         initial_bankroll: Starting capital.
+        flat_staking: If True, stake relative to initial_bankroll (not compound).
 
     Returns:
         Dict with roi, n_bets, sharpe, max_drawdown, etc.
@@ -372,7 +374,7 @@ def backtest_strategy(
         if edge < edge_threshold:
             continue
 
-        # Half-Kelly sizing
+        # Kelly sizing
         if price <= 0 or price >= 1:
             continue
         b = (1.0 / price) - 1  # Net odds
@@ -382,7 +384,8 @@ def backtest_strategy(
             continue
 
         stake_pct = min(kelly * kelly_fraction, 0.05)  # Hard cap 5%
-        stake = bankroll * stake_pct
+        stake_base = initial_bankroll if flat_staking else bankroll
+        stake = stake_base * stake_pct
 
         # Resolve bet
         outcome = int(y_test[i])

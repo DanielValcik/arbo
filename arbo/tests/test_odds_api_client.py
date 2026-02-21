@@ -171,7 +171,7 @@ class TestSportKeyMap:
 
     def test_soccer_has_leagues(self) -> None:
         assert "soccer" in SPORT_KEY_MAP
-        assert len(SPORT_KEY_MAP["soccer"]) >= 5
+        assert len(SPORT_KEY_MAP["soccer"]) >= 3
 
     def test_epl_included(self) -> None:
         assert "soccer_epl" in SPORT_KEY_MAP["soccer"]

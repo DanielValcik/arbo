@@ -24,14 +24,15 @@ market_maker:
   prefer_fee_markets: true
 
 # --- Layer 2: Value Betting ---
+# edge_threshold and kelly_fraction tuned via backtest (2026-02-21)
 value_model:
-  edge_threshold: 0.03
+  edge_threshold: 0.05
   scan_interval_s: 300
   min_training_samples: 200
   xgboost_weight: 0.5
   llm_weight: 0.3
   historical_weight: 0.2
-  kelly_fraction: 0.5
+  kelly_fraction: 0.25
   max_position_pct: 0.05
 
 # --- Layer 4: Confluence ---
@@ -82,12 +83,16 @@ sports_latency:
   min_probability_extreme: 0.95
 
 # --- The Odds API ---
+# Paper trading optimized: h2h only (1 credit/req instead of 3)
+# 3 leagues (EPL, La Liga, Bundesliga) configured via SPORT_KEY_MAP
+# cache_ttl 900s = ~400 credits/day = 20K lasts full month
 odds_api:
   base_url: "https://api.the-odds-api.com/v4"
   regions: "eu"
-  markets: "h2h,spreads,totals"
+  markets: "h2h"
   odds_format: "decimal"
-  min_remaining_quota: 50
+  min_remaining_quota: 100
+  cache_ttl: 900
 
 # --- LLM provider ---
 llm:

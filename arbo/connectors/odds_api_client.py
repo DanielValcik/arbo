@@ -23,14 +23,13 @@ from arbo.utils.logger import get_logger
 logger = get_logger("odds_api")
 
 # Maps Polymarket categories to The Odds API sport keys
+# Paper trading: 3 leagues to conserve quota (~400 credits/day)
+# Expand after confirming quota sustainability
 SPORT_KEY_MAP: dict[str, list[str]] = {
     "soccer": [
         "soccer_epl",
-        "soccer_uefa_champs_league",
         "soccer_spain_la_liga",
         "soccer_germany_bundesliga",
-        "soccer_italy_serie_a",
-        "soccer_france_ligue_one",
     ],
 }
 
@@ -136,7 +135,7 @@ class OddsApiClient:
         self._remaining_quota: int | None = None
         self._cache: dict[str, tuple[float, list[OddsEvent]]] = {}
         self._outrights_cache: dict[str, tuple[float, dict[str, Decimal]]] = {}
-        self._cache_ttl = 300.0  # 5 minutes
+        self._cache_ttl = float(config.odds_api.cache_ttl)
 
     @property
     def remaining_quota(self) -> int | None:
