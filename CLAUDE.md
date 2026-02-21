@@ -1,11 +1,11 @@
 # ARBO — Project Intelligence File
 
 > This file is the authoritative reference for all development on Arbo.
-> Updated: 2026-02-20
+> Updated: 2026-02-21 (POLYMARKET PIVOT)
 
 ## What Is Arbo
 
-AI-powered sports betting intelligence system. Detects arbitrage, value bets, and situational edge opportunities across Matchbook exchange and 20+ bookmakers. Single-user, runs on VPS, interfaces via Slack + PostgreSQL.
+Automated trading system for Polymarket — a decentralized prediction market on Polygon blockchain. The system combines 9 strategic layers for generating edge through information asymmetry, statistical models, and on-chain analytics. Single-user, runs on VPS, interfaces via Slack + PostgreSQL.
 
 ## Repository
 
@@ -15,75 +15,104 @@ AI-powered sports betting intelligence system. Detects arbitrage, value bets, an
 
 ## Authoritative Documents
 
-- `arbo_devbrief_v4_final.md` — THE source of truth. Every technical detail lives here.
-- `arbo_cto_handoff_memo.md` — Explains reasoning behind v3→v4 changes.
+- `ARBO_CTO_Development_Brief_v3.md` — THE source of truth for Polymarket system. Every technical detail lives here.
+- `Arbo_CTO_Handoff_Memo.md` — Historical context (v3→v4 Matchbook changes, now superseded by pivot).
 - Any deviation from the brief requires CEO approval.
 
-## Architecture Overview
+## Architecture Overview — 9 Layers
 
 ```
-Layer 1: Data Ingestion (Matchbook poller, Odds API, News RSS/Reddit, BetInAsia Playwright)
-    ↓
-Layer 2: Intelligence Agents (Arb Scanner P1, Value Model P2, Situational Edge P3)
-    ↓
-Layer 3: Decision Engine (Signal Aggregator → Risk Manager → Kelly Calculator)
-    ↓
-Layer 4: Execution (Matchbook auto-execute, Slack manual alerts)
-    ↓
-Layer 5: Monitoring (Slack bot commands, daily P&L, weekly reports)
+Layer 1: Market Making + Rebate Harvesting (spread capture + maker rebates)
+Layer 2: Value Betting — Multi-Source Ensemble (XGBoost + Gemini + historical)
+Layer 3: Semantic Market Graph (e5-large-v2 embeddings + Chroma DB)
+Layer 4: Whale Copy + Multi-Signal Confluence (on-chain wallet tracking)
+Layer 5: Logical/Combinatorial Arbitrage (LLM semantic analysis)
+Layer 6: Temporal Crypto Arbitrage (15min crypto markets vs spot)
+Layer 7: Smart Money Order Flow (Polygon on-chain OrderFilled events)
+Layer 8: Attention Markets (Kaito AI × Polymarket sentiment)
+Layer 9: Live Sports Data Latency (sports data feed advantage)
+
+Signal Flow:
+  Strategy → Signal → Confluence Scorer → RiskManager.pre_trade_check() → CLOB
+                                              ↓ (rejected)
+                                          Log + Alert
 ```
 
 ## Critical Technical Facts
 
-### Matchbook API (VERIFIED 2026-02-20)
-- Auth: `POST https://api.matchbook.com/bpapi/rest/security/session` (NOT /edge/rest/)
-- All data: `GET https://api.matchbook.com/edge/rest/events/...`
-- Offers: `POST/GET/DELETE https://api.matchbook.com/edge/rest/v2/offers` (v2!)
-- Session TTL: ~6 hours (Redis TTL=18000s)
-- Commission: 4% net win from CZ
-- API cost: £100 per 1M GET. Target <500K/month via tiered polling.
-- Re-auth on 401 with asyncio.Lock, retry original request once
+### Polymarket API (VERIFIED 2026-02-21)
+- CLOB API: `https://clob.polymarket.com` — orders, orderbook, prices
+- Gamma API: `https://gamma-api.polymarket.com` — market metadata, discovery (NO AUTH)
+- Data API: `https://data-api.polymarket.com` — wallet positions, trade history (NO AUTH)
+- WebSocket: `wss://ws-subscriptions-clob.polymarket.com/ws/market` — live orderbook
+- User WS: `wss://ws-subscriptions-clob.polymarket.com/ws/user` — order/trade updates (AUTH)
+- Network: Polygon (chain_id=137), USDC.e collateral, ~$0.007 gas/tx
+- SDK: py-clob-client==0.34.6 (pin exact version)
+- Auth: L1 (EIP-712 private key signing) + L2 (HMAC-SHA256 apiKey/secret/passphrase)
+- Order types: GTC, GTD, FOK, FAK. PostOnly for maker-only orders.
+- Batch: up to 15 orders per request
+- Rate limits: POST /order 3500/10s, GET /book 1500/10s, Gamma 500/10s
+- Heartbeat: PING every 10s on WebSocket, auto-cancel on disconnect
+- NegRisk: multi-outcome events, pass `neg_risk=True` from Gamma API `enableNegRisk` field
+- Tick sizes: "0.1", "0.01", "0.001", "0.0001" — market-specific
+
+### Polymarket Fee Model
+- Most sports markets: 0% fee (February 2026)
+- Fee-enabled: 15min crypto, 5min crypto, NCAAB, Serie A
+- Formula: `fee = price * (1 - price) * fee_rate` (max at p=0.50)
+- Maker rebates: 20-25% of taker fees redistributed to liquidity providers
+- PostOnly orders guarantee maker status
+
+### Contract Addresses (Polygon)
+- CTF Exchange: `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`
+- NegRisk CTF Exchange: `0xC5d563A36AE78145C45a50134d48A1215220f80a`
+- NegRisk Adapter: `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296`
+- Conditional Tokens: `0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`
+- USDC.e: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
 
 ### LLM Strategy
-- Primary: Gemini 2.0 Flash ($0.10/$0.40 per MTok) — `google-genai` SDK
+- Primary: Gemini 2.0 Flash ($0.10/$0.40 per MTok) — `google-generativeai` SDK
 - Fallback: Claude Haiku 4.5 ($1/$5 per MTok) — `anthropic` SDK
-- EEA restriction: Google free tier NOT available. Paid from day 1. ~€0.30/month.
-- Shadow mode in Sprint 4: logs signals, does NOT auto-execute until CEO validates
+- EEA restriction: Google free tier NOT available. Paid from day 1.
+- `response_mime_type="application/json"` for structured output
 
-### News Sources (NO NewsAPI.org)
-- RSS: BBC Sport, ESPN, Sky Sports, Google News RSS (all free, realtime)
-- Reddit: asyncpraw (requires OAuth app approval, non-commercial)
-- GNews API: optional backup (100 req/day free)
+### The Odds API
+- Endpoint: `https://api.the-odds-api.com/v4`
+- Pinnacle odds via `bookmakers=pinnacle&regions=eu`
+- Free tier: 500 req/month. $10 tier: 10K req/month.
+- Track quota via `x-requests-remaining` header — NEVER exceed limit
 
 ## Non-Negotiable Rules (HARDCODED in source)
 
-These are Python constants, NOT configurable:
-- MAX_BET_PCT = 0.05 (5% bankroll) — kelly.py
-- KELLY_FRACTION = 0.5 (half-Kelly) — kelly.py
-- MIN_BET_EUR = 5.0 — kelly.py
-- DAILY_LOSS_PCT = 0.10 (10%) — risk.py
-- WEEKLY_LOSS_PCT = 0.20 (20%) — risk.py
-- MAX_CONCURRENT = 3 — risk.py
-- MAX_PER_EVENT = 1 — risk.py
-- MAX_SPORT_EXPOSURE_PCT = 0.40 — risk.py
-- MIN_EDGE = 0.02 (2%) — risk.py
-- MIN_PAPER_WEEKS = 4 — risk.py
-- LLM_CONF_THRESHOLD = 0.7 — situational_agent.py
-- LLM_MAG_THRESHOLD = 5 — situational_agent.py
+These are Python constants, NOT configurable. Changes require CEO approval.
+
+```python
+# arbo/core/risk_manager.py
+MAX_POSITION_PCT = 0.05          # 5% capital per trade
+DAILY_LOSS_PCT = 0.10            # 10% daily loss → auto shutdown
+WEEKLY_LOSS_PCT = 0.20           # 20% weekly loss → shutdown + CEO escalation
+WHALE_COPY_MAX_PCT = 0.025       # 2.5% per copied whale position
+MAX_MARKET_TYPE_PCT = 0.30       # 30% max in one market type
+MAX_CONFLUENCE_DOUBLE_PCT = 0.05 # 5% hard cap even at confluence score 5
+MIN_PAPER_WEEKS = 4              # 4 weeks paper trading before ANY live execution
+KELLY_FRACTION = 0.5             # Half-Kelly sizing
+```
 
 ## Tech Stack
 
 - Python 3.12+, async everywhere (aiohttp, asyncpg, slack-bolt)
-- PostgreSQL 16 + Redis 7
+- PostgreSQL 16 (NO Redis — in-memory caches + asyncio queues instead)
 - SQLAlchemy 2.0 async + Alembic migrations
-- Pydantic v2 for all DTOs
+- Pydantic v2 for all DTOs and config
 - structlog for JSON logging (no print())
 - Slack: slack-bolt 1.27+ (AsyncApp + Socket Mode, no public URL needed)
 - XGBoost 3.x + scikit-learn for ML
-- Playwright for BetInAsia scraping
-- No Docker — direct VPS (systemd + PostgreSQL + Redis)
+- Chroma DB + sentence-transformers for semantic graph (Layer 3)
+- web3.py for Polygon on-chain events (Layer 7)
+- py-clob-client for Polymarket CLOB trading
+- No Docker — direct VPS (systemd + PostgreSQL)
 
-### Slack Bot (REPLACES Telegram)
+### Slack Bot
 - Framework: slack-bolt AsyncApp + AsyncSocketModeHandler
 - Connection: Socket Mode (outbound WebSocket, no public URL/webhook needed)
 - Tokens: SLACK_BOT_TOKEN (xoxb-), SLACK_APP_TOKEN (xapp-)
@@ -98,56 +127,115 @@ These are Python constants, NOT configurable:
 - Type hints on every function
 - `black` (line length 100), `ruff`, `mypy --strict`
 - `pre-commit` hooks for all three
-- 100% test coverage: kelly.py, risk.py, odds.py
 - `pytest` + `pytest-asyncio` (>=1.0, asyncio_mode="auto")
 - `aioresponses` for HTTP mocking, `factory_boy` for test data
+- Docstrings on all public functions (Google style)
 - Conventional commits: feat:, fix:, test:, docs:, refactor:
-- Feature branches + PR + squash merge
+- Feature branches: `feature/PM-XXX-description`
+
+## Project Structure
+
+```
+arbo/
+├── config/
+│   ├── settings.yaml          # Risk params, thresholds, intervals
+│   └── settings.py            # Pydantic Settings class
+├── core/
+│   ├── risk_manager.py        # SINGLETON risk manager
+│   ├── paper_engine.py        # Paper trading engine
+│   ├── portfolio.py           # Position tracking, P&L
+│   ├── confluence.py          # Multi-signal confluence scorer
+│   ├── scanner.py             # Unified opportunity scanner
+│   └── fee_model.py           # Polymarket fee calculations
+├── connectors/
+│   ├── polymarket_client.py   # CLOB wrapper
+│   ├── market_discovery.py    # Gamma API market catalog
+│   ├── odds_api_client.py     # The Odds API (Pinnacle)
+│   ├── polygon_flow.py        # On-chain order flow (Layer 7)
+│   └── websocket_manager.py   # WS connection manager with reconnect
+├── strategies/
+│   ├── market_maker.py        # Layer 1
+│   ├── value_betting.py       # Layer 2 (signal generator)
+│   ├── whale_discovery.py     # Layer 4 (discovery)
+│   ├── whale_monitor.py       # Layer 4 (real-time monitoring)
+│   ├── logical_arb.py         # Layer 5
+│   ├── temporal_crypto.py     # Layer 6
+│   ├── arb_monitor.py         # Layer 3 (NegRisk monitoring)
+│   ├── attention_markets.py   # Layer 8
+│   └── sports_latency.py      # Layer 9
+├── models/
+│   ├── xgboost_value.py       # XGBoost value model
+│   ├── feature_engineering.py # Feature extraction
+│   ├── calibration.py         # Platt scaling, reliability
+│   └── market_graph.py        # Semantic graph (Layer 3, Chroma)
+├── agents/
+│   ├── gemini_agent.py        # Gemini 2.0 Flash wrapper
+│   └── news_agent.py          # News sentiment agent
+├── dashboard/
+│   ├── cli_dashboard.py       # Terminal dashboard
+│   ├── report_generator.py    # Weekly/daily reports
+│   └── slack_bot.py           # Slack alert notifications
+├── utils/
+│   ├── config.py              # Config loading (reused from Sprint 1-2)
+│   ├── db.py                  # SQLAlchemy models + engine
+│   ├── logger.py              # structlog config
+│   └── odds.py                # Odds conversion + Kelly math
+├── tests/                     # Per-module test files
+├── main.py                    # Orchestrator — starts all layers
+└── __init__.py
+```
 
 ## Sprint Timeline
 
-| Sprint | Weeks | Focus |
-|--------|-------|-------|
-| 1 | 1–2 | Infrastructure + Matchbook Client |
-| 2 | 3–4 | Arb Scanner + Slack Bot + Paper Trading |
-| 3 | 5–7 | Value Model + BetInAsia Monitor |
-| 4 | 8–10 | Auto-Execution + LLM Agent + Risk Management |
-| 5 | 11–13 | Polymarket + Optimization + Live |
+| Sprint | Weeks | Focus | Go/No-go Gate |
+|--------|-------|-------|---------------|
+| 1 | 1–2 | CLOB + Odds API + Paper engine | Connectivity OK, scanner runs |
+| 2 | 3–4 | Value model + MM bot + Order flow | Model Brier < 0.22, MM shadow P&L+ |
+| 3 | 5–6 | Whale + Semantic graph + Advanced layers | Whale detection < 10s, 9 layers integrated |
+| 4 | 7–10 | Paper trading validation (4 weeks) | 4 weeks paper P&L data, CEO approval |
 
-## Current Sprint: 2 (Arb Scanner + Slack Bot + Paper Trading)
+## Current Sprint: 1 (Foundation — Polymarket Pivot)
 
-Sprint 1 COMPLETE. Implemented:
-- Project structure, config system, structured logging
-- All 7 database tables + Alembic migration
-- Matchbook REST client (auth, events, markets, prices, betting, rate limiter)
-- Main polling loop with error handling + kill switch
-- systemd service + VPS deploy scripts
-- 16/16 tests passing (now 107/107 with Sprint 2), ruff + black clean
+### Previous Work (Matchbook era — ARCHIVED to `_archive/`)
+Sprint 1-2 of Matchbook version complete. 107/107 tests. Reusable components migrated:
+- structlog config, Pydantic config loader, SQLAlchemy base, odds math, Slack bot pattern
+- The Odds API client (adapted for Polymarket market matching)
 
-Sprint 2 COMPLETE. Implemented:
-- Odds conversion + arb math utilities (src/utils/odds.py) — 35 tests
-- The Odds API v4 client (src/data/odds_api.py) — quota tracking, sport key mapping — 12 tests
-- Fuzzy event matcher (src/data/event_matcher.py) — rapidfuzz + team aliases — 13 tests
-- Arb scanner (src/agents/arb_scanner.py) — cross-platform + same-exchange — 10 tests
-- Paper trading tracker (src/execution/position_tracker.py) — half-Kelly sizing — 9 tests
-- Slack bot (src/alerts/slack_bot.py) — 5 slash commands + Block Kit alerts — 12 tests
-- Main loop wired with all Sprint 2 components
-- 107/107 tests passing, ruff + black clean
-
-DO NOT START: LLM, BetInAsia, Value Model, Polymarket
+### Sprint 1 Tasks (PM-001 through PM-007)
+- PM-001: Polymarket CLOB client wrapper
+- PM-002: Market discovery module (Gamma API)
+- PM-003: The Odds API integration (adapt existing)
+- PM-004: Paper trading engine
+- PM-005: Opportunity scanner (all layers)
+- PM-006: Config & secrets management
+- PM-007: Risk manager (core)
 
 ## Config Loading Priority
 
 ```
-.env → settings.yaml → settings.{MODE}.yaml (overlay)
+.env → config/settings.yaml → config/settings.{MODE}.yaml (overlay)
 ```
 
 ## Error Handling Rules
 
-See Section 8 of devbrief. Every failure mode has defined behavior:
-- Matchbook unreachable: exponential backoff 1s→5min, Slack alert after 3 failures
-- 401: re-auth with Lock, retry once
-- Partial fills: >60% accept, <60% cancel all
-- PostgreSQL down: queue critical writes in Redis (max 1000), drop odds_snapshots
-- Redis down: fallback to in-memory dict, half rate limit
+- Polymarket CLOB unreachable: exponential backoff 1s→5min, Slack alert after 3 failures
+- WebSocket disconnect: reconnect with exponential backoff, heartbeat every 10s
+- Rate limit (throttled): back off, reduce request frequency
+- PostgreSQL down: queue critical writes in asyncio.Queue (max 1000), drop non-critical
+- LLM API down: skip LLM-dependent layers (5, 8), rest of system continues
 - Unhandled exception: log, sleep 60s, resume. 3x same in 10min → auto /kill
+- Emergency shutdown: cancel ALL orders, log reason, notify CEO via Slack
+
+## Confluence Scoring (Central Decision Mechanism)
+
+| Signal | Points |
+|--------|--------|
+| Whale buys position | +1 |
+| Value model shows edge > 5% | +1 |
+| News agent detects relevant event | +1 |
+| Order flow spike in market (Layer 7) | +1 |
+| Logical inconsistency with related market (Layer 5) | +1 |
+
+- Score 0-1: NO TRADE
+- Score 2: Standard size (2.5% capital)
+- Score 3+: Double size (5% capital — hard cap)

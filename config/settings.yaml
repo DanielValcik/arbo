@@ -1,42 +1,85 @@
 bankroll: 2000.00
 currency: EUR
 
-# --- Target sports/leagues (only fetch these) ---
-sports:
-  football:
-    leagues: ["EPL", "Champions League", "La Liga", "Bundesliga", "Serie A"]
-    markets: ["h2h", "spreads", "totals"]
-  basketball:
-    leagues: ["NBA", "Euroleague"]
-    markets: ["h2h", "spreads", "totals"]
+# --- Polymarket connection ---
+polymarket:
+  clob_url: "https://clob.polymarket.com"
+  gamma_url: "https://gamma-api.polymarket.com"
+  data_url: "https://data-api.polymarket.com"
+  ws_url: "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+  chain_id: 137
+  signature_type: 0  # 0=EOA, 1=POLY_PROXY, 2=GNOSIS_SAFE
+  heartbeat_interval_s: 10
+  max_retries: 3
+  timeout_seconds: 10
 
-# --- Polling intervals (seconds) ---
-polling:
-  matchbook: 8
-  odds_api_batch: 300
-  news: 300
-  betinasia: 60
+# --- Layer 1: Market Making ---
+market_maker:
+  min_spread: 0.04
+  min_volume_24h: 1000
+  max_volume_24h: 50000
+  max_inventory_imbalance: 0.6
+  order_size_pct: 0.025
+  heartbeat_interval_s: 30
+  prefer_fee_markets: true
 
-# --- Agent weights (Phase 1: arb-only) ---
-weights:
-  arb: 1.0
-  value: 0.0
-  situational: 0.0
+# --- Layer 2: Value Betting ---
+value_model:
+  edge_threshold: 0.03
+  scan_interval_s: 300
+  min_training_samples: 200
+  xgboost_weight: 0.5
+  llm_weight: 0.3
+  historical_weight: 0.2
+  kelly_fraction: 0.5
+  max_position_pct: 0.05
 
-# --- LLM provider ---
-llm:
-  provider: gemini
-  gemini_model: gemini-2.0-flash
-  claude_model: claude-haiku-4-5-20251001
-  max_calls_per_day: 100
+# --- Layer 4: Confluence ---
+confluence:
+  min_score: 2
+  standard_size_pct: 0.025
+  double_size_pct: 0.05
+  whale_min_confidence: 0.6
+  whale_poll_interval_s: 4
+  whale_detection_target_s: 10
 
-# --- Thresholds ---
-thresholds:
-  min_edge: 0.02
-  arb_margin: 0.04
-  value_gap: 0.05
-  llm_confidence: 0.7
-  llm_magnitude: 5
+# --- Layer 5: Logical Arb ---
+logical_arb:
+  min_pricing_violation: 0.03
+  scan_interval_s: 900
+  llm_model: "gemini-2.0-flash"
+  max_llm_calls_per_hour: 40
+  negrisk_sum_threshold: 0.03
+
+# --- Layer 6: Temporal Crypto ---
+temporal_crypto:
+  spot_sources: ["binance_ws", "coinbase_ws"]
+  price_deviation_threshold: 0.005
+  market_lag_window_s: 60
+  use_postonly: true
+  max_trades_per_hour: 20
+
+# --- Layer 7: Order Flow ---
+order_flow:
+  ctf_exchange: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+  volume_zscore_threshold: 2.0
+  flow_imbalance_threshold: 0.65
+  rolling_windows: [3600, 14400, 86400]
+  min_converging_signals: 2
+
+# --- Layer 8: Attention Markets ---
+attention_markets:
+  sentiment_scan_interval_s: 1800
+  min_divergence: 0.05
+  max_position_pct: 0.05
+  sources: ["twitter", "reddit", "tiktok"]
+  llm_model: "gemini-2.0-flash"
+
+# --- Layer 9: Sports Latency ---
+sports_latency:
+  max_trade_size: 200
+  max_trades_per_hour: 10
+  min_probability_extreme: 0.95
 
 # --- The Odds API ---
 odds_api:
@@ -46,27 +89,31 @@ odds_api:
   odds_format: "decimal"
   min_remaining_quota: 50
 
-# --- Matchbook connection ---
-matchbook:
-  base_url: "https://api.matchbook.com/edge/rest"
-  auth_url: "https://api.matchbook.com/bpapi/rest"
-  commission_pct: 0.04
-  session_ttl_seconds: 18000
-  max_retries: 3
-  timeout_seconds: 10
-  unmatched_cancel_after: 30
-  min_fill_pct: 0.60
+# --- LLM provider ---
+llm:
+  provider: gemini
+  gemini_model: gemini-2.0-flash
+  claude_model: claude-haiku-4-5-20251001
+  max_calls_per_hour: 60
+
+# --- Polling intervals (seconds) ---
+polling:
+  market_discovery: 900   # 15 min
+  odds_api_batch: 300     # 5 min
+  value_scan: 300         # 5 min
+  news: 1800              # 30 min
 
 # --- Risk limits: DOCUMENTATION ONLY ---
-# Actual limits hardcoded in src/engine/risk.py
-# Cannot be overridden by config. See brief Section 7.
+# Actual limits are HARDCODED in arbo/core/risk_manager.py
+# Cannot be overridden by config. See brief Section 5.
 risk:
-  max_bet_pct: 0.05
+  max_position_pct: 0.05
   daily_loss_pct: 0.10
   weekly_loss_pct: 0.20
-  max_concurrent_bets: 3
-  max_per_event: 1
-  max_sport_exposure_pct: 0.40
+  whale_copy_max_pct: 0.025
+  max_market_type_pct: 0.30
+  max_confluence_double_pct: 0.05
+  min_paper_weeks: 4
 
 # --- News feeds ---
 news_feeds:
@@ -77,9 +124,4 @@ news_feeds:
       name: "ESPN Soccer"
     - url: "https://news.google.com/rss/search?q=premier+league+injury&hl=en"
       name: "Google News EPL Injuries"
-    - url: "https://news.google.com/rss/search?q=champions+league+injury&hl=en"
-      name: "Google News UCL Injuries"
-    - url: "https://news.google.com/rss/search?q=NBA+injury+report&hl=en"
-      name: "Google News NBA Injuries"
-  reddit_subreddits: ["soccer", "sportsbook", "nba", "PremierLeague"]
-  gnews_enabled: false
+  reddit_subreddits: ["soccer", "sportsbook", "polymarket", "CryptoMarkets"]
