@@ -1,14 +1,14 @@
 [Unit]
-Description=Arbo Sports Betting Intelligence System
-After=network.target postgresql.service redis.service
-Wants=postgresql.service redis.service
+Description=Arbo Polymarket Trading System
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
 User=arbo
 Group=arbo
 WorkingDirectory=/opt/arbo
-ExecStart=/opt/arbo/.venv/bin/python -m src.main
+ExecStart=/opt/arbo/.venv/bin/python -m arbo.main --mode paper
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
