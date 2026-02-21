@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
 # Import all models so Alembic sees them
-from src.utils.db import Base  # noqa: E402
+from arbo.utils.db import Base  # noqa: E402
 
 config = context.config
 

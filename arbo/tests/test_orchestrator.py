@@ -204,6 +204,44 @@ class TestSignalProcessor:
         assert len(call_args[0][0]) == 2
 
 
+class TestLayer9Disabled:
+    @pytest.mark.asyncio
+    async def test_sports_latency_init_returns_none(self, orch: ArboOrchestrator) -> None:
+        """Layer 9 should be disabled (returns None) in paper mode."""
+        result = await orch._init_sports_latency()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_sports_latency_run_skips_when_none(self, orch: ArboOrchestrator) -> None:
+        """_run_sports_latency should be a no-op when component is None."""
+        orch._sports_latency = None
+        await orch._run_sports_latency()  # Should not raise
+
+
+class TestSlackBotInit:
+    @pytest.mark.asyncio
+    async def test_slack_bot_init_without_tokens(self, orch: ArboOrchestrator) -> None:
+        """Slack bot should return None when tokens are missing."""
+        orch._config.slack_bot_token = ""
+        orch._config.slack_app_token = ""
+        result = await orch._init_slack_bot()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_slack_bot_init_with_tokens(self, orch: ArboOrchestrator) -> None:
+        """Slack bot should be created when tokens are provided."""
+        orch._config.slack_bot_token = "xoxb-test"
+        orch._config.slack_app_token = "xapp-test"
+        orch._config.slack_channel_id = "C123"
+        orch._paper_engine = MagicMock()
+        orch._paper_engine.balance = 2000
+        orch._paper_engine.open_positions = []
+        orch._paper_engine.get_stats.return_value = {}
+
+        result = await orch._init_slack_bot()
+        assert result is not None
+
+
 class TestLLMDegradedMode:
     @pytest.mark.asyncio
     async def test_llm_degraded_mode_disables_layers(self, orch: ArboOrchestrator) -> None:

@@ -16,7 +16,6 @@ import pytest
 
 from arbo.connectors.market_discovery import GammaMarket, MarketDiscovery
 from arbo.connectors.odds_api_client import OddsApiClient
-from arbo.core.scanner import SignalDirection
 from arbo.strategies.sports_latency import LiveScore, SportsLatencyScanner
 
 # ================================================================
@@ -188,8 +187,8 @@ class TestPollCycle:
     """Full poll cycle tests."""
 
     @pytest.mark.asyncio
-    async def test_extreme_prob_signal(self) -> None:
-        """Completed game with matched market → Layer 9 signal."""
+    async def test_layer9_disabled_returns_empty(self) -> None:
+        """Layer 9 is disabled during paper trading — poll_cycle returns empty."""
         market = _make_market(question="Will Arsenal win against Chelsea?")
         disc = MarketDiscovery()
         disc._markets = {market.condition_id: market}
@@ -197,20 +196,8 @@ class TestPollCycle:
         odds = _make_odds_client()
         scanner = SportsLatencyScanner(discovery=disc, odds_client=odds)
 
-        # Mock _fetch_live_scores to return completed game
-        completed_score = _make_score(
-            home_team="Arsenal",
-            away_team="Chelsea",
-            home_score=2,
-            away_score=0,
-            status="completed",
-        )
-
-        with patch.object(scanner, "_fetch_live_scores", return_value=[completed_score]):
-            signals = await scanner.poll_cycle()
-            assert len(signals) == 1
-            assert signals[0].layer == 9
-            assert signals[0].direction == SignalDirection.BUY_YES
+        signals = await scanner.poll_cycle()
+        assert len(signals) == 0
 
     @pytest.mark.asyncio
     async def test_no_events_no_signal(self) -> None:

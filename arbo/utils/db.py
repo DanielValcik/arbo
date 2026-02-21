@@ -253,6 +253,29 @@ class NewsItem(Base):
 
 
 # ================================================================
+# REAL_MARKET_DATA: Snapshots of market prices for model retraining
+# ================================================================
+class RealMarketData(Base):
+    __tablename__ = "real_market_data"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    market_condition_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    polymarket_mid: Mapped[float] = mapped_column(Float, nullable=False)
+    pinnacle_prob: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spread: Mapped[float | None] = mapped_column(Float, nullable=True)
+    volume_24h: Mapped[Decimal | None] = mapped_column(Numeric(16, 2), nullable=True)
+    liquidity: Mapped[Decimal | None] = mapped_column(Numeric(16, 2), nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_real_market_data_cond_time", "market_condition_id", captured_at.desc()),
+    )
+
+
+# ================================================================
 # Engine & Session Factory
 # ================================================================
 

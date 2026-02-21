@@ -86,7 +86,11 @@ class SportsLatencyScanner:
         Returns:
             List of Layer 9 signals.
         """
-        self._total_polls += 1
+        # Layer 9 disabled during paper trading — burns Odds API credits for hardcoded-0 scores
+        logger.debug("sports_latency_disabled")
+        return []
+
+        self._total_polls += 1  # pragma: no cover
 
         # Check quota
         remaining = self._odds_client.remaining_quota

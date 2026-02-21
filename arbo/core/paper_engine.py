@@ -393,6 +393,134 @@ class PaperTradingEngine:
 
         return snapshot
 
+    async def save_trade_to_db(self, trade: PaperTrade) -> None:
+        """Persist a paper trade to the database (best-effort)."""
+        try:
+            from arbo.utils.db import PaperTrade as PaperTradeDB
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                db_trade = PaperTradeDB(
+                    market_condition_id=trade.market_condition_id,
+                    token_id=trade.token_id,
+                    layer=trade.layer,
+                    side=trade.side,
+                    price=trade.price,
+                    size=trade.size,
+                    slippage=trade.fill_price - trade.price,
+                    edge_at_exec=trade.edge,
+                    confluence_score=trade.confluence_score,
+                    kelly_fraction=trade.kelly_fraction,
+                    status=trade.status.value,
+                    fee_paid=trade.fee,
+                    placed_at=trade.placed_at,
+                    notes=trade.notes or None,
+                )
+                session.add(db_trade)
+                await session.commit()
+        except Exception as e:
+            logger.warning("save_trade_to_db_failed", error=str(e))
+
+    async def save_snapshot_to_db(self, snapshot: PortfolioSnapshot) -> None:
+        """Persist a portfolio snapshot to the database (best-effort)."""
+        try:
+            from arbo.utils.db import PaperSnapshot as PaperSnapshotDB
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                db_snap = PaperSnapshotDB(
+                    balance=snapshot.balance,
+                    unrealized_pnl=snapshot.unrealized_pnl,
+                    total_value=snapshot.total_value,
+                    num_open_positions=snapshot.num_open_positions,
+                    per_layer_pnl={str(k): str(v) for k, v in snapshot.per_layer_pnl.items()},
+                    snapshot_at=snapshot.snapshot_at,
+                )
+                session.add(db_snap)
+                await session.commit()
+        except Exception as e:
+            logger.warning("save_snapshot_to_db_failed", error=str(e))
+
+    async def sync_positions_to_db(self) -> None:
+        """Upsert current open positions to the database (best-effort)."""
+        try:
+            from sqlalchemy import delete
+
+            from arbo.utils.db import PaperPosition as PaperPositionDB
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(delete(PaperPositionDB))
+                for pos in self._positions.values():
+                    db_pos = PaperPositionDB(
+                        market_condition_id=pos.market_condition_id,
+                        token_id=pos.token_id,
+                        side=pos.side,
+                        avg_price=pos.avg_price,
+                        size=pos.size,
+                        current_price=pos.current_price,
+                        unrealized_pnl=pos.unrealized_pnl,
+                        layer=pos.layer,
+                    )
+                    session.add(db_pos)
+                await session.commit()
+        except Exception as e:
+            logger.warning("sync_positions_to_db_failed", error=str(e))
+
+    async def load_state_from_db(self) -> None:
+        """Restore open positions and balance from the database on startup."""
+        try:
+            from sqlalchemy import select
+
+            from arbo.utils.db import PaperPosition as PaperPositionDB
+            from arbo.utils.db import PaperSnapshot as PaperSnapshotDB
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                # Load positions
+                result = await session.execute(select(PaperPositionDB))
+                db_positions = result.scalars().all()
+                for db_pos in db_positions:
+                    pos = PaperPosition(
+                        market_condition_id=db_pos.market_condition_id,
+                        token_id=db_pos.token_id,
+                        side=db_pos.side,
+                        avg_price=Decimal(str(db_pos.avg_price)),
+                        size=Decimal(str(db_pos.size)),
+                        shares=(
+                            Decimal(str(db_pos.size)) / Decimal(str(db_pos.avg_price))
+                            if db_pos.avg_price
+                            else Decimal("0")
+                        ),
+                        layer=db_pos.layer,
+                        current_price=(
+                            Decimal(str(db_pos.current_price)) if db_pos.current_price else None
+                        ),
+                    )
+                    self._positions[pos.token_id] = pos
+
+                # Load last snapshot for balance
+                result = await session.execute(
+                    select(PaperSnapshotDB).order_by(PaperSnapshotDB.snapshot_at.desc()).limit(1)
+                )
+                last_snap = result.scalars().first()
+                if last_snap is not None:
+                    self._balance = Decimal(str(last_snap.balance))
+                    logger.info(
+                        "state_restored_from_db",
+                        positions=len(self._positions),
+                        balance=str(self._balance),
+                    )
+                else:
+                    logger.info("no_db_state_found", using="initial_capital")
+
+        except Exception as e:
+            logger.warning("load_state_from_db_failed", error=str(e))
+
     def get_stats(self) -> dict[str, object]:
         """Get summary statistics."""
         resolved = [t for t in self._trades if t.status in (TradeStatus.WON, TradeStatus.LOST)]

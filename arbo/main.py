@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+import sqlalchemy as sa
+
 from arbo.config.settings import get_config
 from arbo.utils.logger import get_logger, setup_logging
 
@@ -106,10 +108,14 @@ class ArboOrchestrator:
         # Dashboard / reports
         self._cli_dashboard: Any = None
         self._report_generator: Any = None
+        self._slack_bot: Any = None
 
         # LLM degraded mode flag
         self._llm_degraded = False
         self._llm_last_check: float = 0.0
+
+        # Startup timestamp for uptime tracking
+        self._start_time: float = 0.0
 
     # ------------------------------------------------------------------
     # Public API
@@ -118,6 +124,7 @@ class ArboOrchestrator:
     async def start(self) -> None:
         """Initialize all components and start all layer tasks."""
         logger.info("orchestrator_starting", mode=self._mode, capital=str(self._capital))
+        self._start_time = time.monotonic()
 
         self._install_signal_handlers()
         await self._init_components()
@@ -245,6 +252,19 @@ class ArboOrchestrator:
             "ReportGenerator", self._init_report_generator
         )
 
+        # Database connectivity check
+        await self._init_optional("Database", self._init_db)
+
+        # Slack bot
+        self._slack_bot = await self._init_optional("SlackBot", self._init_slack_bot)
+
+        # Restore paper engine state from DB
+        if self._paper_engine is not None:
+            try:
+                await self._paper_engine.load_state_from_db()
+            except Exception as e:
+                logger.warning("load_state_from_db_skipped", error=str(e))
+
     async def _init_optional(self, name: str, factory: Any) -> Any:
         """Initialize an optional component. Returns None on failure."""
         try:
@@ -366,13 +386,9 @@ class ArboOrchestrator:
         return AttentionMarketsScanner(discovery=self._discovery, gemini=self._gemini)
 
     async def _init_sports_latency(self) -> Any:
-        if not self._discovery or not self._odds_client:
-            return None
-        from arbo.strategies.sports_latency import SportsLatencyScanner
-
-        s = SportsLatencyScanner(discovery=self._discovery, odds_client=self._odds_client)
-        await s.initialize()
-        return s
+        # Layer 9 disabled during paper trading — scores are hardcoded to 0, burns API credits
+        logger.info("sports_latency_disabled_paper_mode")
+        return None
 
     async def _init_arb_monitor(self) -> Any:
         if not self._discovery:
@@ -391,12 +407,91 @@ class ArboOrchestrator:
 
         return ReportGenerator()
 
+    async def _init_db(self) -> Any:
+        """Verify database connectivity."""
+        from arbo.utils.db import get_engine
+
+        engine = get_engine()
+        async with engine.connect() as conn:
+            await conn.execute(sa.text("SELECT 1"))
+        logger.info("database_connected")
+        return True
+
+    async def _init_slack_bot(self) -> Any:
+        """Initialize Slack bot with dependency-injected callbacks."""
+        cfg = self._config
+        if not cfg.slack_bot_token or not cfg.slack_app_token:
+            logger.warning("slack_bot_skipped", reason="missing tokens")
+            return None
+
+        from arbo.dashboard.slack_bot import SlackBot
+
+        return SlackBot(
+            bot_token=cfg.slack_bot_token,
+            app_token=cfg.slack_app_token,
+            channel_id=cfg.slack_channel_id,
+            get_status_fn=self._get_status_for_slack,
+            get_pnl_fn=self._get_pnl_for_slack,
+            shutdown_fn=self._slack_shutdown,
+        )
+
+    # ------------------------------------------------------------------
+    # Slack callbacks
+    # ------------------------------------------------------------------
+
+    async def _get_status_for_slack(self) -> dict[str, Any]:
+        """Build system status dict for /status command."""
+        active = sum(
+            1
+            for s in self._layers.values()
+            if s.enabled and not s.permanent_stop and s.task and not s.task.done()
+        )
+        balance = str(self._paper_engine.balance) if self._paper_engine else "N/A"
+        positions = len(self._paper_engine.open_positions) if self._paper_engine else 0
+        uptime = int(time.monotonic() - self._start_time) if self._start_time else 0
+
+        return {
+            "mode": self._mode,
+            "uptime_s": uptime,
+            "layers_active": active,
+            "layers_total": len(self._layers),
+            "balance": balance,
+            "open_positions": positions,
+        }
+
+    async def _get_pnl_for_slack(self) -> dict[str, Any]:
+        """Build P&L dict for /pnl command."""
+        if self._paper_engine is None:
+            return {}
+        return self._paper_engine.get_stats()
+
+    async def _slack_shutdown(self) -> None:
+        """Emergency shutdown triggered via /kill."""
+        logger.critical("emergency_shutdown_via_slack")
+        self._shutdown_event.set()
+
     # ------------------------------------------------------------------
     # Close components
     # ------------------------------------------------------------------
 
     async def _close_components(self) -> None:
         """Close all component sessions."""
+        # Sync final paper engine state to DB
+        if self._paper_engine is not None:
+            try:
+                snapshot = self._paper_engine.take_snapshot()
+                await self._paper_engine.save_snapshot_to_db(snapshot)
+                await self._paper_engine.sync_positions_to_db()
+            except Exception as e:
+                logger.warning("final_state_sync_failed", error=str(e))
+
+        # Close Slack bot
+        if self._slack_bot is not None:
+            try:
+                await self._slack_bot.close()
+            except Exception as e:
+                logger.warning("close_slack_bot_error", error=str(e))
+
         closables = [
             ("discovery", self._discovery),
             ("poly_client", self._poly_client),
@@ -456,13 +551,30 @@ class ArboOrchestrator:
                 )
 
     def _start_internal_tasks(self) -> None:
-        """Start signal processor and health monitor tasks."""
+        """Start signal processor, health monitor, schedulers, and data collector."""
         self._internal_tasks.append(
             asyncio.create_task(self._signal_processor(), name="signal_processor")
         )
         self._internal_tasks.append(
             asyncio.create_task(self._health_monitor(), name="health_monitor")
         )
+        self._internal_tasks.append(
+            asyncio.create_task(self._snapshot_scheduler(), name="snapshot_scheduler")
+        )
+        self._internal_tasks.append(
+            asyncio.create_task(self._daily_report_scheduler(), name="daily_report_scheduler")
+        )
+        self._internal_tasks.append(
+            asyncio.create_task(self._weekly_report_scheduler(), name="weekly_report_scheduler")
+        )
+        self._internal_tasks.append(
+            asyncio.create_task(self._data_collector(), name="data_collector")
+        )
+        # Start Slack bot as internal task
+        if self._slack_bot is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._slack_bot.start(), name="slack_bot")
+            )
 
     async def _run_layer_task(
         self,
@@ -717,7 +829,7 @@ class ArboOrchestrator:
             side = "BUY" if "BUY" in opp.direction.value else "SELL"
             market_price = Decimal("0.50")  # placeholder
 
-            self._paper_engine.place_trade(
+            trade = self._paper_engine.place_trade(
                 market_condition_id=opp.market_condition_id,
                 token_id=opp.token_id,
                 side=side,
@@ -728,6 +840,8 @@ class ArboOrchestrator:
                 fee_enabled=fee_enabled,
                 confluence_score=opp.score,
             )
+            if trade is not None:
+                await self._paper_engine.save_trade_to_db(trade)
 
     # ------------------------------------------------------------------
     # Health monitor
@@ -849,6 +963,143 @@ class ArboOrchestrator:
             if not self._llm_degraded:
                 self._llm_degraded = True
                 logger.warning("llm_degraded_mode_enabled", reason=str(e))
+
+    # ------------------------------------------------------------------
+    # Scheduled tasks
+    # ------------------------------------------------------------------
+
+    async def _snapshot_scheduler(self) -> None:
+        """Take hourly portfolio snapshots and persist to DB."""
+        interval = self._orch_cfg.snapshot_interval_s
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(interval)
+            if self._paper_engine is None:
+                continue
+            try:
+                snapshot = self._paper_engine.take_snapshot()
+                await self._paper_engine.save_snapshot_to_db(snapshot)
+                await self._paper_engine.sync_positions_to_db()
+            except Exception as e:
+                logger.error("snapshot_scheduler_error", error=str(e))
+
+    async def _daily_report_scheduler(self) -> None:
+        """Generate and send daily report at configured hour (UTC)."""
+        from datetime import UTC, datetime
+
+        target_hour = self._orch_cfg.daily_report_hour_utc
+
+        while not self._shutdown_event.is_set():
+            now = datetime.now(UTC)
+            # Sleep until target hour
+            if now.hour == target_hour and now.minute < 5:
+                await self._send_daily_report()
+                # Sleep past this window to avoid double-send
+                await asyncio.sleep(3600)
+            else:
+                await asyncio.sleep(60)
+
+    async def _weekly_report_scheduler(self) -> None:
+        """Generate and send weekly report on configured day/hour (UTC)."""
+        from datetime import UTC, datetime
+
+        target_day = self._orch_cfg.weekly_report_day  # 6 = Sunday
+        target_hour = self._orch_cfg.weekly_report_hour_utc
+
+        while not self._shutdown_event.is_set():
+            now = datetime.now(UTC)
+            if now.weekday() == target_day and now.hour == target_hour and now.minute < 5:
+                await self._send_weekly_report()
+                await asyncio.sleep(3600)
+            else:
+                await asyncio.sleep(60)
+
+    async def _send_daily_report(self) -> None:
+        """Generate and send daily report via Slack."""
+        if self._report_generator is None or self._paper_engine is None:
+            return
+        try:
+            trades = [
+                {
+                    "layer": t.layer,
+                    "actual_pnl": str(t.actual_pnl) if t.actual_pnl else None,
+                    "size": str(t.size),
+                    "notes": t.notes,
+                }
+                for t in self._paper_engine.trade_history
+            ]
+            report = self._report_generator.generate_daily(trades=trades, signals=[])
+            formatted = self._report_generator.format_slack_report(report)
+            if self._slack_bot is not None:
+                await self._slack_bot.send_daily_report(formatted["blocks"])
+            logger.info("daily_report_sent")
+        except Exception as e:
+            logger.error("daily_report_error", error=str(e))
+
+    async def _send_weekly_report(self) -> None:
+        """Generate and send weekly report via Slack."""
+        if self._report_generator is None or self._paper_engine is None:
+            return
+        try:
+            trades = [
+                {
+                    "layer": t.layer,
+                    "actual_pnl": str(t.actual_pnl) if t.actual_pnl else None,
+                    "size": str(t.size),
+                    "confluence_score": t.confluence_score,
+                    "token_id": t.token_id,
+                }
+                for t in self._paper_engine.trade_history
+            ]
+            daily = self._report_generator.generate_daily(trades=trades, signals=[])
+            weekly = self._report_generator.generate_weekly(
+                daily_reports=[daily],
+                trades=trades,
+                portfolio_balance=self._paper_engine.balance,
+            )
+            formatted = self._report_generator.format_slack_weekly_report(weekly)
+            if self._slack_bot is not None:
+                await self._slack_bot.send_weekly_report(formatted["blocks"])
+            logger.info("weekly_report_sent")
+        except Exception as e:
+            logger.error("weekly_report_error", error=str(e))
+
+    async def _data_collector(self) -> None:
+        """Hourly: snapshot polymarket_mid/spread/volume for active markets."""
+        from datetime import UTC, datetime
+
+        interval = self._orch_cfg.snapshot_interval_s  # same as snapshot interval (1h)
+
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(interval)
+            if self._discovery is None:
+                continue
+            try:
+                from arbo.utils.db import RealMarketData, get_session_factory
+
+                markets = self._discovery.get_all_active()
+                if not markets:
+                    continue
+
+                factory = get_session_factory()
+                now = datetime.now(UTC)
+                async with factory() as session:
+                    for m in markets:
+                        mid = m.price_yes if m.price_yes is not None else 0.5
+                        row = RealMarketData(
+                            market_condition_id=m.condition_id,
+                            polymarket_mid=float(mid),
+                            spread=float(m.spread) if hasattr(m, "spread") and m.spread else None,
+                            volume_24h=m.volume_24h,
+                            liquidity=m.liquidity,
+                            source="gamma_snapshot",
+                            captured_at=now,
+                        )
+                        session.add(row)
+                    await session.commit()
+
+                logger.info("data_collector_snapshot", markets=len(markets))
+            except Exception as e:
+                logger.warning("data_collector_error", error=str(e))
 
     # ------------------------------------------------------------------
     # Signal handlers
