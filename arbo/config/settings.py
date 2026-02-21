@@ -117,6 +117,8 @@ class SportsLatencyConfig(BaseModel):
     max_trade_size: int = 200
     max_trades_per_hour: int = 10
     min_probability_extreme: float = 0.95
+    max_fee_pct: float = 0.003
+    poll_interval_s: int = 5
 
 
 class OddsApiConfig(BaseModel):
