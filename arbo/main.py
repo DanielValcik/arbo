@@ -18,6 +18,7 @@ import contextlib
 import signal
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -121,6 +122,11 @@ class ArboOrchestrator:
 
         # Startup timestamp for uptime tracking
         self._start_time: float = 0.0
+
+        # Daily trade limiting
+        self._daily_trade_count = 0
+        self._daily_trade_date: str = ""  # YYYY-MM-DD, reset on new day
+        self._max_daily_trades = 15
 
     # ------------------------------------------------------------------
     # Public API
@@ -939,7 +945,22 @@ class ArboOrchestrator:
         trades_this_scan = 0
         max_trades_per_scan = 5
 
+        # Daily trade limit: reset counter on new UTC day
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        if today != self._daily_trade_date:
+            self._daily_trade_count = 0
+            self._daily_trade_date = today
+
         for opp in tradeable:
+            # Daily trade limit: max 15 new trades per day in paper mode
+            if self._daily_trade_count >= self._max_daily_trades:
+                logger.info(
+                    "daily_trade_limit_reached",
+                    trades_today=self._daily_trade_count,
+                    max=self._max_daily_trades,
+                )
+                break
+
             # Per-scan trade limit: prevent rapid capital deployment
             if trades_this_scan >= max_trades_per_scan:
                 logger.info(
@@ -1039,6 +1060,7 @@ class ArboOrchestrator:
             if trade is not None:
                 processed_markets.add(opp.market_condition_id)
                 trades_this_scan += 1
+                self._daily_trade_count += 1
                 await self._paper_engine.save_trade_to_db(trade)
 
     async def _save_signals_to_db(self, signals: list[Signal]) -> None:

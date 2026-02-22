@@ -328,8 +328,12 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
 @app.get("/api/signals")
 async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Last 100 signals with market names and category."""
+    """Last 100 tradeable signals (edge ≤ 12%) with market names and category.
+
+    Signals with edge > 12% are excluded (model error / line mismatch).
+    """
     signals: list[dict[str, Any]] = []
+    max_edge = Decimal("0.12")
     try:
         from arbo.utils.db import Market, get_session_factory
         from arbo.utils.db import Signal as DBSignal
@@ -339,6 +343,7 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
             result = await session.execute(
                 sa.select(DBSignal, Market.question, Market.category)
                 .outerjoin(Market, DBSignal.market_condition_id == Market.condition_id)
+                .where(DBSignal.edge <= max_edge)
                 .order_by(DBSignal.detected_at.desc())
                 .limit(100)
             )
