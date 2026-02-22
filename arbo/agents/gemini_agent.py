@@ -1,6 +1,6 @@
 """Gemini LLM probability agent (PM-104).
 
-Primary LLM: Gemini 2.0 Flash with JSON response mode.
+Primary LLM: Gemini 2.5 Flash with JSON response mode.
 Fallback: Claude Haiku 4.5 via anthropic SDK.
 Rate limited to max_calls_per_hour (default 60).
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -67,6 +68,39 @@ class RateLimiter:
             self._timestamps.popleft()
 
 
+def _extract_json(text: str) -> dict[str, Any] | None:
+    """Extract JSON object from LLM response text.
+
+    Handles markdown code blocks, text before/after JSON, etc.
+    """
+    if not text or not text.strip():
+        return None
+
+    # Try direct parse first
+    try:
+        return json.loads(text)  # type: ignore[no-any-return]
+    except json.JSONDecodeError:
+        pass
+
+    # Strip markdown code blocks: ```json\n...\n``` or ```\n...\n```
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            pass
+
+    # Find first { ... } JSON object in text
+    match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
 class GeminiAgent:
     """LLM probability prediction agent.
 
@@ -86,7 +120,8 @@ class GeminiAgent:
         self._anthropic_client: Any = None
         self._total_calls = 0
         self._fallback_calls = 0
-        self._timeout_s = 5.0
+        self._gemini_timeout_s = 30.0  # Gemini 2.5 Flash is a thinking model
+        self._claude_timeout_s = 15.0
 
     async def initialize(self) -> None:
         """Initialize LLM clients."""
@@ -192,19 +227,19 @@ class GeminiAgent:
                     None,
                     lambda: self._gemini_model.generate_content(prompt),
                 ),
-                timeout=self._timeout_s,
+                timeout=self._gemini_timeout_s,
             )
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
             text = response.text
-            data = json.loads(text)
+            data = _extract_json(text)
+            if data is None:
+                logger.warning("gemini_parse_error", error="no JSON found", raw=text[:200])
+                return None
             return self._validate_prediction(data, "gemini", self._gemini_model_name, elapsed_ms)
 
         except TimeoutError:
-            logger.warning("gemini_timeout", timeout_s=self._timeout_s)
-            return None
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning("gemini_parse_error", error=str(e))
+            logger.warning("gemini_timeout", timeout_s=self._gemini_timeout_s)
             return None
         except Exception as e:
             logger.warning("gemini_error", error=str(e))
@@ -220,19 +255,31 @@ class GeminiAgent:
                     max_tokens=512,
                     messages=[{"role": "user", "content": prompt}],
                 ),
-                timeout=self._timeout_s,
+                timeout=self._claude_timeout_s,
             )
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
-            text = response.content[0].text
-            data = json.loads(text)
+            # Extract text from response content blocks
+            text = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    text += block.text
+            if not text:
+                logger.warning(
+                    "claude_empty_response",
+                    stop_reason=response.stop_reason,
+                    content_types=[b.type for b in response.content],
+                )
+                return None
+
+            data = _extract_json(text)
+            if data is None:
+                logger.warning("claude_parse_error", error="no JSON found", raw=text[:200])
+                return None
             return self._validate_prediction(data, "claude", self._claude_model_name, elapsed_ms)
 
         except TimeoutError:
-            logger.warning("claude_timeout", timeout_s=self._timeout_s)
-            return None
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning("claude_parse_error", error=str(e))
+            logger.warning("claude_timeout", timeout_s=self._claude_timeout_s)
             return None
         except Exception as e:
             logger.warning("claude_error", error=str(e))

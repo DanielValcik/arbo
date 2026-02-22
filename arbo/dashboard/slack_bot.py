@@ -64,8 +64,31 @@ class SlackBot:
         self._app = AsyncApp(token=self._bot_token)
         self._register_commands()
 
+        # Log all incoming events for debugging
+        @self._app.middleware
+        async def log_all_events(body: dict[str, Any], next: Any) -> None:  # noqa: A002
+            event_type = body.get("event", {}).get("type", body.get("type", "unknown"))
+            logger.debug("slack_event_received", event_type=event_type)
+            await next()
+
         self._handler = AsyncSocketModeHandler(self._app, self._app_token)
         logger.info("slack_bot_starting")
+
+        # Send startup notification (non-blocking)
+        try:
+            from slack_sdk.web.async_client import AsyncWebClient
+
+            client = AsyncWebClient(token=self._bot_token)
+            auth = await client.auth_test()
+            bot_id = auth.get("user_id", "?")
+            logger.info("slack_bot_auth_ok", bot_id=bot_id, team=auth.get("team", "?"))
+            await client.chat_postMessage(
+                channel=self._channel_id,
+                text=f"Arbo online (paper mode). Use `@arbo status` or `@arbo help`.",
+            )
+        except Exception as e:
+            logger.warning("slack_startup_notify_failed", error=str(e))
+
         await self._handler.start_async()
 
     async def close(self) -> None:

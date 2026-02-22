@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from arbo.agents.gemini_agent import GeminiAgent, LLMPrediction, RateLimiter
+from arbo.agents.gemini_agent import GeminiAgent, LLMPrediction, RateLimiter, _extract_json
 
 # ================================================================
 # RateLimiter
@@ -264,6 +264,41 @@ class TestStats:
         assert stats["total_calls"] == 1
         assert stats["fallback_calls"] == 0
         assert stats["remaining_hourly"] == 59  # 60 - 1
+
+
+# ================================================================
+# JSON extraction
+# ================================================================
+
+
+class TestExtractJson:
+    """_extract_json handles various LLM response formats."""
+
+    def test_pure_json(self) -> None:
+        data = _extract_json('{"probability": 0.5, "confidence": 0.7, "reasoning": "test"}')
+        assert data is not None
+        assert data["probability"] == 0.5
+
+    def test_markdown_code_block(self) -> None:
+        text = '```json\n{"probability": 0.6, "confidence": 0.8, "reasoning": "analysis"}\n```'
+        data = _extract_json(text)
+        assert data is not None
+        assert data["probability"] == 0.6
+
+    def test_text_before_json(self) -> None:
+        text = 'Here is my analysis:\n{"probability": 0.4, "confidence": 0.5, "reasoning": "ok"}'
+        data = _extract_json(text)
+        assert data is not None
+        assert data["probability"] == 0.4
+
+    def test_empty_string(self) -> None:
+        assert _extract_json("") is None
+
+    def test_none_like(self) -> None:
+        assert _extract_json("   ") is None
+
+    def test_no_json(self) -> None:
+        assert _extract_json("This is just text with no JSON at all.") is None
 
 
 # ================================================================

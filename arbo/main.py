@@ -290,9 +290,7 @@ class ArboOrchestrator:
     async def _init_odds_client(self) -> Any:
         from arbo.connectors.odds_api_client import OddsApiClient
 
-        c = OddsApiClient()
-        await c.initialize()
-        return c
+        return OddsApiClient()
 
     async def _init_event_matcher(self) -> Any:
         from arbo.connectors.event_matcher import EventMatcher
@@ -598,17 +596,33 @@ class ArboOrchestrator:
 
             try:
                 state.last_heartbeat = time.monotonic()
-                await coro_factory()
-                state.last_heartbeat = time.monotonic()
 
                 if interval_s <= 0:
-                    # Continuous task exited normally -- break
+                    # Continuous task: run coro in background, keep heartbeat alive
+                    inner = asyncio.create_task(coro_factory(), name=f"{name}_inner")
+                    try:
+                        while not inner.done() and not self._shutdown_event.is_set():
+                            await asyncio.sleep(1)
+                            state.last_heartbeat = time.monotonic()
+                    finally:
+                        if not inner.done():
+                            inner.cancel()
+                            try:
+                                await inner
+                            except (asyncio.CancelledError, Exception):
+                                pass
+                        elif inner.exception():
+                            raise inner.exception()
                     break
+                else:
+                    await coro_factory()
+                    state.last_heartbeat = time.monotonic()
 
-                # Sleep in small increments so we can respond to shutdown quickly
-                deadline = time.monotonic() + interval_s
-                while time.monotonic() < deadline and not self._shutdown_event.is_set():
-                    await asyncio.sleep(min(1.0, deadline - time.monotonic()))
+                    # Sleep in small increments; keep heartbeat alive during idle
+                    deadline = time.monotonic() + interval_s
+                    while time.monotonic() < deadline and not self._shutdown_event.is_set():
+                        await asyncio.sleep(min(1.0, deadline - time.monotonic()))
+                        state.last_heartbeat = time.monotonic()
 
             except asyncio.CancelledError:
                 raise
