@@ -4,15 +4,17 @@ Tests verify:
 1. RollingWindow: add/volume, prune, z-score normal, z-score spike, buy/sell tracking, empty
 2. OrderFilled parsing: valid log, invalid→None, buy/sell detection
 3. Convergence: below thresholds, z+imbalance→signal, z+delta→signal, signal format layer 7
+4. Polling lifecycle: handle_log, matched_tokens filter, start/stop, stats
 
 Acceptance: parses OrderFilled events, calculates Z-scores, data in DB. Min 100 events.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from arbo.connectors.polygon_flow import (
     OrderFilledEvent,
@@ -299,6 +301,184 @@ class TestConvergence:
         assert "imbalance" in signal.details
         assert "delta" in signal.details
         assert "converging_signals" in signal.details
+
+
+# ================================================================
+# Polling lifecycle
+# ================================================================
+
+
+class TestPollingLifecycle:
+    """OrderFlowMonitor polling-based lifecycle."""
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_handle_log_processes_event(self, mock_config: MagicMock) -> None:
+        """_handle_log parses log and feeds to rolling window."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        log = _make_log()
+        monitor._handle_log(log)
+
+        assert monitor._total_events == 1
+        token_id = str(10**40)
+        assert token_id in monitor._windows
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_handle_log_invalid_ignored(self, mock_config: MagicMock) -> None:
+        """_handle_log ignores invalid logs."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        monitor._handle_log({"topics": ["0x00"], "data": "0x00", "blockNumber": "0x0"})
+        assert monitor._total_events == 0
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_matched_tokens_filter(self, mock_config: MagicMock) -> None:
+        """Only matched tokens are processed when filter is set."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        # Set filter to only track a specific token
+        monitor.update_matched_tokens({"999"})
+
+        # This log produces token_id = str(10**40), which is NOT in the filter
+        log = _make_log()
+        monitor._handle_log(log)
+
+        assert monitor._total_events == 0
+        assert len(monitor._windows) == 0
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_matched_tokens_allows_matching(self, mock_config: MagicMock) -> None:
+        """Events for matched tokens are processed."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        token_id = str(10**40)
+        monitor.update_matched_tokens({token_id})
+
+        log = _make_log()
+        monitor._handle_log(log)
+
+        assert monitor._total_events == 1
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_empty_filter_processes_all(self, mock_config: MagicMock) -> None:
+        """Empty matched_tokens set processes all events."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        # Empty set = process all
+        monitor.update_matched_tokens(set())
+
+        log = _make_log()
+        monitor._handle_log(log)
+
+        assert monitor._total_events == 1
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_stats_property(self, mock_config: MagicMock) -> None:
+        """Stats property returns correct counts."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        stats = monitor.stats
+        assert stats["total_events"] == 0
+        assert stats["signals_emitted"] == 0
+        assert stats["active_tokens"] == 0
+
+        # Process a log
+        monitor._handle_log(_make_log())
+        stats = monitor.stats
+        assert stats["total_events"] == 1
+        assert stats["active_tokens"] == 1
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_on_signal_callback(self, mock_config: MagicMock) -> None:
+        """on_signal callback is invoked when convergence is detected."""
+        mock_config.return_value = _mock_config()
+        received: list[Signal] = []
+        monitor = OrderFlowMonitor(on_signal=lambda s: received.append(s))
+
+        # Build convergent data directly in the window
+        window = RollingWindow()
+        now = time.monotonic()
+        window._time_fn = lambda: now
+        for i in range(1, 7):
+            window.add(Decimal("10"), is_buy=True, timestamp=now - i * 300 - 1)
+        for _ in range(20):
+            window.add(Decimal("100"), is_buy=True, timestamp=now - 1)
+
+        token_id = str(10**40)
+        monitor._windows[token_id] = window
+
+        # Create a log that will trigger convergence check for this token
+        log = _make_log()
+        monitor._handle_log(log)
+
+        assert monitor._signals_emitted >= 1
+        assert len(received) >= 1
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    async def test_start_stop_lifecycle(self, mock_config: MagicMock) -> None:
+        """Start creates polling task, stop cleans up."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor(poll_interval=1)
+
+        # Mock _get_block_number to avoid real HTTP calls
+        monitor._get_block_number = AsyncMock(return_value=1000)
+        monitor._get_logs = AsyncMock(return_value=[])
+
+        await monitor.initialize()
+
+        # Manually set session to avoid real HTTP
+        monitor._session = MagicMock()
+        monitor._session.closed = False
+        monitor._session.close = AsyncMock()
+        monitor._running = True
+        monitor._last_block = 1000
+
+        # Create a task that we can cancel
+        monitor._task = asyncio.create_task(monitor._poll_loop())
+
+        # Let it run briefly
+        await asyncio.sleep(0.05)
+        assert monitor._running
+
+        await monitor.stop()
+        assert not monitor._running
+        assert monitor._task is None
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_poll_interval_stored(self, mock_config: MagicMock) -> None:
+        """Custom poll_interval is stored."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor(poll_interval=120)
+        assert monitor._poll_interval == 120
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_http_url_constructed(self, mock_config: MagicMock) -> None:
+        """HTTP URL is constructed from Alchemy key."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+        assert monitor._http_url == "https://polygon-mainnet.g.alchemy.com/v2/test-key"
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_get_metrics(self, mock_config: MagicMock) -> None:
+        """get_metrics returns correct flow metrics."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        # Process a few logs
+        monitor._handle_log(_make_log())
+        monitor._handle_log(_make_log())
+
+        token_id = str(10**40)
+        metrics = monitor.get_metrics(token_id)
+        assert metrics is not None
+        assert metrics.token_id == token_id
+        assert metrics.event_count == 2
 
 
 # ================================================================

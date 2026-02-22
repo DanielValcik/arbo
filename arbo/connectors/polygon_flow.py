@@ -1,8 +1,10 @@
 """Order flow monitor — Layer 7 (PM-105).
 
 Monitors Polygon blockchain for CTF Exchange OrderFilled events via
-Alchemy WebSocket (eth_subscribe). Tracks volume, buy/sell imbalance,
+Alchemy HTTP polling (eth_getLogs). Tracks volume, buy/sell imbalance,
 and z-score spikes to detect smart money activity.
+
+CU budget: ~5.1K CU/hour (eth_blockNumber ~10 CU + eth_getLogs ~75 CU, 1/min).
 
 See brief Layer 7 for full specification.
 """
@@ -11,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import math
 import time
 from collections import deque
@@ -258,9 +259,11 @@ def parse_order_filled(log: dict[str, Any]) -> OrderFilledEvent | None:
 class OrderFlowMonitor:
     """Layer 7: Smart money order flow monitor.
 
-    Subscribes to CTF Exchange OrderFilled events via Alchemy WebSocket.
+    Polls CTF Exchange OrderFilled events via Alchemy HTTP (eth_getLogs).
     Tracks volume flow per token, detects z-score spikes and imbalance
     convergence to emit trading signals.
+
+    CU budget: ~5.1K CU/hour (eth_blockNumber ~10 CU + eth_getLogs ~75 CU per poll).
 
     Signal convergence requires >=2 of:
     - Volume z-score > threshold (default 2.0)
@@ -268,136 +271,149 @@ class OrderFlowMonitor:
     - Cumulative delta trending (consistent directional flow)
     """
 
-    def __init__(self, on_signal: Callable[[Signal], None] | None = None) -> None:
+    def __init__(
+        self,
+        on_signal: Callable[[Signal], None] | None = None,
+        poll_interval: int = 60,
+    ) -> None:
         config = get_config()
         self._alchemy_key = config.alchemy_key
+        self._http_url = (
+            f"https://polygon-mainnet.g.alchemy.com/v2/{self._alchemy_key}"
+            if self._alchemy_key
+            else ""
+        )
         self._ctf_exchange = config.order_flow.ctf_exchange
         self._zscore_threshold = config.order_flow.volume_zscore_threshold
         self._imbalance_threshold = Decimal(str(config.order_flow.flow_imbalance_threshold))
         self._min_converging = config.order_flow.min_converging_signals
         self._on_signal = on_signal
+        self._poll_interval = poll_interval
         self._windows: dict[str, RollingWindow] = {}
         self._session: aiohttp.ClientSession | None = None
-        self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._task: asyncio.Task[None] | None = None
         self._running = False
+        self._last_block = 0
+        self._matched_tokens: set[str] = set()
         self._total_events = 0
         self._signals_emitted = 0
         self._topic: str = ""
 
     async def initialize(self) -> None:
-        """Build WebSocket URL and compute event topic."""
+        """Compute event topic hash."""
         self._topic = _compute_topic()
         if not self._alchemy_key:
             logger.warning("order_flow_no_alchemy_key", msg="ALCHEMY_KEY not set")
-        logger.info("order_flow_initialized", ctf_exchange=self._ctf_exchange)
+        logger.info(
+            "order_flow_initialized",
+            ctf_exchange=self._ctf_exchange,
+            poll_interval=self._poll_interval,
+        )
 
     async def start(self) -> None:
-        """Connect to Alchemy WS and subscribe to OrderFilled events."""
+        """Start polling loop (non-blocking, creates background task)."""
         if not self._alchemy_key:
             logger.warning("order_flow_cannot_start", msg="No Alchemy key")
             return
+        if self._running:
+            return
 
-        url = f"wss://polygon-mainnet.g.alchemy.com/v2/{self._alchemy_key}"
         self._session = aiohttp.ClientSession()
-
-        backoff = 1
-        max_backoff = 60
-
-        while True:
-            try:
-                self._ws = await self._session.ws_connect(url, heartbeat=30)
-                self._running = True
-
-                # Subscribe to logs
-                subscribe_msg = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "eth_subscribe",
-                    "params": [
-                        "logs",
-                        {
-                            "address": self._ctf_exchange,
-                            "topics": [self._topic],
-                        },
-                    ],
-                }
-                await self._ws.send_json(subscribe_msg)
-                logger.info("order_flow_subscribed", exchange=self._ctf_exchange)
-
-                self._task = asyncio.create_task(self._read_loop())
-                return
-
-            except Exception as e:
-                logger.warning("order_flow_connect_retry", error=str(e), backoff_s=backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
+        self._running = True
+        self._last_block = await self._get_block_number()
+        self._task = asyncio.create_task(self._poll_loop())
+        logger.info("order_flow_polling_started", from_block=self._last_block)
 
     async def stop(self) -> None:
-        """Disconnect and cleanup."""
+        """Stop polling and close session."""
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-        if self._ws and not self._ws.closed:
-            await self._ws.close()
+        self._task = None
         if self._session and not self._session.closed:
             await self._session.close()
+        self._session = None
         logger.info(
             "order_flow_stopped",
             total_events=self._total_events,
             signals=self._signals_emitted,
         )
 
-    async def _read_loop(self) -> None:
-        """Read WebSocket messages and process events."""
-        if self._ws is None:
+    def update_matched_tokens(self, token_ids: set[str]) -> None:
+        """Update the set of token IDs to filter on (from matched markets).
+
+        Args:
+            token_ids: Token IDs from discovery/matching. Empty = process all.
+        """
+        self._matched_tokens = token_ids
+
+    async def _poll_loop(self) -> None:
+        """Poll eth_getLogs every interval."""
+        while self._running:
+            try:
+                current_block = await self._get_block_number()
+                if current_block > self._last_block:
+                    logs = await self._get_logs(self._last_block + 1, current_block)
+                    for log in logs:
+                        self._handle_log(log)
+                    self._last_block = current_block
+                    logger.debug(
+                        "order_flow_poll_ok",
+                        from_block=self._last_block,
+                        to_block=current_block,
+                        logs=len(logs),
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("order_flow_poll_error", error=str(e))
+            # Sleep in 1s increments for responsive shutdown
+            for _ in range(self._poll_interval):
+                if not self._running:
+                    return
+                await asyncio.sleep(1)
+
+    async def _get_block_number(self) -> int:
+        """eth_blockNumber RPC call (~10 CU)."""
+        if self._session is None:
+            raise RuntimeError("Session not initialized")
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []}
+        async with self._session.post(self._http_url, json=payload) as resp:
+            data = await resp.json()
+            return int(data["result"], 16)
+
+    async def _get_logs(self, from_block: int, to_block: int) -> list[dict[str, Any]]:
+        """eth_getLogs for OrderFilled events (~75 CU per call)."""
+        if self._session is None:
+            raise RuntimeError("Session not initialized")
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "eth_getLogs",
+            "params": [
+                {
+                    "address": self._ctf_exchange,
+                    "topics": [self._topic],
+                    "fromBlock": hex(from_block),
+                    "toBlock": hex(to_block),
+                }
+            ],
+        }
+        async with self._session.post(self._http_url, json=payload) as resp:
+            data = await resp.json()
+            return data.get("result", [])
+
+    def _handle_log(self, log: dict[str, Any]) -> None:
+        """Parse log, filter by matched tokens, feed to RollingWindow."""
+        event = parse_order_filled(log)
+        if event is None:
             return
 
-        try:
-            async for msg in self._ws:
-                if not self._running:
-                    break
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    signal = self._handle_message(msg.data)
-                    if signal is not None:
-                        self._signals_emitted += 1
-                        logger.info(
-                            "order_flow_signal",
-                            token_id=signal.token_id[:20],
-                            edge=str(signal.edge),
-                        )
-                        if self._on_signal is not None:
-                            self._on_signal(signal)
-                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                    break
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.error("order_flow_read_error", error=str(e))
-        finally:
-            self._running = False
-
-    def _handle_message(self, raw: str) -> Signal | None:
-        """Process a raw WebSocket message.
-
-        Returns a Signal if convergence is detected, else None.
-        """
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return None
-
-        # eth_subscription messages have params.result
-        params = data.get("params", {})
-        result = params.get("result")
-        if result is None:
-            return None
-
-        event = parse_order_filled(result)
-        if event is None:
-            return None
+        # Filter: only process events for markets we're tracking
+        if self._matched_tokens and event.token_id not in self._matched_tokens:
+            return
 
         self._total_events += 1
 
@@ -409,7 +425,17 @@ class OrderFlowMonitor:
         volume = event.taker_amount if event.is_buy else event.maker_amount
         window.add(volume, event.is_buy)
 
-        return self._check_convergence(event.token_id)
+        # Check convergence and emit signal
+        signal = self._check_convergence(event.token_id)
+        if signal is not None:
+            self._signals_emitted += 1
+            logger.info(
+                "order_flow_signal",
+                token_id=signal.token_id[:20],
+                edge=str(signal.edge),
+            )
+            if self._on_signal is not None:
+                self._on_signal(signal)
 
     def _check_convergence(self, token_id: str) -> Signal | None:
         """Check if multiple flow signals converge for a token.

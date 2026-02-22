@@ -393,11 +393,14 @@ class ArboOrchestrator:
         return s
 
     async def _init_order_flow(self) -> Any:
-        # DISABLED: Alchemy WebSocket streaming on CTF Exchange burns 30M CU/day.
-        # Needs redesign: polling via eth_getLogs instead of eth_subscribe.
-        # See CEO directive 2026-02-22.
-        logger.info("order_flow_disabled", reason="alchemy_cu_limit")
-        return None
+        from arbo.connectors.polygon_flow import OrderFlowMonitor
+
+        monitor = OrderFlowMonitor(
+            on_signal=lambda sig: self._signal_queue.put_nowait(sig),
+            poll_interval=60,
+        )
+        await monitor.initialize()
+        return monitor
 
     async def _init_attention(self) -> Any:
         if not self._discovery:
@@ -781,12 +784,15 @@ class ArboOrchestrator:
             await self._signal_queue.put(sig)
 
     async def _run_order_flow(self) -> None:
-        """Layer 7: Order flow monitor (continuous WebSocket)."""
+        """Layer 7: Order flow monitor (polling via eth_getLogs).
+
+        The monitor runs its own internal poll loop via start().
+        This coroutine just starts it and blocks until shutdown.
+        """
         if self._order_flow is None:
             return
-        await self._order_flow.initialize()
         await self._order_flow.start()
-        # start() returns after the read_loop task is created; we wait on shutdown
+        # start() creates a background polling task; we wait on shutdown
         while not self._shutdown_event.is_set():
             await asyncio.sleep(1)
 
@@ -939,7 +945,7 @@ class ArboOrchestrator:
                             layer=name,
                             error=str(exc),
                         )
-                    self._restart_layer(name)
+                    await self._restart_layer(name)
 
                 # Check heartbeat timeout
                 elif now - state.last_heartbeat > timeout:
@@ -948,13 +954,16 @@ class ArboOrchestrator:
                         layer=name,
                         last_heartbeat_ago_s=int(now - state.last_heartbeat),
                     )
-                    self._restart_layer(name)
+                    await self._restart_layer(name)
 
             # Check LLM degraded mode
             await self._check_llm_health()
 
-    def _restart_layer(self, name: str) -> None:
-        """Restart a single layer task."""
+    async def _restart_layer(self, name: str) -> None:
+        """Restart a single layer task with proper resource cleanup.
+
+        Lifecycle: cancel old task → cleanup component → reinit component → start new task.
+        """
         state = self._layers.get(name)
         if state is None or state.permanent_stop:
             return
@@ -964,11 +973,19 @@ class ArboOrchestrator:
             logger.warning("layer_max_restarts_reached", layer=name)
             return
 
-        # Cancel old task
+        # 1. Cancel old task and wait for it
         if state.task and not state.task.done():
             state.task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await state.task
 
-        # Find the original coro factory and interval
+        # 2. Cleanup old component resources (close sessions, WebSockets, etc.)
+        await self._cleanup_layer(name)
+
+        # 3. Reinitialize component (create fresh instance)
+        await self._reinit_layer(name)
+
+        # 4. Start new task
         layer_map = self._get_layer_map()
         if name not in layer_map:
             return
@@ -980,6 +997,49 @@ class ArboOrchestrator:
         )
 
         logger.info("layer_restarted", layer=name, restart_count=state.restart_count)
+
+    async def _cleanup_layer(self, name: str) -> None:
+        """Close/stop the component for a layer before reinit."""
+        cleanup_map: dict[str, tuple[str, str]] = {
+            "L1_market_maker": ("_market_maker", "stop"),
+            "L3_semantic_graph": ("_market_graph", "close"),
+            "L4_whale_monitor": ("_whale_monitor", "close"),
+            "L6_temporal_crypto": ("_temporal_crypto", "close"),
+            "L7_order_flow": ("_order_flow", "stop"),
+        }
+        entry = cleanup_map.get(name)
+        if entry is None:
+            return
+        attr_name, method_name = entry
+        component = getattr(self, attr_name, None)
+        if component is not None and hasattr(component, method_name):
+            try:
+                await getattr(component, method_name)()
+                logger.info("layer_component_cleaned", layer=name)
+            except Exception as e:
+                logger.warning("layer_cleanup_error", layer=name, error=str(e))
+
+    async def _reinit_layer(self, name: str) -> None:
+        """Reinitialize the component for a layer after cleanup."""
+        reinit_map: dict[str, tuple[str, str]] = {
+            "L1_market_maker": ("_init_market_maker", "_market_maker"),
+            "L3_semantic_graph": ("_init_market_graph", "_market_graph"),
+            "L4_whale_monitor": ("_init_whale_monitor", "_whale_monitor"),
+            "L6_temporal_crypto": ("_init_temporal_crypto", "_temporal_crypto"),
+            "L7_order_flow": ("_init_order_flow", "_order_flow"),
+        }
+        entry = reinit_map.get(name)
+        if entry is None:
+            return
+        init_fn_name, attr_name = entry
+        init_fn = getattr(self, init_fn_name, None)
+        if init_fn is not None:
+            try:
+                result = await init_fn()
+                setattr(self, attr_name, result)
+                logger.info("layer_component_reinited", layer=name)
+            except Exception as e:
+                logger.warning("layer_reinit_error", layer=name, error=str(e))
 
     def _get_layer_map(self) -> dict[str, tuple[Any, float]]:
         """Return mapping of layer name to (coro_factory, interval)."""
