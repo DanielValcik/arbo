@@ -349,11 +349,24 @@ class GammaMarket:
         }
 
 
+# Sports series IDs from Gamma API /sports endpoint (verified 2026-02-22)
+SPORTS_SERIES: dict[str, int] = {
+    "epl": 10188,
+    "la_liga": 10193,
+    "bundesliga": 10194,
+    "serie_a": 10203,
+    "ligue_1": 10195,
+    "ucl": 10204,
+    "europa_league": 10209,
+}
+
+
 class MarketDiscovery:
     """Discovers and catalogs active Polymarket markets via Gamma API.
 
     Features:
     - Paginated fetching of all active markets
+    - Sports match-level events via /events endpoint (series-based)
     - Filtering by category, volume, fee status
     - Categorization: soccer, politics, crypto, esports, entertainment, attention_markets
     - 15-minute refresh interval
@@ -471,6 +484,77 @@ class MarketDiscovery:
         logger.info("markets_fetched", total=len(all_markets))
         return all_markets
 
+    async def _fetch_sports_events(self) -> list[GammaMarket]:
+        """Fetch match-level sports events via /events endpoint.
+
+        Sports markets use a series-based system on the Events endpoint,
+        NOT the Markets endpoint. Each soccer league has a series ID.
+        Events contain nested market arrays with moneyline/spreads/totals.
+
+        Returns:
+            List of GammaMarket objects from sports events.
+        """
+        if not self._session:
+            return []
+
+        all_markets: list[GammaMarket] = []
+        for league, series_id in SPORTS_SERIES.items():
+            try:
+                params = {
+                    "active": "true",
+                    "closed": "false",
+                    "series_id": str(series_id),
+                    "limit": "50",
+                }
+                url = f"{self._gamma_url}/events"
+                async with self._session.get(url, params=params) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            "sports_events_error",
+                            league=league,
+                            status=resp.status,
+                        )
+                        continue
+                    events = await resp.json()
+                    if not isinstance(events, list):
+                        continue
+
+                    for event in events:
+                        nested = event.get("markets", [])
+                        if not isinstance(nested, list):
+                            continue
+                        for raw_market in nested:
+                            if not isinstance(raw_market, dict):
+                                continue
+                            # Skip closed/inactive
+                            if raw_market.get("closed", False):
+                                continue
+                            if not raw_market.get("active", True):
+                                continue
+                            market = GammaMarket(raw_market)
+                            # Force soccer category for sports events
+                            market.category = "soccer"
+                            if market.condition_id and market.active:
+                                all_markets.append(market)
+
+                logger.debug(
+                    "sports_events_fetched",
+                    league=league,
+                    events=len(events),
+                    markets=sum(1 for e in events for _ in (e.get("markets") or [])),
+                )
+            except Exception as e:
+                logger.warning("sports_events_exception", league=league, error=str(e))
+            await asyncio.sleep(0.1)
+
+        if all_markets:
+            logger.info(
+                "sports_match_markets_found",
+                total=len(all_markets),
+                leagues=len(SPORTS_SERIES),
+            )
+        return all_markets
+
     async def refresh(self) -> list[GammaMarket]:
         """Refresh market catalog if refresh interval has elapsed.
 
@@ -483,8 +567,15 @@ class MarketDiscovery:
 
         markets = await self.fetch_all_active_markets()
 
+        # Fetch sports match-level events (moneyline, spreads, totals)
+        sports_markets = await self._fetch_sports_events()
+        markets.extend(sports_markets)
+
         self._markets = {m.condition_id: m for m in markets}
         self._last_refresh = now
+
+        # Sync to DB for dashboard JOINs
+        await self._sync_markets_to_db(markets)
 
         # Log category breakdown
         categories: dict[str, int] = {}
@@ -493,6 +584,43 @@ class MarketDiscovery:
         logger.info("market_catalog_refreshed", total=len(markets), categories=categories)
 
         return markets
+
+    async def _sync_markets_to_db(self, markets: list[GammaMarket]) -> None:
+        """Sync discovered markets to the PostgreSQL markets table.
+
+        Uses upsert (INSERT ON CONFLICT UPDATE) so dashboard JOINs with
+        PaperTrade/PaperPosition can resolve question + category.
+        """
+        try:
+            import sqlalchemy as sa
+
+            from arbo.utils.db import Market, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                for m in markets:
+                    db_dict = m.to_db_dict()
+                    stmt = (
+                        sa.dialects.postgresql.insert(Market)
+                        .values(**db_dict)
+                        .on_conflict_do_update(
+                            index_elements=["condition_id"],
+                            set_={
+                                "question": db_dict["question"],
+                                "category": db_dict["category"],
+                                "volume_24h": db_dict["volume_24h"],
+                                "liquidity": db_dict["liquidity"],
+                                "active": db_dict["active"],
+                                "last_price_yes": db_dict["last_price_yes"],
+                                "last_price_no": db_dict["last_price_no"],
+                            },
+                        )
+                    )
+                    await session.execute(stmt)
+                await session.commit()
+            logger.info("markets_synced_to_db", count=len(markets))
+        except Exception as e:
+            logger.warning("market_db_sync_failed", error=str(e))
 
     def get_all(self) -> list[GammaMarket]:
         """Get all cached markets."""
@@ -593,6 +721,26 @@ class MarketDiscovery:
             and m.price_yes is not None
             and Decimal("0.05") <= m.price_yes <= Decimal("0.95")
             and len(m.outcomes) == 2
+        ]
+
+    def get_soccer_match_markets(self) -> list[GammaMarket]:
+        """Get match-level soccer markets (moneyline: 'Will X win on date?').
+
+        These come from the /events endpoint via sports series IDs.
+        Filters for category=soccer, active, binary, price 5-95 cents,
+        and question pattern indicating a match (not seasonal/outright).
+        """
+        match_keywords = ("win on", "beat", "end in a draw", "spread:", "o/u ", "both teams")
+        return [
+            m
+            for m in self._markets.values()
+            if m.category == "soccer"
+            and m.active
+            and not m.closed
+            and m.price_yes is not None
+            and Decimal("0.05") <= m.price_yes <= Decimal("0.95")
+            and len(m.outcomes) == 2
+            and any(kw in m.question.lower() for kw in match_keywords)
         ]
 
     def get_all_active(self) -> list[GammaMarket]:

@@ -113,7 +113,22 @@ def _infer_category(question: str | None, details: dict[str, Any] | None = None)
         return "Crypto"
     if any(kw in q for kw in ("election", "trump", "biden", "senate", "congress", "president")):
         return "Politics"
-    return "Soccer"
+    if any(
+        kw in q
+        for kw in (
+            "win on",
+            "beat",
+            "draw",
+            "premier league",
+            "la liga",
+            "bundesliga",
+            "serie a",
+            "soccer",
+            "football",
+        )
+    ):
+        return "Soccer"
+    return "Other"
 
 
 # ---------------------------------------------------------------------------

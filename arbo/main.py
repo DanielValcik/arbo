@@ -232,9 +232,7 @@ class ArboOrchestrator:
         )
 
         # Binance client (shared)
-        self._binance_client = await self._init_optional(
-            "BinanceClient", self._init_binance_client
-        )
+        self._binance_client = await self._init_optional("BinanceClient", self._init_binance_client)
 
         # Crypto model
         self._crypto_model = await self._init_optional("CryptoModel", self._init_crypto_model)
@@ -938,8 +936,19 @@ class ArboOrchestrator:
 
         # FIX 2: Per-market deduplication within batch
         processed_markets: set[str] = set()
+        trades_this_scan = 0
+        max_trades_per_scan = 5
 
         for opp in tradeable:
+            # Per-scan trade limit: prevent rapid capital deployment
+            if trades_this_scan >= max_trades_per_scan:
+                logger.info(
+                    "per_scan_limit_reached",
+                    trades=trades_this_scan,
+                    max=max_trades_per_scan,
+                )
+                break
+
             # FIX 2: Skip if already traded this market in this batch
             if opp.market_condition_id in processed_markets:
                 logger.info(
@@ -1029,6 +1038,7 @@ class ArboOrchestrator:
             )
             if trade is not None:
                 processed_markets.add(opp.market_condition_id)
+                trades_this_scan += 1
                 await self._paper_engine.save_trade_to_db(trade)
 
     async def _save_signals_to_db(self, signals: list[Signal]) -> None:
@@ -1037,7 +1047,8 @@ class ArboOrchestrator:
         Uses the Signal DB model, not the scanner Signal dataclass.
         """
         try:
-            from arbo.utils.db import Signal as SignalDB, get_session_factory
+            from arbo.utils.db import Signal as SignalDB
+            from arbo.utils.db import get_session_factory
 
             factory = get_session_factory()
             async with factory() as session:
@@ -1058,16 +1069,15 @@ class ArboOrchestrator:
         except Exception as e:
             logger.warning("signals_save_failed", error=str(e))
 
-    async def _update_signal_confluence_scores(
-        self, tradeable: list[object]
-    ) -> None:
+    async def _update_signal_confluence_scores(self, tradeable: list[object]) -> None:
         """Update confluence_score in DB signals after scoring (best-effort).
 
         Sets the final confluence score on signals that matched tradeable opportunities
         so the dashboard shows post-scoring values, not the pre-scoring default of 0.
         """
         try:
-            from arbo.utils.db import Signal as SignalDB, get_session_factory
+            from arbo.utils.db import Signal as SignalDB
+            from arbo.utils.db import get_session_factory
 
             # Build market_id → score mapping from scored opportunities
             score_map: dict[str, int] = {}
@@ -1079,9 +1089,9 @@ class ArboOrchestrator:
 
             factory = get_session_factory()
             async with factory() as session:
-                # Update signals that match scored markets (last batch only)
+                total_updated = 0
                 for market_id, score in score_map.items():
-                    await session.execute(
+                    result = await session.execute(
                         sa.update(SignalDB)
                         .where(
                             SignalDB.market_condition_id == market_id,
@@ -1089,8 +1099,13 @@ class ArboOrchestrator:
                         )
                         .values(confluence_score=score)
                     )
+                    total_updated += result.rowcount
                 await session.commit()
-            logger.debug("confluence_scores_updated", markets=len(score_map))
+            logger.info(
+                "confluence_scores_updated",
+                markets=len(score_map),
+                rows_updated=total_updated,
+            )
         except Exception as e:
             logger.warning("confluence_score_update_failed", error=str(e))
 
