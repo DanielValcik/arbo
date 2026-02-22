@@ -45,6 +45,25 @@
         .badge-paper { background: var(--yellow); color: #000; }
         .badge-live { background: var(--red); color: #fff; }
         .refresh-info { color: var(--text-dim); font-size: 11px; }
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .filter-bar label { color: var(--text-dim); }
+        .filter-bar select {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 12px;
+        }
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -83,6 +102,40 @@
         .positive { color: var(--green); }
         .negative { color: var(--red); }
         .neutral { color: var(--text-dim); }
+        .cat-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .cat-card {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 11px;
+        }
+        .cat-card-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        .cat-stat {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-dim);
+        }
+        .cat-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .cat-soccer { background: var(--green); color: #000; }
+        .cat-crypto { background: var(--blue); color: #000; }
+        .cat-politics { background: var(--purple); color: #000; }
+        .cat-other { background: var(--text-dim); color: #000; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -108,7 +161,7 @@
         tr:hover { background: rgba(88, 166, 255, 0.05); }
         .layer-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 8px;
         }
         .layer-card {
@@ -185,6 +238,16 @@
         <div class="refresh-info">Last refresh: <span id="lastRefresh">--</span></div>
     </div>
 
+    <div class="filter-bar">
+        <label>Category:</label>
+        <select id="categoryFilter" onchange="applyFilter()">
+            <option value="all">All</option>
+            <option value="Soccer">Soccer</option>
+            <option value="Crypto">Crypto</option>
+            <option value="Politics">Politics</option>
+        </select>
+    </div>
+
     <div class="grid">
         <!-- Portfolio -->
         <div class="card">
@@ -195,6 +258,7 @@
                 <div class="metric"><div class="metric-value" id="pWeeklyPnl">--</div><div class="metric-label">Weekly P&L</div></div>
                 <div class="metric"><div class="metric-value" id="pRoi">--</div><div class="metric-label">Total ROI</div></div>
             </div>
+            <div class="cat-breakdown" id="categoryBreakdown"></div>
         </div>
 
         <!-- P&L Chart -->
@@ -257,6 +321,7 @@
                     <thead>
                         <tr>
                             <th>Market</th>
+                            <th>Category</th>
                             <th>Side</th>
                             <th>Size</th>
                             <th>Avg Price</th>
@@ -267,7 +332,7 @@
                         </tr>
                     </thead>
                     <tbody id="positionsBody">
-                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                        <tr><td colspan="9" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -281,6 +346,7 @@
                     <thead>
                         <tr>
                             <th>Time</th>
+                            <th>Category</th>
                             <th>Layer</th>
                             <th>Market</th>
                             <th>Direction</th>
@@ -291,7 +357,7 @@
                         </tr>
                     </thead>
                     <tbody id="signalsBody">
-                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                        <tr><td colspan="9" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -306,6 +372,7 @@
                         <tr>
                             <th>#</th>
                             <th>Market</th>
+                            <th>Category</th>
                             <th>Layer</th>
                             <th>Side</th>
                             <th>Price</th>
@@ -318,7 +385,7 @@
                         </tr>
                     </thead>
                     <tbody id="tradesBody">
-                        <tr><td colspan="11" class="loading">Loading...</td></tr>
+                        <tr><td colspan="12" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -327,6 +394,32 @@
 
     <script>
     let pnlChart = null;
+    let currentFilter = 'all';
+
+    // Store latest data for re-filtering
+    let latestPositions = [];
+    let latestSignals = [];
+    let latestTrades = [];
+
+    function catBadge(cat) {
+        const c = (cat || 'Other').toLowerCase();
+        const cls = c === 'soccer' ? 'cat-soccer' :
+                    c === 'crypto' ? 'cat-crypto' :
+                    c === 'politics' ? 'cat-politics' : 'cat-other';
+        return `<span class="cat-badge ${cls}">${cat || 'Other'}</span>`;
+    }
+
+    function matchesFilter(category) {
+        if (currentFilter === 'all') return true;
+        return (category || '').toLowerCase() === currentFilter.toLowerCase();
+    }
+
+    function applyFilter() {
+        currentFilter = document.getElementById('categoryFilter').value;
+        renderPositions();
+        renderSignals();
+        renderTrades();
+    }
 
     function pnlClass(val) {
         if (val > 0) return 'positive';
@@ -396,6 +489,26 @@
         roiEl.textContent = fmtPct(data.roi_pct);
         roiEl.className = 'metric-value ' + pnlClass(data.roi_pct);
 
+        // Category P&L breakdown
+        const catDiv = document.getElementById('categoryBreakdown');
+        const cats = data.category_pnl || {};
+        const catEntries = Object.entries(cats);
+        if (catEntries.length > 0) {
+            catDiv.innerHTML = catEntries.map(([cat, d]) => {
+                const pnl = (d.realized_pnl || 0) + (d.unrealized_pnl || 0);
+                return `
+                    <div class="cat-card">
+                        <div class="cat-card-title">${catBadge(cat)}</div>
+                        <div class="cat-stat"><span>Trades</span><span>${d.trades || 0}</span></div>
+                        <div class="cat-stat"><span>Open</span><span>${d.open_positions || 0}</span></div>
+                        <div class="cat-stat"><span>Invested</span><span>$${(d.invested_open || 0).toFixed(2)}</span></div>
+                        <div class="cat-stat"><span>P&L</span><span class="${pnlClass(pnl)}">${fmtPnl(pnl)}</span></div>
+                    </div>`;
+            }).join('');
+        } else {
+            catDiv.innerHTML = '<div style="color:var(--text-dim);font-size:11px">No trade data yet</div>';
+        }
+
         // Update chart
         if (data.snapshots && data.snapshots.length > 0) {
             const labels = data.snapshots.map(s => fmtShortTime(s.timestamp));
@@ -459,6 +572,7 @@
             const hb = l.heartbeat_ago_s < 60 ? l.heartbeat_ago_s + 's' :
                        l.heartbeat_ago_s < 3600 ? Math.floor(l.heartbeat_ago_s/60) + 'm' :
                        Math.floor(l.heartbeat_ago_s/3600) + 'h';
+            const cats = l.categories ? `<div class="layer-stat"><span>Categories</span><span>${l.categories}</span></div>` : '';
             return `
                 <div class="layer-card">
                     <div class="layer-header">
@@ -468,23 +582,22 @@
                     <div class="layer-stat"><span>Signals 24h</span><span>${l.signals_24h}</span></div>
                     <div class="layer-stat"><span>Last heartbeat</span><span>${hb} ago</span></div>
                     <div class="layer-stat"><span>Restarts</span><span>${l.restart_count}</span></div>
+                    ${cats}
                 </div>`;
         }).join('');
     }
 
-    async function updatePositions() {
-        const data = await fetchJSON('/api/positions');
-        if (!data) return;
-
+    function renderPositions() {
         const tbody = document.getElementById('positionsBody');
-        if (!data.positions || data.positions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
+        const filtered = latestPositions.filter(p => matchesFilter(p.category));
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
             return;
         }
-
-        tbody.innerHTML = data.positions.map(p => `
+        tbody.innerHTML = filtered.map(p => `
             <tr>
-                <td title="${p.market}">${truncate(p.market, 40)}</td>
+                <td title="${p.market}">${truncate(p.market, 35)}</td>
+                <td>${catBadge(p.category)}</td>
                 <td>${p.side}</td>
                 <td>$${(p.size || 0).toFixed(2)}</td>
                 <td>${(p.avg_price || 0).toFixed(4)}</td>
@@ -496,28 +609,40 @@
         `).join('');
     }
 
-    async function updateSignals() {
-        const data = await fetchJSON('/api/signals');
+    async function updatePositions() {
+        const data = await fetchJSON('/api/positions');
         if (!data) return;
+        latestPositions = data.positions || [];
+        renderPositions();
+    }
 
+    function renderSignals() {
         const tbody = document.getElementById('signalsBody');
-        if (!data.signals || data.signals.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No signals yet</td></tr>';
+        const filtered = latestSignals.filter(s => matchesFilter(s.category));
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No signals yet</td></tr>';
             return;
         }
-
-        tbody.innerHTML = data.signals.slice(0, 50).map(s => `
+        tbody.innerHTML = filtered.slice(0, 50).map(s => `
             <tr>
                 <td>${fmtTime(s.timestamp)}</td>
+                <td>${catBadge(s.category)}</td>
                 <td>L${s.layer}</td>
-                <td title="${s.market}">${truncate(s.market, 35)}</td>
+                <td title="${s.market}">${truncate(s.market, 30)}</td>
                 <td>${s.direction}</td>
                 <td>${s.edge !== null ? (s.edge * 100).toFixed(1) + '%' : '--'}</td>
                 <td>${s.confidence !== null ? (s.confidence * 100).toFixed(0) + '%' : '--'}</td>
                 <td>${s.confluence_score !== null ? s.confluence_score : '--'}</td>
-                <td title="${s.reason}">${truncate(s.reason, 30)}</td>
+                <td title="${s.reason}">${truncate(s.reason, 25)}</td>
             </tr>
         `).join('');
+    }
+
+    async function updateSignals() {
+        const data = await fetchJSON('/api/signals');
+        if (!data) return;
+        latestSignals = data.signals || [];
+        renderSignals();
     }
 
     async function updateRisk() {
@@ -566,24 +691,22 @@
         cEl.style.color = (cVal === 1) ? 'var(--yellow)' : '';
     }
 
-    async function updateTrades() {
-        const data = await fetchJSON('/api/trades');
-        if (!data) return;
-
+    function renderTrades() {
         const tbody = document.getElementById('tradesBody');
-        if (!data.trades || data.trades.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
+        const filtered = latestTrades.filter(t => matchesFilter(t.category));
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="12" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
             return;
         }
-
-        tbody.innerHTML = data.trades.map(t => {
+        tbody.innerHTML = filtered.map(t => {
             const statusColor = t.status === 'won' ? 'var(--green)' :
                                t.status === 'lost' ? 'var(--red)' :
                                t.status === 'open' ? 'var(--blue)' : 'var(--text-dim)';
             return `
                 <tr>
                     <td>${t.id}</td>
-                    <td title="${t.market}">${truncate(t.market, 30)}</td>
+                    <td title="${t.market}">${truncate(t.market, 25)}</td>
+                    <td>${catBadge(t.category)}</td>
                     <td>L${t.layer}</td>
                     <td>${t.side}</td>
                     <td>${(t.price || 0).toFixed(4)}</td>
@@ -595,6 +718,13 @@
                     <td>${fmtTime(t.placed_at)}</td>
                 </tr>`;
         }).join('');
+    }
+
+    async function updateTrades() {
+        const data = await fetchJSON('/api/trades');
+        if (!data) return;
+        latestTrades = data.trades || [];
+        renderTrades();
     }
 
     async function fetchAll() {

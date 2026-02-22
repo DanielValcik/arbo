@@ -17,6 +17,7 @@ rsync -avz --delete \
     --exclude '.pytest_cache' \
     --exclude '.ruff_cache' \
     --exclude '/models/' \
+    --exclude 'data/models/' \
     --exclude 'logs/' \
     --exclude '.git' \
     --exclude '.claude' \

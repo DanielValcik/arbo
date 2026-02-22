@@ -150,6 +150,7 @@ def evaluate_pair(
             "question": market.question[:100],
             "outright_team": pair.outright_team,
             "sport_key": pair.sport_key,
+            "category": "soccer",
             "used_model": value_model is not None and value_model.is_trained,
         },
     )
@@ -387,6 +388,7 @@ class ValueSignalGenerator:
                 "fee": str(fee),
                 "spot_price": str(spot),
                 "strike_price": str(strike),
+                "time_to_expiry": str(round(time_to_expiry, 1)),
                 "asset": info.asset,
                 "question": market.question[:100],
                 "category": "crypto",

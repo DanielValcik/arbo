@@ -86,6 +86,36 @@ def _dec(val: Any) -> float | None:
     return float(val)
 
 
+# Layer → category mapping
+_LAYER_CATEGORIES: dict[str, str] = {
+    "L1_market_maker": "Soccer",
+    "L2_value_signal": "Soccer + Crypto + Politics",
+    "L3_semantic_graph": "All",
+    "L4_whale_copy": "All",
+    "L5_logical_arb": "All",
+    "L6_temporal_crypto": "Crypto",
+    "L7_order_flow": "All",
+    "L8_attention": "All",
+    "L9_sports_latency": "Soccer",
+}
+
+
+def _infer_category(question: str | None, details: dict[str, Any] | None = None) -> str:
+    """Infer market category from signal details or market question."""
+    if details:
+        cat = details.get("category", "")
+        if cat:
+            return cat.capitalize()
+    if not question:
+        return "Other"
+    q = question.lower()
+    if any(kw in q for kw in ("btc", "bitcoin", "eth", "ethereum", "sol", "solana", "crypto")):
+        return "Crypto"
+    if any(kw in q for kw in ("election", "trump", "biden", "senate", "congress", "president")):
+        return "Politics"
+    return "Soccer"
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -103,7 +133,7 @@ async def dashboard_page(
 
 @app.get("/api/portfolio")
 async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Portfolio summary: balance, P&L, snapshot history for chart."""
+    """Portfolio summary: balance, P&L, snapshot history, per-category breakdown."""
     orch = state.orchestrator
     if orch is None:
         return {"error": "Orchestrator not available"}
@@ -117,9 +147,16 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
     daily_pnl = 0.0
     weekly_pnl = 0.0
     snapshots: list[dict[str, Any]] = []
+    category_pnl: dict[str, dict[str, Any]] = {}
 
     try:
-        from arbo.utils.db import PaperSnapshot, PaperTrade, get_session_factory
+        from arbo.utils.db import (
+            Market,
+            PaperPosition,
+            PaperSnapshot,
+            PaperTrade,
+            get_session_factory,
+        )
 
         factory = get_session_factory()
         async with factory() as session:
@@ -142,6 +179,52 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                 )
             )
             weekly_pnl = _dec(result.scalar()) or 0.0
+
+            # Per-category P&L: join trades with markets to get category
+            result = await session.execute(
+                sa.select(
+                    Market.category,
+                    sa.func.count(PaperTrade.id),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    sa.func.coalesce(
+                        sa.func.sum(
+                            sa.case(
+                                (PaperTrade.status == "open", PaperTrade.size),
+                                else_=sa.literal(0),
+                            )
+                        ),
+                        0,
+                    ),
+                )
+                .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
+                .group_by(Market.category)
+            )
+            for row in result.all():
+                cat = (row[0] or "other").capitalize()
+                category_pnl[cat] = {
+                    "trades": row[1],
+                    "realized_pnl": _dec(row[2]) or 0.0,
+                    "invested": _dec(row[3]) or 0.0,
+                }
+
+            # Open positions per category
+            result = await session.execute(
+                sa.select(
+                    Market.category,
+                    sa.func.count(PaperPosition.id),
+                    sa.func.coalesce(sa.func.sum(PaperPosition.size), 0),
+                    sa.func.coalesce(sa.func.sum(PaperPosition.unrealized_pnl), 0),
+                )
+                .outerjoin(Market, PaperPosition.market_condition_id == Market.condition_id)
+                .group_by(Market.category)
+            )
+            for row in result.all():
+                cat = (row[0] or "other").capitalize()
+                if cat not in category_pnl:
+                    category_pnl[cat] = {"trades": 0, "realized_pnl": 0.0, "invested": 0.0}
+                category_pnl[cat]["open_positions"] = row[1]
+                category_pnl[cat]["invested_open"] = _dec(row[2]) or 0.0
+                category_pnl[cat]["unrealized_pnl"] = _dec(row[3]) or 0.0
 
             # Snapshots for chart (last 7 days)
             result = await session.execute(
@@ -179,12 +262,13 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
         "total_pnl": round(total_pnl, 2),
         "roi_pct": round(roi_pct, 2),
         "snapshots": snapshots,
+        "category_pnl": category_pnl,
     }
 
 
 @app.get("/api/positions")
 async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Open positions with market names."""
+    """Open positions with market names and category."""
     orch = state.orchestrator
     if orch is None:
         return {"positions": []}
@@ -196,13 +280,16 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                sa.select(PaperPosition, Market.question)
+                sa.select(PaperPosition, Market.question, Market.category)
                 .outerjoin(Market, PaperPosition.market_condition_id == Market.condition_id)
                 .order_by(PaperPosition.opened_at.desc())
             )
             for row in result.all():
                 pos = row[0]
                 question = row[1] or pos.market_condition_id[:20]
+                category = (row[2] or "other").capitalize()
+                if category == "Other":
+                    category = _infer_category(question)
                 positions.append(
                     {
                         "market": question,
@@ -214,6 +301,7 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         "current_price": _dec(pos.current_price),
                         "unrealized_pnl": _dec(pos.unrealized_pnl),
                         "layer": pos.layer,
+                        "category": category,
                         "opened_at": pos.opened_at.isoformat() if pos.opened_at else None,
                     }
                 )
@@ -225,7 +313,7 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
 @app.get("/api/signals")
 async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Last 100 signals with market names."""
+    """Last 100 signals with market names and category."""
     signals: list[dict[str, Any]] = []
     try:
         from arbo.utils.db import Market, get_session_factory
@@ -234,7 +322,7 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                sa.select(DBSignal, Market.question)
+                sa.select(DBSignal, Market.question, Market.category)
                 .outerjoin(Market, DBSignal.market_condition_id == Market.condition_id)
                 .order_by(DBSignal.detected_at.desc())
                 .limit(100)
@@ -244,6 +332,10 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
                 question = row[1] or sig.market_condition_id[:20]
                 details = sig.details or {}
                 reason = details.get("reason", details.get("match_type", ""))
+                # Category from signal details (most accurate) or market table
+                category = details.get("category", row[2] or "other")
+                if isinstance(category, str):
+                    category = category.capitalize()
                 signals.append(
                     {
                         "timestamp": sig.detected_at.isoformat() if sig.detected_at else None,
@@ -253,6 +345,7 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
                         "edge": _dec(sig.edge),
                         "confidence": _dec(sig.confidence),
                         "confluence_score": sig.confluence_score,
+                        "category": category,
                         "reason": str(reason)[:100] if reason else "",
                     }
                 )
@@ -264,7 +357,7 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
 
 @app.get("/api/layers")
 async def api_layers(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Per-layer status: green/yellow/red, heartbeat, restart count, 24h signal count."""
+    """Per-layer status with category info."""
     orch = state.orchestrator
     if orch is None:
         return {"layers": []}
@@ -323,6 +416,7 @@ async def api_layers(_user: str = Depends(_verify_credentials)) -> dict[str, Any
                 "heartbeat_ago_s": int(heartbeat_ago),
                 "restart_count": ls.restart_count,
                 "signals_24h": signal_counts.get(layer_num, 0),
+                "categories": _LAYER_CATEGORIES.get(name, ""),
             }
         )
 
@@ -408,7 +502,7 @@ async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]
 
 @app.get("/api/trades")
 async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Last 50 trades with market names."""
+    """Last 50 trades with market names and category."""
     trades: list[dict[str, Any]] = []
     try:
         from arbo.utils.db import Market, PaperTrade, get_session_factory
@@ -416,7 +510,7 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                sa.select(PaperTrade, Market.question)
+                sa.select(PaperTrade, Market.question, Market.category)
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
                 .order_by(PaperTrade.placed_at.desc())
                 .limit(50)
@@ -424,6 +518,9 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
             for row in result.all():
                 trade = row[0]
                 question = row[1] or trade.market_condition_id[:20]
+                category = (row[2] or "other").capitalize()
+                if category == "Other":
+                    category = _infer_category(question)
                 trades.append(
                     {
                         "id": trade.id,
@@ -437,6 +534,7 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
                         "status": trade.status,
                         "actual_pnl": _dec(trade.actual_pnl),
                         "fee_paid": _dec(trade.fee_paid),
+                        "category": category,
                         "placed_at": trade.placed_at.isoformat() if trade.placed_at else None,
                         "resolved_at": (
                             trade.resolved_at.isoformat() if trade.resolved_at else None

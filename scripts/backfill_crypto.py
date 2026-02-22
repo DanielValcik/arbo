@@ -21,9 +21,7 @@ import json
 import math
 import ssl
 import sys
-import time
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +35,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from arbo.connectors.binance_client import BinanceClient
 from arbo.connectors.market_discovery import categorize_crypto_market
-from arbo.models.calibration import brier_score
 from arbo.models.crypto_features import (
     CRYPTO_FEATURE_COLUMNS,
     compute_distance_pct,
@@ -49,7 +46,9 @@ from arbo.models.xgboost_crypto import (
 )
 
 
-async def fetch_closed_crypto_markets(gamma_url: str = "https://gamma-api.polymarket.com") -> list[dict[str, Any]]:
+async def fetch_closed_crypto_markets(
+    gamma_url: str = "https://gamma-api.polymarket.com",
+) -> list[dict[str, Any]]:
     """Fetch all closed crypto markets from Gamma API."""
     ssl_ctx = ssl.create_default_context(cafile=certifi.where())
     async with aiohttp.ClientSession(
@@ -134,7 +133,7 @@ async def build_features_for_market(
             start_ms=start_ms,
             end_ms=end_ms,
         )
-    except Exception as e:
+    except Exception:
         return None
 
     if len(bars) < 24:  # Need at least 24 bars for meaningful features
@@ -256,7 +255,9 @@ async def main() -> None:
             labels.append(label)
 
             if (i + 1) % 50 == 0:
-                print(f"  Processed {i + 1}/{len(markets)} (valid: {len(features_list)}, skipped: {skipped})")
+                print(
+                    f"  Processed {i + 1}/{len(markets)} (valid: {len(features_list)}, skipped: {skipped})"
+                )
 
             # Rate limit
             if (i + 1) % 10 == 0:
@@ -305,14 +306,21 @@ async def main() -> None:
     print(f"\n  Brier score: {brier:.4f} {'PASS' if brier < 0.22 else 'FAIL'} (threshold: 0.22)")
 
     # Simple backtest
+    # NOTE: polymarket_mid from closed markets = resolved price (0.00 or 1.00),
+    # not the trading price. Use spot_vs_strike to derive a synthetic market price
+    # that approximates what the market would have traded at pre-resolution.
     probs = model.predict_proba_df(X_test)
-    poly_mids = X_test["polymarket_mid"].values
+    spot_ratios = X_test["spot_vs_strike"].values
     bankroll = 10000.0
     n_bets = 0
 
     for i in range(len(X_test)):
         prob = float(probs[i])
-        price = float(poly_mids[i]) if not np.isnan(poly_mids[i]) else 0.5
+        # Synthetic market price: maps spot_vs_strike to a [0.05, 0.95] range
+        # spot_vs_strike > 1 → market leans YES, < 1 → leans NO
+        svs = float(spot_ratios[i]) if not np.isnan(spot_ratios[i]) else 1.0
+        price = np.clip(0.5 + (svs - 1.0) * 5.0, 0.05, 0.95)
+
         edge = prob - price
         if edge < 0.03 or price <= 0 or price >= 1:
             continue
