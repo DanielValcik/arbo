@@ -321,12 +321,35 @@ class ArboOrchestrator:
     async def _init_value_signal(self) -> Any:
         if not self._discovery or not self._odds_client or not self._event_matcher:
             return None
+        from pathlib import Path
+
+        from arbo.models.xgboost_value import ValueModel
         from arbo.strategies.value_signal import ValueSignalGenerator
+
+        # Load trained XGBoost model if available
+        value_model: ValueModel | None = None
+        model_path = Path("data/models/backtest_model.joblib")
+        if model_path.exists():
+            try:
+                value_model = ValueModel()
+                value_model.load(model_path)
+                logger.info(
+                    "xgboost_model_loaded",
+                    path=str(model_path),
+                    brier=value_model.brier_score_val,
+                )
+            except Exception as e:
+                logger.warning("xgboost_model_load_failed", error=str(e))
+                value_model = None
+        else:
+            logger.warning("xgboost_model_not_found", path=str(model_path))
 
         return ValueSignalGenerator(
             discovery=self._discovery,
             odds_client=self._odds_client,
             matcher=self._event_matcher,
+            value_model=value_model,
+            edge_threshold=self._config.value_model.edge_threshold,
         )
 
     async def _init_market_graph(self) -> Any:
