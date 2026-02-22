@@ -139,7 +139,8 @@ class TestRealMarketPrice:
 
         signals = [_make_signal(details={"poly_price": 0.35})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         # Verify place_trade was called with real price, not 0.50
         call_kwargs = orch._paper_engine.place_trade.call_args
@@ -182,7 +183,8 @@ class TestRealMarketPrice:
 
         signals = [_make_signal(market_condition_id="cond_2", token_id="tok_2", details={"poly_price": 0.72})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         call_kwargs = orch._paper_engine.place_trade.call_args
         assert call_kwargs is not None
@@ -224,7 +226,8 @@ class TestRealMarketPrice:
 
         signals = [_make_signal(market_condition_id="cond_3", token_id="tok_3", details={})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         # place_trade should NOT have been called
         orch._paper_engine.place_trade.assert_not_called()
@@ -263,7 +266,8 @@ class TestRealMarketPrice:
 
         signals = [_make_signal(market_condition_id="cond_longshot", details={"poly_price": 0.002})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         orch._paper_engine.place_trade.assert_not_called()
 
@@ -301,9 +305,90 @@ class TestRealMarketPrice:
 
         signals = [_make_signal(market_condition_id="cond_certain", details={"poly_price": 0.98})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         orch._paper_engine.place_trade.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_excessive_edge_skipped(self) -> None:
+        """Signals with edge > 12% are skipped (model error filter)."""
+        from arbo.main import ArboOrchestrator
+
+        orch = ArboOrchestrator(mode="paper")
+
+        orch._confluence = MagicMock()
+        orch._paper_engine = MagicMock()
+        orch._paper_engine._positions = {}
+        orch._paper_engine.place_trade = MagicMock(return_value=None)
+
+        mock_market = MagicMock()
+        mock_market.category = "soccer"
+        mock_market.fee_enabled = False
+        mock_market.price_yes = 0.45
+        orch._discovery = MagicMock()
+        orch._discovery.get_by_condition_id = MagicMock(return_value=mock_market)
+
+        opp = ScoredOpportunity(
+            market_condition_id="cond_bad_edge",
+            token_id="tok_bad_edge",
+            direction=SignalDirection.BUY_YES,
+            score=2,
+            signals=[_make_signal(market_condition_id="cond_bad_edge", token_id="tok_bad_edge", details={"poly_price": 0.45})],
+            contributing_layers={2, 4},
+            position_size_pct=Decimal("0.025"),
+            recommended_size=Decimal("50"),
+            best_edge=Decimal("0.25"),  # 25% — way above 12% cap
+        )
+        orch._confluence.get_tradeable = MagicMock(return_value=[opp])
+
+        signals = [_make_signal(market_condition_id="cond_bad_edge", details={"poly_price": 0.45})]
+        with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
+
+        orch._paper_engine.place_trade.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_normal_edge_passes(self) -> None:
+        """Signals with edge <= 12% pass through to paper engine."""
+        from arbo.main import ArboOrchestrator
+
+        orch = ArboOrchestrator(mode="paper")
+
+        orch._confluence = MagicMock()
+        orch._paper_engine = MagicMock()
+        orch._paper_engine._positions = {}
+        mock_trade = MagicMock()
+        orch._paper_engine.place_trade = MagicMock(return_value=mock_trade)
+        orch._paper_engine.save_trade_to_db = AsyncMock()
+
+        mock_market = MagicMock()
+        mock_market.category = "soccer"
+        mock_market.fee_enabled = False
+        mock_market.price_yes = 0.45
+        orch._discovery = MagicMock()
+        orch._discovery.get_by_condition_id = MagicMock(return_value=mock_market)
+
+        opp = ScoredOpportunity(
+            market_condition_id="cond_good_edge",
+            token_id="tok_good_edge",
+            direction=SignalDirection.BUY_YES,
+            score=2,
+            signals=[_make_signal(market_condition_id="cond_good_edge", token_id="tok_good_edge", details={"poly_price": 0.45})],
+            contributing_layers={2, 4},
+            position_size_pct=Decimal("0.025"),
+            recommended_size=Decimal("50"),
+            best_edge=Decimal("0.07"),  # 7% — within 12% cap
+        )
+        orch._confluence.get_tradeable = MagicMock(return_value=[opp])
+
+        signals = [_make_signal(market_condition_id="cond_good_edge", details={"poly_price": 0.45})]
+        with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
+
+        assert orch._paper_engine.place_trade.call_count == 1
 
 
 # ================================================================
@@ -363,7 +448,8 @@ class TestPerMarketDedup:
 
         signals = [_make_signal(market_condition_id="cond_dup", details={"poly_price": 0.45})]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         # place_trade should be called only once
         assert orch._paper_engine.place_trade.call_count == 1
@@ -419,7 +505,8 @@ class TestPerMarketDedup:
             _make_signal(market_condition_id="cond_b", details={"poly_price": 0.60}),
         ]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         assert orch._paper_engine.place_trade.call_count == 2
 
@@ -469,7 +556,8 @@ class TestPerMarketDedup:
 
         signals = [_make_signal(market_condition_id="cond_existing", token_id="tok_existing")]
         with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         orch._paper_engine.place_trade.assert_not_called()
 
@@ -658,6 +746,7 @@ class TestSignalPersistence:
         with patch.object(
             orch, "_save_signals_to_db", new_callable=AsyncMock, side_effect=None
         ):
-            await orch._process_signal_batch(signals)
+            with patch.object(orch, "_update_signal_confluence_scores", new_callable=AsyncMock):
+                await orch._process_signal_batch(signals)
 
         # If we got here without exception, the test passes

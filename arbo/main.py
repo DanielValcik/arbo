@@ -881,6 +881,9 @@ class ArboOrchestrator:
 
         tradeable = self._confluence.get_tradeable(signals, category_map)
 
+        # Update confluence scores back into DB signals (for dashboard visibility)
+        await self._update_signal_confluence_scores(tradeable)
+
         # FIX 2: Per-market deduplication within batch
         processed_markets: set[str] = set()
 
@@ -932,6 +935,19 @@ class ArboOrchestrator:
                     "skip_extreme_price",
                     market_id=opp.market_condition_id,
                     price=str(market_price),
+                )
+                continue
+
+            # Max edge cap — anything above 12% is almost certainly model error
+            # (seasonal vs match-level mismatch), not a real opportunity
+            _MAX_EDGE = Decimal("0.12")
+            if opp.best_edge > _MAX_EDGE:
+                logger.info(
+                    "skip_excessive_edge",
+                    market_id=opp.market_condition_id,
+                    edge=str(opp.best_edge),
+                    price=str(market_price),
+                    max_edge=str(_MAX_EDGE),
                 )
                 continue
 
@@ -989,6 +1005,42 @@ class ArboOrchestrator:
             logger.info("signals_saved_to_db", count=len(signals))
         except Exception as e:
             logger.warning("signals_save_failed", error=str(e))
+
+    async def _update_signal_confluence_scores(
+        self, tradeable: list[object]
+    ) -> None:
+        """Update confluence_score in DB signals after scoring (best-effort).
+
+        Sets the final confluence score on signals that matched tradeable opportunities
+        so the dashboard shows post-scoring values, not the pre-scoring default of 0.
+        """
+        try:
+            from arbo.utils.db import Signal as SignalDB, get_session_factory
+
+            # Build market_id → score mapping from scored opportunities
+            score_map: dict[str, int] = {}
+            for opp in tradeable:
+                score_map[opp.market_condition_id] = opp.score  # type: ignore[attr-defined]
+
+            if not score_map:
+                return
+
+            factory = get_session_factory()
+            async with factory() as session:
+                # Update signals that match scored markets (last batch only)
+                for market_id, score in score_map.items():
+                    await session.execute(
+                        sa.update(SignalDB)
+                        .where(
+                            SignalDB.market_condition_id == market_id,
+                            SignalDB.confluence_score == 0,
+                        )
+                        .values(confluence_score=score)
+                    )
+                await session.commit()
+            logger.debug("confluence_scores_updated", markets=len(score_map))
+        except Exception as e:
+            logger.warning("confluence_score_update_failed", error=str(e))
 
     # ------------------------------------------------------------------
     # Health monitor

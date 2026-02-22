@@ -15,7 +15,7 @@ polymarket:
 
 # --- Layer 1: Market Making ---
 market_maker:
-  min_spread: 0.04
+  min_spread: 0.02
   min_volume_24h: 1000
   max_volume_24h: 50000
   max_inventory_imbalance: 0.6
