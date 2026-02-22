@@ -154,6 +154,14 @@ class ConfluenceScorer:
 
         opportunities = self.score_signals(signals)
 
+        # Build price map from signal details
+        price_map: dict[str, Decimal] = {}
+        for sig in signals:
+            if sig.market_condition_id not in price_map:
+                poly_price = sig.details.get("poly_price")
+                if poly_price is not None:
+                    price_map[sig.market_condition_id] = Decimal(str(poly_price))
+
         tradeable: list[ScoredOpportunity] = []
         for opp in opportunities:
             if opp.score < self._min_score:
@@ -171,7 +179,8 @@ class ConfluenceScorer:
                 )
 
             category = market_category_map.get(opp.market_condition_id, "other")
-            checked = self._apply_risk_check(opp, category)
+            price = price_map.get(opp.market_condition_id)
+            checked = self._apply_risk_check(opp, category, price=price)
             if checked is not None:
                 tradeable.append(checked)
                 self._total_tradeable += 1
@@ -260,8 +269,18 @@ class ConfluenceScorer:
         else:
             return self._double_size_pct
 
-    def _apply_risk_check(self, opp: ScoredOpportunity, category: str) -> ScoredOpportunity | None:
+    def _apply_risk_check(
+        self,
+        opp: ScoredOpportunity,
+        category: str,
+        price: Decimal | None = None,
+    ) -> ScoredOpportunity | None:
         """Validate opportunity through RiskManager.pre_trade_check().
+
+        Args:
+            opp: Scored opportunity to validate.
+            category: Market category for concentration checks.
+            price: Real market price. Falls back to signal details or best_edge estimate.
 
         Returns:
             The opportunity if approved, None if rejected.
@@ -270,11 +289,20 @@ class ConfluenceScorer:
             "BUY" if opp.direction in (SignalDirection.BUY_YES, SignalDirection.BUY_NO) else "SELL"
         )
 
+        # Resolve real price: explicit > signal details > estimate from edge
+        if price is None and opp.signals:
+            poly_price = opp.signals[0].details.get("poly_price")
+            if poly_price is not None:
+                price = Decimal(str(poly_price))
+        if price is None:
+            # Last resort: estimate from best_edge (still better than hardcoded 0.50)
+            price = max(Decimal("0.01"), Decimal("0.50") - opp.best_edge)
+
         request = TradeRequest(
             market_id=opp.market_condition_id,
             token_id=opp.token_id,
             side=side,
-            price=Decimal("0.50"),  # placeholder — actual price at execution
+            price=price,
             size=opp.recommended_size,
             layer=min(opp.contributing_layers) if opp.contributing_layers else 0,
             market_category=category,

@@ -24,6 +24,8 @@ WEEKLY_LOSS_PCT = Decimal("0.20")  # 20% weekly loss → shutdown + CEO escalati
 WHALE_COPY_MAX_PCT = Decimal("0.025")  # 2.5% per copied whale position
 MAX_MARKET_TYPE_PCT = Decimal("0.30")  # 30% max in one market type
 MAX_CONFLUENCE_DOUBLE_PCT = Decimal("0.05")  # 5% hard cap at any confluence score
+MAX_TOTAL_EXPOSURE_PCT = Decimal("0.80")  # 80% max capital deployed
+MAX_POSITIONS_PER_MARKET = 1  # Only 1 position per market at a time
 MIN_PAPER_WEEKS = 4  # 4 weeks paper trading before ANY live execution
 KELLY_FRACTION = Decimal("0.5")  # Half-Kelly sizing
 
@@ -61,6 +63,7 @@ class ExposureState:
     weekly_pnl: Decimal = Decimal("0")
     open_positions_value: Decimal = Decimal("0")
     category_exposure: dict[str, Decimal] = field(default_factory=dict)
+    market_positions: dict[str, int] = field(default_factory=dict)
     daily_reset_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     weekly_reset_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -187,6 +190,37 @@ class RiskManager:
                 f"limit ({category_max}). Current: {current_exposure}",
             )
 
+        # 7. Total exposure cap
+        exposure_max = self._state.capital * MAX_TOTAL_EXPOSURE_PCT
+        if self._state.open_positions_value + request.size > exposure_max:
+            logger.warning(
+                "risk_rejected",
+                check="total_exposure",
+                current=str(self._state.open_positions_value),
+                requested=str(request.size),
+                max_allowed=str(exposure_max),
+            )
+            return RiskDecision(
+                approved=False,
+                reason=f"Total exposure {self._state.open_positions_value + request.size} "
+                f"would exceed {MAX_TOTAL_EXPOSURE_PCT*100}% limit ({exposure_max})",
+            )
+
+        # 8. Per-market position limit
+        market_pos_count = self._state.market_positions.get(request.market_id, 0)
+        if market_pos_count >= MAX_POSITIONS_PER_MARKET:
+            logger.warning(
+                "risk_rejected",
+                check="per_market_limit",
+                market_id=request.market_id,
+                current_positions=market_pos_count,
+            )
+            return RiskDecision(
+                approved=False,
+                reason=f"Market '{request.market_id}' already has {market_pos_count} "
+                f"position(s) (max {MAX_POSITIONS_PER_MARKET})",
+            )
+
         logger.info(
             "risk_approved",
             market_id=request.market_id,
@@ -215,11 +249,22 @@ class RiskManager:
         current = self._state.category_exposure.get(market_category, Decimal("0"))
         self._state.category_exposure[market_category] = current + size
 
-        # Update P&L if resolved
-        if pnl is not None:
+        # Update open positions value and per-market tracking
+        if pnl is None:
+            # Opening a new position
+            self._state.open_positions_value += size
+            cur_count = self._state.market_positions.get(market_id, 0)
+            self._state.market_positions[market_id] = cur_count + 1
+        else:
+            # Closing / resolving a position
             self._state.daily_pnl += pnl
             self._state.weekly_pnl += pnl
-            # Remove from exposure
+            self._state.open_positions_value = max(
+                Decimal("0"), self._state.open_positions_value - size
+            )
+            cur_count = self._state.market_positions.get(market_id, 0)
+            self._state.market_positions[market_id] = max(0, cur_count - 1)
+            # Remove from category exposure
             self._state.category_exposure[market_category] = max(
                 Decimal("0"), current + size - abs(size)
             )

@@ -868,6 +868,9 @@ class ArboOrchestrator:
         if self._confluence is None or self._paper_engine is None:
             return
 
+        # FIX 5: Save all incoming signals to DB (best-effort)
+        await self._save_signals_to_db(signals)
+
         # Build market category map from discovery
         category_map: dict[str, str] = {}
         if self._discovery is not None:
@@ -878,14 +881,49 @@ class ArboOrchestrator:
 
         tradeable = self._confluence.get_tradeable(signals, category_map)
 
+        # FIX 2: Per-market deduplication within batch
+        processed_markets: set[str] = set()
+
         for opp in tradeable:
-            # Get market for fee info
+            # FIX 2: Skip if already traded this market in this batch
+            if opp.market_condition_id in processed_markets:
+                logger.info(
+                    "dedup_skip_batch",
+                    market_id=opp.market_condition_id,
+                )
+                continue
+
+            # FIX 2: Skip if paper engine already holds a position on this token
+            if opp.token_id in self._paper_engine._positions:
+                logger.info(
+                    "dedup_skip_existing_position",
+                    market_id=opp.market_condition_id,
+                    token_id=opp.token_id,
+                )
+                continue
+
+            # Get market for fee info + real price
             fee_enabled = False
+            market_price: Decimal | None = None
             market_category = category_map.get(opp.market_condition_id, "other")
             if self._discovery is not None:
                 market = self._discovery.get_by_condition_id(opp.market_condition_id)
                 if market is not None:
                     fee_enabled = market.fee_enabled
+                    # FIX 1: Use real market price from discovery
+                    if market.price_yes is not None:
+                        market_price = Decimal(str(market.price_yes))
+
+            # FIX 1: Fallback to signal details poly_price
+            if market_price is None and opp.signals:
+                poly_price = opp.signals[0].details.get("poly_price")
+                if poly_price is not None:
+                    market_price = Decimal(str(poly_price))
+
+            # FIX 1: NEVER trade without a real price
+            if market_price is None:
+                logger.warning("no_real_price", market_id=opp.market_condition_id)
+                continue
 
             # [DIAGNOSTIC_MODE] tag for score-1 trades
             if opp.score == 1:
@@ -898,21 +936,49 @@ class ArboOrchestrator:
                 )
 
             side = "BUY" if "BUY" in opp.direction.value else "SELL"
-            market_price = Decimal("0.50")  # placeholder
+            model_prob = market_price + opp.best_edge
 
             trade = self._paper_engine.place_trade(
                 market_condition_id=opp.market_condition_id,
                 token_id=opp.token_id,
                 side=side,
                 market_price=market_price,
-                model_prob=market_price + opp.best_edge,
+                model_prob=model_prob,
                 layer=min(opp.contributing_layers) if opp.contributing_layers else 0,
                 market_category=market_category,
                 fee_enabled=fee_enabled,
                 confluence_score=opp.score,
             )
             if trade is not None:
+                processed_markets.add(opp.market_condition_id)
                 await self._paper_engine.save_trade_to_db(trade)
+
+    async def _save_signals_to_db(self, signals: list[Signal]) -> None:
+        """Save all signals to the database for audit trail (best-effort).
+
+        Uses the Signal DB model, not the scanner Signal dataclass.
+        """
+        try:
+            from arbo.utils.db import Signal as SignalDB, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                for sig in signals:
+                    row = SignalDB(
+                        layer=sig.layer,
+                        market_condition_id=sig.market_condition_id,
+                        direction=sig.direction.value,
+                        edge=sig.edge,
+                        confidence=sig.confidence,
+                        details=sig.details,
+                        confluence_score=sig.confluence_score,
+                        detected_at=sig.detected_at,
+                    )
+                    session.add(row)
+                await session.commit()
+            logger.info("signals_saved_to_db", count=len(signals))
+        except Exception as e:
+            logger.warning("signals_save_failed", error=str(e))
 
     # ------------------------------------------------------------------
     # Health monitor
