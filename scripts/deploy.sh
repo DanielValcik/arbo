@@ -3,7 +3,7 @@
 # Usage: ./scripts/deploy.sh [user@host]
 set -euo pipefail
 
-VPS="${1:-arbo@your-lightsail-ip}"
+VPS="${1:-arbo}"
 REMOTE_DIR="/opt/arbo"
 
 echo "=== Deploying Arbo to ${VPS}:${REMOTE_DIR} ==="
@@ -18,6 +18,7 @@ rsync -avz --delete \
     --exclude '.ruff_cache' \
     --exclude 'models/*.joblib' \
     --exclude '.git' \
+    --exclude '.claude' \
     --exclude 'docs/' \
     --exclude '_archive/' \
     --exclude 'Screenshot*' \

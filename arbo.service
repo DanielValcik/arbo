@@ -21,12 +21,13 @@ EnvironmentFile=/opt/arbo/.env
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/arbo/models /opt/arbo/logs
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/opt/arbo/models /opt/arbo/logs /home/arbo/.cache /home/arbo/.postgresql
 
-# Memory limit — alert if approaching 4GB instance limit
+# Memory limit — e5-large-v2 model uses ~1.3GB alone
 MemoryMax=3G
-MemoryHigh=2G
+MemoryHigh=2.5G
 
 [Install]
 WantedBy=multi-user.target
