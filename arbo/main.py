@@ -109,6 +109,7 @@ class ArboOrchestrator:
         self._cli_dashboard: Any = None
         self._report_generator: Any = None
         self._slack_bot: Any = None
+        self._web_dashboard: Any = None
 
         # LLM degraded mode flag
         self._llm_degraded = False
@@ -257,6 +258,9 @@ class ArboOrchestrator:
 
         # Slack bot
         self._slack_bot = await self._init_optional("SlackBot", self._init_slack_bot)
+
+        # Web dashboard
+        self._web_dashboard = await self._init_optional("WebDashboard", self._init_web_dashboard)
 
         # Restore paper engine state from DB
         if self._paper_engine is not None:
@@ -456,6 +460,19 @@ class ArboOrchestrator:
             shutdown_fn=self._slack_shutdown,
         )
 
+    async def _init_web_dashboard(self) -> Any:
+        """Initialize web dashboard, injecting orchestrator reference."""
+        cfg = self._config
+        if not cfg.dashboard_password:
+            logger.warning("web_dashboard_skipped", reason="DASHBOARD_PASSWORD not set")
+            return None
+
+        from arbo.dashboard.web import app as web_app
+        from arbo.dashboard.web import state as web_state
+
+        web_state.orchestrator = self
+        return web_app
+
     # ------------------------------------------------------------------
     # Slack callbacks
     # ------------------------------------------------------------------
@@ -595,6 +612,11 @@ class ArboOrchestrator:
         if self._slack_bot is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._slack_bot.start(), name="slack_bot")
+            )
+        # Start web dashboard as internal task
+        if self._web_dashboard is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._run_web_dashboard(), name="web_dashboard")
             )
 
     async def _run_layer_task(
@@ -1137,6 +1159,21 @@ class ArboOrchestrator:
                 logger.info("data_collector_snapshot", markets=len(markets))
             except Exception as e:
                 logger.warning("data_collector_error", error=str(e))
+
+    async def _run_web_dashboard(self) -> None:
+        """Run uvicorn web dashboard server."""
+        import uvicorn
+
+        cfg = self._config
+        config = uvicorn.Config(
+            self._web_dashboard,
+            host=cfg.dashboard.host,
+            port=cfg.dashboard.port,
+            log_level="warning",
+        )
+        server = uvicorn.Server(config)
+        logger.info("web_dashboard_starting", host=cfg.dashboard.host, port=cfg.dashboard.port)
+        await server.serve()
 
     # ------------------------------------------------------------------
     # Signal handlers

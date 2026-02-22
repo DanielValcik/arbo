@@ -25,9 +25,9 @@ ProtectHome=read-only
 PrivateTmp=true
 ReadWritePaths=/opt/arbo/models /opt/arbo/logs /home/arbo/.cache /home/arbo/.postgresql
 
-# Memory limit — e5-large-v2 model uses ~1.3GB alone
-MemoryMax=3G
-MemoryHigh=2.5G
+# Memory limit — e5-large-v2 model uses ~1.3GB, uvicorn adds ~100MB
+MemoryMax=3.5G
+MemoryHigh=3G
 
 [Install]
 WantedBy=multi-user.target

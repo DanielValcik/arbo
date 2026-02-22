@@ -18,8 +18,9 @@ apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip
 # ---- Build dependencies (asyncpg, web3, sentence-transformers, etc.) ----
 apt-get install -y build-essential libpq-dev
 
-# ---- Firewall: SSH only (no public HTTP needed — Slack uses Socket Mode) ----
+# ---- Firewall: SSH + dashboard port 8080 ----
 ufw allow OpenSSH
+ufw allow 8080/tcp
 ufw --force enable
 
 # ---- Create arbo user ----

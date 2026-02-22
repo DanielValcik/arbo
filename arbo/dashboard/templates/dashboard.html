@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARBO Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 { font-size: 18px; letter-spacing: 2px; }
+        .badge {
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-paper { background: var(--yellow); color: #000; }
+        .badge-live { background: var(--red); color: #fff; }
+        .refresh-info { color: var(--text-dim); font-size: 11px; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 12px 20px;
+        }
+        .grid-full { grid-column: 1 / -1; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px;
+        }
+        .card-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        .metric { text-align: center; }
+        .metric-value {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        .positive { color: var(--green); }
+        .negative { color: var(--red); }
+        .neutral { color: var(--text-dim); }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 5px 8px;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 250px;
+        }
+        tr:hover { background: rgba(88, 166, 255, 0.05); }
+        .layer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 8px;
+        }
+        .layer-card {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 11px;
+        }
+        .layer-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+        .dot-yellow { background: var(--yellow); box-shadow: 0 0 4px var(--yellow); }
+        .dot-red { background: var(--red); box-shadow: 0 0 4px var(--red); }
+        .layer-stat {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-dim);
+            font-size: 10px;
+        }
+        .bar-container {
+            background: rgba(48, 54, 61, 0.5);
+            border-radius: 3px;
+            height: 18px;
+            position: relative;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        .bar-label {
+            position: absolute;
+            top: 50%;
+            left: 8px;
+            transform: translateY(-50%);
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+        }
+        .loading {
+            color: var(--text-dim);
+            text-align: center;
+            padding: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .layer-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display:flex;align-items:center;gap:12px">
+            <h1>ARBO</h1>
+            <span class="badge badge-{{ mode }}">{{ mode }}</span>
+        </div>
+        <div class="refresh-info">Last refresh: <span id="lastRefresh">--</span></div>
+    </div>
+
+    <div class="grid">
+        <!-- Portfolio -->
+        <div class="card">
+            <div class="card-title">Portfolio</div>
+            <div class="metrics" id="portfolioMetrics">
+                <div class="metric"><div class="metric-value" id="pBalance">--</div><div class="metric-label">Balance</div></div>
+                <div class="metric"><div class="metric-value" id="pDailyPnl">--</div><div class="metric-label">Daily P&L</div></div>
+                <div class="metric"><div class="metric-value" id="pWeeklyPnl">--</div><div class="metric-label">Weekly P&L</div></div>
+                <div class="metric"><div class="metric-value" id="pRoi">--</div><div class="metric-label">Total ROI</div></div>
+            </div>
+        </div>
+
+        <!-- P&L Chart -->
+        <div class="card">
+            <div class="card-title">Portfolio Value (7d)</div>
+            <div class="chart-container">
+                <canvas id="pnlChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Layer Status -->
+        <div class="card grid-full">
+            <div class="card-title">Layer Status</div>
+            <div class="layer-grid" id="layerGrid">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Risk -->
+        <div class="card">
+            <div class="card-title">Risk Limits</div>
+            <div id="riskSection">
+                <div style="margin-bottom:8px">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+                        <span>Daily Loss</span><span id="riskDailyPct">0%</span>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-fill" id="riskDailyBar" style="width:0%;background:var(--green)"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+                        <span>Weekly Loss</span><span id="riskWeeklyPct">0%</span>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-fill" id="riskWeeklyBar" style="width:0%;background:var(--green)"></div>
+                    </div>
+                </div>
+                <div id="categoryExposure" style="margin-top:8px;font-size:11px"></div>
+            </div>
+        </div>
+
+        <!-- Infrastructure -->
+        <div class="card">
+            <div class="card-title">Infrastructure</div>
+            <div class="metrics" id="infraMetrics">
+                <div class="metric"><div class="metric-value" id="iUptime">--</div><div class="metric-label">Uptime</div></div>
+                <div class="metric"><div class="metric-value" id="iMemory">--</div><div class="metric-label">Memory (MB)</div></div>
+                <div class="metric"><div class="metric-value" id="iCpu">--</div><div class="metric-label">CPU %</div></div>
+                <div class="metric"><div class="metric-value" id="iOddsQuota">--</div><div class="metric-label">Odds Quota</div></div>
+            </div>
+        </div>
+
+        <!-- Open Positions -->
+        <div class="card grid-full">
+            <div class="card-title">Open Positions</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Market</th>
+                            <th>Side</th>
+                            <th>Size</th>
+                            <th>Avg Price</th>
+                            <th>Current</th>
+                            <th>Unrealized P&L</th>
+                            <th>Layer</th>
+                            <th>Opened</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positionsBody">
+                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Live Signals -->
+        <div class="card grid-full">
+            <div class="card-title">Recent Signals</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Layer</th>
+                            <th>Market</th>
+                            <th>Direction</th>
+                            <th>Edge</th>
+                            <th>Confidence</th>
+                            <th>Confluence</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="signalsBody">
+                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Trade Log -->
+        <div class="card grid-full">
+            <div class="card-title">Trade Log (Last 50)</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Market</th>
+                            <th>Layer</th>
+                            <th>Side</th>
+                            <th>Price</th>
+                            <th>Size</th>
+                            <th>Edge</th>
+                            <th>Confluence</th>
+                            <th>Status</th>
+                            <th>P&L</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradesBody">
+                        <tr><td colspan="11" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let pnlChart = null;
+
+    function pnlClass(val) {
+        if (val > 0) return 'positive';
+        if (val < 0) return 'negative';
+        return 'neutral';
+    }
+
+    function fmtPnl(val) {
+        if (val === null || val === undefined) return '--';
+        const sign = val >= 0 ? '+' : '';
+        return sign + val.toFixed(2);
+    }
+
+    function fmtPct(val) {
+        if (val === null || val === undefined) return '--';
+        const sign = val >= 0 ? '+' : '';
+        return sign + val.toFixed(2) + '%';
+    }
+
+    function fmtTime(iso) {
+        if (!iso) return '--';
+        const d = new Date(iso);
+        return d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+
+    function fmtShortTime(iso) {
+        if (!iso) return '--';
+        const d = new Date(iso);
+        return d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+    }
+
+    function truncate(str, len) {
+        if (!str) return '';
+        return str.length > len ? str.slice(0, len) + '...' : str;
+    }
+
+    function barColor(pct) {
+        if (pct > 75) return 'var(--red)';
+        if (pct > 50) return 'var(--yellow)';
+        return 'var(--green)';
+    }
+
+    async function fetchJSON(url) {
+        const resp = await fetch(url);
+        if (resp.status === 401) {
+            document.body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red)">Authentication required. Reload the page.</div>';
+            return null;
+        }
+        return resp.json();
+    }
+
+    async function updatePortfolio() {
+        const data = await fetchJSON('/api/portfolio');
+        if (!data || data.error) return;
+
+        document.getElementById('pBalance').textContent = '$' + (data.balance || 0).toFixed(2);
+
+        const dailyEl = document.getElementById('pDailyPnl');
+        dailyEl.textContent = fmtPnl(data.daily_pnl);
+        dailyEl.className = 'metric-value ' + pnlClass(data.daily_pnl);
+
+        const weeklyEl = document.getElementById('pWeeklyPnl');
+        weeklyEl.textContent = fmtPnl(data.weekly_pnl);
+        weeklyEl.className = 'metric-value ' + pnlClass(data.weekly_pnl);
+
+        const roiEl = document.getElementById('pRoi');
+        roiEl.textContent = fmtPct(data.roi_pct);
+        roiEl.className = 'metric-value ' + pnlClass(data.roi_pct);
+
+        // Update chart
+        if (data.snapshots && data.snapshots.length > 0) {
+            const labels = data.snapshots.map(s => fmtShortTime(s.timestamp));
+            const values = data.snapshots.map(s => s.total_value);
+
+            if (pnlChart) {
+                pnlChart.data.labels = labels;
+                pnlChart.data.datasets[0].data = values;
+                pnlChart.update('none');
+            } else {
+                const ctx = document.getElementById('pnlChart').getContext('2d');
+                pnlChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Total Value ($)',
+                            data: values,
+                            borderColor: '#58a6ff',
+                            backgroundColor: 'rgba(88,166,255,0.1)',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 12 },
+                                grid: { color: 'rgba(48,54,61,0.3)' },
+                            },
+                            y: {
+                                ticks: { color: '#8b949e', font: { size: 9 } },
+                                grid: { color: 'rgba(48,54,61,0.3)' },
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    async function updateLayers() {
+        const data = await fetchJSON('/api/layers');
+        if (!data) return;
+
+        const grid = document.getElementById('layerGrid');
+        if (!data.layers || data.layers.length === 0) {
+            grid.innerHTML = '<div class="loading">No layer data</div>';
+            return;
+        }
+
+        grid.innerHTML = data.layers.map(l => {
+            const dotClass = 'dot-' + l.status;
+            const hb = l.heartbeat_ago_s < 60 ? l.heartbeat_ago_s + 's' :
+                       l.heartbeat_ago_s < 3600 ? Math.floor(l.heartbeat_ago_s/60) + 'm' :
+                       Math.floor(l.heartbeat_ago_s/3600) + 'h';
+            return `
+                <div class="layer-card">
+                    <div class="layer-header">
+                        <span class="status-dot ${dotClass}"></span>
+                        <span style="font-weight:600">${l.name}</span>
+                    </div>
+                    <div class="layer-stat"><span>Signals 24h</span><span>${l.signals_24h}</span></div>
+                    <div class="layer-stat"><span>Last heartbeat</span><span>${hb} ago</span></div>
+                    <div class="layer-stat"><span>Restarts</span><span>${l.restart_count}</span></div>
+                </div>`;
+        }).join('');
+    }
+
+    async function updatePositions() {
+        const data = await fetchJSON('/api/positions');
+        if (!data) return;
+
+        const tbody = document.getElementById('positionsBody');
+        if (!data.positions || data.positions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.positions.map(p => `
+            <tr>
+                <td title="${p.market}">${truncate(p.market, 40)}</td>
+                <td>${p.side}</td>
+                <td>$${(p.size || 0).toFixed(2)}</td>
+                <td>${(p.avg_price || 0).toFixed(4)}</td>
+                <td>${p.current_price !== null ? p.current_price.toFixed(4) : '--'}</td>
+                <td class="${pnlClass(p.unrealized_pnl)}">${fmtPnl(p.unrealized_pnl)}</td>
+                <td>L${p.layer}</td>
+                <td>${fmtTime(p.opened_at)}</td>
+            </tr>
+        `).join('');
+    }
+
+    async function updateSignals() {
+        const data = await fetchJSON('/api/signals');
+        if (!data) return;
+
+        const tbody = document.getElementById('signalsBody');
+        if (!data.signals || data.signals.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No signals yet</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.signals.slice(0, 50).map(s => `
+            <tr>
+                <td>${fmtTime(s.timestamp)}</td>
+                <td>L${s.layer}</td>
+                <td title="${s.market}">${truncate(s.market, 35)}</td>
+                <td>${s.direction}</td>
+                <td>${s.edge !== null ? (s.edge * 100).toFixed(1) + '%' : '--'}</td>
+                <td>${s.confidence !== null ? (s.confidence * 100).toFixed(0) + '%' : '--'}</td>
+                <td>${s.confluence_score !== null ? s.confluence_score : '--'}</td>
+                <td title="${s.reason}">${truncate(s.reason, 30)}</td>
+            </tr>
+        `).join('');
+    }
+
+    async function updateRisk() {
+        const data = await fetchJSON('/api/risk');
+        if (!data || data.error) return;
+
+        const dp = data.daily_utilization_pct || 0;
+        const wp = data.weekly_utilization_pct || 0;
+
+        document.getElementById('riskDailyPct').textContent = dp.toFixed(1) + '% of 10% limit';
+        document.getElementById('riskDailyBar').style.width = dp + '%';
+        document.getElementById('riskDailyBar').style.background = barColor(dp);
+
+        document.getElementById('riskWeeklyPct').textContent = wp.toFixed(1) + '% of 20% limit';
+        document.getElementById('riskWeeklyBar').style.width = wp + '%';
+        document.getElementById('riskWeeklyBar').style.background = barColor(wp);
+
+        const catDiv = document.getElementById('categoryExposure');
+        const cats = data.category_exposure || {};
+        const catEntries = Object.entries(cats).filter(([_, v]) => v > 0);
+        if (catEntries.length > 0) {
+            catDiv.innerHTML = '<div style="color:var(--text-dim);margin-bottom:4px">Category Exposure:</div>' +
+                catEntries.map(([cat, val]) =>
+                    `<div style="display:flex;justify-content:space-between"><span>${cat}</span><span>$${val.toFixed(2)}</span></div>`
+                ).join('');
+        } else {
+            catDiv.innerHTML = '<div style="color:var(--text-dim)">No active exposure</div>';
+        }
+    }
+
+    async function updateInfra() {
+        const data = await fetchJSON('/api/infra');
+        if (!data) return;
+
+        document.getElementById('iUptime').textContent = data.uptime_human || '--';
+        document.getElementById('iMemory').textContent = data.memory_mb || '--';
+        document.getElementById('iCpu').textContent = (data.cpu_pct || 0).toFixed(1);
+
+        const q = data.odds_api_quota || {};
+        document.getElementById('iOddsQuota').textContent =
+            q.remaining !== 'N/A' ? q.remaining + '/' + q.total : 'N/A';
+    }
+
+    async function updateTrades() {
+        const data = await fetchJSON('/api/trades');
+        if (!data) return;
+
+        const tbody = document.getElementById('tradesBody');
+        if (!data.trades || data.trades.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.trades.map(t => {
+            const statusColor = t.status === 'won' ? 'var(--green)' :
+                               t.status === 'lost' ? 'var(--red)' :
+                               t.status === 'open' ? 'var(--blue)' : 'var(--text-dim)';
+            return `
+                <tr>
+                    <td>${t.id}</td>
+                    <td title="${t.market}">${truncate(t.market, 30)}</td>
+                    <td>L${t.layer}</td>
+                    <td>${t.side}</td>
+                    <td>${(t.price || 0).toFixed(4)}</td>
+                    <td>$${(t.size || 0).toFixed(2)}</td>
+                    <td>${t.edge !== null ? (t.edge * 100).toFixed(1) + '%' : '--'}</td>
+                    <td>${t.confluence_score !== null ? t.confluence_score : '--'}</td>
+                    <td style="color:${statusColor}">${t.status}</td>
+                    <td class="${pnlClass(t.actual_pnl)}">${fmtPnl(t.actual_pnl)}</td>
+                    <td>${fmtTime(t.placed_at)}</td>
+                </tr>`;
+        }).join('');
+    }
+
+    async function fetchAll() {
+        await Promise.all([
+            updatePortfolio(),
+            updateLayers(),
+            updatePositions(),
+            updateSignals(),
+            updateRisk(),
+            updateInfra(),
+            updateTrades(),
+        ]);
+        document.getElementById('lastRefresh').textContent =
+            new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+
+    // Initial load + auto-refresh every 30s
+    fetchAll();
+    setInterval(fetchAll, 30000);
+    </script>
+</body>
+</html>

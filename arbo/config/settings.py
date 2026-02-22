@@ -153,6 +153,13 @@ class RiskConfig(BaseModel):
     min_paper_weeks: int = 4
 
 
+class DashboardConfig(BaseModel):
+    """Web dashboard configuration."""
+
+    port: int = 8080
+    host: str = "0.0.0.0"
+
+
 class OrchestratorConfig(BaseModel):
     """Orchestrator runtime configuration."""
 
@@ -224,6 +231,10 @@ class ArboConfig(BaseSettings):
         alias="DATABASE_URL",
     )
 
+    # Web dashboard
+    dashboard_user: str = Field(default="arbo", alias="DASHBOARD_USER")
+    dashboard_password: str = Field(default="", alias="DASHBOARD_PASSWORD")
+
     # Nested config (loaded from YAML)
     polymarket: PolymarketConfig = PolymarketConfig()
     market_maker: MarketMakerConfig = MarketMakerConfig()
@@ -237,6 +248,7 @@ class ArboConfig(BaseSettings):
     odds_api: OddsApiConfig = OddsApiConfig()
     llm: LLMConfig = LLMConfig()
     risk: RiskConfig = RiskConfig()
+    dashboard: DashboardConfig = DashboardConfig()
     orchestrator: OrchestratorConfig = OrchestratorConfig()
     polling: PollingConfig = PollingConfig()
     news_feeds: NewsFeedsConfig = NewsFeedsConfig()
