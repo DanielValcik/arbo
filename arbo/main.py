@@ -393,15 +393,11 @@ class ArboOrchestrator:
         return s
 
     async def _init_order_flow(self) -> Any:
-        from arbo.connectors.polygon_flow import OrderFlowMonitor
-
-        def _enqueue_signal(sig: Signal) -> None:
-            try:
-                self._signal_queue.put_nowait(sig)
-            except asyncio.QueueFull:
-                logger.warning("signal_queue_full", layer=7)
-
-        return OrderFlowMonitor(on_signal=_enqueue_signal)
+        # DISABLED: Alchemy WebSocket streaming on CTF Exchange burns 30M CU/day.
+        # Needs redesign: polling via eth_getLogs instead of eth_subscribe.
+        # See CEO directive 2026-02-22.
+        logger.info("order_flow_disabled", reason="alchemy_cu_limit")
+        return None
 
     async def _init_attention(self) -> Any:
         if not self._discovery:
