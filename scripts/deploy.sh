@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Deploy Arbo to VPS
+# Deploy Arbo to AWS Lightsail (London eu-west-2)
 # Usage: ./scripts/deploy.sh [user@host]
 set -euo pipefail
 
-VPS="${1:-arbo@your-vps-ip}"
+VPS="${1:-arbo@your-lightsail-ip}"
 REMOTE_DIR="/opt/arbo"
 
 echo "=== Deploying Arbo to ${VPS}:${REMOTE_DIR} ==="
@@ -34,8 +34,14 @@ ssh "${VPS}" "cd ${REMOTE_DIR} && .venv/bin/python -m alembic upgrade head"
 echo "=== Restarting service ==="
 ssh "${VPS}" "sudo systemctl restart arbo"
 
+# Wait for service to stabilize
+sleep 3
+
 echo "=== Checking status ==="
 ssh "${VPS}" "sudo systemctl status arbo --no-pager"
 
+echo ""
 echo "=== Deploy complete ==="
-echo "Logs: ssh ${VPS} 'journalctl -u arbo -f'"
+echo "Logs:    ssh ${VPS} 'journalctl -u arbo -f'"
+echo "Status:  ssh ${VPS} 'sudo systemctl status arbo'"
+echo "Restart: ssh ${VPS} 'sudo systemctl restart arbo'"

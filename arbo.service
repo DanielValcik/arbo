@@ -24,5 +24,9 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/arbo/models /opt/arbo/logs
 
+# Memory limit — alert if approaching 4GB instance limit
+MemoryMax=3G
+MemoryHigh=2G
+
 [Install]
 WantedBy=multi-user.target
