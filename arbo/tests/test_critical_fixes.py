@@ -229,6 +229,82 @@ class TestRealMarketPrice:
         # place_trade should NOT have been called
         orch._paper_engine.place_trade.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_extreme_low_price_skipped(self) -> None:
+        """Markets with price < 0.05 are skipped (long-shot filter)."""
+        from arbo.main import ArboOrchestrator
+
+        orch = ArboOrchestrator(mode="paper")
+
+        orch._confluence = MagicMock()
+        orch._paper_engine = MagicMock()
+        orch._paper_engine._positions = {}
+        orch._paper_engine.place_trade = MagicMock(return_value=None)
+
+        mock_market = MagicMock()
+        mock_market.category = "soccer"
+        mock_market.fee_enabled = False
+        mock_market.price_yes = 0.002  # Extreme long-shot
+        orch._discovery = MagicMock()
+        orch._discovery.get_by_condition_id = MagicMock(return_value=mock_market)
+
+        opp = ScoredOpportunity(
+            market_condition_id="cond_longshot",
+            token_id="tok_longshot",
+            direction=SignalDirection.BUY_YES,
+            score=2,
+            signals=[_make_signal(market_condition_id="cond_longshot", token_id="tok_longshot", details={"poly_price": 0.002})],
+            contributing_layers={2, 4},
+            position_size_pct=Decimal("0.025"),
+            recommended_size=Decimal("50"),
+            best_edge=Decimal("0.20"),
+        )
+        orch._confluence.get_tradeable = MagicMock(return_value=[opp])
+
+        signals = [_make_signal(market_condition_id="cond_longshot", details={"poly_price": 0.002})]
+        with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
+            await orch._process_signal_batch(signals)
+
+        orch._paper_engine.place_trade.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extreme_high_price_skipped(self) -> None:
+        """Markets with price > 0.95 are skipped (near-certain filter)."""
+        from arbo.main import ArboOrchestrator
+
+        orch = ArboOrchestrator(mode="paper")
+
+        orch._confluence = MagicMock()
+        orch._paper_engine = MagicMock()
+        orch._paper_engine._positions = {}
+        orch._paper_engine.place_trade = MagicMock(return_value=None)
+
+        mock_market = MagicMock()
+        mock_market.category = "politics"
+        mock_market.fee_enabled = False
+        mock_market.price_yes = 0.98  # Near-certain
+        orch._discovery = MagicMock()
+        orch._discovery.get_by_condition_id = MagicMock(return_value=mock_market)
+
+        opp = ScoredOpportunity(
+            market_condition_id="cond_certain",
+            token_id="tok_certain",
+            direction=SignalDirection.BUY_YES,
+            score=2,
+            signals=[_make_signal(market_condition_id="cond_certain", token_id="tok_certain", details={"poly_price": 0.98})],
+            contributing_layers={2, 7},
+            position_size_pct=Decimal("0.025"),
+            recommended_size=Decimal("50"),
+            best_edge=Decimal("0.05"),
+        )
+        orch._confluence.get_tradeable = MagicMock(return_value=[opp])
+
+        signals = [_make_signal(market_condition_id="cond_certain", details={"poly_price": 0.98})]
+        with patch.object(orch, "_save_signals_to_db", new_callable=AsyncMock):
+            await orch._process_signal_batch(signals)
+
+        orch._paper_engine.place_trade.assert_not_called()
+
 
 # ================================================================
 # FIX 2: Per-market deduplication tests

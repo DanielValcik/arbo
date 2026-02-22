@@ -925,6 +925,16 @@ class ArboOrchestrator:
                 logger.warning("no_real_price", market_id=opp.market_condition_id)
                 continue
 
+            # Skip extreme long-shot / near-certain markets (price < 0.05 or > 0.95)
+            # These have artificially inflated edge values and are untradeable
+            if market_price < Decimal("0.05") or market_price > Decimal("0.95"):
+                logger.info(
+                    "skip_extreme_price",
+                    market_id=opp.market_condition_id,
+                    price=str(market_price),
+                )
+                continue
+
             # [DIAGNOSTIC_MODE] tag for score-1 trades
             if opp.score == 1:
                 logger.info(
