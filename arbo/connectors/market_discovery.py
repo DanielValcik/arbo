@@ -331,6 +331,14 @@ class GammaMarket:
 
     def to_db_dict(self) -> dict[str, Any]:
         """Convert to dict for DB insertion."""
+        # Parse end_date string to datetime for PostgreSQL
+        end_date_dt = None
+        if self.end_date:
+            try:
+                end_date_dt = datetime.fromisoformat(self.end_date.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+
         return {
             "condition_id": self.condition_id,
             "question": self.question,
@@ -342,7 +350,7 @@ class GammaMarket:
             "neg_risk": self.neg_risk,
             "volume_24h": self.volume_24h,
             "liquidity": self.liquidity,
-            "end_date": self.end_date,
+            "end_date": end_date_dt,
             "active": self.active and not self.closed,
             "last_price_yes": float(self.price_yes) if self.price_yes else None,
             "last_price_no": float(self.price_no) if self.price_no else None,
