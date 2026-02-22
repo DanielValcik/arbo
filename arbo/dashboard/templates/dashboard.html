@@ -245,6 +245,7 @@
                 <div class="metric"><div class="metric-value" id="iMemory">--</div><div class="metric-label">Memory (MB)</div></div>
                 <div class="metric"><div class="metric-value" id="iCpu">--</div><div class="metric-label">CPU %</div></div>
                 <div class="metric"><div class="metric-value" id="iOddsQuota">--</div><div class="metric-label">Odds Quota</div></div>
+                <div class="metric"><div class="metric-value" id="iConfluence">--</div><div class="metric-label">Confluence Min</div></div>
             </div>
         </div>
 
@@ -558,6 +559,11 @@
         const q = data.odds_api_quota || {};
         document.getElementById('iOddsQuota').textContent =
             q.remaining !== 'N/A' ? q.remaining + '/' + q.total : 'N/A';
+
+        const cEl = document.getElementById('iConfluence');
+        const cVal = data.confluence_threshold;
+        cEl.textContent = cVal !== undefined ? cVal : '--';
+        cEl.style.color = (cVal === 1) ? 'var(--yellow)' : '';
     }
 
     async function updateTrades() {

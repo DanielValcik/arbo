@@ -132,21 +132,22 @@ class TestPositionSizing:
         opps = scorer.score_signals(signals)
         assert opps[0].recommended_size == Decimal("0")
 
-    def test_score_1_no_trade(self, scorer: ConfluenceScorer) -> None:
-        """Score 1 → 0% size (no trade)."""
+    def test_score_1_standard_size_diagnostic(self, scorer: ConfluenceScorer) -> None:
+        """Score 1 → standard size (min_score=1 diagnostic mode)."""
         signals = [_make_signal(layer=4)]
         opps = scorer.score_signals(signals)
-        assert opps[0].recommended_size == Decimal("0")
+        assert opps[0].position_size_pct == Decimal("0.025")
+        assert opps[0].recommended_size == Decimal("50.00")
 
-    def test_score_2_standard_size(self, scorer: ConfluenceScorer) -> None:
-        """Score 2 → 2.5% capital = $50."""
+    def test_score_2_double_size(self, scorer: ConfluenceScorer) -> None:
+        """Score 2 → double size (5% capital = $100) when min_score=1."""
         signals = [
             _make_signal(layer=4, market_condition_id="cond_1"),
             _make_signal(layer=7, market_condition_id="cond_1"),
         ]
         opps = scorer.score_signals(signals)
-        assert opps[0].position_size_pct == Decimal("0.025")
-        assert opps[0].recommended_size == Decimal("50.00")
+        assert opps[0].position_size_pct == Decimal("0.05")
+        assert opps[0].recommended_size == Decimal("100.00")
 
     def test_score_3_double_capped(self, scorer: ConfluenceScorer) -> None:
         """Score 3+ → 5% capital = $100 (hard cap)."""
@@ -231,17 +232,19 @@ class TestGetTradeable:
     """Full get_tradeable pipeline."""
 
     def test_mixed_signals_pipeline(self, scorer: ConfluenceScorer) -> None:
-        """Mixed signals: some markets tradeable, some not."""
+        """Mixed signals: score >= 1 tradeable, score 0 not (diagnostic mode)."""
         signals = [
             # Market 1: score 2 (tradeable)
             _make_signal(layer=4, market_condition_id="cond_1"),
             _make_signal(layer=7, market_condition_id="cond_1"),
-            # Market 2: score 1 (not tradeable)
+            # Market 2: score 1 (tradeable in diagnostic mode)
             _make_signal(layer=5, market_condition_id="cond_2"),
         ]
         tradeable = scorer.get_tradeable(signals, {"cond_1": "crypto", "cond_2": "politics"})
-        assert len(tradeable) == 1
-        assert tradeable[0].market_condition_id == "cond_1"
+        assert len(tradeable) == 2
+        tradeable_ids = {o.market_condition_id for o in tradeable}
+        assert "cond_1" in tradeable_ids
+        assert "cond_2" in tradeable_ids
 
     def test_stats_tracked(self, scorer: ConfluenceScorer) -> None:
         """Scorer stats are updated after pipeline runs."""

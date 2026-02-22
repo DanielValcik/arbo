@@ -37,7 +37,7 @@ value_model:
 
 # --- Layer 4: Confluence ---
 confluence:
-  min_score: 2
+  min_score: 1  # DIAGNOSTIC MODE (2026-02-22): lowered from 2 to 1 for 2 weeks
   standard_size_pct: 0.025
   double_size_pct: 0.05
   whale_min_confidence: 0.6

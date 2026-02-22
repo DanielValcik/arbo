@@ -159,6 +159,17 @@ class ConfluenceScorer:
             if opp.score < self._min_score:
                 continue
 
+            # Tag diagnostic mode for score-1 trades (min_score temporarily lowered)
+            diagnostic_mode = opp.score == 1
+            if diagnostic_mode:
+                logger.info(
+                    "confluence_tradeable_diagnostic",
+                    market_id=opp.market_condition_id,
+                    score=opp.score,
+                    layers=sorted(opp.contributing_layers),
+                    edge=str(opp.best_edge),
+                )
+
             category = market_category_map.get(opp.market_condition_id, "other")
             checked = self._apply_risk_check(opp, category)
             if checked is not None:

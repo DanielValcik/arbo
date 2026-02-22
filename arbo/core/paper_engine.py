@@ -285,6 +285,7 @@ class PaperTradingEngine:
                 size=size,
             )
 
+        diagnostic_mode = confluence_score == 1
         logger.info(
             "paper_trade_placed",
             trade_id=trade.id,
@@ -297,6 +298,7 @@ class PaperTradingEngine:
             edge=str(edge),
             layer=layer,
             confluence=confluence_score,
+            diagnostic_mode=diagnostic_mode,
         )
 
         return trade

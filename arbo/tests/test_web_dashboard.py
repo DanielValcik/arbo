@@ -74,7 +74,11 @@ class MockConfig:
         port = 8080
         host = "0.0.0.0"
 
+    class Confluence:
+        min_score = 1
+
     dashboard = Dashboard()
+    confluence = Confluence()
 
     dashboard_user = "testuser"
     dashboard_password = "testpass"
@@ -295,6 +299,8 @@ class TestInfraAPI:
         assert "cpu_pct" in data
         assert "odds_api_quota" in data
         assert data["mode"] == "paper"
+        assert "confluence_threshold" in data
+        assert data["confluence_threshold"] == 1
 
     def test_uptime_is_positive(self, client: TestClient) -> None:
         resp = client.get("/api/infra", auth=AUTH)

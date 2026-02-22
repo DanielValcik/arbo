@@ -885,6 +885,16 @@ class ArboOrchestrator:
                 if market is not None:
                     fee_enabled = market.fee_enabled
 
+            # [DIAGNOSTIC_MODE] tag for score-1 trades
+            if opp.score == 1:
+                logger.info(
+                    "diagnostic_mode_trade",
+                    market_id=opp.market_condition_id,
+                    score=opp.score,
+                    layers=sorted(opp.contributing_layers),
+                    edge=str(opp.best_edge),
+                )
+
             side = "BUY" if "BUY" in opp.direction.value else "SELL"
             market_price = Decimal("0.50")  # placeholder
 
