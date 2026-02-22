@@ -16,7 +16,8 @@ rsync -avz --delete \
     --exclude '.mypy_cache' \
     --exclude '.pytest_cache' \
     --exclude '.ruff_cache' \
-    --exclude 'models/*.joblib' \
+    --exclude 'models/' \
+    --exclude 'logs/' \
     --exclude '.git' \
     --exclude '.claude' \
     --exclude 'docs/' \

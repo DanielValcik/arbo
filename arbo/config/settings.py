@@ -76,7 +76,7 @@ class LogicalArbConfig(BaseModel):
 
     min_pricing_violation: float = 0.03
     scan_interval_s: int = 900
-    llm_model: str = "gemini-2.0-flash"
+    llm_model: str = "gemini-2.5-flash"
     max_llm_calls_per_hour: int = 40
     negrisk_sum_threshold: float = 0.03
 
@@ -108,7 +108,7 @@ class AttentionMarketsConfig(BaseModel):
     min_divergence: float = 0.05
     max_position_pct: float = 0.05
     sources: list[str] = ["twitter", "reddit", "tiktok"]
-    llm_model: str = "gemini-2.0-flash"
+    llm_model: str = "gemini-2.5-flash"
 
 
 class SportsLatencyConfig(BaseModel):
@@ -136,7 +136,7 @@ class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
     provider: str = "gemini"
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     claude_model: str = "claude-haiku-4-5-20251001"
     max_calls_per_hour: int = 60
 

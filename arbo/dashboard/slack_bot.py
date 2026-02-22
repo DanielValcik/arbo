@@ -1,7 +1,8 @@
 """Slack bot for Arbo trading alerts and commands (Socket Mode).
 
-Provides slash commands (/status, /pnl, /kill) and methods for sending
-alerts, daily/weekly reports via Block Kit messages.
+Supports @mention commands (@arbo status/pnl/kill) and slash commands
+(/status, /pnl, /kill). Methods for sending alerts, daily/weekly reports
+via Block Kit messages.
 
 Uses dependency injection — no imports of orchestrator or paper engine.
 """
@@ -77,7 +78,7 @@ class SlackBot:
         logger.info("slack_bot_stopped")
 
     def _register_commands(self) -> None:
-        """Register slash command handlers on the Slack app."""
+        """Register slash commands and @mention handler on the Slack app."""
         if self._app is None:
             return
 
@@ -112,6 +113,42 @@ class SlackBot:
                 await self._shutdown_fn()
             except Exception as e:
                 logger.error("slack_kill_error", error=str(e))
+
+        @self._app.event("app_mention")
+        async def handle_mention(event: dict[str, Any], say: Any) -> None:
+            """Handle @arbo mentions: '@arbo status', '@arbo pnl', '@arbo kill'."""
+            import re
+
+            raw_text = event.get("text", "")
+            # Strip the mention tag (<@BOTID>) first, then lowercase
+            command = re.sub(r"<@[A-Za-z0-9]+>", "", raw_text).strip().lower()
+            logger.info("slack_mention_received", command=command)
+
+            try:
+                if command in ("status", "s"):
+                    status = await self._get_status_fn()
+                    blocks = self._format_status_blocks(status)
+                    await say(blocks=blocks, text="System Status")
+                elif command in ("pnl", "p"):
+                    pnl = await self._get_pnl_fn()
+                    blocks = self._format_pnl_blocks(pnl)
+                    await say(blocks=blocks, text="P&L Summary")
+                elif command == "kill":
+                    await say(text="Emergency shutdown initiated...")
+                    logger.critical("slack_kill_command_received")
+                    await self._shutdown_fn()
+                elif command in ("help", "h", ""):
+                    await say(
+                        text="*Arbo Commands:*\n"
+                        "• `@arbo status` — system status\n"
+                        "• `@arbo pnl` — P&L summary\n"
+                        "• `@arbo kill` — emergency shutdown"
+                    )
+                else:
+                    await say(text=f"Unknown command: `{command}`. Try `@arbo help`.")
+            except Exception as e:
+                logger.error("slack_mention_error", error=str(e), command=command)
+                await say(text=f"Error: {e}")
 
     async def send_message(self, text: str) -> None:
         """Send a plain text message to the default channel."""

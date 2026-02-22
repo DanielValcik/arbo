@@ -48,7 +48,7 @@ confluence:
 logical_arb:
   min_pricing_violation: 0.03
   scan_interval_s: 900
-  llm_model: "gemini-2.0-flash"
+  llm_model: "gemini-2.5-flash"
   max_llm_calls_per_hour: 40
   negrisk_sum_threshold: 0.03
 
@@ -74,7 +74,7 @@ attention_markets:
   min_divergence: 0.05
   max_position_pct: 0.05
   sources: ["twitter", "reddit", "tiktok"]
-  llm_model: "gemini-2.0-flash"
+  llm_model: "gemini-2.5-flash"
 
 # --- Layer 9: Sports Latency ---
 sports_latency:
@@ -97,7 +97,7 @@ odds_api:
 # --- LLM provider ---
 llm:
   provider: gemini
-  gemini_model: gemini-2.0-flash
+  gemini_model: gemini-2.5-flash
   claude_model: claude-haiku-4-5-20251001
   max_calls_per_hour: 60
 
