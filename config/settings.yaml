@@ -34,6 +34,9 @@ value_model:
   historical_weight: 0.2
   kelly_fraction: 0.25
   max_position_pct: 0.05
+  crypto_edge_threshold: 0.03
+  politics_edge_threshold: 0.04
+  max_politics_per_scan: 10
 
 # --- Layer 4: Confluence ---
 confluence:
@@ -51,6 +54,13 @@ logical_arb:
   llm_model: "gemini-2.5-flash"
   max_llm_calls_per_hour: 40
   negrisk_sum_threshold: 0.03
+
+# --- Binance public API ---
+binance:
+  base_url: "https://api.binance.com"
+  futures_url: "https://fapi.binance.com"
+  max_requests_per_min: 100
+  cache_ttl: 300
 
 # --- Layer 6: Temporal Crypto ---
 temporal_crypto:

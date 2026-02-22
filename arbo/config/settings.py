@@ -58,6 +58,9 @@ class ValueModelConfig(BaseModel):
     historical_weight: float = 0.2
     kelly_fraction: float = 0.5
     max_position_pct: float = 0.05
+    crypto_edge_threshold: float = 0.03
+    politics_edge_threshold: float = 0.04
+    max_politics_per_scan: int = 10
 
 
 class ConfluenceConfig(BaseModel):
@@ -79,6 +82,15 @@ class LogicalArbConfig(BaseModel):
     llm_model: str = "gemini-2.5-flash"
     max_llm_calls_per_hour: int = 40
     negrisk_sum_threshold: float = 0.03
+
+
+class BinanceConfig(BaseModel):
+    """Binance public API configuration."""
+
+    base_url: str = "https://api.binance.com"
+    futures_url: str = "https://fapi.binance.com"
+    max_requests_per_min: int = 100
+    cache_ttl: int = 300
 
 
 class TemporalCryptoConfig(BaseModel):
@@ -241,6 +253,7 @@ class ArboConfig(BaseSettings):
     value_model: ValueModelConfig = ValueModelConfig()
     confluence: ConfluenceConfig = ConfluenceConfig()
     logical_arb: LogicalArbConfig = LogicalArbConfig()
+    binance: BinanceConfig = BinanceConfig()
     temporal_crypto: TemporalCryptoConfig = TemporalCryptoConfig()
     order_flow: OrderFlowConfig = OrderFlowConfig()
     attention_markets: AttentionMarketsConfig = AttentionMarketsConfig()

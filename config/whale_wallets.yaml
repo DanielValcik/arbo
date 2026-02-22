@@ -1,0 +1,16 @@
+# Whale wallets seed file (PM-407)
+# Top 20 Polymarket traders by ROI from leaderboard.
+# Fallback if Data API leaderboard endpoint is unavailable.
+# Source: https://data-api.polymarket.com/leaderboard?window=all&limit=20
+# Last updated: 2026-02-22
+
+wallets:
+  - address: "0x1234567890abcdef1234567890abcdef12345678"
+    label: "whale_1"
+    source: "leaderboard_seed"
+  - address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    label: "whale_2"
+    source: "leaderboard_seed"
+  # NOTE: Replace with real addresses after first successful leaderboard fetch.
+  # The whale_discovery module will auto-populate from the Data API on startup.
+  # This file serves as a bootstrap seed only.

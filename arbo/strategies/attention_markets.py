@@ -22,7 +22,20 @@ from arbo.utils.logger import get_logger
 logger = get_logger("attention_markets")
 
 # Keywords that identify attention/mindshare markets
-ATTENTION_KEYWORDS = ["mindshare", "attention", "kaito", "trending", "viral", "hype"]
+ATTENTION_KEYWORDS = [
+    "mindshare",
+    "attention",
+    "kaito",
+    "trending",
+    "viral",
+    "hype",
+    "sentiment",
+    "social",
+    "popularity",
+    "followers",
+    "views",
+    "engagement",
+]
 
 
 @dataclass

@@ -9,9 +9,13 @@ See brief PM-002 for full specification.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import re
 import ssl
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -30,7 +34,18 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "token"],
     "esports": ["esports", "league of legends", "cs2", "dota", "valorant"],
     "entertainment": ["oscar", "grammy", "movie", "tv show", "celebrity"],
-    "attention_markets": ["mindshare", "attention", "kaito"],
+    "attention_markets": [
+        "mindshare",
+        "attention",
+        "kaito",
+        "sentiment",
+        "social",
+        "trending",
+        "popularity",
+        "followers",
+        "views",
+        "engagement",
+    ],
 }
 
 
@@ -53,6 +68,176 @@ def categorize_market(question: str, tags: list[str] | None = None) -> str:
             return category
 
     return "other"
+
+
+# ---------------------------------------------------------------------------
+# Crypto market parsing (reuses patterns from temporal_crypto.py)
+# ---------------------------------------------------------------------------
+
+# Symbol extraction keyword map (mirrored from temporal_crypto.py:SYMBOL_MAP)
+_CRYPTO_SYMBOL_MAP: dict[str, str] = {
+    "bitcoin": "BTCUSDT",
+    "btc": "BTCUSDT",
+    "ethereum": "ETHUSDT",
+    "eth": "ETHUSDT",
+    "solana": "SOLUSDT",
+    "sol": "SOLUSDT",
+    "dogecoin": "DOGEUSDT",
+    "doge": "DOGEUSDT",
+    "xrp": "XRPUSDT",
+    "cardano": "ADAUSDT",
+    "ada": "ADAUSDT",
+    "avalanche": "AVAXUSDT",
+    "avax": "AVAXUSDT",
+    "chainlink": "LINKUSDT",
+    "link": "LINKUSDT",
+    "polkadot": "DOTUSDT",
+    "dot": "DOTUSDT",
+}
+
+# Strike price patterns (mirrored from temporal_crypto.py:_STRIKE_PATTERNS)
+_STRIKE_PATTERNS = [
+    re.compile(r"\$([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?)"),  # $95,000
+    re.compile(r"\$([0-9]+(?:\.[0-9]+)?)\s*k", re.IGNORECASE),  # $95k
+    re.compile(r"\$([0-9]+(?:\.[0-9]+)?)"),  # $95000
+]
+
+# Date patterns for expiry parsing
+_DATE_PATTERNS = [
+    # "March 1" / "February 28" / "March 1, 2026"
+    re.compile(
+        r"(?:by|on|before)?\s*"
+        r"(January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\s+(\d{1,2})(?:,?\s*(\d{4}))?",
+        re.IGNORECASE,
+    ),
+    # "Feb 28" / "Mar 1"
+    re.compile(
+        r"(?:by|on|before)?\s*"
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:,?\s*(\d{4}))?",
+        re.IGNORECASE,
+    ),
+]
+
+_MONTH_MAP: dict[str, int] = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
+
+# 5-min market detection
+_5MIN_PATTERN = re.compile(r"5\s*min|up or down", re.IGNORECASE)
+
+
+@dataclass
+class CryptoMarketInfo:
+    """Parsed metadata from a crypto price-threshold market question."""
+
+    asset: str  # e.g. "BTC"
+    symbol: str  # Binance symbol e.g. "BTCUSDT"
+    strike: Decimal
+    expiry: datetime | None
+    direction: str  # "above" or "below"
+    is_5min: bool
+
+
+def categorize_crypto_market(question: str) -> CryptoMarketInfo | None:
+    """Parse a crypto market question into structured CryptoMarketInfo.
+
+    Handles:
+    - "Will BTC be above $100,000 on March 1?"
+    - "Will ETH be above $4,000 by February 28?"
+    - "Bitcoin Up or Down - February 23, 1:25PM" (5-min markets)
+    - "Will Solana be above $200 on March 15?"
+
+    Args:
+        question: Market question text.
+
+    Returns:
+        CryptoMarketInfo or None if not a parseable crypto market.
+    """
+    q_lower = question.lower()
+
+    # 1. Extract asset/symbol
+    symbol: str | None = None
+    asset: str = ""
+    for keyword, sym in _CRYPTO_SYMBOL_MAP.items():
+        if keyword in q_lower:
+            symbol = sym
+            asset = sym.replace("USDT", "")
+            break
+
+    if symbol is None:
+        return None
+
+    # 2. Extract strike price
+    strike: Decimal | None = None
+    for pattern in _STRIKE_PATTERNS:
+        match = pattern.search(question)
+        if match:
+            value_str = match.group(1).replace(",", "")
+            try:
+                value = Decimal(value_str)
+                # Handle k notation
+                full_match = question[match.start() : match.end() + 2]
+                if re.search(r"k\b", full_match, re.IGNORECASE):
+                    value *= 1000
+                strike = value
+                break
+            except Exception:
+                continue
+
+    # 5-min markets may not have a strike
+    is_5min = bool(_5MIN_PATTERN.search(question))
+
+    if strike is None and not is_5min:
+        return None
+
+    # 3. Parse expiry date
+    expiry: datetime | None = None
+    for pattern in _DATE_PATTERNS:
+        match = pattern.search(question)
+        if match:
+            month_str = match.group(1).lower()
+            day = int(match.group(2))
+            year = int(match.group(3)) if match.group(3) else datetime.now().year
+            month = _MONTH_MAP.get(month_str)
+            if month:
+                with contextlib.suppress(ValueError):
+                    expiry = datetime(year, month, day)
+            break
+
+    # 4. Direction
+    direction = "below" if "below" in q_lower or "down" in q_lower else "above"
+
+    return CryptoMarketInfo(
+        asset=asset,
+        symbol=symbol,
+        strike=strike or Decimal("0"),
+        expiry=expiry,
+        direction=direction,
+        is_5min=is_5min,
+    )
 
 
 class GammaMarket:
@@ -377,6 +562,42 @@ class MarketDiscovery:
             and m.fee_enabled
             and ("15" in m.question.lower() or "minute" in m.question.lower())
         ]
+
+    def get_crypto_markets(self) -> list[GammaMarket]:
+        """Get active crypto markets with price in tradeable range (5-95 cents).
+
+        Filters for category=crypto, active, binary, and price within 0.05-0.95.
+        """
+        return [
+            m
+            for m in self._markets.values()
+            if m.category == "crypto"
+            and m.active
+            and not m.closed
+            and m.price_yes is not None
+            and Decimal("0.05") <= m.price_yes <= Decimal("0.95")
+            and len(m.outcomes) == 2
+        ]
+
+    def get_politics_markets(self) -> list[GammaMarket]:
+        """Get active politics markets with price in tradeable range (5-95 cents).
+
+        Filters for category=politics, active, binary, and price within 0.05-0.95.
+        """
+        return [
+            m
+            for m in self._markets.values()
+            if m.category == "politics"
+            and m.active
+            and not m.closed
+            and m.price_yes is not None
+            and Decimal("0.05") <= m.price_yes <= Decimal("0.95")
+            and len(m.outcomes) == 2
+        ]
+
+    def get_all_active(self) -> list[GammaMarket]:
+        """Get all active, non-closed markets."""
+        return [m for m in self._markets.values() if m.active and not m.closed]
 
     def get_negrisk_events(self) -> list[GammaMarket]:
         """Get NegRisk multi-outcome markets for Layer 3/5 monitoring."""

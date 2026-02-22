@@ -93,6 +93,10 @@ class ArboOrchestrator:
         self._gemini: Any = None
         self._whale_discovery: Any = None
 
+        # Binance client (shared between L2 crypto + L6)
+        self._binance_client: Any = None
+        self._crypto_model: Any = None
+
         # Layer components
         self._market_maker: Any = None
         self._value_signal: Any = None
@@ -227,6 +231,14 @@ class ArboOrchestrator:
             "WhaleDiscovery", self._init_whale_discovery
         )
 
+        # Binance client (shared)
+        self._binance_client = await self._init_optional(
+            "BinanceClient", self._init_binance_client
+        )
+
+        # Crypto model
+        self._crypto_model = await self._init_optional("CryptoModel", self._init_crypto_model)
+
         # Layer components
         self._market_maker = await self._init_optional("MarketMaker", self._init_market_maker)
         self._value_signal = await self._init_optional(
@@ -315,6 +327,38 @@ class ArboOrchestrator:
         await d.initialize()
         return d
 
+    async def _init_binance_client(self) -> Any:
+        from arbo.connectors.binance_client import BinanceClient
+
+        cfg = self._config.binance
+        client = BinanceClient(
+            base_url=cfg.base_url,
+            futures_url=cfg.futures_url,
+            max_requests_per_min=cfg.max_requests_per_min,
+            cache_ttl=cfg.cache_ttl,
+        )
+        await client.initialize()
+        return client
+
+    async def _init_crypto_model(self) -> Any:
+        from pathlib import Path
+
+        from arbo.models.xgboost_crypto import CryptoValueModel
+
+        model_path = Path("data/models/crypto_model.joblib")
+        if not model_path.exists():
+            logger.warning("crypto_model_not_found", path=str(model_path))
+            return None
+
+        model = CryptoValueModel()
+        model.load(model_path)
+        logger.info(
+            "crypto_model_loaded",
+            path=str(model_path),
+            brier=model.brier_score_val,
+        )
+        return model
+
     async def _init_market_maker(self) -> Any:
         if not self._poly_client:
             return None
@@ -348,12 +392,19 @@ class ArboOrchestrator:
         else:
             logger.warning("xgboost_model_not_found", path=str(model_path))
 
+        vm_cfg = self._config.value_model
         return ValueSignalGenerator(
             discovery=self._discovery,
             odds_client=self._odds_client,
             matcher=self._event_matcher,
             value_model=value_model,
-            edge_threshold=self._config.value_model.edge_threshold,
+            edge_threshold=vm_cfg.edge_threshold,
+            crypto_model=self._crypto_model,
+            binance_client=self._binance_client,
+            gemini=self._gemini,
+            crypto_edge_threshold=vm_cfg.crypto_edge_threshold,
+            politics_edge_threshold=vm_cfg.politics_edge_threshold,
+            max_politics_per_scan=vm_cfg.max_politics_per_scan,
         )
 
     async def _init_market_graph(self) -> Any:
@@ -533,6 +584,7 @@ class ArboOrchestrator:
             ("discovery", self._discovery),
             ("poly_client", self._poly_client),
             ("odds_client", self._odds_client),
+            ("binance_client", self._binance_client),
             ("market_graph", self._market_graph),
             ("whale_monitor", self._whale_monitor),
             ("temporal_crypto", self._temporal_crypto),
