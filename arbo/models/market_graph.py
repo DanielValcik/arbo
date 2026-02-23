@@ -148,14 +148,17 @@ class SemanticMarketGraph:
             partial(self._model.encode, questions, show_progress_bar=False)
         )
 
-        # Upsert into Chroma (also CPU-bound for large batches)
+        # Upsert into Chroma in batches (max ~5000 per batch due to Chroma limit)
         embedding_lists = [e.tolist() for e in embeddings]
-        await asyncio.to_thread(
-            self._collection.upsert,
-            ids=ids,
-            embeddings=embedding_lists,
-            documents=questions,
-        )
+        batch_size = 5000
+        for start in range(0, len(ids), batch_size):
+            end = start + batch_size
+            await asyncio.to_thread(
+                self._collection.upsert,
+                ids=ids[start:end],
+                embeddings=embedding_lists[start:end],
+                documents=questions[start:end],
+            )
 
         logger.info("graph_embeddings_stored", count=len(ids))
 
