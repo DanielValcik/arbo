@@ -523,6 +523,9 @@ class ArboOrchestrator:
             get_status_fn=self._get_status_for_slack,
             get_pnl_fn=self._get_pnl_for_slack,
             shutdown_fn=self._slack_shutdown,
+            daily_brief_channel_id=cfg.slack_daily_brief_channel_id,
+            review_queue_channel_id=cfg.slack_review_queue_channel_id,
+            weekly_report_channel_id=cfg.slack_weekly_report_channel_id,
         )
 
     async def _init_web_dashboard(self) -> Any:
@@ -571,7 +574,20 @@ class ArboOrchestrator:
     async def _slack_shutdown(self) -> None:
         """Emergency shutdown triggered via /kill."""
         logger.critical("emergency_shutdown_via_slack")
+        if self._slack_bot is not None:
+            await self._slack_bot.send_alert("Emergency shutdown triggered via `/kill` command")
         self._shutdown_event.set()
+
+    async def _check_risk_shutdown_alert(self) -> None:
+        """Send Slack alert if risk manager flagged a shutdown (loss limits)."""
+        if self._risk_manager is None or self._slack_bot is None:
+            return
+        if getattr(self._risk_manager, "_shutdown", False):
+            reason = getattr(self._risk_manager, "_shutdown_reason", "Unknown risk event")
+            if not getattr(self, "_risk_alert_sent", False):
+                self._risk_alert_sent = True
+                await self._slack_bot.send_alert(f"Risk shutdown: {reason}")
+                self._shutdown_event.set()
 
     # ------------------------------------------------------------------
     # Close components
@@ -774,6 +790,14 @@ class ArboOrchestrator:
                 errors=len(state.error_timestamps),
                 window_s=_ERROR_WINDOW_S,
             )
+            if self._slack_bot is not None:
+                task = asyncio.create_task(
+                    self._slack_bot.send_alert(
+                        f"Emergency shutdown: layer `{name}` crashed "
+                        f"{len(state.error_timestamps)}x in {_ERROR_WINDOW_S}s"
+                    )
+                )
+                self._internal_tasks.append(task)
             self._shutdown_event.set()
             return
 
@@ -785,6 +809,14 @@ class ArboOrchestrator:
                 restart_count=state.restart_count,
             )
             state.permanent_stop = True
+            if self._slack_bot is not None:
+                task = asyncio.create_task(
+                    self._slack_bot.send_alert(
+                        f"Layer `{name}` permanently stopped after "
+                        f"{state.restart_count} restarts"
+                    )
+                )
+                self._internal_tasks.append(task)
 
     # ------------------------------------------------------------------
     # Layer coroutines
@@ -951,6 +983,8 @@ class ArboOrchestrator:
 
             try:
                 await self._process_signal_batch(batch)
+                # Check if risk manager triggered shutdown (loss limits)
+                await self._check_risk_shutdown_alert()
             except Exception as e:
                 logger.error("signal_processor_error", error=str(e))
 

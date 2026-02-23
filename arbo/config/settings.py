@@ -236,6 +236,9 @@ class ArboConfig(BaseSettings):
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
     slack_app_token: str = Field(default="", alias="SLACK_APP_TOKEN")
     slack_channel_id: str = Field(default="", alias="SLACK_CHANNEL_ID")
+    slack_daily_brief_channel_id: str = Field(default="", alias="SLACK_DAILY_BRIEF_CHANNEL_ID")
+    slack_review_queue_channel_id: str = Field(default="", alias="SLACK_REVIEW_QUEUE_CHANNEL_ID")
+    slack_weekly_report_channel_id: str = Field(default="", alias="SLACK_WEEKLY_REPORT_CHANNEL_ID")
 
     # Database
     database_url: str = Field(

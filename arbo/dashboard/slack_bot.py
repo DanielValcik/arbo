@@ -1,8 +1,11 @@
 """Slack bot for Arbo trading alerts and commands (Socket Mode).
 
 Supports @mention commands (@arbo status/pnl/kill) and slash commands
-(/status, /pnl, /kill). Methods for sending alerts, daily/weekly reports
-via Block Kit messages.
+(/status, /pnl, /kill). Routes messages to dedicated channels:
+
+- #daily-brief: startup notification, daily reports (informational, read-only)
+- #review-queue: critical alerts, risk events, errors requiring action
+- #weekly-report: weekly analytical reports
 
 Uses dependency injection — no imports of orchestrator or paper engine.
 """
@@ -28,10 +31,13 @@ class SlackBot:
     Args:
         bot_token: Slack bot token (xoxb-...).
         app_token: Slack app token (xapp-...).
-        channel_id: Default channel for alerts/reports.
+        channel_id: Default/fallback channel for interactive commands.
         get_status_fn: Async callback returning system status dict.
         get_pnl_fn: Async callback returning P&L dict.
         shutdown_fn: Async callback to trigger emergency shutdown.
+        daily_brief_channel_id: Channel for daily reports and status info.
+        review_queue_channel_id: Channel for alerts requiring human action.
+        weekly_report_channel_id: Channel for weekly analytical reports.
     """
 
     def __init__(
@@ -42,6 +48,9 @@ class SlackBot:
         get_status_fn: StatusCallback,
         get_pnl_fn: PnlCallback,
         shutdown_fn: ShutdownCallback,
+        daily_brief_channel_id: str = "",
+        review_queue_channel_id: str = "",
+        weekly_report_channel_id: str = "",
     ) -> None:
         self._bot_token = bot_token
         self._app_token = app_token
@@ -49,6 +58,10 @@ class SlackBot:
         self._get_status_fn = get_status_fn
         self._get_pnl_fn = get_pnl_fn
         self._shutdown_fn = shutdown_fn
+        # Dedicated channels (fall back to default if not configured)
+        self._daily_brief_channel = daily_brief_channel_id or channel_id
+        self._review_queue_channel = review_queue_channel_id or channel_id
+        self._weekly_report_channel = weekly_report_channel_id or channel_id
         self._app: Any = None
         self._handler: Any = None
 
@@ -66,15 +79,20 @@ class SlackBot:
 
         # Log all incoming events for debugging
         @self._app.middleware
-        async def log_all_events(body: dict[str, Any], next: Any) -> None:  # noqa: A002
+        async def log_all_events(body: dict[str, Any], next: Any) -> None:
             event_type = body.get("event", {}).get("type", body.get("type", "unknown"))
             logger.debug("slack_event_received", event_type=event_type)
             await next()
 
         self._handler = AsyncSocketModeHandler(self._app, self._app_token)
-        logger.info("slack_bot_starting")
+        logger.info(
+            "slack_bot_starting",
+            daily_brief=self._daily_brief_channel,
+            review_queue=self._review_queue_channel,
+            weekly_report=self._weekly_report_channel,
+        )
 
-        # Send startup notification (non-blocking)
+        # Verify auth (no Slack message — startup is logged, not broadcasted)
         try:
             from slack_sdk.web.async_client import AsyncWebClient
 
@@ -82,12 +100,8 @@ class SlackBot:
             auth = await client.auth_test()
             bot_id = auth.get("user_id", "?")
             logger.info("slack_bot_auth_ok", bot_id=bot_id, team=auth.get("team", "?"))
-            await client.chat_postMessage(
-                channel=self._channel_id,
-                text=f"Arbo online (paper mode). Use `@arbo status` or `@arbo help`.",
-            )
         except Exception as e:
-            logger.warning("slack_startup_notify_failed", error=str(e))
+            logger.warning("slack_auth_failed", error=str(e))
 
         await self._handler.start_async()
 
@@ -173,44 +187,58 @@ class SlackBot:
                 logger.error("slack_mention_error", error=str(e), command=command)
                 await say(text=f"Error: {e}")
 
-    async def send_message(self, text: str) -> None:
-        """Send a plain text message to the default channel."""
-        if self._app is None:
-            logger.warning("slack_not_connected", action="send_message")
-            return
-        try:
-            await self._app.client.chat_postMessage(
-                channel=self._channel_id,
-                text=text,
-            )
-        except Exception as e:
-            logger.error("slack_send_error", error=str(e))
+    # ------------------------------------------------------------------
+    # Message sending — routed to dedicated channels
+    # ------------------------------------------------------------------
 
-    async def send_blocks(self, blocks: list[dict[str, Any]], text: str = "") -> None:
-        """Send Block Kit blocks to the default channel."""
+    async def _post(self, channel: str, text: str = "", blocks: list[dict[str, Any]] | None = None) -> None:
+        """Low-level post to a specific channel."""
         if self._app is None:
-            logger.warning("slack_not_connected", action="send_blocks")
+            logger.warning("slack_not_connected", action="post")
             return
         try:
-            await self._app.client.chat_postMessage(
-                channel=self._channel_id,
-                blocks=blocks,
-                text=text or "Arbo Report",
-            )
+            kwargs: dict[str, Any] = {"channel": channel, "text": text or "Arbo"}
+            if blocks:
+                kwargs["blocks"] = blocks
+            await self._app.client.chat_postMessage(**kwargs)
         except Exception as e:
-            logger.error("slack_send_blocks_error", error=str(e))
+            logger.error("slack_send_error", error=str(e), channel=channel)
+
+    # --- #daily-brief (informational, read-only) ---
 
     async def send_daily_report(self, blocks: list[dict[str, Any]]) -> None:
-        """Send a daily report (Block Kit) to Slack."""
-        await self.send_blocks(blocks, text="Daily Report")
+        """Send a daily report to #daily-brief."""
+        await self._post(self._daily_brief_channel, text="Daily Report", blocks=blocks)
 
-    async def send_weekly_report(self, blocks: list[dict[str, Any]]) -> None:
-        """Send a weekly report (Block Kit) to Slack."""
-        await self.send_blocks(blocks, text="Weekly Report")
+    async def send_message(self, text: str) -> None:
+        """Send a plain text info message to #daily-brief."""
+        await self._post(self._daily_brief_channel, text=text)
+
+    # --- #review-queue (actionable, requires human response) ---
 
     async def send_alert(self, text: str) -> None:
-        """Send an alert message to the default channel."""
-        await self.send_message(f"*ALERT:* {text}")
+        """Send an alert requiring action to #review-queue."""
+        await self._post(self._review_queue_channel, text=f":rotating_light: *ALERT:* {text}")
+
+    async def send_alert_blocks(self, blocks: list[dict[str, Any]], text: str = "Alert") -> None:
+        """Send a Block Kit alert to #review-queue."""
+        await self._post(self._review_queue_channel, text=text, blocks=blocks)
+
+    # --- #weekly-report (analytical, trends) ---
+
+    async def send_weekly_report(self, blocks: list[dict[str, Any]]) -> None:
+        """Send a weekly report to #weekly-report."""
+        await self._post(self._weekly_report_channel, text="Weekly Report", blocks=blocks)
+
+    # --- Legacy / fallback (default channel) ---
+
+    async def send_blocks(self, blocks: list[dict[str, Any]], text: str = "") -> None:
+        """Send Block Kit blocks to the default channel (fallback)."""
+        await self._post(self._channel_id, text=text or "Arbo Report", blocks=blocks)
+
+    # ------------------------------------------------------------------
+    # Block Kit formatters
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _format_status_blocks(status: dict[str, Any]) -> list[dict[str, Any]]:
