@@ -742,6 +742,9 @@ class ArboOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._data_collector(), name="data_collector")
         )
+        self._internal_tasks.append(
+            asyncio.create_task(self._position_price_updater(), name="position_price_updater")
+        )
         # Start Slack bot as internal task
         if self._slack_bot is not None:
             self._internal_tasks.append(
@@ -1436,6 +1439,32 @@ class ArboOrchestrator:
                 await self._paper_engine.sync_positions_to_db()
             except Exception as e:
                 logger.error("snapshot_scheduler_error", error=str(e))
+
+    async def _position_price_updater(self) -> None:
+        """Update open position prices from market discovery cache every 5 minutes."""
+        interval = 300  # 5 minutes
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(interval)
+            if self._paper_engine is None or self._discovery is None:
+                continue
+            try:
+                updated = 0
+                for pos in self._paper_engine.open_positions:
+                    market = self._discovery.get_by_condition_id(pos.market_condition_id)
+                    if market is None:
+                        continue
+                    # Match token_id to YES or NO price
+                    if pos.token_id == market.token_id_yes and market.price_yes is not None:
+                        self._paper_engine.update_position_price(pos.token_id, market.price_yes)
+                        updated += 1
+                    elif pos.token_id == market.token_id_no and market.price_no is not None:
+                        self._paper_engine.update_position_price(pos.token_id, market.price_no)
+                        updated += 1
+                if updated > 0:
+                    await self._paper_engine.sync_positions_to_db()
+                    logger.info("position_prices_updated", updated=updated, total=len(self._paper_engine.open_positions))
+            except Exception as e:
+                logger.error("position_price_update_error", error=str(e))
 
     async def _daily_report_scheduler(self) -> None:
         """Generate and send daily report at configured hour (UTC)."""
