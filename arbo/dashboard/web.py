@@ -175,25 +175,34 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
         factory = get_session_factory()
         async with factory() as session:
-            # Daily P&L
+            # Daily P&L = change in total portfolio value since midnight UTC
             today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
             result = await session.execute(
-                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0)).where(
-                    PaperTrade.placed_at >= today,
-                    PaperTrade.status.in_(["won", "lost"]),
-                )
+                sa.select(PaperSnapshot.total_value)
+                .where(PaperSnapshot.snapshot_at <= today)
+                .order_by(PaperSnapshot.snapshot_at.desc())
+                .limit(1)
             )
-            daily_pnl = _dec(result.scalar()) or 0.0
+            day_start_value = _dec(result.scalar())
+            if day_start_value is not None:
+                daily_pnl = round((total_value or 0.0) - day_start_value, 2)
+            else:
+                # No snapshot before today — use initial capital
+                daily_pnl = round((total_value or 0.0) - (initial or 0.0), 2)
 
-            # Weekly P&L
+            # Weekly P&L = change in total portfolio value since Monday 00:00 UTC
             week_start = today - timedelta(days=today.weekday())
             result = await session.execute(
-                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0)).where(
-                    PaperTrade.placed_at >= week_start,
-                    PaperTrade.status.in_(["won", "lost"]),
-                )
+                sa.select(PaperSnapshot.total_value)
+                .where(PaperSnapshot.snapshot_at <= week_start)
+                .order_by(PaperSnapshot.snapshot_at.desc())
+                .limit(1)
             )
-            weekly_pnl = _dec(result.scalar()) or 0.0
+            week_start_value = _dec(result.scalar())
+            if week_start_value is not None:
+                weekly_pnl = round((total_value or 0.0) - week_start_value, 2)
+            else:
+                weekly_pnl = round((total_value or 0.0) - (initial or 0.0), 2)
 
             # Per-category P&L: join trades with markets to get category
             result = await session.execute(

@@ -531,6 +531,8 @@
                             backgroundColor: 'rgba(88,166,255,0.1)',
                             borderWidth: 1.5,
                             pointRadius: 0,
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: '#58a6ff',
                             fill: true,
                             tension: 0.3,
                         }]
@@ -538,8 +540,28 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
                         plugins: {
                             legend: { display: false },
+                            tooltip: {
+                                enabled: true,
+                                backgroundColor: '#1c2128',
+                                borderColor: '#30363d',
+                                borderWidth: 1,
+                                titleColor: '#8b949e',
+                                bodyColor: '#e6edf3',
+                                bodyFont: { size: 13, weight: 'bold' },
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return '$' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                    }
+                                }
+                            },
                         },
                         scales: {
                             x: {
