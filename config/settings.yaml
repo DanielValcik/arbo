@@ -93,15 +93,15 @@ sports_latency:
   min_probability_extreme: 0.95
 
 # --- The Odds API ---
-# h2h + totals = 2 credits/req. 3 leagues × 96 calls/day = 576 credits/day = ~17K/month (under 20K tier)
-# Spreads deferred (would push to 3 credits/req = 25K/month, over tier limit)
+# h2h + totals = 2 credits/req. Cache 1800s → ~48 calls/day × 3 leagues = 288 credits/day = ~8.6K/month
+# Was 900s (854 credits/day = 25.6K/month, over 20K tier). 1800s is safe margin.
 odds_api:
   base_url: "https://api.the-odds-api.com/v4"
   regions: "eu"
   markets: "h2h,totals"
   odds_format: "decimal"
   min_remaining_quota: 100
-  cache_ttl: 900
+  cache_ttl: 1800
 
 # --- LLM provider ---
 llm:

@@ -285,6 +285,9 @@ class ArboOrchestrator:
             except Exception as e:
                 logger.warning("load_state_from_db_skipped", error=str(e))
 
+        # P0-2: Restore daily trade counter from DB (survives restarts)
+        await self._load_daily_trade_counter()
+
     async def _init_optional(self, name: str, factory: Any) -> Any:
         """Initialize an optional component. Returns None on failure."""
         try:
@@ -414,20 +417,10 @@ class ArboOrchestrator:
         )
 
     async def _init_market_graph(self) -> Any:
-        from arbo.models.market_graph import SemanticMarketGraph
-
-        g = SemanticMarketGraph(discovery=self._discovery, gemini=self._gemini)
-        await g.initialize()
-        if self._discovery:
-            markets = self._discovery.get_all()
-            if markets:
-                count = await g.build_graph(markets)
-                logger.info(
-                    "market_graph_initial_build",
-                    markets=len(markets),
-                    relationships=count,
-                )
-        return g
+        # P0-1: Graph build disabled — 6K embeddings + 60K relationships on 4GB RAM
+        # causes memory pressure and service crashes. Re-enable after RAM upgrade.
+        logger.info("market_graph_disabled", reason="stability — 4GB RAM insufficient")
+        return None
 
     async def _init_whale_monitor(self) -> Any:
         if not self._whale_discovery:
@@ -577,6 +570,65 @@ class ArboOrchestrator:
         if self._slack_bot is not None:
             await self._slack_bot.send_alert("Emergency shutdown triggered via `/kill` command")
         self._shutdown_event.set()
+
+    # ------------------------------------------------------------------
+    # Daily trade counter persistence (P0-2)
+    # ------------------------------------------------------------------
+
+    async def _load_daily_trade_counter(self) -> None:
+        """Load today's trade count from DB. Survives restarts."""
+        try:
+            from arbo.utils.db import DailyTradeCounter, get_session_factory
+
+            today = datetime.now(UTC).date()
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.select(DailyTradeCounter).where(
+                        DailyTradeCounter.trade_date == today
+                    )
+                )
+                row = result.scalar_one_or_none()
+                if row is not None:
+                    self._daily_trade_count = row.trade_count
+                    self._daily_trade_date = today.isoformat()
+                    logger.info(
+                        "daily_trade_counter_restored",
+                        date=self._daily_trade_date,
+                        count=self._daily_trade_count,
+                    )
+                else:
+                    self._daily_trade_count = 0
+                    self._daily_trade_date = today.isoformat()
+        except Exception as e:
+            logger.warning("daily_trade_counter_load_failed", error=str(e))
+
+    async def _save_daily_trade_counter(self) -> None:
+        """Persist today's trade count to DB."""
+        try:
+            from arbo.utils.db import DailyTradeCounter, get_session_factory
+
+            today = datetime.now(UTC).date()
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.select(DailyTradeCounter).where(
+                        DailyTradeCounter.trade_date == today
+                    )
+                )
+                row = result.scalar_one_or_none()
+                if row is not None:
+                    row.trade_count = self._daily_trade_count
+                else:
+                    session.add(
+                        DailyTradeCounter(
+                            trade_date=today,
+                            trade_count=self._daily_trade_count,
+                        )
+                    )
+                await session.commit()
+        except Exception as e:
+            logger.warning("daily_trade_counter_save_failed", error=str(e))
 
     async def _check_risk_shutdown_alert(self) -> None:
         """Send Slack alert if risk manager flagged a shutdown (loss limits)."""
@@ -827,17 +879,7 @@ class ArboOrchestrator:
         if self._discovery is None:
             return
         await self._discovery.refresh()
-        # Build semantic graph after first successful refresh (markets needed).
-        # Launched as background task — build_graph() is CPU-heavy (embeddings)
-        # and would block the event loop for minutes if awaited inline.
-        if (
-            not getattr(self, "_graph_built", False)
-            and self._market_graph is not None
-        ):
-            markets = self._discovery.get_all()
-            if markets:
-                self._graph_built = True  # Set early to prevent duplicate launches
-                asyncio.create_task(self._build_graph_background(markets))
+        # P0-1: Graph build disabled for stability. Code preserved for re-enable.
 
     async def _build_graph_background(self, markets: list[Any]) -> None:
         """Build semantic graph in background without blocking the event loop."""
@@ -1131,6 +1173,8 @@ class ArboOrchestrator:
                 trades_this_scan += 1
                 self._daily_trade_count += 1
                 await self._paper_engine.save_trade_to_db(trade)
+                # P0-2: Persist counter after each trade (survives restart)
+                await self._save_daily_trade_counter()
 
     async def _save_signals_to_db(self, signals: list[Signal]) -> None:
         """Save all signals to the database for audit trail (best-effort).

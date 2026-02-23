@@ -233,6 +233,20 @@ class DailyPnl(Base):
 
 
 # ================================================================
+# DAILY_TRADE_COUNTER: Persist daily trade count across restarts
+# ================================================================
+class DailyTradeCounter(Base):
+    __tablename__ = "daily_trade_counter"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date_type] = mapped_column(Date, nullable=False, unique=True)
+    trade_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ================================================================
 # NEWS_ITEMS: Raw news for LLM analysis (Layer 8 / news agent)
 # ================================================================
 class NewsItem(Base):

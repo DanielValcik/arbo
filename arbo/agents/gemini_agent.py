@@ -116,6 +116,7 @@ class GeminiAgent:
         self._gemini_api_key = config.gemini_api_key
         self._anthropic_api_key = config.anthropic_api_key
         self._rate_limiter = RateLimiter(max_calls=config.llm.max_calls_per_hour)
+        self._raw_rate_limiter = RateLimiter(max_calls=config.llm.max_calls_per_hour)
         self._gemini_model: Any = None
         self._anthropic_client: Any = None
         self._total_calls = 0
@@ -158,8 +159,9 @@ class GeminiAgent:
 
         Unlike predict(), does NOT wrap in probability estimation template.
         Used for graph classification, logical arb, and other non-prediction tasks.
+        Uses a separate rate limiter to avoid interference with predict().
         """
-        if not self._rate_limiter.allow():
+        if not self._raw_rate_limiter.allow():
             return None
 
         # Try Gemini first
