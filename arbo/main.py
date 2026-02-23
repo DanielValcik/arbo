@@ -329,6 +329,8 @@ class ArboOrchestrator:
 
         d = WhaleDiscovery()
         await d.initialize()
+        wallets = await d.discover()
+        logger.info("whale_discovery_initial", wallets=len(wallets))
         return d
 
     async def _init_binance_client(self) -> Any:
@@ -416,6 +418,15 @@ class ArboOrchestrator:
 
         g = SemanticMarketGraph(discovery=self._discovery, gemini=self._gemini)
         await g.initialize()
+        if self._discovery:
+            markets = self._discovery.get_all()
+            if markets:
+                count = await g.build_graph(markets)
+                logger.info(
+                    "market_graph_initial_build",
+                    markets=len(markets),
+                    relationships=count,
+                )
         return g
 
     async def _init_whale_monitor(self) -> Any:

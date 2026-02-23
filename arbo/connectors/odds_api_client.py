@@ -45,6 +45,7 @@ class OddsOutcome(BaseModel):
 
     name: str
     price: Decimal
+    point: Decimal | None = None  # line value: 2.5 for totals, -1.5 for spreads
 
 
 class OddsMarket(BaseModel):
@@ -72,18 +73,122 @@ class OddsEvent(BaseModel):
     commence_time: datetime
     bookmakers: list[OddsBookmaker]
 
-    def get_pinnacle_h2h(self) -> dict[str, Decimal] | None:
-        """Extract Pinnacle h2h odds as {outcome_name: decimal_odds}.
+    def get_pinnacle_market(self, market_key: str) -> list[OddsOutcome] | None:
+        """Get Pinnacle outcomes for a market type (h2h, totals, spreads).
 
         Falls back through preferred bookmakers if Pinnacle not available.
+
+        Args:
+            market_key: Market type key ("h2h", "totals", "spreads").
+
+        Returns:
+            List of OddsOutcome or None if not found.
         """
         for preferred_key in PREFERRED_BOOKMAKERS:
             for bm in self.bookmakers:
                 if bm.key == preferred_key:
                     for market in bm.markets:
-                        if market.key == "h2h":
-                            return {o.name: o.price for o in market.outcomes}
+                        if market.key == market_key:
+                            return market.outcomes
         return None
+
+    def get_pinnacle_h2h(self) -> dict[str, Decimal] | None:
+        """Extract Pinnacle h2h odds as {outcome_name: decimal_odds}.
+
+        Falls back through preferred bookmakers if Pinnacle not available.
+        """
+        outcomes = self.get_pinnacle_market("h2h")
+        if outcomes is None:
+            return None
+        return {o.name: o.price for o in outcomes}
+
+    def get_pinnacle_totals_prob(self, line: float, over: bool = True) -> Decimal | None:
+        """Get Pinnacle implied prob for Over/Under at a specific line.
+
+        Finds the totals outcomes matching point == line, returns vig-removed prob.
+
+        Args:
+            line: The totals line to match (e.g. 2.5).
+            over: If True return Over prob, else Under prob.
+
+        Returns:
+            Implied probability (0-1) or None if not found.
+        """
+        outcomes = self.get_pinnacle_market("totals")
+        if outcomes is None:
+            return None
+
+        target_name = "Over" if over else "Under"
+        line_dec = Decimal(str(line))
+
+        # Find Over and Under outcomes at the requested line
+        matching: dict[str, Decimal] = {}
+        for o in outcomes:
+            if o.point is not None and o.point == line_dec:
+                matching[o.name] = o.price
+
+        if target_name not in matching:
+            return None
+
+        # Vig removal: need both sides
+        other_name = "Under" if over else "Over"
+        if other_name not in matching:
+            # Single-sided: return raw implied prob
+            return Decimal("1") / matching[target_name]
+
+        raw_target = Decimal("1") / matching[target_name]
+        raw_other = Decimal("1") / matching[other_name]
+        total = raw_target + raw_other
+
+        if total <= 0:
+            return None
+
+        return raw_target / total
+
+    def get_pinnacle_spreads_prob(self, team: str, line: float) -> Decimal | None:
+        """Get Pinnacle implied prob for a team at a specific spread line.
+
+        Uses exact team name matching against outcome names.
+
+        Args:
+            team: Team name to match (e.g. "Arsenal").
+            line: The spread line (e.g. -0.5).
+
+        Returns:
+            Implied probability (0-1) or None if not found.
+        """
+        outcomes = self.get_pinnacle_market("spreads")
+        if outcomes is None:
+            return None
+
+        line_dec = Decimal(str(line))
+        team_lower = team.lower()
+
+        # Find matching outcome for the team at the given line
+        target_outcome: OddsOutcome | None = None
+        other_outcome: OddsOutcome | None = None
+
+        for o in outcomes:
+            if o.point is not None and o.point == line_dec and o.name.lower() == team_lower:
+                target_outcome = o
+            elif o.point is not None and o.point == -line_dec and o.name.lower() != team_lower:
+                other_outcome = o
+
+        if target_outcome is None:
+            return None
+
+        raw_target = Decimal("1") / target_outcome.price
+
+        if other_outcome is None:
+            return raw_target
+
+        raw_other = Decimal("1") / other_outcome.price
+        total = raw_target + raw_other
+
+        if total <= 0:
+            return None
+
+        return raw_target / total
 
     def get_pinnacle_implied_prob(self, outcome_name: str) -> Decimal | None:
         """Get Pinnacle implied probability for a specific outcome.
@@ -251,7 +356,11 @@ class OddsApiClient:
                                 OddsMarket(
                                     key=mk["key"],
                                     outcomes=[
-                                        OddsOutcome(name=oc["name"], price=oc["price"])
+                                        OddsOutcome(
+                                            name=oc["name"],
+                                            price=oc["price"],
+                                            point=oc.get("point"),
+                                        )
                                         for oc in mk["outcomes"]
                                     ],
                                 )

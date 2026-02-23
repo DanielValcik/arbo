@@ -28,6 +28,11 @@ _CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
 # Suffixes to strip during normalization
 _STRIP_SUFFIXES = re.compile(r"\b(FC|CF|SC|BC|AC|SS|SSC|ACF|AFC|SL|AS|VfB|VfL|TSG|RB|SK)\b", re.I)
 
+# Market type detection patterns (based on production Polymarket questions)
+_OU_PATTERN = re.compile(r":\s*O/U\s+(\d+\.?\d*)")  # ": O/U 2.5"
+_SPREAD_PATTERN = re.compile(r"Spread:\s*.+\(([+-]?\d+\.?\d*)\)")  # "Spread: Nice (-2.5)"
+_BTTS_PATTERN = re.compile(r"Both Teams to Score", re.I)
+
 # Common patterns in Polymarket soccer questions (match-level: 2 teams)
 _TEAM_PATTERNS = [
     # "Will Arsenal win against Chelsea?"
@@ -149,6 +154,31 @@ def identify_league(league_str: str) -> str | None:
     return None
 
 
+def detect_market_type(question: str) -> tuple[str, float | None]:
+    """Detect the market type from a Polymarket question.
+
+    Args:
+        question: Polymarket market question string.
+
+    Returns:
+        (market_type, line) where market_type is one of
+        "moneyline", "totals", "spreads", "btts" and line is
+        the numeric line value (or None for moneyline/btts).
+    """
+    ou_match = _OU_PATTERN.search(question)
+    if ou_match:
+        return ("totals", float(ou_match.group(1)))
+
+    spread_match = _SPREAD_PATTERN.search(question)
+    if spread_match:
+        return ("spreads", float(spread_match.group(1)))
+
+    if _BTTS_PATTERN.search(question):
+        return ("btts", None)
+
+    return ("moneyline", None)
+
+
 class MatchedPair:
     """A matched Polymarket market + Odds API event pair.
 
@@ -165,6 +195,8 @@ class MatchedPair:
         match_type: str = "match",
         outright_team: str | None = None,
         sport_key: str | None = None,
+        market_type: str | None = None,
+        market_line: float | None = None,
     ) -> None:
         self.polymarket = polymarket
         self.odds_event = odds_event
@@ -173,6 +205,8 @@ class MatchedPair:
         self.match_type = match_type  # "match" or "seasonal"
         self.outright_team = outright_team
         self.sport_key = sport_key
+        self.market_type = market_type  # "moneyline", "totals", "spreads", "btts"
+        self.market_line = market_line  # 2.5, -1.5, etc.
 
 
 def load_aliases(path: Path | None = None) -> dict[str, list[str]]:
@@ -244,8 +278,20 @@ class EventMatcher:
             if market.category != "soccer":
                 continue
 
-            teams = extract_teams_from_question(market.question)
+            # Detect market type before team extraction
+            market_type, market_line = detect_market_type(market.question)
+
+            # Pre-process question to strip suffixes before team extraction
+            clean_q = market.question
+            clean_q = re.sub(r":\s*O/U\s+\d+\.?\d*", "", clean_q)
+            clean_q = re.sub(r":\s*Both Teams to Score", "", clean_q, flags=re.I)
+
+            teams = extract_teams_from_question(clean_q)
             if teams is None:
+                continue
+
+            # BTTS: skip — no BTTS in The Odds API
+            if market_type == "btts":
                 continue
 
             team_a, team_b = teams
@@ -258,16 +304,30 @@ class EventMatcher:
 
                 score = self._score_match(team_a, team_b, event)
                 if score >= self._threshold and score > best_score:
+                    # Route probability by market type
+                    if market_type == "totals" and market_line is not None:
+                        pinnacle_prob = event.get_pinnacle_totals_prob(
+                            market_line, over=True
+                        )
+                    elif market_type == "spreads" and market_line is not None:
+                        pinnacle_prob = event.get_pinnacle_spreads_prob(
+                            event.home_team, market_line
+                        )
+                    else:
+                        # moneyline: use h2h prob for home team
+                        pinnacle_prob = event.get_pinnacle_implied_prob(event.home_team)
+
+                    if pinnacle_prob is None:
+                        continue  # No matching odds → skip (better than wrong prob)
+
                     best_score = score
-
-                    # Get Pinnacle implied prob for the YES outcome
-                    pinnacle_prob = event.get_pinnacle_implied_prob(event.home_team)
-
                     best_match = MatchedPair(
                         polymarket=market,
                         odds_event=event,
                         match_score=score,
                         pinnacle_prob=pinnacle_prob,
+                        market_type=market_type,
+                        market_line=market_line,
                     )
 
             if best_match is not None:
@@ -279,6 +339,8 @@ class EventMatcher:
                     oa=f"{best_match.odds_event.home_team} vs {best_match.odds_event.away_team}",
                     score=round(best_score, 3),
                     pinnacle_prob=str(best_match.pinnacle_prob),
+                    market_type=market_type,
+                    market_line=market_line,
                 )
 
         logger.info(

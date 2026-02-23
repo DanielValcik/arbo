@@ -93,13 +93,12 @@ sports_latency:
   min_probability_extreme: 0.95
 
 # --- The Odds API ---
-# Paper trading optimized: h2h only (1 credit/req instead of 3)
-# 3 leagues (EPL, La Liga, Bundesliga) configured via SPORT_KEY_MAP
-# cache_ttl 900s = ~400 credits/day = 20K lasts full month
+# h2h + totals = 2 credits/req. 3 leagues × 96 calls/day = 576 credits/day = ~17K/month (under 20K tier)
+# Spreads deferred (would push to 3 credits/req = 25K/month, over tier limit)
 odds_api:
   base_url: "https://api.the-odds-api.com/v4"
   regions: "eu"
-  markets: "h2h"
+  markets: "h2h,totals"
   odds_format: "decimal"
   min_remaining_quota: 100
   cache_ttl: 900

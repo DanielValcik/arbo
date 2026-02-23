@@ -178,3 +178,144 @@ class TestSportKeyMap:
 
     def test_la_liga_included(self) -> None:
         assert "soccer_spain_la_liga" in SPORT_KEY_MAP["soccer"]
+
+
+# ================================================================
+# OddsOutcome point field + totals/spreads methods
+# ================================================================
+
+
+def _make_event_with_totals(
+    home_team: str = "Arsenal",
+    away_team: str = "Chelsea",
+    totals_line: Decimal = Decimal("2.5"),
+    over_price: Decimal = Decimal("1.90"),
+    under_price: Decimal = Decimal("1.95"),
+) -> OddsEvent:
+    """Build a test OddsEvent with Pinnacle h2h + totals markets."""
+    return OddsEvent(
+        id="event_totals",
+        sport_key="soccer_epl",
+        home_team=home_team,
+        away_team=away_team,
+        commence_time="2026-03-01T15:00:00Z",
+        bookmakers=[
+            OddsBookmaker(
+                key="pinnacle",
+                title="Pinnacle",
+                markets=[
+                    OddsMarket(
+                        key="h2h",
+                        outcomes=[
+                            OddsOutcome(name="Arsenal", price=Decimal("2.10")),
+                            OddsOutcome(name="Chelsea", price=Decimal("3.50")),
+                            OddsOutcome(name="Draw", price=Decimal("3.40")),
+                        ],
+                    ),
+                    OddsMarket(
+                        key="totals",
+                        outcomes=[
+                            OddsOutcome(
+                                name="Over", price=over_price, point=totals_line
+                            ),
+                            OddsOutcome(
+                                name="Under", price=under_price, point=totals_line
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+
+def _make_event_with_spreads(
+    home_team: str = "Arsenal",
+    away_team: str = "Chelsea",
+    home_line: Decimal = Decimal("-0.5"),
+    home_price: Decimal = Decimal("1.85"),
+    away_price: Decimal = Decimal("2.00"),
+) -> OddsEvent:
+    """Build a test OddsEvent with Pinnacle spreads market."""
+    return OddsEvent(
+        id="event_spreads",
+        sport_key="soccer_epl",
+        home_team=home_team,
+        away_team=away_team,
+        commence_time="2026-03-01T15:00:00Z",
+        bookmakers=[
+            OddsBookmaker(
+                key="pinnacle",
+                title="Pinnacle",
+                markets=[
+                    OddsMarket(
+                        key="spreads",
+                        outcomes=[
+                            OddsOutcome(
+                                name=home_team, price=home_price, point=home_line
+                            ),
+                            OddsOutcome(
+                                name=away_team, price=away_price, point=-home_line
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+
+class TestOddsOutcomePoint:
+    """OddsOutcome point field parsing."""
+
+    def test_parse_outcome_with_point(self) -> None:
+        oc = OddsOutcome(name="Over", price=Decimal("1.90"), point=Decimal("2.5"))
+        assert oc.point == Decimal("2.5")
+
+    def test_parse_outcome_without_point(self) -> None:
+        oc = OddsOutcome(name="Arsenal", price=Decimal("2.10"))
+        assert oc.point is None
+
+
+class TestTotalsProb:
+    """Pinnacle totals probability extraction."""
+
+    def test_get_pinnacle_totals_prob(self) -> None:
+        """Over 2.5 at 1.90 should return valid prob ~0.50."""
+        event = _make_event_with_totals()
+        prob = event.get_pinnacle_totals_prob(2.5, over=True)
+        assert prob is not None
+        assert Decimal("0.40") < prob < Decimal("0.60")
+
+    def test_totals_no_matching_line(self) -> None:
+        """Requesting line 4.5 when only 2.5 exists should return None."""
+        event = _make_event_with_totals()
+        prob = event.get_pinnacle_totals_prob(4.5, over=True)
+        assert prob is None
+
+    def test_totals_under_prob(self) -> None:
+        """Under prob should be complementary to Over."""
+        event = _make_event_with_totals()
+        over_prob = event.get_pinnacle_totals_prob(2.5, over=True)
+        under_prob = event.get_pinnacle_totals_prob(2.5, over=False)
+        assert over_prob is not None
+        assert under_prob is not None
+        total = over_prob + under_prob
+        assert abs(total - Decimal("1")) < Decimal("0.01")
+
+
+class TestSpreadsProb:
+    """Pinnacle spreads probability extraction."""
+
+    def test_get_pinnacle_spreads_prob(self) -> None:
+        """Arsenal at -0.5 should return valid prob."""
+        event = _make_event_with_spreads()
+        prob = event.get_pinnacle_spreads_prob("Arsenal", -0.5)
+        assert prob is not None
+        assert Decimal("0.40") < prob < Decimal("0.60")
+
+    def test_spreads_no_matching_team(self) -> None:
+        """Non-existent team returns None."""
+        event = _make_event_with_spreads()
+        prob = event.get_pinnacle_spreads_prob("Liverpool", -0.5)
+        assert prob is None

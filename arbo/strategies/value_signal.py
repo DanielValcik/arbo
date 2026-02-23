@@ -150,6 +150,8 @@ def evaluate_pair(
             "question": market.question[:100],
             "outright_team": pair.outright_team,
             "sport_key": pair.sport_key,
+            "market_type": pair.market_type,
+            "market_line": pair.market_line,
             "category": "soccer",
             "used_model": value_model is not None and value_model.is_trained,
         },

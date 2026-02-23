@@ -16,6 +16,7 @@ from decimal import Decimal
 from arbo.connectors.event_matcher import (
     DEFAULT_THRESHOLD,
     EventMatcher,
+    detect_market_type,
     extract_teams_from_question,
 )
 from arbo.connectors.market_discovery import GammaMarket
@@ -308,3 +309,168 @@ class TestFullMatching:
         ]
         matched = matcher.match_markets(polymarkets, odds_events)
         assert len(matched) == 2
+
+
+# ================================================================
+# Market type detection
+# ================================================================
+
+
+class TestDetectMarketType:
+    """detect_market_type() — classify Polymarket question by market type."""
+
+    def test_detect_moneyline(self) -> None:
+        mt, line = detect_market_type("Will Arsenal win on 2026-03-01?")
+        assert mt == "moneyline"
+        assert line is None
+
+    def test_detect_totals_2_5(self) -> None:
+        mt, line = detect_market_type("Liverpool FC vs. West Ham United FC: O/U 2.5")
+        assert mt == "totals"
+        assert line == 2.5
+
+    def test_detect_totals_1_5(self) -> None:
+        mt, line = detect_market_type("Leeds United FC vs. Manchester City FC: O/U 1.5")
+        assert mt == "totals"
+        assert line == 1.5
+
+    def test_detect_spreads(self) -> None:
+        mt, line = detect_market_type("Spread: OGC Nice (-2.5)")
+        assert mt == "spreads"
+        assert line == -2.5
+
+    def test_detect_btts(self) -> None:
+        mt, line = detect_market_type("Elche CF vs. RCD Espanyol: Both Teams to Score")
+        assert mt == "btts"
+        assert line is None
+
+    def test_detect_seasonal_is_moneyline(self) -> None:
+        mt, line = detect_market_type("Will Manchester City win the EPL?")
+        assert mt == "moneyline"
+        assert line is None
+
+
+# ================================================================
+# Market type routing in match_markets()
+# ================================================================
+
+
+def _make_odds_event_with_totals(
+    event_id: str,
+    home_team: str,
+    away_team: str,
+) -> OddsEvent:
+    """Build a test OddsEvent with Pinnacle h2h + totals.
+
+    Over 1.5 at 1.35 (vig-free ~0.72) is realistic for a Man City away match.
+    With Poly price 0.795 → edge ~7%, well under the old 57% h2h mismatch bug.
+    """
+    return OddsEvent(
+        id=event_id,
+        sport_key="soccer_epl",
+        home_team=home_team,
+        away_team=away_team,
+        commence_time="2026-03-01T15:00:00Z",
+        bookmakers=[
+            OddsBookmaker(
+                key="pinnacle",
+                title="Pinnacle",
+                markets=[
+                    OddsMarket(
+                        key="h2h",
+                        outcomes=[
+                            OddsOutcome(name=home_team, price=Decimal("5.20")),
+                            OddsOutcome(name=away_team, price=Decimal("1.65")),
+                            OddsOutcome(name="Draw", price=Decimal("4.00")),
+                        ],
+                    ),
+                    OddsMarket(
+                        key="totals",
+                        outcomes=[
+                            OddsOutcome(
+                                name="Over",
+                                price=Decimal("1.35"),
+                                point=Decimal("1.5"),
+                            ),
+                            OddsOutcome(
+                                name="Under",
+                                price=Decimal("3.50"),
+                                point=Decimal("1.5"),
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+
+class TestMarketTypeRouting:
+    """Match-level matching routes probability by market type."""
+
+    def test_ou_match_uses_totals_prob(self) -> None:
+        """O/U market should get Pinnacle totals prob, not h2h."""
+        matcher = EventMatcher()
+        polymarkets = [
+            _make_gamma_market(
+                "c1",
+                "Leeds United FC vs. Manchester City FC: O/U 1.5",
+                outcome_prices=["0.795", "0.205"],
+            ),
+        ]
+        odds_events = [
+            _make_odds_event_with_totals("e1", "Leeds United", "Manchester City"),
+        ]
+        matched = matcher.match_markets(polymarkets, odds_events)
+        assert len(matched) == 1
+        assert matched[0].market_type == "totals"
+        assert matched[0].market_line == 1.5
+        # Prob should come from totals market (Over 1.5 at 2.20 → ~0.44),
+        # NOT from h2h (home win at 2.10 → ~0.47)
+        assert matched[0].pinnacle_prob is not None
+
+    def test_ou_edge_reasonable(self) -> None:
+        """O/U 1.5 edge should be reasonable (<20%), not the absurd 57% from h2h mismatch."""
+        matcher = EventMatcher()
+        polymarkets = [
+            _make_gamma_market(
+                "c1",
+                "Leeds United FC vs. Manchester City FC: O/U 1.5",
+                outcome_prices=["0.795", "0.205"],
+            ),
+        ]
+        odds_events = [
+            _make_odds_event_with_totals("e1", "Leeds United", "Manchester City"),
+        ]
+        matched = matcher.match_markets(polymarkets, odds_events)
+        assert len(matched) == 1
+        edge = abs(matched[0].pinnacle_prob - Decimal("0.795"))
+        assert edge < Decimal("0.20"), f"Edge {edge} is unreasonably high — likely h2h/totals mismatch"
+
+    def test_moneyline_still_matches_h2h(self) -> None:
+        """Moneyline market should still use h2h prob."""
+        matcher = EventMatcher()
+        polymarkets = [
+            _make_gamma_market("c1", "Arsenal vs Chelsea?"),
+        ]
+        odds_events = [
+            _make_odds_event("e1", "Arsenal", "Chelsea"),
+        ]
+        matched = matcher.match_markets(polymarkets, odds_events)
+        assert len(matched) == 1
+        assert matched[0].market_type == "moneyline"
+        assert matched[0].pinnacle_prob is not None
+
+    def test_btts_skipped_no_odds(self) -> None:
+        """BTTS market should not match (no API support)."""
+        matcher = EventMatcher()
+        polymarkets = [
+            _make_gamma_market(
+                "c1", "Arsenal vs Chelsea: Both Teams to Score"
+            ),
+        ]
+        odds_events = [
+            _make_odds_event("e1", "Arsenal", "Chelsea"),
+        ]
+        matched = matcher.match_markets(polymarkets, odds_events)
+        assert len(matched) == 0
