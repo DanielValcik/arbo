@@ -15,10 +15,12 @@ See brief Layer 3 for full specification.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
+from functools import partial
 from typing import Any
 
 from arbo.utils.logger import get_logger
@@ -141,13 +143,17 @@ class SemanticMarketGraph:
         if not questions:
             return 0
 
-        # Encode all questions
-        embeddings = self._model.encode(questions, show_progress_bar=False)
+        # Encode all questions (CPU-bound — run in thread to avoid blocking event loop)
+        embeddings = await asyncio.to_thread(
+            partial(self._model.encode, questions, show_progress_bar=False)
+        )
 
-        # Upsert into Chroma
-        self._collection.upsert(
+        # Upsert into Chroma (also CPU-bound for large batches)
+        embedding_lists = [e.tolist() for e in embeddings]
+        await asyncio.to_thread(
+            self._collection.upsert,
             ids=ids,
-            embeddings=[e.tolist() for e in embeddings],
+            embeddings=embedding_lists,
             documents=questions,
         )
 

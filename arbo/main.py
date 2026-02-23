@@ -795,6 +795,30 @@ class ArboOrchestrator:
         if self._discovery is None:
             return
         await self._discovery.refresh()
+        # Build semantic graph after first successful refresh (markets needed).
+        # Launched as background task — build_graph() is CPU-heavy (embeddings)
+        # and would block the event loop for minutes if awaited inline.
+        if (
+            not getattr(self, "_graph_built", False)
+            and self._market_graph is not None
+        ):
+            markets = self._discovery.get_all()
+            if markets:
+                self._graph_built = True  # Set early to prevent duplicate launches
+                asyncio.create_task(self._build_graph_background(markets))
+
+    async def _build_graph_background(self, markets: list[Any]) -> None:
+        """Build semantic graph in background without blocking the event loop."""
+        try:
+            count = await self._market_graph.build_graph(markets)
+            logger.info(
+                "market_graph_initial_build",
+                markets=len(markets),
+                relationships=count,
+            )
+        except Exception as e:
+            self._graph_built = False  # Allow retry on next discovery cycle
+            logger.warning("market_graph_build_failed", error=str(e))
 
     async def _run_market_maker(self) -> None:
         """Layer 1: Market making heartbeat."""
