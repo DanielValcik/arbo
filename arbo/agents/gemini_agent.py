@@ -153,6 +153,69 @@ class GeminiAgent:
         else:
             logger.warning("anthropic_no_api_key", msg="ANTHROPIC_API_KEY not set")
 
+    async def raw_query(self, prompt: str) -> dict[str, Any] | None:
+        """Send a raw prompt and return parsed JSON dict.
+
+        Unlike predict(), does NOT wrap in probability estimation template.
+        Used for graph classification, logical arb, and other non-prediction tasks.
+        """
+        if not self._rate_limiter.allow():
+            return None
+
+        # Try Gemini first
+        if self._gemini_model is not None:
+            result = await self._raw_call_gemini(prompt)
+            if result is not None:
+                self._total_calls += 1
+                return result
+
+        # Fallback to Claude
+        if self._anthropic_client is not None:
+            result = await self._raw_call_claude(prompt)
+            if result is not None:
+                self._total_calls += 1
+                self._fallback_calls += 1
+                return result
+
+        logger.warning("llm_raw_both_failed", prompt=prompt[:80])
+        return None
+
+    async def _raw_call_gemini(self, prompt: str) -> dict[str, Any] | None:
+        """Call Gemini with raw prompt and return parsed JSON."""
+        try:
+            loop = asyncio.get_event_loop()
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self._gemini_model.generate_content(prompt),
+                ),
+                timeout=self._gemini_timeout_s,
+            )
+            return _extract_json(response.text)
+        except Exception as e:
+            logger.debug("gemini_raw_error", error=str(e))
+            return None
+
+    async def _raw_call_claude(self, prompt: str) -> dict[str, Any] | None:
+        """Call Claude with raw prompt and return parsed JSON."""
+        try:
+            response = await asyncio.wait_for(
+                self._anthropic_client.messages.create(
+                    model=self._claude_model_name,
+                    max_tokens=512,
+                    messages=[{"role": "user", "content": prompt}],
+                ),
+                timeout=self._claude_timeout_s,
+            )
+            text = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    text += block.text
+            return _extract_json(text) if text else None
+        except Exception as e:
+            logger.debug("claude_raw_error", error=str(e))
+            return None
+
     async def predict(
         self,
         question: str,

@@ -169,9 +169,11 @@ class TestRelationClassification:
     async def test_classify_subset(self) -> None:
         """LLM classifies relationship as SUBSET."""
         gemini = AsyncMock()
-        gemini.predict.return_value = FakePrediction(
-            reasoning="This is a SUBSET relationship", confidence=0.9
-        )
+        gemini.raw_query.return_value = {
+            "relationship": "SUBSET",
+            "confidence": 0.9,
+            "reasoning": "A is a subset of B",
+        }
         graph = SemanticMarketGraph(gemini=gemini)
 
         rel_type, confidence = await graph._classify_relationship("A?", "B?")
@@ -182,9 +184,11 @@ class TestRelationClassification:
     async def test_classify_mutex(self) -> None:
         """LLM classifies relationship as MUTEX."""
         gemini = AsyncMock()
-        gemini.predict.return_value = FakePrediction(
-            reasoning="These are MUTEX outcomes", confidence=0.85
-        )
+        gemini.raw_query.return_value = {
+            "relationship": "MUTEX",
+            "confidence": 0.85,
+            "reasoning": "These are mutually exclusive",
+        }
         graph = SemanticMarketGraph(gemini=gemini)
 
         rel_type, _confidence = await graph._classify_relationship("A?", "B?")

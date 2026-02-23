@@ -272,9 +272,9 @@ class SemanticMarketGraph:
             "Classify the relationship between these two prediction market questions.\n\n"
             f"Question A: {question_a}\n"
             f"Question B: {question_b}\n\n"
-            "Respond with JSON:\n"
+            "Respond with ONLY a JSON object:\n"
             '{"relationship": "SUBSET|MUTEX|IMPLICATION|TEMPORAL|NONE", '
-            '"confidence": 0.0-1.0, "reasoning": "..."}\n\n'
+            '"confidence": 0.8, "reasoning": "brief explanation"}\n\n'
             "SUBSET: A is a subset of B (if A true, then B true)\n"
             "MUTEX: A and B cannot both be true\n"
             "IMPLICATION: A implies B (but B does not imply A)\n"
@@ -283,22 +283,18 @@ class SemanticMarketGraph:
         )
 
         try:
-            prediction = await self._gemini.predict(
-                question=prompt,
-                current_price=0.5,
-                category="semantic_analysis",
-            )
+            data = await self._gemini.raw_query(prompt)
 
-            if prediction is None:
+            if data is None:
                 return (RelationType.NONE, 0.0)
 
-            # Parse the reasoning field for relationship type
-            reasoning = prediction.reasoning.upper()
+            rel_str = str(data.get("relationship", "NONE")).upper()
+            confidence = float(data.get("confidence", 0.5))
             for rel_type in RelationType:
-                if rel_type.value in reasoning:
-                    return (rel_type, prediction.confidence)
+                if rel_type.value == rel_str:
+                    return (rel_type, confidence)
 
-            return (RelationType.NONE, prediction.confidence)
+            return (RelationType.NONE, confidence)
 
         except Exception as e:
             logger.debug("classification_error", error=str(e))

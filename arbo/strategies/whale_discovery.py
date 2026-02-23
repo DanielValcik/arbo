@@ -31,8 +31,8 @@ MIN_TOTAL_VOLUME = 50_000.0  # USD
 REFRESH_INTERVAL_S = 7 * 24 * 3600
 
 # Leaderboard page size
-LEADERBOARD_PAGE_SIZE = 100
-MAX_LEADERBOARD_PAGES = 10
+LEADERBOARD_PAGE_SIZE = 50  # Polymarket API max per request
+MAX_LEADERBOARD_PAGES = 20  # 50 * 20 = 1000 wallets (API offset max)
 
 
 @dataclass
@@ -50,12 +50,20 @@ class WhaleWallet:
     last_checked: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def passes_filters(self) -> bool:
-        """Check if this wallet passes all quality filters."""
-        return (
-            self.win_rate >= MIN_WIN_RATE
-            and self.resolved_positions >= MIN_RESOLVED_POSITIONS
-            and self.total_volume >= MIN_TOTAL_VOLUME
-        )
+        """Check if this wallet passes quality filters.
+
+        Leaderboard wallets lack win_rate/resolved_positions, so filter
+        on volume + positive ROI. Once enriched, full filters apply.
+        """
+        if self.win_rate > 0 and self.resolved_positions > 0:
+            # Fully enriched wallet — apply strict filters
+            return (
+                self.win_rate >= MIN_WIN_RATE
+                and self.resolved_positions >= MIN_RESOLVED_POSITIONS
+                and self.total_volume >= MIN_TOTAL_VOLUME
+            )
+        # Leaderboard wallet (not yet enriched) — accept on volume + positive PnL
+        return self.total_volume >= MIN_TOTAL_VOLUME and self.roi_pct > 0
 
 
 class WhaleDiscovery:
@@ -146,7 +154,7 @@ class WhaleDiscovery:
     async def _scrape_leaderboard(self) -> list[WhaleWallet]:
         """Scrape leaderboard from Data API.
 
-        Endpoint: GET {data_url}/leaderboard/ranked-wallets
+        Endpoint: GET {data_url}/v1/leaderboard
         Paginates through results to collect top wallets.
         """
         if not self._session:
@@ -156,10 +164,12 @@ class WhaleDiscovery:
 
         for page in range(MAX_LEADERBOARD_PAGES):
             offset = page * LEADERBOARD_PAGE_SIZE
-            url = f"{self._data_url}/leaderboard/ranked-wallets"
+            url = f"{self._data_url}/v1/leaderboard"
             params = {
                 "limit": str(LEADERBOARD_PAGE_SIZE),
                 "offset": str(offset),
+                "timePeriod": "ALL",
+                "orderBy": "PNL",
             }
 
             try:
@@ -191,21 +201,34 @@ class WhaleDiscovery:
         return wallets
 
     def _parse_leaderboard_entry(self, entry: dict[str, Any]) -> WhaleWallet | None:
-        """Parse a single leaderboard entry into a WhaleWallet."""
+        """Parse a single leaderboard entry into a WhaleWallet.
+
+        API response fields: proxyWallet, userName, pnl, vol, rank.
+        win_rate/resolved_positions not in leaderboard — enriched later.
+        """
         try:
-            address = entry.get("address", "") or entry.get("wallet", "")
+            address = (
+                entry.get("proxyWallet", "")
+                or entry.get("address", "")
+                or entry.get("wallet", "")
+            )
             if not address:
                 return None
 
+            pnl = float(entry.get("pnl", 0) or 0)
+            vol = float(entry.get("vol", 0) or entry.get("totalVolume", 0) or 0)
+
             return WhaleWallet(
                 address=address,
-                display_name=entry.get("displayName", "") or entry.get("name", "") or address[:10],
-                roi_pct=float(entry.get("roi", 0) or 0),
-                win_rate=float(entry.get("winRate", 0) or entry.get("win_rate", 0) or 0),
-                resolved_positions=int(
-                    entry.get("resolvedPositions", 0) or entry.get("resolved", 0) or 0
+                display_name=(
+                    entry.get("userName", "")
+                    or entry.get("displayName", "")
+                    or address[:10]
                 ),
-                total_volume=float(entry.get("totalVolume", 0) or entry.get("volume", 0) or 0),
+                roi_pct=pnl / vol * 100 if vol > 0 else 0.0,
+                win_rate=0.0,  # Not in leaderboard API; enriched later
+                resolved_positions=0,  # Not in leaderboard API; enriched later
+                total_volume=vol,
                 discovery_source="leaderboard",
             )
         except (ValueError, TypeError) as e:
@@ -222,7 +245,7 @@ class WhaleDiscovery:
             return wallet
 
         url = f"{self._data_url}/positions"
-        params = {"address": wallet.address}
+        params = {"user": wallet.address}
 
         try:
             async with self._session.get(url, params=params) as resp:

@@ -52,12 +52,11 @@ def _make_leaderboard_entry(
     roi: float = 25.0,
 ) -> dict:
     return {
-        "address": address,
-        "displayName": address[:10],
-        "roi": roi,
-        "winRate": win_rate,
-        "resolvedPositions": resolved,
-        "totalVolume": volume,
+        "proxyWallet": address,
+        "userName": address[:10],
+        "pnl": roi / 100 * volume,  # Convert ROI% to absolute PnL
+        "vol": volume,
+        "rank": "1",
     }
 
 
@@ -178,12 +177,12 @@ class TestWhaleDiscoveryAPI:
 
         with aioresponses() as mocked:
             mocked.get(
-                re.compile(r".*/leaderboard/ranked-wallets.*"),
+                re.compile(r".*/v1/leaderboard.*"),
                 payload=entries,
             )
             # Second page returns empty to stop pagination
             mocked.get(
-                re.compile(r".*/leaderboard/ranked-wallets.*"),
+                re.compile(r".*/v1/leaderboard.*"),
                 payload=[],
             )
 
@@ -234,7 +233,7 @@ class TestWhaleDiscoveryAPI:
 
         with aioresponses() as mocked:
             mocked.get(
-                re.compile(r".*/leaderboard/ranked-wallets.*"),
+                re.compile(r".*/v1/leaderboard.*"),
                 status=500,
             )
 
@@ -281,11 +280,11 @@ class TestWhaleDiscoveryIntegration:
         with aioresponses() as mocked:
             # Leaderboard returns mixed entries
             mocked.get(
-                re.compile(r".*/leaderboard/ranked-wallets.*"),
+                re.compile(r".*/v1/leaderboard.*"),
                 payload=good_entries + bad_entries,
             )
             mocked.get(
-                re.compile(r".*/leaderboard/ranked-wallets.*"),
+                re.compile(r".*/v1/leaderboard.*"),
                 payload=[],
             )
             # Enrich calls for each wallet
