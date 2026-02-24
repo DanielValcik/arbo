@@ -91,6 +91,11 @@ class AttentionMarketsScanner:
             logger.debug("attention_no_markets_found")
             return []
 
+        # Limit to 10 per scan to stay within health monitor heartbeat (120s)
+        # Sort by volume (most liquid first) for best signal quality
+        attention_markets.sort(key=lambda m: m.volume_24h, reverse=True)
+        attention_markets = attention_markets[:10]
+
         signals: list[Signal] = []
 
         for market in attention_markets:
