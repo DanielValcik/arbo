@@ -58,6 +58,42 @@ _ERROR_THRESHOLD = 3
 # LLM re-check interval when degraded
 _LLM_RECHECK_S = 300  # 5 minutes
 
+# Correlation limit: max positions on the same underlying asset
+_MAX_POSITIONS_PER_ASSET = 3
+
+# Mapping of keywords to canonical underlying asset names
+_UNDERLYING_KEYWORDS: list[tuple[str, str]] = [
+    ("bitcoin", "BTC"),
+    ("btc", "BTC"),
+    ("ethereum", "ETH"),
+    ("ether", "ETH"),
+    ("eth", "ETH"),
+    ("solana", "SOL"),
+    ("sol", "SOL"),
+    ("dogecoin", "DOGE"),
+    ("doge", "DOGE"),
+    ("xrp", "XRP"),
+    ("ripple", "XRP"),
+    ("cardano", "ADA"),
+    ("ada", "ADA"),
+    ("sui", "SUI"),
+]
+
+
+def _extract_underlying(question: str) -> str | None:
+    """Extract canonical underlying asset from a market question.
+
+    Returns 'BTC', 'ETH', 'SOL', etc. or None for non-crypto markets.
+    Simple string match — no ML needed.
+    """
+    if not question:
+        return None
+    q_lower = question.lower()
+    for keyword, asset in _UNDERLYING_KEYWORDS:
+        if keyword in q_lower:
+            return asset
+    return None
+
 
 class ArboOrchestrator:
     """Main orchestrator that ties all 9 strategy layers together.
@@ -1100,6 +1136,33 @@ class ArboOrchestrator:
                     token_id=opp.token_id,
                 )
                 continue
+
+            # Correlation limit: max N positions per underlying asset
+            opp_question = ""
+            if opp.signals:
+                opp_question = opp.signals[0].details.get("question", "")
+            if not opp_question and self._discovery is not None:
+                m = self._discovery.get_by_condition_id(opp.market_condition_id)
+                if m is not None:
+                    opp_question = m.question
+            underlying = _extract_underlying(opp_question)
+            if underlying is not None:
+                asset_count = 0
+                for p in self._paper_engine.open_positions:
+                    if self._discovery is None:
+                        break
+                    pm = self._discovery.get_by_condition_id(p.market_condition_id)
+                    if pm is not None and _extract_underlying(pm.question) == underlying:
+                        asset_count += 1
+                if asset_count >= _MAX_POSITIONS_PER_ASSET:
+                    logger.info(
+                        "correlation_limit_skip",
+                        market_id=opp.market_condition_id,
+                        underlying=underlying,
+                        existing=asset_count,
+                        max=_MAX_POSITIONS_PER_ASSET,
+                    )
+                    continue
 
             # Get market for fee info + real price
             fee_enabled = False
