@@ -337,6 +337,9 @@ class ArboOrchestrator:
 
         d = MarketDiscovery()
         await d.initialize()
+        # Populate market catalog at init so layers (L8, L3, etc.) have data immediately
+        markets = await d.refresh()
+        logger.info("discovery_initial_refresh", markets=len(markets))
         return d
 
     async def _init_poly_client(self) -> Any:
@@ -836,7 +839,23 @@ class ArboOrchestrator:
                             raise inner.exception()
                     break
                 else:
-                    await coro_factory()
+                    # Run coro as inner task so heartbeat stays alive during
+                    # long-running operations (e.g. L8 Gemini calls ~300s)
+                    inner = asyncio.create_task(coro_factory(), name=f"{name}_inner")
+                    try:
+                        while not inner.done() and not self._shutdown_event.is_set():
+                            await asyncio.sleep(1)
+                            state.last_heartbeat = time.monotonic()
+                    finally:
+                        if not inner.done():
+                            inner.cancel()
+                            try:
+                                await inner
+                            except (asyncio.CancelledError, Exception):
+                                pass
+                        elif inner.exception():
+                            raise inner.exception()
+
                     state.last_heartbeat = time.monotonic()
 
                     # Sleep in small increments; keep heartbeat alive during idle
