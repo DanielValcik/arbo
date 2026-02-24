@@ -107,6 +107,18 @@ class AttentionMarketsScanner:
             if divergence < self._min_divergence:
                 continue
 
+            # LLM divergence > 25% is likely hallucination — skip
+            if divergence > Decimal("0.25"):
+                logger.debug(
+                    "attention_skip_hallucination",
+                    question=market.question[:60],
+                    divergence=str(divergence),
+                )
+                continue
+
+            # Cap edge at 10% — LLM edges are qualitatively different from L2
+            edge = min(divergence, Decimal("0.10"))
+
             # Direction: if sentiment says higher prob, BUY YES
             if estimate.sentiment_prob > market_price:
                 direction = SignalDirection.BUY_YES
@@ -121,12 +133,13 @@ class AttentionMarketsScanner:
                     market_condition_id=market.condition_id,
                     token_id=token_id,
                     direction=direction,
-                    edge=divergence,
+                    edge=edge,
                     confidence=estimate.confidence,
                     details={
                         "sentiment_prob": str(estimate.sentiment_prob),
                         "market_price": str(market_price),
                         "divergence": str(divergence),
+                        "poly_price": str(market_price),
                         "reasoning": estimate.reasoning,
                         "sources": estimate.sources_analyzed,
                         "question": market.question[:100],

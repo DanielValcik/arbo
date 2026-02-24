@@ -32,7 +32,7 @@ REFRESH_INTERVAL_S = 7 * 24 * 3600
 
 # Leaderboard page size
 LEADERBOARD_PAGE_SIZE = 50  # Polymarket API max per request
-MAX_LEADERBOARD_PAGES = 20  # 50 * 20 = 1000 wallets (API offset max)
+MAX_LEADERBOARD_PAGES = 2  # 50 * 2 = 100 wallets (top traders only)
 
 
 @dataclass

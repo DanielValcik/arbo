@@ -213,7 +213,7 @@ class TestSignalFormat:
     async def test_signal_layer_8(self) -> None:
         """Attention market signals have layer=8."""
         gemini = AsyncMock()
-        gemini.predict.return_value = FakePrediction(probability=0.80, confidence=0.9)
+        gemini.predict.return_value = FakePrediction(probability=0.70, confidence=0.9)
 
         market = _make_market(
             category="attention_markets",
@@ -229,7 +229,7 @@ class TestSignalFormat:
     async def test_signal_details_contain_sentiment(self) -> None:
         """Signal details contain sentiment probability and reasoning."""
         gemini = AsyncMock()
-        gemini.predict.return_value = FakePrediction(probability=0.80, confidence=0.9)
+        gemini.predict.return_value = FakePrediction(probability=0.70, confidence=0.9)
 
         market = _make_market(
             category="attention_markets",
