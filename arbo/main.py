@@ -781,6 +781,9 @@ class ArboOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._position_price_updater(), name="position_price_updater")
         )
+        self._internal_tasks.append(
+            asyncio.create_task(self._resolution_checker(), name="resolution_checker")
+        )
         # Start Slack bot as internal task
         if self._slack_bot is not None:
             self._internal_tasks.append(
@@ -1528,6 +1531,128 @@ class ArboOrchestrator:
                     logger.info("position_prices_updated", updated=updated, total=len(self._paper_engine.open_positions))
             except Exception as e:
                 logger.error("position_price_update_error", error=str(e))
+
+    async def _resolution_checker(self) -> None:
+        """Check open positions for resolved markets and close them with realized P&L.
+
+        Runs every 5 minutes. For each open position:
+        1. If market end_date is in the future, skip (can't be resolved yet)
+        2. Fetch from Gamma API by token_id to check closed status
+        3. If market is closed, determine winner from outcomePrices and resolve
+        """
+        interval = 300  # 5 minutes
+        while not self._shutdown_event.is_set():
+            await asyncio.sleep(interval)
+            if self._paper_engine is None or self._discovery is None:
+                continue
+            try:
+                positions = list(self._paper_engine.open_positions)
+                if not positions:
+                    continue
+
+                now = datetime.now(UTC)
+                resolved_count = 0
+                total_pnl = Decimal("0")
+                checked = 0
+                # Cache fetched markets to avoid duplicate API calls per condition_id
+                fetched_markets: dict[str, GammaMarket | None] = {}
+
+                for pos in positions:
+                    cid = pos.market_condition_id
+
+                    # Fast path: check end_date from discovery cache
+                    # If end_date is in the future, market can't be resolved yet
+                    cached = self._discovery.get_by_condition_id(cid)
+                    if cached is not None and cached.end_date:
+                        try:
+                            end_dt = datetime.fromisoformat(
+                                cached.end_date.replace("Z", "+00:00")
+                            )
+                            if end_dt > now:
+                                continue  # Not past end date yet
+                        except (ValueError, TypeError):
+                            pass  # Can't parse end_date, check anyway
+
+                    # Fetch from Gamma API (by token_id — the only reliable lookup)
+                    if cid not in fetched_markets:
+                        market = await self._discovery.fetch_by_token_id(pos.token_id)
+                        fetched_markets[cid] = market
+                        checked += 1
+                    else:
+                        market = fetched_markets[cid]
+
+                    if market is None or not market.closed:
+                        continue
+
+                    # Market is resolved — determine winner from outcomePrices
+                    # Resolved: outcomePrices = ["1","0"] (YES won) or ["0","1"] (NO won)
+                    yes_price = market.price_yes
+                    if yes_price is None:
+                        continue
+
+                    yes_won = yes_price > Decimal("0.5")
+
+                    # Determine if THIS token won
+                    if pos.token_id == market.token_id_yes:
+                        winning = yes_won
+                    elif pos.token_id == market.token_id_no:
+                        winning = not yes_won
+                    else:
+                        continue
+
+                    pnl = self._paper_engine.resolve_market(pos.token_id, winning)
+                    total_pnl += pnl
+                    resolved_count += 1
+
+                    # Update trade rows in DB
+                    await self._paper_engine.update_resolved_trades_in_db(pos.token_id)
+
+                    logger.info(
+                        "position_resolved",
+                        condition_id=cid,
+                        token_id=pos.token_id[:20],
+                        question=market.question[:80],
+                        outcome="YES" if yes_won else "NO",
+                        side=pos.side,
+                        winning=winning,
+                        pnl=str(pnl),
+                    )
+
+                if resolved_count > 0:
+                    # Sync updated positions and take a snapshot
+                    await self._paper_engine.sync_positions_to_db()
+                    snapshot = self._paper_engine.take_snapshot()
+                    await self._paper_engine.save_snapshot_to_db(snapshot)
+                    logger.info(
+                        "resolution_check_done",
+                        resolved=resolved_count,
+                        total_pnl=str(total_pnl),
+                        balance=str(self._paper_engine.balance),
+                        open_positions=len(self._paper_engine.open_positions),
+                    )
+
+                    # Slack notification for resolved positions
+                    if self._slack_bot is not None:
+                        try:
+                            emoji = ":white_check_mark:" if total_pnl > 0 else ":x:"
+                            msg = (
+                                f"{emoji} *{resolved_count} position(s) resolved*\n"
+                                f"P&L: ${total_pnl:+.2f}\n"
+                                f"Balance: ${self._paper_engine.balance:.2f}\n"
+                                f"Open positions: {len(self._paper_engine.open_positions)}"
+                            )
+                            await self._slack_bot.send_message(msg)
+                        except Exception:
+                            pass
+                else:
+                    logger.info(
+                        "resolution_check_none",
+                        positions=len(positions),
+                        checked=checked,
+                    )
+
+            except Exception as e:
+                logger.error("resolution_checker_error", error=str(e))
 
     async def _daily_report_scheduler(self) -> None:
         """Generate and send daily report at configured hour (UTC)."""

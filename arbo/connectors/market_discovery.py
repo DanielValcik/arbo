@@ -751,6 +751,27 @@ class MarketDiscovery:
             and any(kw in m.question.lower() for kw in match_keywords)
         ]
 
+    async def fetch_by_token_id(self, token_id: str) -> GammaMarket | None:
+        """Fetch a specific market by CLOB token ID from Gamma API.
+
+        Works regardless of active/closed status. Used by resolution checker
+        to detect resolved (closed) markets dropped from the active-only cache.
+        """
+        if not self._session:
+            return None
+        try:
+            url = f"{self._gamma_url}/markets"
+            params = {"clob_token_ids": token_id, "limit": "1"}
+            async with self._session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                if isinstance(data, list) and data:
+                    return GammaMarket(data[0])
+        except Exception as e:
+            logger.debug("fetch_by_token_id_error", token_id=token_id[:20], error=str(e))
+        return None
+
     def get_all_active(self) -> list[GammaMarket]:
         """Get all active, non-closed markets."""
         return [m for m in self._markets.values() if m.active and not m.closed]

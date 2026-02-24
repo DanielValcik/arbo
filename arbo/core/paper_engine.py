@@ -472,6 +472,41 @@ class PaperTradingEngine:
         except Exception as e:
             logger.warning("sync_positions_to_db_failed", error=str(e))
 
+    async def update_resolved_trades_in_db(self, token_id: str) -> None:
+        """Update DB rows for trades that were just resolved (best-effort)."""
+        try:
+            from sqlalchemy import update
+
+            from arbo.utils.db import PaperTrade as PaperTradeDB
+            from arbo.utils.db import get_session_factory
+
+            # Find the resolved in-memory trade data
+            resolved_trades = [
+                t for t in self._trades
+                if t.token_id == token_id and t.status in (TradeStatus.WON, TradeStatus.LOST)
+                and t.resolved_at is not None
+            ]
+            if not resolved_trades:
+                return
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    update(PaperTradeDB)
+                    .where(
+                        PaperTradeDB.token_id == token_id,
+                        PaperTradeDB.status == "open",
+                    )
+                    .values(
+                        status=resolved_trades[0].status.value,
+                        actual_pnl=resolved_trades[0].actual_pnl,
+                        resolved_at=resolved_trades[0].resolved_at,
+                    )
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning("update_resolved_trades_db_failed", error=str(e), token_id=token_id)
+
     async def load_state_from_db(self) -> None:
         """Restore open positions and balance from the database on startup."""
         try:
