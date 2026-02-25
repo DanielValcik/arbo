@@ -253,17 +253,10 @@ class ArboOrchestrator:
             logger.error("init_paper_engine_failed", error=str(e))
             raise
 
-        # Confluence scorer (required)
-        try:
-            from arbo.core.confluence import ConfluenceScorer
-
-            self._confluence = ConfluenceScorer(
-                risk_manager=self._risk_manager,
-                capital=self._capital,
-            )
-        except Exception as e:
-            logger.error("init_confluence_failed", error=str(e))
-            raise
+        # Confluence scorer — ARCHIVED (RDH pivot)
+        # Replaced by per-strategy quality gates in main_rdh.py
+        self._confluence = None
+        logger.info("confluence_scorer_archived", note="Replaced by quality gates in RDH architecture")
 
         # Market discovery
         self._discovery = await self._init_optional("MarketDiscovery", self._init_discovery)

@@ -27,7 +27,19 @@ MAX_CONFLUENCE_DOUBLE_PCT = Decimal("0.05")  # 5% hard cap at any confluence sco
 MAX_TOTAL_EXPOSURE_PCT = Decimal("0.80")  # 80% max capital deployed
 MAX_POSITIONS_PER_MARKET = 1  # Only 1 position per market at a time
 MIN_PAPER_WEEKS = 4  # 4 weeks paper trading before ANY live execution
-KELLY_FRACTION = Decimal("0.5")  # Half-Kelly sizing
+KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly sizing (RDH pivot: was 0.5)
+
+# ================================================================
+# RDH: PER-STRATEGY ALLOCATION — DO NOT CHANGE WITHOUT CEO APPROVAL
+# ================================================================
+STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
+    "A": Decimal("400"),   # Theta Decay — 20%
+    "B": Decimal("400"),   # Reflexivity Surfer — 20%
+    "C": Decimal("1000"),  # Compound Weather — 50%
+}
+RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
+MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy
+STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.15")  # 15% weekly drawdown → halt strategy
 
 
 @dataclass
@@ -43,6 +55,7 @@ class TradeRequest:
     market_category: str
     confluence_score: int = 0
     is_whale_copy: bool = False
+    strategy: str = ""  # RDH strategy: "A", "B", "C", or "" for legacy
 
 
 @dataclass
@@ -52,6 +65,23 @@ class RiskDecision:
     approved: bool
     reason: str
     adjusted_size: Decimal | None = None
+
+
+@dataclass
+class StrategyState:
+    """Per-strategy allocation and exposure tracking (RDH)."""
+
+    allocated: Decimal
+    deployed: Decimal = Decimal("0")
+    weekly_pnl: Decimal = Decimal("0")
+    total_pnl: Decimal = Decimal("0")
+    position_count: int = 0
+    is_halted: bool = False
+
+    @property
+    def available(self) -> Decimal:
+        """Capital available to deploy for this strategy."""
+        return self.allocated - self.deployed
 
 
 @dataclass
@@ -66,6 +96,8 @@ class ExposureState:
     market_positions: dict[str, int] = field(default_factory=dict)
     daily_reset_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     weekly_reset_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # RDH: Per-strategy tracking
+    strategies: dict[str, StrategyState] = field(default_factory=dict)
 
 
 class RiskManager:
@@ -86,6 +118,9 @@ class RiskManager:
         self._state = ExposureState(capital=capital)
         self._shutdown = False
         self._shutdown_callbacks: list[object] = []
+        # Initialize per-strategy states
+        for strategy, allocation in STRATEGY_ALLOCATIONS.items():
+            self._state.strategies[strategy] = StrategyState(allocated=allocation)
 
     @classmethod
     async def get_instance(cls, capital: Decimal | None = None) -> RiskManager:
@@ -239,11 +274,27 @@ class RiskManager:
                 f"position(s) (max {MAX_POSITIONS_PER_MARKET})",
             )
 
+        # 9. RDH: Per-strategy allocation check
+        if request.strategy:
+            strategy_decision = self._check_strategy_limits(request)
+            if not strategy_decision.approved:
+                return strategy_decision
+
+        # 10. RDH: Reserve capital check
+        if request.strategy:
+            deployable = self._state.capital - RESERVE_CAPITAL
+            if self._state.open_positions_value + request.size > deployable:
+                return RiskDecision(
+                    approved=False,
+                    reason=f"Would breach reserve capital ({RESERVE_CAPITAL} USDC must stay undeployed)",
+                )
+
         logger.info(
             "risk_approved",
             market_id=request.market_id,
             size=str(request.size),
             layer=request.layer,
+            strategy=request.strategy or "legacy",
             confluence=request.confluence_score,
         )
         return RiskDecision(approved=True, reason="All checks passed")
@@ -316,6 +367,112 @@ class RiskManager:
         logger.critical("emergency_shutdown_initiated", reason=reason)
         # Actual order cancellation and Slack notification handled by caller
 
+    def _check_strategy_limits(self, request: TradeRequest) -> RiskDecision:
+        """Check RDH per-strategy limits."""
+        strategy = request.strategy
+        if strategy not in self._state.strategies:
+            return RiskDecision(
+                approved=False,
+                reason=f"Unknown strategy '{strategy}'. Valid: A, B, C",
+            )
+
+        ss = self._state.strategies[strategy]
+
+        # Strategy halted?
+        if ss.is_halted:
+            return RiskDecision(
+                approved=False,
+                reason=f"Strategy {strategy} is halted (15% weekly drawdown breached). "
+                f"CEO escalation required.",
+            )
+
+        # Would exceed strategy allocation?
+        if ss.deployed + request.size > ss.allocated:
+            return RiskDecision(
+                approved=False,
+                reason=f"Strategy {strategy}: deployed {ss.deployed} + size {request.size} "
+                f"would exceed allocation {ss.allocated}",
+            )
+
+        # Position count limit
+        if ss.position_count >= MAX_POSITIONS_PER_STRATEGY:
+            return RiskDecision(
+                approved=False,
+                reason=f"Strategy {strategy}: already has {ss.position_count} positions "
+                f"(max {MAX_POSITIONS_PER_STRATEGY})",
+            )
+
+        return RiskDecision(approved=True, reason="Strategy checks passed")
+
+    def strategy_post_trade(
+        self,
+        strategy: str,
+        size: Decimal,
+        pnl: Decimal | None = None,
+    ) -> None:
+        """Update per-strategy state after a trade fill or resolution.
+
+        Args:
+            strategy: Strategy identifier ("A", "B", "C").
+            size: Trade size in USDC.
+            pnl: Realized P&L if position resolved (None for new positions).
+        """
+        if strategy not in self._state.strategies:
+            logger.warning("unknown_strategy_update", strategy=strategy)
+            return
+
+        ss = self._state.strategies[strategy]
+        if pnl is None:
+            # Opening new position
+            ss.deployed += size
+            ss.position_count += 1
+        else:
+            # Closing position
+            ss.deployed = max(Decimal("0"), ss.deployed - size)
+            ss.position_count = max(0, ss.position_count - 1)
+            ss.weekly_pnl += pnl
+            ss.total_pnl += pnl
+
+            # Check per-strategy kill switch (15% weekly drawdown)
+            if ss.weekly_pnl < Decimal("0"):
+                drawdown_pct = abs(ss.weekly_pnl) / ss.allocated
+                if drawdown_pct >= STRATEGY_WEEKLY_DRAWDOWN_PCT:
+                    ss.is_halted = True
+                    logger.critical(
+                        "strategy_halted",
+                        strategy=strategy,
+                        weekly_pnl=str(ss.weekly_pnl),
+                        drawdown_pct=f"{drawdown_pct*100:.1f}%",
+                        reason="15% weekly drawdown breached — CEO escalation required",
+                    )
+
+        logger.info(
+            "strategy_exposure_updated",
+            strategy=strategy,
+            deployed=str(ss.deployed),
+            available=str(ss.available),
+            weekly_pnl=str(ss.weekly_pnl),
+            positions=ss.position_count,
+        )
+
+    def get_strategy_state(self, strategy: str) -> StrategyState | None:
+        """Get current state for a strategy."""
+        return self._state.strategies.get(strategy)
+
+    def reset_strategy_halt(self, strategy: str) -> bool:
+        """Manually reset a halted strategy (CEO override).
+
+        Returns True if strategy was halted and is now reset.
+        """
+        ss = self._state.strategies.get(strategy)
+        if ss is None:
+            return False
+        if not ss.is_halted:
+            return False
+        ss.is_halted = False
+        logger.info("strategy_halt_reset", strategy=strategy, by="ceo_override")
+        return True
+
     def _maybe_reset_periods(self) -> None:
         """Reset daily/weekly counters if period has elapsed."""
         now = datetime.now(UTC)
@@ -331,3 +488,6 @@ class RiskManager:
             logger.info("weekly_pnl_reset", previous=str(self._state.weekly_pnl))
             self._state.weekly_pnl = Decimal("0")
             self._state.weekly_reset_at = now
+            # Also reset per-strategy weekly P&L
+            for ss in self._state.strategies.values():
+                ss.weekly_pnl = Decimal("0")

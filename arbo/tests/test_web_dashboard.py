@@ -55,6 +55,22 @@ class MockPaperEngine:
         }
 
 
+@dataclass
+class MockStrategyState:
+    """Mock StrategyState for testing."""
+
+    allocated: Decimal = Decimal("400")
+    deployed: Decimal = Decimal("50")
+    weekly_pnl: Decimal = Decimal("12.50")
+    total_pnl: Decimal = Decimal("25.00")
+    position_count: int = 2
+    is_halted: bool = False
+
+    @property
+    def available(self) -> Decimal:
+        return self.allocated - self.deployed
+
+
 class MockRiskManager:
     """Mock risk manager."""
 
@@ -65,6 +81,16 @@ class MockRiskManager:
         "crypto": Decimal("80.00"),
     }
     _shutdown = False
+
+    def __init__(self) -> None:
+        self._strategies: dict[str, MockStrategyState] = {
+            "A": MockStrategyState(),
+            "B": MockStrategyState(allocated=Decimal("400"), deployed=Decimal("0")),
+            "C": MockStrategyState(allocated=Decimal("1000"), deployed=Decimal("200")),
+        }
+
+    def get_strategy_state(self, strategy: str) -> MockStrategyState | None:
+        return self._strategies.get(strategy)
 
 
 class MockConfig:
@@ -98,12 +124,12 @@ class MockOrchestrator:
     _capital = Decimal("2000.00")
     _start_time = time.monotonic() - 3600  # 1 hour ago
     _paper_engine = MockPaperEngine()
-    _risk_manager = MockRiskManager()
     _odds_client = MockOddsClient()
     _config = MockConfig()
     _llm_degraded = False
 
     def __init__(self) -> None:
+        self._risk_manager = MockRiskManager()
         self._layers = {
             "discovery": MockLayerState("discovery"),
             "L1_market_maker": MockLayerState("L1_market_maker"),
@@ -342,6 +368,96 @@ class TestPositionsAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert "positions" in data
+
+
+# ---------------------------------------------------------------------------
+# Strategy endpoints (RDH)
+# ---------------------------------------------------------------------------
+
+
+class TestStrategiesAPI:
+    """Test /api/strategies endpoint."""
+
+    def test_returns_all_strategies(self, client: TestClient) -> None:
+        resp = client.get("/api/strategies", auth=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "strategies" in data
+        strategies = data["strategies"]
+        assert len(strategies) == 3
+
+        ids = {s["id"] for s in strategies}
+        assert ids == {"A", "B", "C"}
+
+    def test_strategy_structure(self, client: TestClient) -> None:
+        resp = client.get("/api/strategies", auth=AUTH)
+        data = resp.json()
+        strat_a = next(s for s in data["strategies"] if s["id"] == "A")
+        assert strat_a["name"] == "Theta Decay"
+        assert strat_a["allocated"] == 400.0
+        assert strat_a["deployed"] == 50.0
+        assert strat_a["available"] == 350.0
+        assert strat_a["positions"] == 2
+        assert strat_a["is_halted"] is False
+
+    def test_no_orchestrator(self) -> None:
+        state.orchestrator = None
+        c = TestClient(app, raise_server_exceptions=False)
+        resp = c.get("/api/strategies", auth=AUTH)
+        assert resp.status_code == 200
+        assert resp.json() == {"strategies": []}
+
+
+class TestCapitalAPI:
+    """Test /api/capital endpoint."""
+
+    def test_returns_capital_allocation(self, client: TestClient) -> None:
+        resp = client.get("/api/capital", auth=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total_capital" in data
+        assert "allocations" in data
+        assert "reserve" in data
+        assert len(data["allocations"]) == 3
+
+    def test_capital_utilization(self, client: TestClient) -> None:
+        resp = client.get("/api/capital", auth=AUTH)
+        data = resp.json()
+        alloc_a = next(a for a in data["allocations"] if a["strategy"] == "A")
+        # deployed=50, allocated=400 → 12.5%
+        assert alloc_a["utilization_pct"] == 12.5
+        assert alloc_a["name"] == "Theta Decay"
+
+    def test_reserve_shown(self, client: TestClient) -> None:
+        resp = client.get("/api/capital", auth=AUTH)
+        data = resp.json()
+        assert data["reserve"] == 200.0
+
+
+class TestTakerFlowAPI:
+    """Test /api/taker-flow endpoint."""
+
+    def test_handles_no_db(self, client: TestClient) -> None:
+        resp = client.get("/api/taker-flow", auth=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "snapshots" in data
+
+
+class TestPortfolioStrategyPnl:
+    """Test per-strategy P&L in /api/portfolio."""
+
+    def test_portfolio_includes_strategy_pnl(self, client: TestClient) -> None:
+        resp = client.get("/api/portfolio", auth=AUTH)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "strategy_pnl" in data
+        sp = data["strategy_pnl"]
+        assert "A" in sp
+        assert sp["A"]["name"] == "Theta Decay"
+        assert sp["A"]["allocated"] == 400.0
+        assert sp["A"]["deployed"] == 50.0
+        assert sp["A"]["total_pnl"] == 25.0
 
 
 # ---------------------------------------------------------------------------

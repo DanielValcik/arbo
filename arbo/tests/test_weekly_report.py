@@ -23,6 +23,7 @@ import pytest
 from arbo.dashboard.report_generator import (
     DailyReport,
     ReportGenerator,
+    StrategyDailyStats,
     WeeklyReport,
 )
 
@@ -433,3 +434,112 @@ class TestWeeklyCSVExport:
         # Find layer breakdown section
         layer_idx = next(i for i, r in enumerate(rows) if r and r[0] == "Layer Breakdown")
         assert rows[layer_idx + 1][0] == "layer"
+
+
+# ================================================================
+# Per-Strategy P&L (RDH)
+# ================================================================
+
+
+class TestPerStrategyDaily:
+    """Per-strategy P&L in daily reports."""
+
+    def test_daily_report_per_strategy_pnl(self, gen: ReportGenerator) -> None:
+        """Daily report computes per-strategy P&L from trade strategy field."""
+        trades = [
+            {"actual_pnl": 10.0, "layer": 7, "size": 30, "strategy": "A"},
+            {"actual_pnl": -5.0, "layer": 7, "size": 25, "strategy": "A"},
+            {"actual_pnl": 8.0, "layer": 2, "size": 50, "strategy": "B"},
+        ]
+        report = gen.generate_daily(trades, signals=[])
+        assert "A" in report.per_strategy_pnl
+        assert "B" in report.per_strategy_pnl
+        assert report.per_strategy_pnl["A"].trades == 2
+        assert report.per_strategy_pnl["A"].pnl == Decimal("5")
+        assert report.per_strategy_pnl["A"].wins == 1
+        assert report.per_strategy_pnl["B"].trades == 1
+        assert report.per_strategy_pnl["B"].pnl == Decimal("8")
+
+    def test_daily_report_no_strategy(self, gen: ReportGenerator) -> None:
+        """Trades without strategy field don't appear in per_strategy_pnl."""
+        trades = [
+            {"actual_pnl": 10.0, "layer": 2, "size": 50},
+        ]
+        report = gen.generate_daily(trades, signals=[])
+        assert report.per_strategy_pnl == {}
+
+    def test_daily_report_empty_strategy(self, gen: ReportGenerator) -> None:
+        """Trades with empty strategy are excluded."""
+        trades = [
+            {"actual_pnl": 10.0, "layer": 2, "size": 50, "strategy": ""},
+        ]
+        report = gen.generate_daily(trades, signals=[])
+        assert report.per_strategy_pnl == {}
+
+
+class TestPerStrategyWeekly:
+    """Per-strategy P&L in weekly reports."""
+
+    def test_weekly_per_strategy_aggregation(self, gen: ReportGenerator) -> None:
+        """Weekly report aggregates per-strategy P&L from trade data."""
+        daily = [
+            _make_daily(date(2026, 2, 16), total_pnl=Decimal("10")),
+            _make_daily(date(2026, 2, 17), total_pnl=Decimal("-5")),
+        ]
+        trades = [
+            {"actual_pnl": 15.0, "layer": 7, "size": 30, "strategy": "A"},
+            {"actual_pnl": -3.0, "layer": 7, "size": 25, "strategy": "A"},
+            {"actual_pnl": 8.0, "layer": 2, "size": 40, "strategy": "C"},
+            {"actual_pnl": -15.0, "layer": 2, "size": 50, "strategy": "C"},
+        ]
+        report = gen.generate_weekly(daily, trades=trades)
+
+        assert "A" in report.per_strategy_pnl
+        assert report.per_strategy_pnl["A"].trades == 2
+        assert report.per_strategy_pnl["A"].pnl == Decimal("12")
+        assert report.per_strategy_pnl["A"].wins == 1
+
+        assert "C" in report.per_strategy_pnl
+        assert report.per_strategy_pnl["C"].trades == 2
+        assert report.per_strategy_pnl["C"].pnl == Decimal("-7")
+        assert report.per_strategy_pnl["C"].wins == 1
+
+    def test_weekly_per_strategy_empty(self, gen: ReportGenerator) -> None:
+        """No strategy trades → empty per_strategy_pnl."""
+        report = gen.generate_weekly([], trades=[])
+        assert report.per_strategy_pnl == {}
+
+
+class TestSlackStrategyBlocks:
+    """Slack Block Kit includes per-strategy section."""
+
+    def test_daily_slack_strategy_section(self, gen: ReportGenerator) -> None:
+        """Daily Slack report includes per-strategy block when data present."""
+        trades = [
+            {"actual_pnl": 10.0, "layer": 7, "size": 30, "strategy": "A"},
+            {"actual_pnl": -5.0, "layer": 2, "size": 50, "strategy": "C"},
+        ]
+        report = gen.generate_daily(trades, signals=[])
+        msg = gen.format_slack_report(report)
+        block_texts = [str(b) for b in msg["blocks"]]
+        assert any("Per-Strategy" in t for t in block_texts)
+        assert any("Theta Decay" in t for t in block_texts)
+
+    def test_weekly_slack_strategy_section(self, gen: ReportGenerator) -> None:
+        """Weekly Slack report includes per-strategy block."""
+        daily = [_make_daily(date(2026, 2, 16))]
+        trades = [
+            {"actual_pnl": 10.0, "layer": 7, "size": 30, "strategy": "A"},
+        ]
+        report = gen.generate_weekly(daily, trades=trades)
+        msg = gen.format_slack_weekly_report(report)
+        block_texts = [str(b) for b in msg["blocks"]]
+        assert any("Per-Strategy" in t for t in block_texts)
+
+    def test_no_strategy_no_block(self, gen: ReportGenerator) -> None:
+        """No strategy data → no per-strategy block."""
+        trades = [{"actual_pnl": 10.0, "layer": 2, "size": 50}]
+        report = gen.generate_daily(trades, signals=[])
+        msg = gen.format_slack_report(report)
+        block_texts = [str(b) for b in msg["blocks"]]
+        assert not any("Per-Strategy" in t for t in block_texts)

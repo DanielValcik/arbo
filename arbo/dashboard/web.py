@@ -86,7 +86,7 @@ def _dec(val: Any) -> float | None:
     return float(val)
 
 
-# Layer → category mapping
+# Layer → category mapping (legacy)
 _LAYER_CATEGORIES: dict[str, str] = {
     "L1_market_maker": "Soccer",
     "L2_value_signal": "Soccer + Crypto + Politics",
@@ -97,6 +97,13 @@ _LAYER_CATEGORIES: dict[str, str] = {
     "L7_order_flow": "All",
     "L8_attention": "All",
     "L9_sports_latency": "Soccer",
+}
+
+# Strategy metadata (RDH architecture)
+_STRATEGY_META: dict[str, dict[str, str]] = {
+    "A": {"name": "Theta Decay", "category": "Longshots", "description": "Sell optimism premium on longshot YES contracts"},
+    "B": {"name": "Reflexivity Surfer", "category": "Trending", "description": "Ride reflexive momentum in trending markets"},
+    "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
 }
 
 
@@ -284,6 +291,24 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
     total_pnl = (total_value or 0.0) - (initial or 0.0)
     roi_pct = (total_pnl / initial * 100) if initial else 0.0
 
+    # Per-strategy P&L from risk manager
+    strategy_pnl: dict[str, dict[str, Any]] = {}
+    if orch._risk_manager:
+        rm = orch._risk_manager
+        for sid, meta in _STRATEGY_META.items():
+            ss = rm.get_strategy_state(sid)
+            if ss:
+                strategy_pnl[sid] = {
+                    "name": meta["name"],
+                    "allocated": _dec(ss.allocated),
+                    "deployed": _dec(ss.deployed),
+                    "available": _dec(ss.available),
+                    "weekly_pnl": _dec(ss.weekly_pnl),
+                    "total_pnl": _dec(ss.total_pnl),
+                    "positions": ss.position_count,
+                    "is_halted": ss.is_halted,
+                }
+
     return {
         "balance": balance,
         "total_value": total_value,
@@ -294,6 +319,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
         "roi_pct": round(roi_pct, 2),
         "snapshots": snapshots,
         "category_pnl": category_pnl,
+        "strategy_pnl": strategy_pnl,
     }
 
 
@@ -588,6 +614,139 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
         logger.warning("trades_query_error", error=str(e))
 
     return {"trades": trades}
+
+
+@app.get("/api/strategies")
+async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Per-strategy status: allocation, P&L, positions, halt state."""
+    orch = state.orchestrator
+    if orch is None:
+        return {"strategies": []}
+
+    rm = orch._risk_manager
+    strategies: list[dict[str, Any]] = []
+
+    for sid, meta in _STRATEGY_META.items():
+        ss = rm.get_strategy_state(sid) if rm else None
+        entry: dict[str, Any] = {
+            "id": sid,
+            "name": meta["name"],
+            "category": meta["category"],
+            "description": meta["description"],
+        }
+        if ss:
+            entry.update(
+                {
+                    "allocated": _dec(ss.allocated),
+                    "deployed": _dec(ss.deployed),
+                    "available": _dec(ss.available),
+                    "weekly_pnl": _dec(ss.weekly_pnl),
+                    "total_pnl": _dec(ss.total_pnl),
+                    "positions": ss.position_count,
+                    "is_halted": ss.is_halted,
+                }
+            )
+        else:
+            entry.update(
+                {
+                    "allocated": 0.0,
+                    "deployed": 0.0,
+                    "available": 0.0,
+                    "weekly_pnl": 0.0,
+                    "total_pnl": 0.0,
+                    "positions": 0,
+                    "is_halted": False,
+                }
+            )
+        strategies.append(entry)
+
+    return {"strategies": strategies}
+
+
+@app.get("/api/capital")
+async def api_capital(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Capital allocation overview across strategies + reserve."""
+    orch = state.orchestrator
+    if orch is None:
+        return {"error": "Orchestrator not available"}
+
+    rm = orch._risk_manager
+    total_capital = _dec(orch._capital) or 0.0
+
+    allocations: list[dict[str, Any]] = []
+    total_deployed = 0.0
+    total_available = 0.0
+
+    if rm:
+        for sid, meta in _STRATEGY_META.items():
+            ss = rm.get_strategy_state(sid)
+            if ss:
+                deployed = _dec(ss.deployed) or 0.0
+                available = _dec(ss.available) or 0.0
+                allocations.append(
+                    {
+                        "strategy": sid,
+                        "name": meta["name"],
+                        "allocated": _dec(ss.allocated),
+                        "deployed": deployed,
+                        "available": available,
+                        "utilization_pct": round(
+                            deployed / float(ss.allocated) * 100, 1
+                        )
+                        if ss.allocated
+                        else 0.0,
+                        "is_halted": ss.is_halted,
+                    }
+                )
+                total_deployed += deployed
+                total_available += available
+
+    # Reserve (10% = $200)
+    from arbo.core.risk_manager import RESERVE_CAPITAL
+
+    reserve = _dec(RESERVE_CAPITAL) or 0.0
+
+    return {
+        "total_capital": total_capital,
+        "total_deployed": round(total_deployed, 2),
+        "total_available": round(total_available, 2),
+        "reserve": reserve,
+        "allocations": allocations,
+    }
+
+
+@app.get("/api/taker-flow")
+async def api_taker_flow(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Recent taker flow snapshots from DB (last 24h)."""
+    snapshots: list[dict[str, Any]] = []
+    try:
+        from arbo.utils.db import TakerFlowSnapshot, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
+            result = await session.execute(
+                sa.select(TakerFlowSnapshot)
+                .where(TakerFlowSnapshot.captured_at > cutoff)
+                .order_by(TakerFlowSnapshot.captured_at.desc())
+                .limit(200)
+            )
+            for row in result.scalars().all():
+                snapshots.append(
+                    {
+                        "market_condition_id": row.market_condition_id,
+                        "yes_volume": _dec(row.yes_taker_volume),
+                        "no_volume": _dec(row.no_taker_volume),
+                        "yes_ratio": _dec(row.yes_no_ratio),
+                        "z_score": _dec(row.z_score),
+                        "is_peak": row.is_peak_optimism,
+                        "captured_at": row.captured_at.isoformat() if row.captured_at else None,
+                    }
+                )
+    except Exception as e:
+        logger.warning("taker_flow_query_error", error=str(e))
+
+    return {"snapshots": snapshots}
 
 
 # ---------------------------------------------------------------------------

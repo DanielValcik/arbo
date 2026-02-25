@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 
 from arbo.connectors.market_discovery import GammaMarket
-from arbo.core.scanner import OpportunityScanner, Signal, SignalDirection
+from arbo.core.scanner import OpportunityScanner, Signal, SignalDirection, ThetaDecaySignal
 
 # ================================================================
 # Factory helper
@@ -447,13 +447,174 @@ class TestSignalFormat:
         )
         db = sig.to_db_dict()
         assert db["layer"] == 2
+        assert db["strategy"] == ""
         assert db["direction"] == "BUY_YES"
         assert db["edge"] == 0.05
         assert db["confluence_score"] == 2
         assert "question" in db["details"]
+
+    def test_signal_with_strategy(self) -> None:
+        """Signal with strategy field set."""
+        sig = Signal(
+            layer=7,
+            market_condition_id="cond_456",
+            token_id="tok_456",
+            direction=SignalDirection.BUY_NO,
+            edge=Decimal("0.08"),
+            confidence=Decimal("0.7"),
+            strategy="A",
+        )
+        assert sig.strategy == "A"
+        db = sig.to_db_dict()
+        assert db["strategy"] == "A"
+        assert db["layer"] == 7
 
     def test_signal_direction_values(self) -> None:
         assert SignalDirection.BUY_YES.value == "BUY_YES"
         assert SignalDirection.BUY_NO.value == "BUY_NO"
         assert SignalDirection.SELL_YES.value == "SELL_YES"
         assert SignalDirection.SELL_NO.value == "SELL_NO"
+
+
+# ================================================================
+# ThetaDecaySignal
+# ================================================================
+
+
+class TestThetaDecaySignal:
+    """Strategy A signal subtype."""
+
+    def test_inherits_signal(self) -> None:
+        """ThetaDecaySignal is a Signal."""
+        sig = ThetaDecaySignal(
+            layer=7,
+            market_condition_id="cond_td",
+            token_id="tok_no",
+            direction=SignalDirection.BUY_NO,
+            edge=Decimal("0.10"),
+            confidence=Decimal("0.75"),
+            strategy="A",
+            z_score=3.5,
+            taker_ratio=0.85,
+        )
+        assert isinstance(sig, Signal)
+        assert sig.strategy == "A"
+        assert sig.z_score == 3.5
+        assert sig.taker_ratio == 0.85
+
+    def test_to_db_dict_includes_theta_fields(self) -> None:
+        """DB dict includes z_score and taker_ratio in details."""
+        sig = ThetaDecaySignal(
+            layer=7,
+            market_condition_id="cond_td",
+            token_id="tok_no",
+            direction=SignalDirection.BUY_NO,
+            edge=Decimal("0.10"),
+            confidence=Decimal("0.75"),
+            strategy="A",
+            z_score=3.5,
+            taker_ratio=0.85,
+            details={"question": "Will X happen?"},
+        )
+        db = sig.to_db_dict()
+        assert db["strategy"] == "A"
+        assert db["details"]["z_score"] == 3.5
+        assert db["details"]["taker_ratio"] == 0.85
+        assert db["details"]["question"] == "Will X happen?"
+
+    def test_default_values(self) -> None:
+        """Defaults for z_score and taker_ratio."""
+        sig = ThetaDecaySignal(
+            layer=7,
+            market_condition_id="cond_td",
+            token_id="tok_no",
+            direction=SignalDirection.BUY_NO,
+            edge=Decimal("0.10"),
+            confidence=Decimal("0.75"),
+        )
+        assert sig.z_score == 0.0
+        assert sig.taker_ratio == 0.0
+        assert sig.strategy == ""
+
+
+# ================================================================
+# Confluence with strategy field
+# ================================================================
+
+
+class TestConfluenceWithStrategy:
+    """Confluence scoring uses strategy field when available."""
+
+    def test_same_strategy_same_market(self, scanner: OpportunityScanner) -> None:
+        """Two signals from same strategy → confluence = 1."""
+        signals = [
+            Signal(
+                layer=7,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_NO,
+                edge=Decimal("0.05"),
+                confidence=Decimal("0.6"),
+                strategy="A",
+            ),
+            Signal(
+                layer=7,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_NO,
+                edge=Decimal("0.08"),
+                confidence=Decimal("0.7"),
+                strategy="A",
+            ),
+        ]
+        updated = scanner.compute_confluence(signals)
+        assert all(s.confluence_score == 1 for s in updated)
+
+    def test_different_strategies_same_market(self, scanner: OpportunityScanner) -> None:
+        """Two signals from different strategies → confluence = 2."""
+        signals = [
+            Signal(
+                layer=7,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_NO,
+                edge=Decimal("0.05"),
+                confidence=Decimal("0.6"),
+                strategy="A",
+            ),
+            Signal(
+                layer=2,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_YES,
+                edge=Decimal("0.08"),
+                confidence=Decimal("0.7"),
+                strategy="B",
+            ),
+        ]
+        updated = scanner.compute_confluence(signals)
+        assert all(s.confluence_score == 2 for s in updated)
+
+    def test_mixed_legacy_and_strategy(self, scanner: OpportunityScanner) -> None:
+        """Legacy (no strategy) + strategy signals → distinct sources."""
+        signals = [
+            Signal(
+                layer=1,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_YES,
+                edge=Decimal("0.05"),
+                confidence=Decimal("0.6"),
+            ),
+            Signal(
+                layer=7,
+                market_condition_id="c1",
+                token_id="tok_1",
+                direction=SignalDirection.BUY_NO,
+                edge=Decimal("0.08"),
+                confidence=Decimal("0.7"),
+                strategy="A",
+            ),
+        ]
+        updated = scanner.compute_confluence(signals)
+        assert all(s.confluence_score == 2 for s in updated)

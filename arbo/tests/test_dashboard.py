@@ -13,7 +13,7 @@ import tempfile
 from datetime import date
 from decimal import Decimal
 
-from arbo.dashboard.cli_dashboard import CLIDashboard, LayerStatus
+from arbo.dashboard.cli_dashboard import CLIDashboard, LayerStatus, StrategyStatus
 from arbo.dashboard.report_generator import DailyReport, ReportGenerator
 
 # ================================================================
@@ -213,3 +213,100 @@ class TestLayerStatus:
         """LayerStatus with error stores error string."""
         ls = _make_layer_status(error="Connection timeout")
         assert ls.error == "Connection timeout"
+
+
+# ================================================================
+# Strategy Table (RDH)
+# ================================================================
+
+
+class TestStrategyTable:
+    """CLI dashboard strategy table."""
+
+    def test_format_strategy_table(self) -> None:
+        """Strategy table formats correctly."""
+        dash = CLIDashboard()
+        strategies = [
+            StrategyStatus("A", "Theta Decay", Decimal("400"), Decimal("50"), Decimal("350"), 2),
+            StrategyStatus("B", "Reflexivity Surfer", Decimal("400"), Decimal("0"), Decimal("400"), 0),
+            StrategyStatus("C", "Compound Weather", Decimal("1000"), Decimal("200"), Decimal("800"), 3),
+        ]
+        table = dash.format_strategy_table(strategies)
+        assert "STRATEGIES" in table
+        assert "Theta Decay" in table
+        assert "Reflexivity Surfer" in table
+        assert "Compound Weather" in table
+        assert "ACTIVE" in table
+
+    def test_halted_strategy_shown(self) -> None:
+        """Halted strategy shows HALTED status."""
+        dash = CLIDashboard()
+        strategies = [
+            StrategyStatus("A", "Theta Decay", is_halted=True),
+        ]
+        table = dash.format_strategy_table(strategies)
+        assert "HALTED" in table
+
+    def test_render_with_strategies(self) -> None:
+        """Render includes strategy section when provided."""
+        dash = CLIDashboard()
+        layers = [_make_layer_status()]
+        strategies = [
+            StrategyStatus("A", "Theta Decay", Decimal("400"), Decimal("50"), Decimal("350"), 2),
+        ]
+        output = dash.render(layers, strategies=strategies)
+        assert "STRATEGIES" in output
+        assert "LAYERS" in output
+
+
+class TestSlackBotBlocks:
+    """Slack bot Block Kit formatters."""
+
+    def test_status_blocks_with_strategies(self) -> None:
+        """Status blocks include strategy section when data present."""
+        from arbo.dashboard.slack_bot import SlackBot
+
+        status = {
+            "mode": "paper",
+            "uptime_s": 3600,
+            "layers_active": 5,
+            "layers_total": 9,
+            "balance": "2050",
+            "open_positions": 3,
+            "strategies": {
+                "A": {"name": "Theta Decay", "deployed": 50, "available": 350, "positions": 2, "is_halted": False},
+            },
+        }
+        blocks = SlackBot._format_status_blocks(status)
+        block_texts = [str(b) for b in blocks]
+        assert any("Strategies" in t for t in block_texts)
+        assert any("Theta Decay" in t for t in block_texts)
+
+    def test_status_blocks_without_strategies(self) -> None:
+        """Status blocks work without strategy data."""
+        from arbo.dashboard.slack_bot import SlackBot
+
+        status = {"mode": "paper", "uptime_s": 60, "balance": "2000"}
+        blocks = SlackBot._format_status_blocks(status)
+        assert len(blocks) == 2  # header + fields only
+
+    def test_pnl_blocks_with_strategy_breakdown(self) -> None:
+        """P&L blocks include per-strategy section."""
+        from arbo.dashboard.slack_bot import SlackBot
+
+        pnl = {
+            "total_pnl": "25.00",
+            "roi_pct": "1.25",
+            "total_trades": 5,
+            "wins": 3,
+            "win_rate": 0.6,
+            "per_layer_pnl": {2: "15.00"},
+            "per_strategy_pnl": {
+                "A": {"pnl": "10.00", "trades": 3, "wins": 2},
+                "C": {"pnl": "15.00", "trades": 2, "wins": 1},
+            },
+        }
+        blocks = SlackBot._format_pnl_blocks(pnl)
+        block_texts = [str(b) for b in blocks]
+        assert any("Per-Strategy" in t for t in block_texts)
+        assert any("Theta Decay" in t for t in block_texts)

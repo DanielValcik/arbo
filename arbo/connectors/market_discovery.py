@@ -34,6 +34,17 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "token"],
     "esports": ["esports", "league of legends", "cs2", "dota", "valorant"],
     "entertainment": ["oscar", "grammy", "movie", "tv show", "celebrity"],
+    "weather": [
+        "temperature",
+        "weather",
+        "degrees",
+        "fahrenheit",
+        "celsius",
+        "high temperature",
+        "low temperature",
+        "°f",
+        "°c",
+    ],
     "attention_markets": [
         "mindshare",
         "attention",

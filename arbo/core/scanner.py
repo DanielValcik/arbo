@@ -1,9 +1,8 @@
-"""Opportunity scanner across all strategy layers.
+"""Opportunity scanner and signal DTOs.
 
-Scans discovered markets for trading signals using per-layer detection
-logic. Produces unified Signal objects for the paper trading engine.
-
-See brief PM-005 for full specification.
+Produces unified Signal objects for the paper trading engine.
+Strategy-specific subtypes (ThetaDecaySignal, etc.) carry extra
+fields without breaking the universal Signal interface.
 """
 
 from __future__ import annotations
@@ -30,17 +29,18 @@ class SignalDirection(Enum):
 
 @dataclass
 class Signal:
-    """Unified trading signal from any layer.
+    """Unified trading signal from any strategy.
 
     Attributes:
-        layer: Strategy layer number (1-9).
+        layer: Legacy layer number (1-9). Kept for backward compatibility.
+        strategy: Strategy identifier ("A", "B", "C", or "" for legacy).
         market_condition_id: Polymarket condition ID.
         token_id: CLOB token ID to trade.
         direction: Trade direction (BUY_YES, BUY_NO, etc.).
         edge: Estimated edge as decimal (e.g. 0.05 = 5%).
         confidence: Confidence score 0-1.
-        confluence_score: Number of layers confirming (0-5).
-        details: Extra context per layer.
+        confluence_score: Number of sources confirming (0-5).
+        details: Extra context per strategy.
         detected_at: UTC timestamp.
     """
 
@@ -50,6 +50,7 @@ class Signal:
     direction: SignalDirection
     edge: Decimal
     confidence: Decimal
+    strategy: str = ""
     confluence_score: int = 0
     details: dict[str, Any] = field(default_factory=dict)
     detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -58,6 +59,7 @@ class Signal:
         """Convert to dict for DB insertion."""
         return {
             "layer": self.layer,
+            "strategy": self.strategy,
             "market_condition_id": self.market_condition_id,
             "direction": self.direction.value,
             "edge": float(self.edge),
@@ -66,6 +68,27 @@ class Signal:
             "details": self.details,
             "detected_at": self.detected_at,
         }
+
+
+@dataclass
+class ThetaDecaySignal(Signal):
+    """Strategy A signal: theta decay on longshot markets.
+
+    Extends Signal with peak optimism detection data.
+    """
+
+    z_score: float = 0.0
+    taker_ratio: float = 0.0
+
+    def to_db_dict(self) -> dict[str, Any]:
+        """Convert to dict with theta-specific fields in details."""
+        d = super().to_db_dict()
+        d["details"] = {
+            **d.get("details", {}),
+            "z_score": self.z_score,
+            "taker_ratio": self.taker_ratio,
+        }
+        return d
 
 
 class OpportunityScanner:
@@ -109,15 +132,17 @@ class OpportunityScanner:
         signals.extend(self.scan_layer3_arb(markets))
         signals.extend(self.scan_layer6_crypto(markets))
 
+        # Build source breakdown for logging
+        source_counts: dict[str, int] = {}
+        for s in signals:
+            key = s.strategy if s.strategy else f"L{s.layer}"
+            source_counts[key] = source_counts.get(key, 0) + 1
+
         logger.info(
             "scan_complete",
             total_markets=len(markets),
             signals_found=len(signals),
-            by_layer=(
-                {f"L{s.layer}": sum(1 for sig in signals if sig.layer == s.layer) for s in signals}
-                if signals
-                else {}
-            ),
+            by_source=source_counts if signals else {},
         )
 
         return signals
@@ -360,26 +385,29 @@ class OpportunityScanner:
         return signals
 
     def compute_confluence(self, signals: list[Signal]) -> list[Signal]:
-        """Compute confluence scores across layers for same market.
+        """Compute confluence scores across sources for same market.
 
-        Markets with signals from multiple layers get higher confluence scores.
-        Score = number of distinct layers detecting an opportunity.
+        Markets with signals from multiple layers/strategies get higher scores.
+        Score = number of distinct sources detecting an opportunity.
 
         Args:
-            signals: Raw signals from all layers.
+            signals: Raw signals from all sources.
 
         Returns:
             Same signals with updated confluence_score.
         """
-        # Group by market condition ID
-        market_layers: dict[str, set[int]] = {}
+        # Group by market condition ID — count distinct sources (layer or strategy)
+        market_sources: dict[str, set[str]] = {}
         for sig in signals:
-            if sig.market_condition_id not in market_layers:
-                market_layers[sig.market_condition_id] = set()
-            market_layers[sig.market_condition_id].add(sig.layer)
+            mid = sig.market_condition_id
+            if mid not in market_sources:
+                market_sources[mid] = set()
+            # Use strategy as source key if set, else fall back to layer number
+            source_key = sig.strategy if sig.strategy else f"L{sig.layer}"
+            market_sources[mid].add(source_key)
 
         # Update confluence scores
         for sig in signals:
-            sig.confluence_score = len(market_layers[sig.market_condition_id])
+            sig.confluence_score = len(market_sources[sig.market_condition_id])
 
         return signals

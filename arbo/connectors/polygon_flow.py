@@ -263,6 +263,284 @@ def parse_order_filled(log: dict[str, Any]) -> OrderFilledEvent | None:
         return None
 
 
+@dataclass
+class FlowSnapshotEntry:
+    """Periodic snapshot of taker flow for 7-day historical tracking."""
+
+    timestamp: float  # monotonic time
+    yes_volume: Decimal
+    no_volume: Decimal
+    yes_ratio: float
+
+
+@dataclass
+class PeakOptimismResult:
+    """Result of peak optimism check for Strategy A."""
+
+    is_peak: bool
+    zscore: float
+    yes_ratio: float
+    condition_id: str
+
+
+@dataclass
+class MarketTakerFlow:
+    """Per-market YES vs NO taker flow tracking for Strategy A (Theta Decay).
+
+    Tracks taker-side volume separately for YES and NO tokens within a market
+    (condition_id). YES taker flow = retail buying YES tokens. When YES taker
+    ratio spikes to 3σ, it indicates peak retail optimism on a longshot.
+
+    7-day historical tracking via periodic snapshots (168 hourly slots).
+    """
+
+    condition_id: str
+    yes_token_id: str
+    no_token_id: str
+    yes_window: RollingWindow
+    no_window: RollingWindow
+    _snapshots: deque[FlowSnapshotEntry] | None = None
+    _last_snap_yes_vol: Decimal = Decimal("0")
+    _last_snap_no_vol: Decimal = Decimal("0")
+
+    def __post_init__(self) -> None:
+        if self._snapshots is None:
+            self._snapshots = deque(maxlen=168)  # 7 days × 24 hours
+
+    @property
+    def yes_volume_4h(self) -> Decimal:
+        return self.yes_window.get_volume(window_s=14400)
+
+    @property
+    def no_volume_4h(self) -> Decimal:
+        return self.no_window.get_volume(window_s=14400)
+
+    @property
+    def yes_taker_ratio(self) -> float:
+        """YES taker volume / total taker volume over 4h."""
+        yes = float(self.yes_volume_4h)
+        no = float(self.no_volume_4h)
+        total = yes + no
+        if total == 0:
+            return 0.5  # No data → neutral
+        return yes / total
+
+    def get_yes_zscore(self, window_s: int = 14400) -> float:
+        """Z-score of YES taker flow over 4h rolling window (5-min buckets)."""
+        return self.yes_window.get_zscore(window_s=window_s)
+
+    def check_peak_optimism(self, threshold: float = 3.0) -> PeakOptimismResult:
+        """Check if YES taker flow is at peak optimism (≥ threshold σ).
+
+        Args:
+            threshold: Z-score threshold for peak detection (default 3.0 = 3σ).
+
+        Returns:
+            PeakOptimismResult with is_peak flag, z-score, and YES ratio.
+        """
+        zscore = self.get_yes_zscore()
+        ratio = self.yes_taker_ratio
+        return PeakOptimismResult(
+            is_peak=zscore >= threshold,
+            zscore=zscore,
+            yes_ratio=ratio,
+            condition_id=self.condition_id,
+        )
+
+    def record_snapshot(self) -> TakerFlowSnapshot:
+        """Record a periodic snapshot of current taker flow state.
+
+        Captures the cumulative YES/NO volume and ratio at this point in time.
+        Call periodically (e.g., every snapshot_interval_s = 300s).
+        """
+        yes_vol = self.yes_window.get_volume()
+        no_vol = self.no_window.get_volume()
+
+        # Delta since last snapshot
+        delta_yes = yes_vol - self._last_snap_yes_vol
+        delta_no = no_vol - self._last_snap_no_vol
+
+        total = float(delta_yes + delta_no)
+        ratio = float(delta_yes) / total if total > 0 else 0.5
+
+        snap = FlowSnapshotEntry(
+            timestamp=time.monotonic(),
+            yes_volume=delta_yes,
+            no_volume=delta_no,
+            yes_ratio=ratio,
+        )
+        self._snapshots.append(snap)
+        self._last_snap_yes_vol = yes_vol
+        self._last_snap_no_vol = no_vol
+        return snap
+
+    @property
+    def historical_avg_yes_rate(self) -> float:
+        """7-day average YES taker ratio from hourly snapshots.
+
+        Returns 0.5 (neutral) if no snapshots yet.
+        """
+        if not self._snapshots:
+            return 0.5
+        total_yes = sum(float(s.yes_volume) for s in self._snapshots)
+        total_no = sum(float(s.no_volume) for s in self._snapshots)
+        total = total_yes + total_no
+        if total == 0:
+            return 0.5
+        return total_yes / total
+
+    @property
+    def snapshot_count(self) -> int:
+        """Number of recorded snapshots."""
+        return len(self._snapshots)
+
+
+class MarketFlowTracker:
+    """Tracks YES/NO taker flow per market (condition_id).
+
+    Used by Strategy A (Theta Decay) to detect 3σ peak optimism spikes
+    on longshot YES contracts.
+    """
+
+    def __init__(self) -> None:
+        self._markets: dict[str, MarketTakerFlow] = {}  # condition_id → flow
+        self._token_to_market: dict[str, str] = {}  # token_id → condition_id
+        self._token_is_yes: dict[str, bool] = {}  # token_id → True if YES
+
+    def register_market(
+        self, condition_id: str, yes_token_id: str, no_token_id: str
+    ) -> None:
+        """Register a market's YES/NO token mapping."""
+        if condition_id in self._markets:
+            return
+        self._markets[condition_id] = MarketTakerFlow(
+            condition_id=condition_id,
+            yes_token_id=yes_token_id,
+            no_token_id=no_token_id,
+            yes_window=RollingWindow(),
+            no_window=RollingWindow(),
+        )
+        self._token_to_market[yes_token_id] = condition_id
+        self._token_to_market[no_token_id] = condition_id
+        self._token_is_yes[yes_token_id] = True
+        self._token_is_yes[no_token_id] = False
+
+    def process_event(self, event: OrderFilledEvent) -> MarketTakerFlow | None:
+        """Process an OrderFilled event, updating YES/NO flow.
+
+        Returns the MarketTakerFlow if the event was for a registered market.
+        """
+        condition_id = self._token_to_market.get(event.token_id)
+        if condition_id is None:
+            return None
+
+        flow = self._markets[condition_id]
+        volume = event.taker_amount if event.is_buy else event.maker_amount
+
+        if self._token_is_yes.get(event.token_id, False):
+            # Taker buying YES token
+            if event.is_buy:
+                flow.yes_window.add(volume, is_buy=True)
+            else:
+                # Taker selling YES ≈ buying NO sentiment
+                flow.no_window.add(volume, is_buy=True)
+        else:
+            # Taker buying NO token
+            if event.is_buy:
+                flow.no_window.add(volume, is_buy=True)
+            else:
+                # Taker selling NO ≈ buying YES sentiment
+                flow.yes_window.add(volume, is_buy=True)
+
+        return flow
+
+    def get_market_flow(self, condition_id: str) -> MarketTakerFlow | None:
+        """Get flow tracker for a market."""
+        return self._markets.get(condition_id)
+
+    def get_all_flows(self) -> list[MarketTakerFlow]:
+        """Get all tracked market flows."""
+        return list(self._markets.values())
+
+    def take_snapshots(self) -> list[FlowSnapshotEntry]:
+        """Record a snapshot for all tracked markets.
+
+        Call periodically (e.g., every snapshot_interval_s). Snapshots
+        accumulate 7-day history for historical baseline comparison.
+
+        Returns:
+            List of snapshots, one per market.
+        """
+        return [flow.record_snapshot() for flow in self._markets.values()]
+
+    def get_peak_optimism_markets(
+        self, threshold: float = 3.0
+    ) -> list[PeakOptimismResult]:
+        """Get all markets where YES taker flow is at peak optimism.
+
+        Args:
+            threshold: Z-score threshold (default 3σ).
+
+        Returns:
+            List of PeakOptimismResult for markets that hit the threshold.
+        """
+        results = []
+        for flow in self._markets.values():
+            result = flow.check_peak_optimism(threshold=threshold)
+            if result.is_peak:
+                results.append(result)
+        return results
+
+    async def save_taker_flow_snapshots(
+        self,
+        session_factory: async_sessionmaker,
+    ) -> int:
+        """Persist current taker flow state to DB for all tracked markets.
+
+        Saves a TakerFlowSnapshot row per market with current YES/NO volumes,
+        z-score, and peak optimism flag. Call every snapshot_interval_s (5min).
+
+        Args:
+            session_factory: SQLAlchemy async session factory.
+
+        Returns:
+            Number of snapshots saved.
+        """
+        from arbo.utils.db import TakerFlowSnapshot as TakerFlowSnapshotDB
+
+        snapshots = []
+        for flow in self._markets.values():
+            zscore = flow.get_yes_zscore()
+            peak = flow.check_peak_optimism()
+            snapshots.append(
+                TakerFlowSnapshotDB(
+                    market_condition_id=flow.condition_id,
+                    yes_taker_volume=flow.yes_volume_4h,
+                    no_taker_volume=flow.no_volume_4h,
+                    yes_no_ratio=flow.yes_taker_ratio,
+                    z_score=zscore,
+                    window_seconds=14400,
+                    is_peak_optimism=peak.is_peak,
+                )
+            )
+
+        if not snapshots:
+            return 0
+
+        try:
+            async with session_factory() as session:
+                session.add_all(snapshots)
+                await session.commit()
+            return len(snapshots)
+        except Exception as e:
+            logger.debug("save_taker_flow_snapshots_error", error=str(e))
+            return 0
+
+    @property
+    def registered_markets(self) -> int:
+        return len(self._markets)
+
+
 class OrderFlowMonitor:
     """Layer 7: Smart money order flow monitor.
 
@@ -294,6 +572,7 @@ class OrderFlowMonitor:
         self._poll_interval = poll_interval
         self._session_factory = session_factory
         self._windows: dict[str, RollingWindow] = {}
+        self._market_tracker = MarketFlowTracker()
         self._session: aiohttp.ClientSession | None = None
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -374,6 +653,17 @@ class OrderFlowMonitor:
             total_events=self._total_events,
             signals=self._signals_emitted,
         )
+
+    def register_market(
+        self, condition_id: str, yes_token_id: str, no_token_id: str
+    ) -> None:
+        """Register a market for YES/NO taker flow tracking (Strategy A)."""
+        self._market_tracker.register_market(condition_id, yes_token_id, no_token_id)
+
+    @property
+    def market_tracker(self) -> MarketFlowTracker:
+        """Access the per-market YES/NO flow tracker."""
+        return self._market_tracker
 
     def update_matched_tokens(self, token_ids: set[str]) -> None:
         """Update the set of token IDs to filter on (from matched markets).
@@ -501,6 +791,9 @@ class OrderFlowMonitor:
 
         self._total_events += 1
 
+        # Feed per-market YES/NO tracker (Strategy A)
+        self._market_tracker.process_event(event)
+
         # Get or create rolling window for this token
         if event.token_id not in self._windows:
             self._windows[event.token_id] = RollingWindow()
@@ -570,6 +863,7 @@ class OrderFlowMonitor:
             direction=direction,
             edge=edge,
             confidence=confidence,
+            strategy="",  # L7 feeds into multiple strategies; resolved downstream
             details={
                 "zscore": round(zscore, 2),
                 "imbalance": str(imbalance.quantize(Decimal("0.001"))),

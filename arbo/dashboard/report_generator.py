@@ -20,6 +20,16 @@ logger = get_logger("report_generator")
 
 
 @dataclass
+class StrategyDailyStats:
+    """Per-strategy daily statistics."""
+
+    trades: int = 0
+    wins: int = 0
+    pnl: Decimal = Decimal("0")
+    deployed: Decimal = Decimal("0")
+
+
+@dataclass
 class DailyReport:
     """Daily trading summary report."""
 
@@ -31,6 +41,7 @@ class DailyReport:
     per_layer_pnl: dict[int, Decimal]
     top_signals: list[dict[str, Any]]
     risk_events: list[str]
+    per_strategy_pnl: dict[str, StrategyDailyStats] = field(default_factory=dict)
 
     @property
     def losing_trades(self) -> int:
@@ -69,6 +80,7 @@ class WeeklyReport:
     avg_score_of_winners: Decimal
     risk_events: list[str]
     portfolio_balance: Decimal
+    per_strategy_pnl: dict[str, StrategyDailyStats] = field(default_factory=dict)
     daily_reports: list[DailyReport] = field(default_factory=list)
 
     @property
@@ -131,6 +143,22 @@ class ReportGenerator:
             pnl = Decimal(str(t.get("actual_pnl", 0) or 0))
             per_layer[layer] = per_layer.get(layer, Decimal("0")) + pnl
 
+        # Per-strategy P&L
+        per_strategy: dict[str, StrategyDailyStats] = {}
+        for t in trades:
+            sid = t.get("strategy", "")
+            if not sid:
+                continue
+            if sid not in per_strategy:
+                per_strategy[sid] = StrategyDailyStats()
+            st = per_strategy[sid]
+            st.trades += 1
+            pnl = Decimal(str(t.get("actual_pnl", 0) or 0))
+            st.pnl += pnl
+            if pnl > 0:
+                st.wins += 1
+            st.deployed += Decimal(str(t.get("size", 0) or 0))
+
         # Top signals by edge
         sorted_signals = sorted(signals, key=lambda s: float(s.get("edge", 0)), reverse=True)
         top_signals = sorted_signals[:5]
@@ -160,6 +188,7 @@ class ReportGenerator:
             per_layer_pnl=per_layer,
             top_signals=top_signals,
             risk_events=risk_events,
+            per_strategy_pnl=per_strategy,
         )
 
         logger.info(
@@ -299,6 +328,22 @@ class ReportGenerator:
             else Decimal("0")
         )
 
+        # Aggregate per-strategy P&L across days
+        per_strategy_pnl: dict[str, StrategyDailyStats] = {}
+        for t in trades:
+            sid = t.get("strategy", "")
+            if not sid:
+                continue
+            if sid not in per_strategy_pnl:
+                per_strategy_pnl[sid] = StrategyDailyStats()
+            st = per_strategy_pnl[sid]
+            st.trades += 1
+            pnl_val = Decimal(str(t.get("actual_pnl", 0) or 0))
+            st.pnl += pnl_val
+            if pnl_val > 0:
+                st.wins += 1
+            st.deployed += Decimal(str(t.get("size", 0) or 0))
+
         # Collect risk events from all daily reports
         all_risk_events: list[str] = []
         for report in daily_reports:
@@ -336,6 +381,7 @@ class ReportGenerator:
             avg_score_of_winners=avg_score_of_winners,
             risk_events=all_risk_events,
             portfolio_balance=portfolio_balance,
+            per_strategy_pnl=per_strategy_pnl,
             daily_reports=list(daily_reports),
         )
 
@@ -523,6 +569,26 @@ class ReportGenerator:
             },
         ]
 
+        # Per-strategy breakdown (RDH)
+        if report.per_strategy_pnl:
+            strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
+            strat_lines = []
+            for sid, stats in sorted(report.per_strategy_pnl.items()):
+                name = strat_names.get(sid, sid)
+                sign = "+" if stats.pnl >= 0 else ""
+                wr = float(stats.wins / stats.trades * 100) if stats.trades > 0 else 0
+                strat_lines.append(f"  {sid} ({name}): {sign}${stats.pnl} ({stats.trades}t, {wr:.0f}%)")
+            strat_text = "\n".join(strat_lines)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Per-Strategy P&L:*\n```\n{strat_text}\n```",
+                    },
+                }
+            )
+
         # Add risk events if any
         if report.risk_events:
             risk_text = "\n".join(f"- {e}" for e in report.risk_events)
@@ -613,6 +679,28 @@ class ReportGenerator:
                 },
             },
         ]
+
+        # Per-strategy breakdown (RDH)
+        if report.per_strategy_pnl:
+            strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
+            strat_lines = []
+            for sid, stats in sorted(report.per_strategy_pnl.items()):
+                name = strat_names.get(sid, sid)
+                sign = "+" if stats.pnl >= 0 else ""
+                wr = float(stats.wins / stats.trades * 100) if stats.trades > 0 else 0
+                strat_lines.append(
+                    f"  {sid} ({name}): {sign}${stats.pnl} ({stats.trades}t, {wr:.0f}%)"
+                )
+            strat_text = "\n".join(strat_lines)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Per-Strategy P&L:*\n```\n{strat_text}\n```",
+                    },
+                }
+            )
 
         # Risk events
         if report.risk_events:

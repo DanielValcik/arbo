@@ -45,6 +45,7 @@ class PaperTrade:
     confluence_score: int
     kelly_fraction: Decimal
     fee: Decimal
+    strategy: str = ""  # RDH strategy ID: "A", "B", "C" (empty = legacy layer)
     status: TradeStatus = TradeStatus.OPEN
     actual_pnl: Decimal | None = None
     placed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -63,6 +64,7 @@ class PaperPosition:
     size: Decimal  # total USDC invested
     shares: Decimal
     layer: int
+    strategy: str = ""
     current_price: Decimal | None = None
 
     @property
@@ -114,6 +116,7 @@ class PaperTradingEngine:
         self._snapshots: list[PortfolioSnapshot] = []
         self._next_trade_id = 1
         self._per_layer_realized_pnl: dict[int, Decimal] = {}
+        self._per_strategy_realized_pnl: dict[str, Decimal] = {}
 
     @property
     def balance(self) -> Decimal:
@@ -149,6 +152,8 @@ class PaperTradingEngine:
         fee_enabled: bool = False,
         confluence_score: int = 0,
         is_whale_copy: bool = False,
+        strategy: str = "",
+        pre_computed_size: Decimal | None = None,
     ) -> PaperTrade | None:
         """Place a simulated paper trade.
 
@@ -166,6 +171,9 @@ class PaperTradingEngine:
             fee_enabled: Whether this market has fees.
             confluence_score: Confluence score (0-5).
             is_whale_copy: Whether this is a whale copy trade.
+            strategy: RDH strategy ID ("A", "B", "C"). Empty = legacy layer.
+            pre_computed_size: Pre-calculated size from strategy ladder/sizing.
+                When provided, skips internal Kelly calculation.
 
         Returns:
             PaperTrade if executed, None if rejected by risk manager.
@@ -183,16 +191,21 @@ class PaperTradingEngine:
             )
             return None
 
-        # Calculate position size via half-Kelly
-        kelly = half_kelly(model_prob, market_price)
-        max_pct = Decimal("0.05")
-        if confluence_score >= 3:
-            max_pct = Decimal("0.05")  # hard cap even at high confluence
-        elif confluence_score >= 2:
-            max_pct = Decimal("0.025")  # standard size
+        if pre_computed_size is not None:
+            # RDH strategies compute their own sizing (Quarter-Kelly via ladder)
+            size = pre_computed_size
+            kelly = Decimal("0")  # Not used — strategy did its own sizing
+        else:
+            # Legacy layers: calculate position size via half-Kelly
+            kelly = half_kelly(model_prob, market_price)
+            max_pct = Decimal("0.05")
+            if confluence_score >= 3:
+                max_pct = Decimal("0.05")  # hard cap even at high confluence
+            elif confluence_score >= 2:
+                max_pct = Decimal("0.025")  # standard size
 
-        position_pct = min(kelly, max_pct)
-        size = (self._balance * position_pct).quantize(Decimal("0.01"))
+            position_pct = min(kelly, max_pct)
+            size = (self._balance * position_pct).quantize(Decimal("0.01"))
 
         if size <= Decimal("0"):
             return None
@@ -262,6 +275,7 @@ class PaperTradingEngine:
             confluence_score=confluence_score,
             kelly_fraction=kelly,
             fee=fee * size,
+            strategy=strategy,
         )
         self._next_trade_id += 1
         self._trades.append(trade)
@@ -285,6 +299,7 @@ class PaperTradingEngine:
                 size=size,
                 shares=shares,
                 layer=layer,
+                strategy=strategy,
             )
 
         # Update risk manager
@@ -354,6 +369,12 @@ class PaperTradingEngine:
         self._per_layer_realized_pnl[layer] = (
             self._per_layer_realized_pnl.get(layer, Decimal("0")) + pnl
         )
+
+        # Track per-strategy P&L
+        if pos.strategy:
+            self._per_strategy_realized_pnl[pos.strategy] = (
+                self._per_strategy_realized_pnl.get(pos.strategy, Decimal("0")) + pnl
+            )
 
         # Update trades
         status = TradeStatus.WON if pnl > 0 else TradeStatus.LOST
@@ -428,6 +449,7 @@ class PaperTradingEngine:
                     fee_paid=trade.fee,
                     placed_at=trade.placed_at,
                     notes=trade.notes or None,
+                    strategy=trade.strategy or None,
                 )
                 session.add(db_trade)
                 await session.commit()
@@ -608,4 +630,30 @@ class PaperTradingEngine:
             "total_pnl": total_pnl,
             "roi_pct": (total_pnl / self._initial_capital * 100) if self._initial_capital else 0,
             "per_layer_pnl": dict(self._per_layer_realized_pnl),
+            "per_strategy_pnl": dict(self._per_strategy_realized_pnl),
+        }
+
+    def get_strategy_stats(self, strategy_id: str) -> dict[str, object]:
+        """Get statistics for a specific RDH strategy (A, B, or C)."""
+        strategy_trades = [t for t in self._trades if t.strategy == strategy_id]
+        resolved = [
+            t for t in strategy_trades if t.status in (TradeStatus.WON, TradeStatus.LOST)
+        ]
+        wins = [t for t in resolved if t.status == TradeStatus.WON]
+        total_pnl = sum(
+            (t.actual_pnl for t in resolved if t.actual_pnl is not None), Decimal("0")
+        )
+        total_invested = sum(t.size for t in strategy_trades)
+
+        return {
+            "strategy": strategy_id,
+            "total_trades": len(strategy_trades),
+            "open_trades": len([t for t in strategy_trades if t.status == TradeStatus.OPEN]),
+            "resolved_trades": len(resolved),
+            "wins": len(wins),
+            "losses": len(resolved) - len(wins),
+            "win_rate": len(wins) / len(resolved) if resolved else 0,
+            "total_pnl": total_pnl,
+            "total_invested": total_invested,
+            "roi_pct": (total_pnl / total_invested * 100) if total_invested else Decimal("0"),
         }

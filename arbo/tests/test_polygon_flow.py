@@ -16,10 +16,16 @@ import time
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from arbo.connectors.polygon_flow import (
+    MarketFlowTracker,
+    MarketTakerFlow,
     OrderFilledEvent,
     OrderFlowMonitor,
+    PeakOptimismResult,
     RollingWindow,
+    FlowSnapshotEntry,
     parse_order_filled,
 )
 from arbo.core.scanner import Signal, SignalDirection
@@ -655,6 +661,536 @@ class TestIncrementalPolling:
         restored = await monitor2._restore_last_block()
 
         assert restored == 42_000
+
+        await engine.dispose()
+
+
+# ================================================================
+# MarketFlowTracker — YES/NO taker ratio (RDH-201)
+# ================================================================
+
+
+def _make_event(
+    token_id: str = "tok_yes",
+    is_buy: bool = True,
+    taker_amount: Decimal = Decimal("50"),
+    maker_amount: Decimal = Decimal("100"),
+) -> OrderFilledEvent:
+    """Create a mock OrderFilledEvent."""
+    from datetime import UTC, datetime
+
+    return OrderFilledEvent(
+        order_hash="0x" + "ab" * 32,
+        maker="0x" + "11" * 20,
+        taker="0x" + "22" * 20,
+        maker_asset_id="123",
+        taker_asset_id="456",
+        maker_amount=maker_amount,
+        taker_amount=taker_amount,
+        fee=Decimal("0.5"),
+        is_buy=is_buy,
+        token_id=token_id,
+        timestamp=datetime.now(UTC),
+        block_number=1000,
+    )
+
+
+class TestMarketFlowTracker:
+    """Per-market YES/NO taker flow tracking."""
+
+    def test_register_market(self) -> None:
+        """Register a market and verify mapping."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        assert tracker.registered_markets == 1
+        flow = tracker.get_market_flow("cond_1")
+        assert flow is not None
+        assert flow.yes_token_id == "tok_yes"
+        assert flow.no_token_id == "tok_no"
+
+    def test_duplicate_register_ignored(self) -> None:
+        """Re-registering same market is a no-op."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        tracker.register_market("cond_1", "tok_yes_2", "tok_no_2")  # Should be ignored
+        assert tracker.registered_markets == 1
+        assert tracker.get_market_flow("cond_1").yes_token_id == "tok_yes"
+
+    def test_process_yes_buy_event(self) -> None:
+        """Buying YES token increases YES taker flow."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        event = _make_event(token_id="tok_yes", is_buy=True, taker_amount=Decimal("100"))
+        flow = tracker.process_event(event)
+
+        assert flow is not None
+        assert flow.yes_volume_4h > Decimal("0")
+        assert flow.no_volume_4h == Decimal("0")
+
+    def test_process_no_buy_event(self) -> None:
+        """Buying NO token increases NO taker flow."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        event = _make_event(token_id="tok_no", is_buy=True, taker_amount=Decimal("100"))
+        flow = tracker.process_event(event)
+
+        assert flow is not None
+        assert flow.no_volume_4h > Decimal("0")
+        assert flow.yes_volume_4h == Decimal("0")
+
+    def test_yes_taker_ratio_all_yes(self) -> None:
+        """All YES buys → ratio = 1.0."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        for _ in range(5):
+            tracker.process_event(
+                _make_event(token_id="tok_yes", is_buy=True, taker_amount=Decimal("100"))
+            )
+
+        flow = tracker.get_market_flow("cond_1")
+        assert flow.yes_taker_ratio == 1.0
+
+    def test_yes_taker_ratio_balanced(self) -> None:
+        """Equal YES/NO buys → ratio ≈ 0.5."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        tracker.process_event(
+            _make_event(token_id="tok_yes", is_buy=True, taker_amount=Decimal("100"))
+        )
+        tracker.process_event(
+            _make_event(token_id="tok_no", is_buy=True, taker_amount=Decimal("100"))
+        )
+
+        flow = tracker.get_market_flow("cond_1")
+        assert abs(flow.yes_taker_ratio - 0.5) < 0.1
+
+    def test_yes_taker_ratio_no_data(self) -> None:
+        """No data → ratio = 0.5 (neutral)."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        flow = tracker.get_market_flow("cond_1")
+        assert flow.yes_taker_ratio == 0.5
+
+    def test_unregistered_market_returns_none(self) -> None:
+        """Event for unregistered market returns None."""
+        tracker = MarketFlowTracker()
+        event = _make_event(token_id="unknown_token")
+        result = tracker.process_event(event)
+        assert result is None
+
+    def test_per_market_isolation(self) -> None:
+        """Different markets track flow independently."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_y1", "tok_n1")
+        tracker.register_market("cond_2", "tok_y2", "tok_n2")
+
+        tracker.process_event(_make_event(token_id="tok_y1", is_buy=True, taker_amount=Decimal("500")))
+        tracker.process_event(_make_event(token_id="tok_y2", is_buy=True, taker_amount=Decimal("50")))
+
+        flow1 = tracker.get_market_flow("cond_1")
+        flow2 = tracker.get_market_flow("cond_2")
+
+        assert flow1.yes_volume_4h > flow2.yes_volume_4h
+
+    def test_get_all_flows(self) -> None:
+        """get_all_flows returns all tracked markets."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_y1", "tok_n1")
+        tracker.register_market("cond_2", "tok_y2", "tok_n2")
+
+        flows = tracker.get_all_flows()
+        assert len(flows) == 2
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_monitor_feeds_market_tracker(self, mock_config: MagicMock) -> None:
+        """OrderFlowMonitor feeds events to market_tracker."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+
+        # Register a market
+        token_id = str(10**40)
+        monitor.register_market("cond_test", token_id, "tok_no_test")
+
+        # Process a log with that token
+        log = _make_log()
+        monitor._handle_log(log)
+
+        flow = monitor.market_tracker.get_market_flow("cond_test")
+        assert flow is not None
+        assert flow.yes_volume_4h > Decimal("0")
+
+
+# ================================================================
+# RDH-202: 4h rolling z-score + 3σ peak optimism
+# ================================================================
+
+
+class TestPeakOptimism:
+    """3σ peak optimism detection on YES taker flow."""
+
+    def test_3sigma_triggers_peak_optimism(self) -> None:
+        """YES z-score ≥ 3.0 → is_peak = True."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        now = time.monotonic()
+        flow.yes_window._time_fn = lambda: now
+
+        # Small varying volume in historical 5-min buckets
+        for i in range(1, 13):  # 12 buckets → 1h of history within 4h window
+            bucket_time = now - (i * 300 + 1)
+            vol = Decimal(str(8 + i))  # 9, 10, 11, ..., 20
+            flow.yes_window.add(vol, is_buy=True, timestamp=bucket_time)
+
+        # Big spike in current bucket (bucket 0)
+        flow.yes_window.add(Decimal("2000"), is_buy=True, timestamp=now - 1)
+
+        result = flow.check_peak_optimism(threshold=3.0)
+        assert result.is_peak is True
+        assert result.zscore >= 3.0
+        assert result.condition_id == "cond_1"
+
+    def test_2_5sigma_does_not_trigger(self) -> None:
+        """YES z-score < 3.0 → is_peak = False."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        now = time.monotonic()
+        flow.yes_window._time_fn = lambda: now
+
+        # Historical buckets with some variance
+        for i in range(1, 13):
+            bucket_time = now - (i * 300 + 1)
+            vol = Decimal(str(10 + i * 3))  # 13, 16, 19, ..., 46
+            flow.yes_window.add(vol, is_buy=True, timestamp=bucket_time)
+
+        # Moderate spike — above average but below 3σ
+        # Mean ≈ 29.5, std ≈ 10.7 → 3σ ≈ 61.6 above mean → need ~91
+        # Place something that gives ~2σ
+        flow.yes_window.add(Decimal("55"), is_buy=True, timestamp=now - 1)
+
+        result = flow.check_peak_optimism(threshold=3.0)
+        assert result.is_peak is False
+        assert result.zscore < 3.0
+
+    def test_no_data_not_peak(self) -> None:
+        """No flow data → not peak."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        result = flow.check_peak_optimism()
+        assert result.is_peak is False
+        assert result.zscore == 0.0
+
+    def test_peak_result_includes_yes_ratio(self) -> None:
+        """PeakOptimismResult includes current YES taker ratio."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        # Add only YES flow → ratio should be 1.0
+        now = time.monotonic()
+        flow.yes_window._time_fn = lambda: now
+        for i in range(1, 7):
+            flow.yes_window.add(Decimal("10"), is_buy=True, timestamp=now - i * 300 - 1)
+        flow.yes_window.add(Decimal("1000"), is_buy=True, timestamp=now - 1)
+
+        result = flow.check_peak_optimism()
+        assert result.yes_ratio == 1.0
+
+    def test_get_peak_optimism_markets(self) -> None:
+        """MarketFlowTracker returns only markets at peak optimism."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_hot", "tok_y1", "tok_n1")
+        tracker.register_market("cond_calm", "tok_y2", "tok_n2")
+
+        now = time.monotonic()
+
+        # cond_hot: massive YES spike → 3σ
+        hot = tracker.get_market_flow("cond_hot")
+        hot.yes_window._time_fn = lambda: now
+        for i in range(1, 13):
+            vol = Decimal(str(8 + i))  # varying: 9, 10, ..., 20
+            hot.yes_window.add(vol, is_buy=True, timestamp=now - i * 300 - 1)
+        hot.yes_window.add(Decimal("2000"), is_buy=True, timestamp=now - 1)
+
+        # cond_calm: uniform-ish volume → no spike
+        calm = tracker.get_market_flow("cond_calm")
+        calm.yes_window._time_fn = lambda: now
+        for i in range(1, 7):
+            calm.yes_window.add(Decimal(str(10 + i)), is_buy=True, timestamp=now - i * 300 - 1)
+        calm.yes_window.add(Decimal("15"), is_buy=True, timestamp=now - 1)
+
+        peaks = tracker.get_peak_optimism_markets(threshold=3.0)
+        assert len(peaks) == 1
+        assert peaks[0].condition_id == "cond_hot"
+        assert peaks[0].is_peak is True
+
+
+class TestTakerFlowSnapshots:
+    """Periodic snapshot tracking for 7-day historical baseline."""
+
+    def test_record_snapshot(self) -> None:
+        """record_snapshot captures current flow state."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        # Add some volume
+        flow.yes_window.add(Decimal("100"), is_buy=True)
+        flow.no_window.add(Decimal("50"), is_buy=True)
+
+        snap = flow.record_snapshot()
+        assert isinstance(snap, FlowSnapshotEntry)
+        assert snap.yes_volume == Decimal("100")
+        assert snap.no_volume == Decimal("50")
+        assert snap.yes_ratio == pytest.approx(100 / 150, abs=0.01)
+        assert flow.snapshot_count == 1
+
+    def test_snapshot_tracks_deltas(self) -> None:
+        """Successive snapshots capture incremental volume only."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        # First period
+        flow.yes_window.add(Decimal("100"), is_buy=True)
+        flow.record_snapshot()
+
+        # Second period — add more
+        flow.yes_window.add(Decimal("60"), is_buy=True)
+        snap2 = flow.record_snapshot()
+
+        # Should be delta only (60, not 160)
+        assert snap2.yes_volume == Decimal("60")
+        assert flow.snapshot_count == 2
+
+    def test_historical_avg_yes_rate(self) -> None:
+        """historical_avg_yes_rate computes weighted average from snapshots."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        # Snapshot 1: 80% YES
+        flow.yes_window.add(Decimal("80"), is_buy=True)
+        flow.no_window.add(Decimal("20"), is_buy=True)
+        flow.record_snapshot()
+
+        # Snapshot 2: 60% YES
+        flow.yes_window.add(Decimal("60"), is_buy=True)
+        flow.no_window.add(Decimal("40"), is_buy=True)
+        flow.record_snapshot()
+
+        # Overall: (80+60) / (80+20+60+40) = 140/200 = 0.70
+        assert flow.historical_avg_yes_rate == pytest.approx(0.70, abs=0.01)
+
+    def test_historical_avg_no_snapshots(self) -> None:
+        """No snapshots → neutral 0.5."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+        assert flow.historical_avg_yes_rate == 0.5
+
+    def test_snapshot_maxlen_168(self) -> None:
+        """Snapshots capped at 168 (7 days × 24 hours)."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        for i in range(200):
+            flow.yes_window.add(Decimal("10"), is_buy=True)
+            flow.record_snapshot()
+
+        assert flow.snapshot_count == 168  # maxlen
+
+    def test_take_snapshots_all_markets(self) -> None:
+        """take_snapshots records for all markets at once."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_y1", "tok_n1")
+        tracker.register_market("cond_2", "tok_y2", "tok_n2")
+
+        # Add some volume
+        flow1 = tracker.get_market_flow("cond_1")
+        flow1.yes_window.add(Decimal("100"), is_buy=True)
+        flow2 = tracker.get_market_flow("cond_2")
+        flow2.yes_window.add(Decimal("200"), is_buy=True)
+
+        snaps = tracker.take_snapshots()
+        assert len(snaps) == 2
+        assert all(isinstance(s, FlowSnapshotEntry) for s in snaps)
+
+        # Both markets now have 1 snapshot
+        assert flow1.snapshot_count == 1
+        assert flow2.snapshot_count == 1
+
+    def test_zscore_uses_4h_window(self) -> None:
+        """get_yes_zscore defaults to 4h (14400s) window."""
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+        flow = tracker.get_market_flow("cond_1")
+
+        now = time.monotonic()
+        flow.yes_window._time_fn = lambda: now
+
+        # Add varying data within 4h window (need std > 0)
+        for i in range(1, 7):
+            vol = Decimal(str(8 + i * 2))  # 10, 12, 14, 16, 18, 20
+            flow.yes_window.add(vol, is_buy=True, timestamp=now - i * 300 - 1)
+        flow.yes_window.add(Decimal("500"), is_buy=True, timestamp=now - 1)
+
+        # Default call (4h window)
+        zscore_4h = flow.get_yes_zscore()
+
+        # Explicit 1h window — should differ (fewer buckets)
+        zscore_1h = flow.get_yes_zscore(window_s=3600)
+
+        # Both should be positive (spike detected)
+        assert zscore_4h > 0
+        assert zscore_1h > 0
+
+
+# ================================================================
+# RDH-203: Taker flow DB persistence
+# ================================================================
+
+
+class TestTakerFlowDBPersistence:
+    """DB persistence for taker flow snapshots."""
+
+    @staticmethod
+    async def _create_db():
+        """Create in-memory SQLite DB with taker_flow_snapshots table."""
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            # Use INTEGER (not BIGINT) for SQLite autoincrement compatibility
+            await conn.execute(
+                text(
+                    """CREATE TABLE taker_flow_snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        market_condition_id VARCHAR(128) NOT NULL,
+                        yes_taker_volume NUMERIC(16, 2) NOT NULL,
+                        no_taker_volume NUMERIC(16, 2) NOT NULL,
+                        yes_no_ratio FLOAT NOT NULL,
+                        z_score FLOAT NOT NULL,
+                        window_seconds INTEGER NOT NULL,
+                        is_peak_optimism BOOLEAN DEFAULT 0,
+                        captured_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )"""
+                )
+            )
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        return engine, factory
+
+    async def test_save_taker_flow_snapshots(self) -> None:
+        """save_taker_flow_snapshots persists to DB."""
+        from sqlalchemy import select
+
+        from arbo.utils.db import TakerFlowSnapshot as TakerFlowSnapshotDB
+
+        engine, factory = await self._create_db()
+
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_yes", "tok_no")
+
+        # Add some volume
+        flow = tracker.get_market_flow("cond_1")
+        flow.yes_window.add(Decimal("200"), is_buy=True)
+        flow.no_window.add(Decimal("100"), is_buy=True)
+
+        saved = await tracker.save_taker_flow_snapshots(factory)
+        assert saved == 1
+
+        # Verify data in DB
+        async with factory() as session:
+            result = await session.execute(select(TakerFlowSnapshotDB))
+            rows = result.scalars().all()
+
+        assert len(rows) == 1
+        assert rows[0].market_condition_id == "cond_1"
+        assert rows[0].yes_taker_volume > Decimal("0")
+        assert rows[0].no_taker_volume > Decimal("0")
+        assert rows[0].window_seconds == 14400
+
+        await engine.dispose()
+
+    async def test_save_snapshots_multiple_markets(self) -> None:
+        """Saves one row per tracked market."""
+        from sqlalchemy import select
+
+        from arbo.utils.db import TakerFlowSnapshot as TakerFlowSnapshotDB
+
+        engine, factory = await self._create_db()
+
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_y1", "tok_n1")
+        tracker.register_market("cond_2", "tok_y2", "tok_n2")
+
+        tracker.get_market_flow("cond_1").yes_window.add(Decimal("100"), is_buy=True)
+        tracker.get_market_flow("cond_2").yes_window.add(Decimal("200"), is_buy=True)
+
+        saved = await tracker.save_taker_flow_snapshots(factory)
+        assert saved == 2
+
+        async with factory() as session:
+            result = await session.execute(select(TakerFlowSnapshotDB))
+            rows = result.scalars().all()
+
+        assert len(rows) == 2
+        condition_ids = {r.market_condition_id for r in rows}
+        assert condition_ids == {"cond_1", "cond_2"}
+
+        await engine.dispose()
+
+    async def test_save_snapshots_empty_tracker(self) -> None:
+        """No registered markets → 0 saved."""
+        engine, factory = await self._create_db()
+
+        tracker = MarketFlowTracker()
+        saved = await tracker.save_taker_flow_snapshots(factory)
+        assert saved == 0
+
+        await engine.dispose()
+
+    async def test_query_by_market_id(self) -> None:
+        """Can query snapshots by market_condition_id."""
+        from sqlalchemy import select
+
+        from arbo.utils.db import TakerFlowSnapshot as TakerFlowSnapshotDB
+
+        engine, factory = await self._create_db()
+
+        tracker = MarketFlowTracker()
+        tracker.register_market("cond_1", "tok_y1", "tok_n1")
+        tracker.register_market("cond_2", "tok_y2", "tok_n2")
+
+        tracker.get_market_flow("cond_1").yes_window.add(Decimal("100"), is_buy=True)
+        tracker.get_market_flow("cond_2").yes_window.add(Decimal("200"), is_buy=True)
+
+        await tracker.save_taker_flow_snapshots(factory)
+
+        # Query only cond_1
+        async with factory() as session:
+            result = await session.execute(
+                select(TakerFlowSnapshotDB).where(
+                    TakerFlowSnapshotDB.market_condition_id == "cond_1"
+                )
+            )
+            rows = result.scalars().all()
+
+        assert len(rows) == 1
+        assert rows[0].market_condition_id == "cond_1"
 
         await engine.dispose()
 

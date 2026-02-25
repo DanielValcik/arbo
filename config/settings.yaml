@@ -117,6 +117,48 @@ polling:
   value_scan: 300         # 5 min
   news: 1800              # 30 min
 
+# --- Strategy C: Compound Weather ---
+weather:
+  noaa_cache_ttl_s: 3600       # 1h cache for NOAA forecasts
+  metoffice_cache_ttl_s: 3600  # 1h cache for Met Office
+  openmeteo_cache_ttl_s: 3600  # 1h cache for Open-Meteo
+  scan_interval_s: 1800        # 30 min between weather market scans
+  forecast_max_age_hours: 6    # Reject forecasts older than 6h
+  min_edge_threshold: 0.05     # 5% minimum edge to trade
+  min_volume_24h: 10000        # $10K minimum 24h volume
+  min_liquidity: 5000          # $5K minimum liquidity
+  min_confidence: 0.5          # Minimum forecast confidence
+  max_ladder_positions: 3      # Max positions per city per day
+  temperature_sigma_c: 2.5     # Forecast uncertainty σ in °C
+
+# --- Strategy A: Theta Decay ---
+theta_decay:
+  zscore_threshold: 3.0         # 3σ peak optimism
+  rolling_window_hours: 4       # 4h rolling z-score window
+  longshot_price_max: 0.15      # YES < $0.15
+  min_volume_24h: 10000         # $10K min volume
+  min_age_hours: 24             # Market must be 24h+ old
+  resolution_window_days_min: 3 # 3-30 days to resolution
+  resolution_window_days_max: 30
+  partial_exit_pct: 0.50        # Sell 50% at NO +50%
+  stop_loss_pct: 0.30           # Exit all at NO -30%
+  position_size_min: 20         # $20 min position
+  position_size_max: 50         # $50 max position
+  max_concurrent_positions: 10  # Max concurrent theta positions
+  excluded_categories: ["crypto"]
+  snapshot_interval_s: 300      # 5 min taker flow snapshots
+
+# --- Strategy allocations: DOCUMENTATION ONLY ---
+# Actual values are HARDCODED in arbo/core/risk_manager.py
+# Cannot be overridden by config. Changes require CEO approval.
+strategy_allocations:
+  A: 400   # Theta Decay — 20%
+  B: 400   # Reflexivity Surfer — 20%
+  C: 1000  # Compound Weather — 50%
+  reserve: 200  # 10% reserve — NEVER deployed
+  max_positions_per_strategy: 10
+  weekly_drawdown_pct: 0.15  # 15% weekly drawdown → halt
+
 # --- Risk limits: DOCUMENTATION ONLY ---
 # Actual limits are HARDCODED in arbo/core/risk_manager.py
 # Cannot be overridden by config. See brief Section 5.

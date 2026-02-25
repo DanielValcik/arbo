@@ -121,10 +121,12 @@ class PaperTrade(Base):
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    strategy: Mapped[str | None] = mapped_column(String(8), nullable=True)  # RDH: "A", "B", "C"
 
     __table_args__ = (
         Index("idx_paper_trades_status", "status", placed_at.desc()),
         Index("idx_paper_trades_layer", "layer"),
+        Index("idx_paper_trades_strategy", "strategy"),
     )
 
 
@@ -299,6 +301,124 @@ class RealMarketData(Base):
 
     __table_args__ = (
         Index("idx_real_market_data_cond_time", "market_condition_id", captured_at.desc()),
+    )
+
+
+# ================================================================
+# RDH: WEATHER_FORECASTS — Temperature forecast data (Strategy C)
+# ================================================================
+class WeatherForecastRecord(Base):
+    __tablename__ = "weather_forecasts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    city: Mapped[str] = mapped_column(String(32), nullable=False)
+    forecast_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    temp_high_c: Mapped[float] = mapped_column(Float, nullable=False)
+    temp_low_c: Mapped[float] = mapped_column(Float, nullable=False)
+    condition: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    precip_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_temp_high_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_temp_low_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accuracy_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accuracy_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_weather_city_date", "city", "forecast_date"),
+        Index("idx_weather_source", "source"),
+    )
+
+
+# ================================================================
+# RDH: TAKER_FLOW_SNAPSHOTS — On-chain taker flow (Strategy A)
+# ================================================================
+class TakerFlowSnapshot(Base):
+    __tablename__ = "taker_flow_snapshots"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    market_condition_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    yes_taker_volume: Mapped[Decimal] = mapped_column(Numeric(16, 2), nullable=False)
+    no_taker_volume: Mapped[Decimal] = mapped_column(Numeric(16, 2), nullable=False)
+    yes_no_ratio: Mapped[float] = mapped_column(Float, nullable=False)
+    z_score: Mapped[float] = mapped_column(Float, nullable=False)
+    window_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_peak_optimism: Mapped[bool] = mapped_column(Boolean, default=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_taker_flow_market", "market_condition_id", captured_at.desc()),
+    )
+
+
+# ================================================================
+# RDH: ATTENTION_MARKET_STATE — Kaito AI mindshare (Strategy B)
+# ================================================================
+class AttentionMarketState(Base):
+    __tablename__ = "attention_market_state"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    market_condition_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    phase: Mapped[str] = mapped_column(String(16), nullable=False)
+    kaito_mindshare: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pm_price: Mapped[float] = mapped_column(Float, nullable=False)
+    divergence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    phase_entered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_attention_market", "market_condition_id"),
+        Index("idx_attention_phase", "phase"),
+    )
+
+
+# ================================================================
+# RDH: RESOLUTION_CHAINS — Capital chaining (Strategy C)
+# ================================================================
+class ResolutionChain(Base):
+    __tablename__ = "resolution_chains"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    chain_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    city_sequence: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
+    current_city_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    initial_capital: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    current_capital: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    cumulative_pnl: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    num_resolutions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+# ================================================================
+# RDH: STRATEGY_ALLOCATIONS — Per-strategy capital tracking
+# ================================================================
+class StrategyAllocation(Base):
+    __tablename__ = "strategy_allocations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    strategy: Mapped[str] = mapped_column(String(1), nullable=False, unique=True)
+    allocated: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    deployed: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    available: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    weekly_pnl: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    total_pnl: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    is_halted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

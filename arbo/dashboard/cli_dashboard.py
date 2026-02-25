@@ -30,6 +30,13 @@ LAYER_NAMES: dict[int, str] = {
     9: "Sports Latency",
 }
 
+# Strategy names (RDH architecture)
+STRATEGY_NAMES: dict[str, str] = {
+    "A": "Theta Decay",
+    "B": "Reflexivity Surfer",
+    "C": "Compound Weather",
+}
+
 
 @dataclass
 class LayerStatus:
@@ -41,6 +48,20 @@ class LayerStatus:
     signals_count: int = 0
     last_signal_at: datetime | None = None
     error: str | None = None
+
+
+@dataclass
+class StrategyStatus:
+    """Status of a single RDH strategy."""
+
+    strategy_id: str
+    name: str
+    allocated: Decimal = Decimal("0")
+    deployed: Decimal = Decimal("0")
+    available: Decimal = Decimal("0")
+    positions: int = 0
+    weekly_pnl: Decimal = Decimal("0")
+    is_halted: bool = False
 
 
 class CLIDashboard:
@@ -60,6 +81,7 @@ class CLIDashboard:
         portfolio_stats: dict[str, Any] | None = None,
         confluence_stats: dict[str, Any] | None = None,
         risk_state: dict[str, Any] | None = None,
+        strategies: list[StrategyStatus] | None = None,
     ) -> str:
         """Render full dashboard as a string.
 
@@ -68,6 +90,7 @@ class CLIDashboard:
             portfolio_stats: Stats from PaperTradingEngine.get_stats().
             confluence_stats: Stats from ConfluenceScorer.stats.
             risk_state: Risk manager state dict.
+            strategies: Per-strategy status (RDH architecture).
 
         Returns:
             Formatted dashboard string for terminal display.
@@ -76,6 +99,9 @@ class CLIDashboard:
 
         header = f"\n{self.SEPARATOR}\n  ARBO — Polymarket Trading System\n  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}\n{self.SEPARATOR}"
         sections.append(header)
+
+        if strategies:
+            sections.append(self.format_strategy_table(strategies))
 
         sections.append(self.format_layer_table(layers))
 
@@ -110,6 +136,34 @@ class CLIDashboard:
             error = ls.error[:12] if ls.error else "-"
             line = f"  {str(ls.layer).ljust(4)}{ls.name.ljust(20)}{status.ljust(10)}{str(ls.signals_count).ljust(10)}{error.ljust(14)}"
             lines.append(line)
+
+        return "\n".join(lines)
+
+    def format_strategy_table(self, strategies: list[StrategyStatus]) -> str:
+        """Format per-strategy status as a table.
+
+        Args:
+            strategies: List of StrategyStatus objects.
+
+        Returns:
+            Formatted table string.
+        """
+        lines = ["\n  STRATEGIES", "  " + "-" * 56]
+        header = f"  {'ID'.ljust(4)}{'Name'.ljust(22)}{'Deploy'.ljust(10)}{'Avail'.ljust(10)}{'Pos'.ljust(5)}{'Status'.ljust(8)}"
+        lines.append(header)
+        lines.append("  " + "-" * 56)
+
+        for ss in strategies:
+            status = "HALTED" if ss.is_halted else "ACTIVE"
+            pnl_sign = "+" if ss.weekly_pnl >= 0 else ""
+            lines.append(
+                f"  {ss.strategy_id.ljust(4)}"
+                f"{ss.name.ljust(22)}"
+                f"${str(ss.deployed).ljust(9)}"
+                f"${str(ss.available).ljust(9)}"
+                f"{str(ss.positions).ljust(5)}"
+                f"{status.ljust(8)}"
+            )
 
         return "\n".join(lines)
 

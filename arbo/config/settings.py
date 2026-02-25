@@ -133,8 +133,43 @@ class SportsLatencyConfig(BaseModel):
     poll_interval_s: int = 5
 
 
+class WeatherConfig(BaseModel):
+    """Weather connectors configuration (Strategy C)."""
+
+    noaa_cache_ttl_s: int = 3600
+    metoffice_cache_ttl_s: int = 3600
+    openmeteo_cache_ttl_s: int = 3600
+    scan_interval_s: int = 1800  # 30 min between weather scans
+    forecast_max_age_hours: int = 6
+    min_edge_threshold: float = 0.05  # 5% minimum edge to trade
+    min_volume_24h: float = 10000.0  # $10K minimum 24h volume
+    min_liquidity: float = 5000.0  # $5K minimum liquidity
+    min_confidence: float = 0.5  # Minimum forecast confidence
+    max_ladder_positions: int = 3  # Max positions per city per day
+    temperature_sigma_c: float = 2.5  # Forecast uncertainty σ in °C
+
+
+class ThetaDecayConfig(BaseModel):
+    """Strategy A: Theta Decay configuration."""
+
+    zscore_threshold: float = 3.0  # 3σ peak optimism threshold
+    rolling_window_hours: int = 4  # 4h rolling window for z-score
+    longshot_price_max: float = 0.15  # YES must be < $0.15
+    min_volume_24h: float = 10000.0  # $10K minimum 24h volume
+    min_age_hours: int = 24  # Market must exist for 24h+
+    resolution_window_days_min: int = 3  # At least 3 days to resolution
+    resolution_window_days_max: int = 30  # At most 30 days to resolution
+    partial_exit_pct: float = 0.50  # Sell 50% at NO +50%
+    stop_loss_pct: float = 0.30  # Exit all at NO -30%
+    position_size_min: float = 20.0  # $20 minimum position
+    position_size_max: float = 50.0  # $50 maximum position
+    max_concurrent_positions: int = 10  # Max 10 concurrent theta positions
+    excluded_categories: list[str] = ["crypto"]  # Skip finance/crypto categories
+    snapshot_interval_s: int = 300  # 5 min taker flow snapshots
+
+
 class OddsApiConfig(BaseModel):
-    """The Odds API configuration."""
+    """The Odds API configuration — DEPRECATED (RDH pivot, subscription cancelled)."""
 
     base_url: str = "https://api.the-odds-api.com/v4"
     regions: str = "eu"
@@ -232,6 +267,7 @@ class ArboConfig(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     alchemy_key: str = Field(default="", alias="ALCHEMY_KEY")
     polygon_rpc_url: str = Field(default="", alias="DRPC_API_URL")
+    metoffice_api_key: str = Field(default="", alias="METOFFICE_API_KEY")
 
     # Slack
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
@@ -262,6 +298,8 @@ class ArboConfig(BaseSettings):
     order_flow: OrderFlowConfig = OrderFlowConfig()
     attention_markets: AttentionMarketsConfig = AttentionMarketsConfig()
     sports_latency: SportsLatencyConfig = SportsLatencyConfig()
+    weather: WeatherConfig = WeatherConfig()
+    theta_decay: ThetaDecayConfig = ThetaDecayConfig()
     odds_api: OddsApiConfig = OddsApiConfig()
     llm: LLMConfig = LLMConfig()
     risk: RiskConfig = RiskConfig()

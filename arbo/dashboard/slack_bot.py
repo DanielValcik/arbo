@@ -250,7 +250,7 @@ class SlackBot:
         balance = status.get("balance", "?")
         positions = status.get("open_positions", 0)
 
-        return [
+        blocks: list[dict[str, Any]] = [
             {
                 "type": "header",
                 "text": {"type": "plain_text", "text": "Arbo System Status"},
@@ -270,6 +270,31 @@ class SlackBot:
             },
         ]
 
+        # Per-strategy status (RDH)
+        strategy_data = status.get("strategies", {})
+        if strategy_data:
+            strat_lines = []
+            for sid, info in sorted(strategy_data.items()):
+                name = info.get("name", sid)
+                deployed = info.get("deployed", 0)
+                available = info.get("available", 0)
+                pos = info.get("positions", 0)
+                halted = info.get("is_halted", False)
+                flag = " [HALTED]" if halted else ""
+                strat_lines.append(f"  {sid} ({name}): ${deployed} deployed, ${available} avail, {pos} pos{flag}")
+            strat_text = "\n".join(strat_lines)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Strategies:*\n```\n{strat_text}\n```",
+                    },
+                }
+            )
+
+        return blocks
+
     @staticmethod
     def _format_pnl_blocks(pnl: dict[str, Any]) -> list[dict[str, Any]]:
         """Format P&L data as Block Kit blocks."""
@@ -286,7 +311,7 @@ class SlackBot:
             layer_lines.append(f"  L{layer}: {sign}${lp}")
         layer_text = "\n".join(layer_lines) if layer_lines else "  No data"
 
-        return [
+        blocks: list[dict[str, Any]] = [
             {
                 "type": "header",
                 "text": {"type": "plain_text", "text": "P&L Summary"},
@@ -308,3 +333,28 @@ class SlackBot:
                 },
             },
         ]
+
+        # Per-strategy P&L breakdown (RDH)
+        strat_pnl = pnl.get("per_strategy_pnl", {})
+        if strat_pnl:
+            strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
+            strat_lines = []
+            for sid, sp in sorted(strat_pnl.items()):
+                name = strat_names.get(sid, sid)
+                sp_pnl = sp.get("pnl", 0)
+                sp_trades = sp.get("trades", 0)
+                sp_wins = sp.get("wins", 0)
+                sign = "+" if float(str(sp_pnl)) >= 0 else ""
+                strat_lines.append(f"  {sid} ({name}): {sign}${sp_pnl} ({sp_trades}t, {sp_wins}w)")
+            strat_text = "\n".join(strat_lines)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Per-Strategy P&L:*\n```\n{strat_text}\n```",
+                    },
+                }
+            )
+
+        return blocks
