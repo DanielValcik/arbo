@@ -132,22 +132,22 @@ class TestPositionSizing:
         opps = scorer.score_signals(signals)
         assert opps[0].recommended_size == Decimal("0")
 
-    def test_score_1_standard_size_diagnostic(self, scorer: ConfluenceScorer) -> None:
-        """Score 1 → standard size (min_score=1 diagnostic mode)."""
+    def test_score_1_no_trade(self, scorer: ConfluenceScorer) -> None:
+        """Score 1 → 0% (no trade, min_score=2)."""
         signals = [_make_signal(layer=4)]
         opps = scorer.score_signals(signals)
-        assert opps[0].position_size_pct == Decimal("0.025")
-        assert opps[0].recommended_size == Decimal("50.00")
+        assert opps[0].position_size_pct == Decimal("0")
+        assert opps[0].recommended_size == Decimal("0.00")
 
-    def test_score_2_double_size(self, scorer: ConfluenceScorer) -> None:
-        """Score 2 → double size (5% capital = $100) when min_score=1."""
+    def test_score_2_standard_size(self, scorer: ConfluenceScorer) -> None:
+        """Score 2 → standard size (2.5% capital = $50) when min_score=2."""
         signals = [
             _make_signal(layer=4, market_condition_id="cond_1"),
             _make_signal(layer=7, market_condition_id="cond_1"),
         ]
         opps = scorer.score_signals(signals)
-        assert opps[0].position_size_pct == Decimal("0.05")
-        assert opps[0].recommended_size == Decimal("100.00")
+        assert opps[0].position_size_pct == Decimal("0.025")
+        assert opps[0].recommended_size == Decimal("50.00")
 
     def test_score_3_double_capped(self, scorer: ConfluenceScorer) -> None:
         """Score 3+ → 5% capital = $100 (hard cap)."""
@@ -232,19 +232,17 @@ class TestGetTradeable:
     """Full get_tradeable pipeline."""
 
     def test_mixed_signals_pipeline(self, scorer: ConfluenceScorer) -> None:
-        """Mixed signals: score >= 1 tradeable, score 0 not (diagnostic mode)."""
+        """Mixed signals: score >= 2 tradeable, score 1 not (min_score=2)."""
         signals = [
             # Market 1: score 2 (tradeable)
             _make_signal(layer=4, market_condition_id="cond_1"),
             _make_signal(layer=7, market_condition_id="cond_1"),
-            # Market 2: score 1 (tradeable in diagnostic mode)
+            # Market 2: score 1 (NOT tradeable with min_score=2)
             _make_signal(layer=5, market_condition_id="cond_2"),
         ]
         tradeable = scorer.get_tradeable(signals, {"cond_1": "crypto", "cond_2": "politics"})
-        assert len(tradeable) == 2
-        tradeable_ids = {o.market_condition_id for o in tradeable}
-        assert "cond_1" in tradeable_ids
-        assert "cond_2" in tradeable_ids
+        assert len(tradeable) == 1
+        assert tradeable[0].market_condition_id == "cond_1"
 
     def test_stats_tracked(self, scorer: ConfluenceScorer) -> None:
         """Scorer stats are updated after pipeline runs."""
@@ -256,3 +254,60 @@ class TestGetTradeable:
         stats = scorer.stats
         assert stats["total_scored"] > 0
         assert stats["total_tradeable"] > 0
+
+
+# ================================================================
+# D5: Update capital
+# ================================================================
+
+
+class TestUpdateCapital:
+    """D5 Bug 3: Confluence scorer uses stale capital for sizing."""
+
+    def test_update_capital_changes_recommended_size(
+        self, risk_manager: RiskManager
+    ) -> None:
+        """update_capital() changes recommended position sizes."""
+        scorer = ConfluenceScorer(risk_manager=risk_manager, capital=Decimal("2000"))
+        scorer.update_capital(Decimal("1000"))
+
+        signals = [
+            _make_signal(layer=4, market_condition_id="cond_1"),
+            _make_signal(layer=7, market_condition_id="cond_1"),
+        ]
+        opps = scorer.score_signals(signals)
+        # Score 2 → standard size (2.5% of 1000 = 25)
+        assert opps[0].recommended_size == Decimal("25.00")
+
+    def test_capital_unchanged_if_same_value(
+        self, risk_manager: RiskManager
+    ) -> None:
+        """update_capital() with same value is a no-op."""
+        scorer = ConfluenceScorer(risk_manager=risk_manager, capital=Decimal("2000"))
+        scorer.update_capital(Decimal("2000"))
+        assert scorer._capital == Decimal("2000")
+
+
+# ================================================================
+# D2: L6 in SCORING_LAYERS
+# ================================================================
+
+
+class TestScoringLayers:
+    """D2: L6 (Temporal Crypto) added to SCORING_LAYERS."""
+
+    def test_l6_contributes_to_score(self, scorer: ConfluenceScorer) -> None:
+        """Layer 6 signal should contribute +1 to confluence score."""
+        signals = [
+            _make_signal(layer=2, market_condition_id="cond_1", edge=Decimal("0.06")),
+            _make_signal(layer=6, market_condition_id="cond_1"),
+        ]
+        opps = scorer.score_signals(signals)
+        assert opps[0].score == 2
+        assert 6 in opps[0].contributing_layers
+
+    def test_l6_alone_scores_one(self, scorer: ConfluenceScorer) -> None:
+        """L6 alone should give score 1."""
+        signals = [_make_signal(layer=6, market_condition_id="cond_1")]
+        opps = scorer.score_signals(signals)
+        assert opps[0].score == 1

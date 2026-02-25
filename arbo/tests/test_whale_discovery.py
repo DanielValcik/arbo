@@ -82,7 +82,7 @@ class TestWhaleWallet:
 
     def test_fails_win_rate(self) -> None:
         """Wallet below win rate threshold fails."""
-        w = _make_wallet(win_rate=50.0)
+        w = _make_wallet(win_rate=45.0)
         assert w.passes_filters() is False
 
     def test_fails_resolved(self) -> None:
@@ -105,10 +105,10 @@ class TestWhaleDiscoveryFiltering:
     """Filter logic for discovered wallets."""
 
     def test_win_rate_filter(self) -> None:
-        """Only wallets with win_rate >= 60% pass."""
+        """Only wallets with win_rate >= 50% pass."""
         disc = WhaleDiscovery()
         wallets = [
-            _make_wallet(address="0x1", win_rate=55.0),
+            _make_wallet(address="0x1", win_rate=45.0),
             _make_wallet(address="0x2", win_rate=65.0),
         ]
         filtered = disc._apply_filters(wallets)
@@ -116,10 +116,10 @@ class TestWhaleDiscoveryFiltering:
         assert filtered[0].address == "0x2"
 
     def test_resolved_filter(self) -> None:
-        """Only wallets with resolved >= 50 pass."""
+        """Only wallets with resolved >= 20 pass."""
         disc = WhaleDiscovery()
         wallets = [
-            _make_wallet(address="0x1", resolved_positions=30),
+            _make_wallet(address="0x1", resolved_positions=15),
             _make_wallet(address="0x2", resolved_positions=60),
         ]
         filtered = disc._apply_filters(wallets)
@@ -142,10 +142,10 @@ class TestWhaleDiscoveryFiltering:
         disc = WhaleDiscovery()
         wallets = [
             _make_wallet(
-                address="0x1", win_rate=55.0, resolved_positions=100, total_volume=100_000.0
+                address="0x1", win_rate=45.0, resolved_positions=100, total_volume=100_000.0
             ),
             _make_wallet(
-                address="0x2", win_rate=65.0, resolved_positions=30, total_volume=100_000.0
+                address="0x2", win_rate=65.0, resolved_positions=15, total_volume=100_000.0
             ),
             _make_wallet(
                 address="0x3", win_rate=65.0, resolved_positions=100, total_volume=1_000.0

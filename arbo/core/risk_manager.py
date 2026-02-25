@@ -112,6 +112,24 @@ class RiskManager:
         """Current exposure state (read-only access)."""
         return self._state
 
+    def update_capital(self, current_capital: Decimal) -> None:
+        """Update the capital base used for all risk limit calculations.
+
+        D5 Bug 2 fix: Risk manager was using initial capital for sizing.
+        Must be called after every trade, settlement, and hourly as safety net.
+
+        Args:
+            current_capital: Current portfolio total value (balance + positions).
+        """
+        old = self._state.capital
+        self._state.capital = current_capital
+        if old != current_capital:
+            logger.info(
+                "risk_capital_updated",
+                old=str(old),
+                new=str(current_capital),
+            )
+
     def pre_trade_check(self, request: TradeRequest) -> RiskDecision:
         """Validate trade request against all risk limits.
 

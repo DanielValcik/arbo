@@ -197,9 +197,24 @@ class WhaleMonitor:
 
         Detects: NEW, INCREASED, DECREASED, CLOSED positions.
         Updates stored snapshot after diffing.
+
+        D2 fix: On first poll (no baseline), seed positions and return empty —
+        prevents mass signals from treating all existing positions as NEW.
         """
         old_map = self._positions.get(address, {})
         new_map = {p.token_id: p for p in new_positions}
+
+        # D2: First run — seed baseline, emit no signals
+        if not old_map:
+            self._positions[address] = new_map
+            if new_map:
+                logger.info(
+                    "whale_baseline_seeded",
+                    address=address[:10],
+                    positions=len(new_map),
+                )
+            return []
+
         changes: list[PositionChange] = []
 
         # Check for NEW and INCREASED positions

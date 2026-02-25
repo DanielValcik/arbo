@@ -520,6 +520,23 @@ class OrderFlowMonitor:
         )
 
     @property
+    def is_healthy(self) -> bool:
+        """Check if the monitor is running and its poll task is alive.
+
+        Returns False if:
+        - Not started (_running is False)
+        - No background task exists
+        - Background task has completed/crashed
+        """
+        if not self._running:
+            return False
+        if self._task is None:
+            return False
+        if self._task.done():
+            return False
+        return True
+
+    @property
     def stats(self) -> dict[str, Any]:
         """Get monitor statistics."""
         return {

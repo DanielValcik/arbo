@@ -22,10 +22,11 @@ from arbo.utils.logger import get_logger
 
 logger = get_logger("whale_discovery")
 
-# Filter constants — NOT configurable. Changes require CEO approval.
-MIN_WIN_RATE = 60.0  # percent
-MIN_RESOLVED_POSITIONS = 50
-MIN_TOTAL_VOLUME = 50_000.0  # USD
+# Filter constants — CEO-authorized relaxation (D2, 2026-02-25).
+# Original: 60% / 50 / $50K — too strict, 0 wallets qualified.
+MIN_WIN_RATE = 50.0  # percent (was 60)
+MIN_RESOLVED_POSITIONS = 20  # (was 50)
+MIN_TOTAL_VOLUME = 25_000.0  # USD (was 50K)
 
 # Staleness interval for full refresh (7 days in seconds)
 REFRESH_INTERVAL_S = 7 * 24 * 3600

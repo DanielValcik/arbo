@@ -73,18 +73,40 @@ def _make_discovery(wallets: list[WhaleWallet] | None = None) -> WhaleDiscovery:
 class TestPositionDiff:
     """Position diff detection."""
 
-    def test_new_position_detected(self) -> None:
-        """New position not in old snapshot → NEW change."""
+    def test_first_run_seeds_baseline(self) -> None:
+        """D2: First poll seeds baseline and returns no changes (prevents mass signals)."""
         disc = _make_discovery()
         monitor = WhaleMonitor(disc)
 
         new_positions = [_make_position(token_id="tok_1", size="1000")]
         changes = monitor._diff_positions("0xwhale1", new_positions)
 
-        assert len(changes) == 1
-        assert changes[0].change_type == ChangeType.NEW
-        assert changes[0].new_size == Decimal("1000")
-        assert changes[0].old_size == Decimal("0")
+        # First run: no changes emitted, but baseline is seeded
+        assert len(changes) == 0
+        assert "0xwhale1" in monitor._positions
+        assert "tok_1" in monitor._positions["0xwhale1"]
+
+    def test_new_position_detected(self) -> None:
+        """New position not in old snapshot → NEW change (after baseline)."""
+        disc = _make_discovery()
+        monitor = WhaleMonitor(disc)
+
+        # Seed baseline with one position
+        monitor._positions["0xwhale1"] = {
+            "tok_0": _make_position(token_id="tok_0", size="500")
+        }
+
+        # New position appears
+        new_positions = [
+            _make_position(token_id="tok_0", size="500"),
+            _make_position(token_id="tok_1", size="1000"),
+        ]
+        changes = monitor._diff_positions("0xwhale1", new_positions)
+
+        new_changes = [c for c in changes if c.change_type == ChangeType.NEW]
+        assert len(new_changes) == 1
+        assert new_changes[0].new_size == Decimal("1000")
+        assert new_changes[0].old_size == Decimal("0")
 
     def test_increased_position_detected(self) -> None:
         """Position size increased → INCREASED change."""
@@ -333,8 +355,8 @@ class TestPollingCycle:
     """Full polling cycle tests."""
 
     @pytest.mark.asyncio
-    async def test_poll_with_changes(self) -> None:
-        """Poll cycle with position changes generates signals."""
+    async def test_poll_first_seeds_baseline(self) -> None:
+        """D2: First poll seeds baseline, no signals emitted."""
         wallet = _make_wallet("0xwhale1")
         disc = _make_discovery([wallet])
         monitor = WhaleMonitor(disc)
@@ -357,7 +379,51 @@ class TestPollingCycle:
             )
 
             signals = await monitor.poll_cycle()
-            # First poll: everything is NEW
+            # D2: First poll seeds baseline, no signals
+            assert len(signals) == 0
+            # But baseline is populated
+            assert "0xwhale1" in monitor._positions
+
+        await monitor.close()
+
+    @pytest.mark.asyncio
+    async def test_poll_with_changes(self) -> None:
+        """Poll cycle with position changes (after baseline) generates signals."""
+        wallet = _make_wallet("0xwhale1")
+        disc = _make_discovery([wallet])
+        monitor = WhaleMonitor(disc)
+        await monitor.initialize()
+
+        # Seed baseline first
+        monitor._positions["0xwhale1"] = {
+            "tok_0": _make_position(address="0xwhale1", token_id="tok_0", size="500")
+        }
+
+        # New position appears
+        positions_data = [
+            {
+                "conditionId": "cond_1",
+                "tokenId": "tok_0",
+                "size": "500",
+                "avgPrice": "0.60",
+                "outcome": "Yes",
+            },
+            {
+                "conditionId": "cond_1",
+                "tokenId": "tok_1",
+                "size": "1000",
+                "avgPrice": "0.60",
+                "outcome": "Yes",
+            },
+        ]
+
+        with aioresponses() as mocked:
+            mocked.get(
+                re.compile(r".*/positions.*"),
+                payload=positions_data,
+            )
+
+            signals = await monitor.poll_cycle()
             assert len(signals) >= 1
             assert any(s.layer == 4 for s in signals)
 

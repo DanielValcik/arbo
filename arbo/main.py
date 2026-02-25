@@ -61,6 +61,9 @@ _LLM_RECHECK_S = 300  # 5 minutes
 # Correlation limit: max positions on the same underlying asset
 _MAX_POSITIONS_PER_ASSET = 3
 
+# D2: Cross-batch signal buffer TTL (seconds)
+_SIGNAL_BUFFER_TTL_S = 1800  # 30 minutes
+
 # Mapping of keywords to canonical underlying asset names
 _UNDERLYING_KEYWORDS: list[tuple[str, str]] = [
     ("bitcoin", "BTC"),
@@ -163,6 +166,15 @@ class ArboOrchestrator:
         self._daily_trade_count = 0
         self._daily_trade_date: str = ""  # YYYY-MM-DD, reset on new day
         self._max_daily_trades = 15
+
+        # D2: Cross-batch signal buffer — keyed by market_condition_id
+        # Value: (list of signals, timestamp of first entry)
+        self._signal_buffer: dict[str, tuple[list[Signal], float]] = {}
+
+        # D2: Dry-run mode — logs trades without executing
+        import os
+
+        self._dry_run = os.environ.get("ARBO_DRY_RUN", "").lower() in ("true", "1", "yes")
 
     # ------------------------------------------------------------------
     # Public API
@@ -320,6 +332,9 @@ class ArboOrchestrator:
                 await self._paper_engine.load_state_from_db()
             except Exception as e:
                 logger.warning("load_state_from_db_skipped", error=str(e))
+
+        # D5 Bug 1: Sync risk manager state from restored positions
+        self._sync_risk_manager_from_positions()
 
         # P0-2: Restore daily trade counter from DB (survives restarts)
         await self._load_daily_trade_counter()
@@ -681,6 +696,64 @@ class ArboOrchestrator:
                 self._shutdown_event.set()
 
     # ------------------------------------------------------------------
+    # D5: Risk manager sync + capital updates
+    # ------------------------------------------------------------------
+
+    def _sync_risk_manager_from_positions(self) -> None:
+        """D5 Bug 1: Restore risk manager state from paper engine positions on restart.
+
+        Iterates restored positions and calls post_trade_update() for each so
+        exposure tracking, category limits, and per-market counts are correct.
+        """
+        if self._risk_manager is None or self._paper_engine is None:
+            return
+
+        positions = self._paper_engine.open_positions
+        if not positions:
+            return
+
+        for pos in positions:
+            # Look up category from discovery
+            category = "other"
+            if self._discovery is not None:
+                market = self._discovery.get_by_condition_id(pos.market_condition_id)
+                if market is not None:
+                    category = market.category
+
+            self._risk_manager.post_trade_update(
+                market_id=pos.market_condition_id,
+                market_category=category,
+                size=pos.size,
+            )
+
+        # Also sync the capital base
+        self._update_capital()
+
+        logger.info(
+            "risk_manager_synced_from_positions",
+            positions=len(positions),
+            open_value=str(self._risk_manager.state.open_positions_value),
+            capital=str(self._risk_manager.state.capital),
+        )
+
+    def _update_capital(self) -> None:
+        """D5 Bug 2+3: Update capital on risk manager and confluence scorer.
+
+        Called on 3 triggers:
+        1. After every place_trade()
+        2. After every settlement
+        3. Hourly in _snapshot_scheduler()
+        """
+        if self._paper_engine is None:
+            return
+
+        current = self._paper_engine.total_value
+        if self._risk_manager is not None:
+            self._risk_manager.update_capital(current)
+        if self._confluence is not None:
+            self._confluence.update_capital(current)
+
+    # ------------------------------------------------------------------
     # Close components
     # ------------------------------------------------------------------
 
@@ -1013,13 +1086,38 @@ class ArboOrchestrator:
         """Layer 7: Order flow monitor (polling via eth_getLogs).
 
         The monitor runs its own internal poll loop via start().
-        This coroutine just starts it and blocks until shutdown.
+        This coroutine starts it and monitors the inner task health.
+
+        D3 fix: If start() returns without setting _running (no ALCHEMY_KEY),
+        return immediately so health monitor can detect it. If inner poll task
+        crashes silently, propagate the exception.
         """
         if self._order_flow is None:
             return
         await self._order_flow.start()
-        # start() creates a background polling task; we wait on shutdown
+
+        # D3: If polling never started (e.g. no ALCHEMY_KEY), exit immediately
+        # so the health monitor doesn't see a "running" task doing nothing.
+        if not self._order_flow._running:
+            logger.warning("order_flow_not_started", reason="polling not active after start()")
+            return
+
+        logger.info("order_flow_polling_started_wrapper")
+
+        # D3: Monitor inner task health — if it crashes, propagate exception
         while not self._shutdown_event.is_set():
+            if self._order_flow._task is not None and self._order_flow._task.done():
+                exc = self._order_flow._task.exception()
+                if exc is not None:
+                    logger.error(
+                        "order_flow_inner_task_crashed",
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                    )
+                    raise exc
+                # Task finished cleanly (shouldn't happen, but exit gracefully)
+                logger.warning("order_flow_inner_task_finished")
+                return
             await asyncio.sleep(1)
 
     async def _run_attention(self) -> None:
@@ -1099,15 +1197,84 @@ class ArboOrchestrator:
         # FIX 5: Save all incoming signals to DB (best-effort)
         await self._save_signals_to_db(signals)
 
+        # D2: Cross-batch signal buffer — merge signals from different batches
+        now = time.monotonic()
+
+        # 1. Prune expired entries
+        expired = [
+            mid for mid, (_, ts) in self._signal_buffer.items()
+            if now - ts > _SIGNAL_BUFFER_TTL_S
+        ]
+        for mid in expired:
+            del self._signal_buffer[mid]
+
+        # 2. Buffer current signals
+        for sig in signals:
+            mid = sig.market_condition_id
+            if mid in self._signal_buffer:
+                self._signal_buffer[mid][0].append(sig)
+            else:
+                self._signal_buffer[mid] = ([sig], now)
+
+        # 3. Merge: for each market in current batch, pull in buffered signals
+        #    from other layers (with direction conflict check)
+        merged_signals = list(signals)  # start with current batch
+        current_mids = {s.market_condition_id for s in signals}
+        current_layers_by_mid: dict[str, set[int]] = {}
+        current_dir_by_mid: dict[str, str] = {}
+        for sig in signals:
+            mid = sig.market_condition_id
+            if mid not in current_layers_by_mid:
+                current_layers_by_mid[mid] = set()
+            current_layers_by_mid[mid].add(sig.layer)
+            # Track direction for conflict check
+            if mid not in current_dir_by_mid:
+                from arbo.core.scanner import SignalDirection
+
+                is_buy = sig.direction in (SignalDirection.BUY_YES, SignalDirection.SELL_NO)
+                current_dir_by_mid[mid] = "BUY" if is_buy else "SELL"
+
+        for mid in current_mids:
+            if mid not in self._signal_buffer:
+                continue
+            buffered_sigs, _ = self._signal_buffer[mid]
+            for bsig in buffered_sigs:
+                # Skip if already in current batch (same layer)
+                if bsig.layer in current_layers_by_mid.get(mid, set()):
+                    continue
+                # Direction conflict check: don't merge opposing signals
+                from arbo.core.scanner import SignalDirection
+
+                b_is_buy = bsig.direction in (SignalDirection.BUY_YES, SignalDirection.SELL_NO)
+                b_dir = "BUY" if b_is_buy else "SELL"
+                if current_dir_by_mid.get(mid) and b_dir != current_dir_by_mid[mid]:
+                    logger.info(
+                        "signal_buffer_direction_conflict",
+                        market_id=mid,
+                        current_dir=current_dir_by_mid[mid],
+                        buffered_dir=b_dir,
+                        buffered_layer=bsig.layer,
+                    )
+                    continue
+                merged_signals.append(bsig)
+
+        if len(merged_signals) > len(signals):
+            logger.info(
+                "signal_buffer_merged",
+                original=len(signals),
+                merged=len(merged_signals),
+                buffer_size=len(self._signal_buffer),
+            )
+
         # Build market category map from discovery
         category_map: dict[str, str] = {}
         if self._discovery is not None:
-            for sig in signals:
+            for sig in merged_signals:
                 market = self._discovery.get_by_condition_id(sig.market_condition_id)
                 if market is not None:
                     category_map[sig.market_condition_id] = market.category
 
-        tradeable = self._confluence.get_tradeable(signals, category_map)
+        tradeable = self._confluence.get_tradeable(merged_signals, category_map)
 
         # Update confluence scores back into DB signals (for dashboard visibility)
         await self._update_signal_confluence_scores(tradeable)
@@ -1124,6 +1291,21 @@ class ArboOrchestrator:
             self._daily_trade_date = today
 
         for opp in tradeable:
+            # D4: Gate-by-gate diagnostic logging for non-L2 signals
+            has_non_l2 = any(s.layer != 2 for s in opp.signals)
+            if has_non_l2:
+                has_existing = opp.token_id in self._paper_engine._positions
+                logger.info(
+                    "signal_gate_diagnostic",
+                    market_id=opp.market_condition_id,
+                    layers=sorted(opp.contributing_layers),
+                    score=opp.score,
+                    daily_count=self._daily_trade_count,
+                    has_existing_position=has_existing,
+                    in_processed_markets=opp.market_condition_id in processed_markets,
+                    edge=str(opp.best_edge),
+                )
+
             # Daily trade limit: max 15 new trades per day in paper mode
             if self._daily_trade_count >= self._max_daily_trades:
                 logger.info(
@@ -1245,6 +1427,21 @@ class ArboOrchestrator:
             side = "BUY" if "BUY" in opp.direction.value else "SELL"
             model_prob = market_price + opp.best_edge
 
+            # D2: Dry-run mode — log would-be trade without executing
+            if self._dry_run:
+                logger.info(
+                    "dry_run_would_trade",
+                    market_id=opp.market_condition_id,
+                    score=opp.score,
+                    layers=sorted(opp.contributing_layers),
+                    edge=str(opp.best_edge),
+                    price=str(market_price),
+                    size=str(opp.recommended_size),
+                    side=side,
+                    category=market_category,
+                )
+                continue
+
             trade = self._paper_engine.place_trade(
                 market_condition_id=opp.market_condition_id,
                 token_id=opp.token_id,
@@ -1263,6 +1460,8 @@ class ArboOrchestrator:
                 await self._paper_engine.save_trade_to_db(trade)
                 # P0-2: Persist counter after each trade (survives restart)
                 await self._save_daily_trade_counter()
+                # D5 Trigger 1: Update capital after every trade
+                self._update_capital()
 
     async def _save_signals_to_db(self, signals: list[Signal]) -> None:
         """Save all signals to the database for audit trail (best-effort).
@@ -1522,6 +1721,8 @@ class ArboOrchestrator:
                 snapshot = self._paper_engine.take_snapshot()
                 await self._paper_engine.save_snapshot_to_db(snapshot)
                 await self._paper_engine.sync_positions_to_db()
+                # D5 Trigger 3: Hourly capital sync as safety net
+                self._update_capital()
             except Exception as e:
                 logger.error("snapshot_scheduler_error", error=str(e))
 
@@ -1622,6 +1823,9 @@ class ArboOrchestrator:
                     pnl = self._paper_engine.resolve_market(pos.token_id, winning)
                     total_pnl += pnl
                     resolved_count += 1
+
+                    # D5 Trigger 2: Update capital after every settlement
+                    self._update_capital()
 
                     # Update trade rows in DB
                     await self._paper_engine.update_resolved_trades_in_db(pos.token_id)

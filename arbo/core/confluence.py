@@ -37,7 +37,8 @@ logger = get_logger("confluence")
 VALUE_EDGE_THRESHOLD = Decimal("0.05")
 
 # Layers that contribute to confluence score
-SCORING_LAYERS = {2, 4, 5, 7, 8}
+# D2: Added L6 (Temporal Crypto) — CEO authorized
+SCORING_LAYERS = {2, 4, 5, 6, 7, 8}
 
 
 @dataclass
@@ -88,6 +89,24 @@ class ConfluenceScorer:
         self._total_scored = 0
         self._total_tradeable = 0
         self._total_rejected = 0
+
+    def update_capital(self, current_capital: Decimal) -> None:
+        """Update capital base for position sizing calculations.
+
+        D5 Bug 3 fix: Confluence scorer was using initial capital for recommended_size.
+        Must be called alongside risk_manager.update_capital() on all 3 triggers.
+
+        Args:
+            current_capital: Current portfolio total value.
+        """
+        old = self._capital
+        self._capital = current_capital
+        if old != current_capital:
+            logger.info(
+                "confluence_capital_updated",
+                old=str(old),
+                new=str(current_capital),
+            )
 
     def score_signals(self, signals: list[Signal]) -> list[ScoredOpportunity]:
         """Score a batch of signals by grouping per market and computing confluence.

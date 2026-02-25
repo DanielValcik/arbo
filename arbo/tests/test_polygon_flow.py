@@ -482,6 +482,70 @@ class TestPollingLifecycle:
 
 
 # ================================================================
+# D3: is_healthy property
+# ================================================================
+
+
+class TestIsHealthy:
+    """OrderFlowMonitor.is_healthy property (D3 crash propagation fix)."""
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_healthy_when_running_with_task(self, mock_config: MagicMock) -> None:
+        """is_healthy returns True when _running=True and task is alive."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+        monitor._running = True
+
+        # Create a fake non-done task
+        loop = asyncio.new_event_loop()
+        future = loop.create_future()
+        monitor._task = future  # type: ignore[assignment]
+        assert monitor.is_healthy is True
+        loop.close()
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_not_healthy_when_not_running(self, mock_config: MagicMock) -> None:
+        """is_healthy returns False when _running=False."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+        monitor._running = False
+        assert monitor.is_healthy is False
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_not_healthy_when_no_task(self, mock_config: MagicMock) -> None:
+        """is_healthy returns False when _task is None."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+        monitor._running = True
+        monitor._task = None
+        assert monitor.is_healthy is False
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_not_healthy_when_task_done(self, mock_config: MagicMock) -> None:
+        """is_healthy returns False when _task has completed/crashed."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor()
+        monitor._running = True
+
+        # Create a completed future to simulate a done task
+        loop = asyncio.new_event_loop()
+        future = loop.create_future()
+        future.set_result(None)
+        monitor._task = future  # type: ignore[assignment]
+        assert monitor.is_healthy is False
+        loop.close()
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    def test_no_alchemy_key_not_healthy(self, mock_config: MagicMock) -> None:
+        """Monitor without Alchemy key is not healthy (polling never starts)."""
+        config = _mock_config()
+        config.alchemy_key = ""
+        mock_config.return_value = config
+        monitor = OrderFlowMonitor()
+        assert monitor.is_healthy is False
+
+
+# ================================================================
 # Helpers
 # ================================================================
 

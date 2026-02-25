@@ -459,12 +459,12 @@ class TestMultiLayerConfluenceScoring:
         assert scores_by_market["cond_c"] == 1
         assert scores_by_market["cond_d"] == 0
 
-        # Get tradeable (score >= 1 in diagnostic mode)
+        # Get tradeable (score >= 2 required)
         tradeable = scorer.get_tradeable(signals, market_category_map=category_map)
         tradeable_ids = {o.market_condition_id for o in tradeable}
         assert "cond_a" in tradeable_ids  # score 5
         assert "cond_b" in tradeable_ids  # score 2
-        assert "cond_c" in tradeable_ids  # score 1 (diagnostic mode)
+        assert "cond_c" not in tradeable_ids  # score 1 (below min_score=2)
         assert "cond_d" not in tradeable_ids  # score 0
 
         # Execute paper trades for tradeable opportunities
@@ -483,13 +483,12 @@ class TestMultiLayerConfluenceScoring:
             )
             assert trade is not None, f"Trade for {opp.market_condition_id} should succeed"
 
-        assert len(engine.trade_history) == 3  # includes cond_c (diagnostic mode)
-        assert len(engine.open_positions) == 3
+        assert len(engine.trade_history) == 2
+        assert len(engine.open_positions) == 2
 
         # Resolve all
         engine.resolve_market("tok_a", winning_outcome=True)
         engine.resolve_market("tok_b", winning_outcome=False)
-        engine.resolve_market("tok_c", winning_outcome=False)
 
         # Generate report covering the whole flow
         gen = ReportGenerator()
@@ -501,8 +500,7 @@ class TestMultiLayerConfluenceScoring:
             portfolio_balance=engine.balance,
         )
 
-        assert weekly.total_trades == 3
+        assert weekly.total_trades == 2
         assert weekly.winning_trades == 1
         assert weekly.confluence_score_distribution.get(5, 0) == 1
         assert weekly.confluence_score_distribution.get(2, 0) == 1
-        assert weekly.confluence_score_distribution.get(1, 0) == 1  # diagnostic mode trade

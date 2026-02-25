@@ -188,3 +188,29 @@ class TestCategoryConcentration:
         request = _make_request(size=Decimal("50"), category="soccer")
         decision = risk_manager.pre_trade_check(request)
         assert decision.approved is True
+
+
+class TestUpdateCapital:
+    """D5 Bug 2: Risk manager uses initial capital, not current balance."""
+
+    def test_update_capital_changes_state(self, risk_manager: RiskManager) -> None:
+        """update_capital() updates the capital used for limit calculations."""
+        assert risk_manager.state.capital == Decimal("2000")
+        risk_manager.update_capital(Decimal("1500"))
+        assert risk_manager.state.capital == Decimal("1500")
+
+    def test_limits_recalculated_after_capital_update(self, risk_manager: RiskManager) -> None:
+        """After capital update, position limits are based on new capital."""
+        risk_manager.update_capital(Decimal("1000"))  # Halved
+        # 5% of 1000 = 50, so 60 should be rejected
+        request = _make_request(size=Decimal("60"))
+        decision = risk_manager.pre_trade_check(request)
+        assert decision.approved is False
+
+    def test_limits_use_new_capital_approves_smaller(self, risk_manager: RiskManager) -> None:
+        """After capital update, appropriately sized orders pass."""
+        risk_manager.update_capital(Decimal("1000"))
+        # 5% of 1000 = 50
+        request = _make_request(size=Decimal("50"))
+        decision = risk_manager.pre_trade_check(request)
+        assert decision.approved is True

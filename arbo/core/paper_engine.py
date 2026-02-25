@@ -223,6 +223,16 @@ class PaperTradingEngine:
             if decision.adjusted_size is not None:
                 size = decision.adjusted_size
 
+        # D5 Bug 4: Balance floor — never go negative
+        if size > self._balance:
+            logger.info(
+                "paper_trade_insufficient_balance",
+                size=str(size),
+                balance=str(self._balance),
+                token_id=token_id,
+            )
+            return None
+
         # Apply slippage
         if side == "BUY":
             fill_price = market_price * (Decimal("1") + self._slippage_pct)
@@ -546,11 +556,30 @@ class PaperTradingEngine:
                 )
                 last_snap = result.scalars().first()
                 if last_snap is not None:
-                    self._balance = Decimal(str(last_snap.balance))
+                    snapshot_balance = Decimal(str(last_snap.balance))
+
+                    # D5 Bug 6: Cross-check snapshot balance against computed balance
+                    # computed = initial_capital - sum(open position sizes)
+                    total_invested = sum(p.size for p in self._positions.values())
+                    computed_balance = self._initial_capital - total_invested
+                    self._balance = min(snapshot_balance, computed_balance)
+
+                    drift = abs(snapshot_balance - computed_balance)
+                    if drift > Decimal("50"):
+                        logger.warning(
+                            "balance_drift_detected",
+                            snapshot_balance=str(snapshot_balance),
+                            computed_balance=str(computed_balance),
+                            drift=str(drift),
+                            using=str(self._balance),
+                        )
+
                     logger.info(
                         "state_restored_from_db",
                         positions=len(self._positions),
                         balance=str(self._balance),
+                        snapshot_balance=str(snapshot_balance),
+                        computed_balance=str(computed_balance),
                     )
                 else:
                     logger.info("no_db_state_found", using="initial_capital")
