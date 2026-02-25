@@ -205,6 +205,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                 weekly_pnl = round((total_value or 0.0) - (initial or 0.0), 2)
 
             # Per-category P&L: join trades with markets to get category
+            # Exclude pre-validation trades from dashboard metrics
             result = await session.execute(
                 sa.select(
                     Market.category,
@@ -221,6 +222,12 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     ),
                 )
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
                 .group_by(Market.category)
             )
             for row in result.all():
@@ -538,9 +545,16 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
 
         factory = get_session_factory()
         async with factory() as session:
+            # Exclude pre-validation trades from trade log
             result = await session.execute(
                 sa.select(PaperTrade, Market.question, Market.category)
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
                 .order_by(PaperTrade.placed_at.desc())
                 .limit(50)
             )
