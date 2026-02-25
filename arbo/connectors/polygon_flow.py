@@ -285,12 +285,7 @@ class OrderFlowMonitor:
         session_factory: async_sessionmaker | None = None,
     ) -> None:
         config = get_config()
-        self._alchemy_key = config.alchemy_key
-        self._http_url = (
-            f"https://polygon-mainnet.g.alchemy.com/v2/{self._alchemy_key}"
-            if self._alchemy_key
-            else ""
-        )
+        self._http_url = config.polygon_rpc_url
         self._ctf_exchange = config.order_flow.ctf_exchange
         self._zscore_threshold = config.order_flow.volume_zscore_threshold
         self._imbalance_threshold = Decimal(str(config.order_flow.flow_imbalance_threshold))
@@ -311,8 +306,8 @@ class OrderFlowMonitor:
     async def initialize(self) -> None:
         """Compute event topic hash."""
         self._topic = _compute_topic()
-        if not self._alchemy_key:
-            logger.warning("order_flow_no_alchemy_key", msg="ALCHEMY_KEY not set")
+        if not self._http_url:
+            logger.warning("order_flow_no_rpc_url", msg="DRPC_API_URL not set")
         logger.info(
             "order_flow_initialized",
             ctf_exchange=self._ctf_exchange,
@@ -328,8 +323,8 @@ class OrderFlowMonitor:
         3. If found but stale (>_MAX_BLOCK_GAP behind): cold start
         4. If not found: cold start (latest - _COLD_START_BLOCKS)
         """
-        if not self._alchemy_key:
-            logger.warning("order_flow_cannot_start", msg="No Alchemy key")
+        if not self._http_url:
+            logger.warning("order_flow_cannot_start", msg="No Polygon RPC URL configured")
             return
         if self._running:
             return

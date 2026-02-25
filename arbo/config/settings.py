@@ -231,6 +231,7 @@ class ArboConfig(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     alchemy_key: str = Field(default="", alias="ALCHEMY_KEY")
+    polygon_rpc_url: str = Field(default="", alias="DRPC_API_URL")
 
     # Slack
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")

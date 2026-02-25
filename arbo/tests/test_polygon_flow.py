@@ -458,11 +458,11 @@ class TestPollingLifecycle:
         assert monitor._poll_interval == 120
 
     @patch("arbo.connectors.polygon_flow.get_config")
-    def test_http_url_constructed(self, mock_config: MagicMock) -> None:
-        """HTTP URL is constructed from Alchemy key."""
+    def test_http_url_from_config(self, mock_config: MagicMock) -> None:
+        """HTTP URL is read from config.polygon_rpc_url."""
         mock_config.return_value = _mock_config()
         monitor = OrderFlowMonitor()
-        assert monitor._http_url == "https://polygon-mainnet.g.alchemy.com/v2/test-key"
+        assert monitor._http_url == "https://lb.drpc.live/polygon/test-key"
 
     @patch("arbo.connectors.polygon_flow.get_config")
     def test_get_metrics(self, mock_config: MagicMock) -> None:
@@ -536,10 +536,10 @@ class TestIsHealthy:
         loop.close()
 
     @patch("arbo.connectors.polygon_flow.get_config")
-    def test_no_alchemy_key_not_healthy(self, mock_config: MagicMock) -> None:
-        """Monitor without Alchemy key is not healthy (polling never starts)."""
+    def test_no_rpc_url_not_healthy(self, mock_config: MagicMock) -> None:
+        """Monitor without RPC URL is not healthy (polling never starts)."""
         config = _mock_config()
-        config.alchemy_key = ""
+        config.polygon_rpc_url = ""
         mock_config.return_value = config
         monitor = OrderFlowMonitor()
         assert monitor.is_healthy is False
@@ -667,7 +667,7 @@ class TestIncrementalPolling:
 def _mock_config() -> MagicMock:
     """Create a mock ArboConfig for order flow tests."""
     config = MagicMock()
-    config.alchemy_key = "test-key"
+    config.polygon_rpc_url = "https://lb.drpc.live/polygon/test-key"
     config.order_flow.ctf_exchange = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
     config.order_flow.volume_zscore_threshold = 2.0
     config.order_flow.flow_imbalance_threshold = 0.65

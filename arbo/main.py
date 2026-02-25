@@ -1090,7 +1090,7 @@ class ArboOrchestrator:
         The monitor runs its own internal poll loop via start().
         This coroutine starts it and monitors the inner task health.
 
-        D3 fix: If start() returns without setting _running (no ALCHEMY_KEY),
+        D3 fix: If start() returns without setting _running (no RPC URL),
         return immediately so health monitor can detect it. If inner poll task
         crashes silently, propagate the exception.
         """
@@ -1098,7 +1098,7 @@ class ArboOrchestrator:
             return
         await self._order_flow.start()
 
-        # D3: If polling never started (e.g. no ALCHEMY_KEY), exit immediately
+        # D3: If polling never started (e.g. no RPC URL), exit immediately
         # so the health monitor doesn't see a "running" task doing nothing.
         if not self._order_flow._running:
             logger.warning("order_flow_not_started", reason="polling not active after start()")
