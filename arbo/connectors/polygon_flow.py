@@ -23,6 +23,7 @@ from decimal import Decimal
 from typing import Any
 
 import aiohttp
+from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: TC003 — used at runtime
 
 from arbo.config.settings import get_config
 from arbo.core.scanner import Signal, SignalDirection
@@ -50,6 +51,12 @@ def _compute_topic() -> str:
 
 # USDC.e amount divisor (6 decimals)
 _USDC_DECIMALS = Decimal("1000000")
+
+# Incremental block tracking constants
+_COLD_START_BLOCKS = 1000  # ~30 min of Polygon blocks on first run
+_DB_KEY = "l7_last_processed_block"  # DB persistence key
+_CU_PER_POLL = 85  # estimated CU per poll (blockNumber 10 + getLogs 75)
+_MAX_BLOCK_GAP = 10_000  # discard restored block if >10K behind (~5h)
 
 
 @dataclass
@@ -275,6 +282,7 @@ class OrderFlowMonitor:
         self,
         on_signal: Callable[[Signal], None] | None = None,
         poll_interval: int = 60,
+        session_factory: async_sessionmaker | None = None,
     ) -> None:
         config = get_config()
         self._alchemy_key = config.alchemy_key
@@ -289,6 +297,7 @@ class OrderFlowMonitor:
         self._min_converging = config.order_flow.min_converging_signals
         self._on_signal = on_signal
         self._poll_interval = poll_interval
+        self._session_factory = session_factory
         self._windows: dict[str, RollingWindow] = {}
         self._session: aiohttp.ClientSession | None = None
         self._task: asyncio.Task[None] | None = None
@@ -311,7 +320,14 @@ class OrderFlowMonitor:
         )
 
     async def start(self) -> None:
-        """Start polling loop (non-blocking, creates background task)."""
+        """Start polling loop (non-blocking, creates background task).
+
+        Block selection on start:
+        1. Try restoring last processed block from DB
+        2. If found and within _MAX_BLOCK_GAP of latest: resume from restored
+        3. If found but stale (>_MAX_BLOCK_GAP behind): cold start
+        4. If not found: cold start (latest - _COLD_START_BLOCKS)
+        """
         if not self._alchemy_key:
             logger.warning("order_flow_cannot_start", msg="No Alchemy key")
             return
@@ -320,7 +336,30 @@ class OrderFlowMonitor:
 
         self._session = aiohttp.ClientSession()
         self._running = True
-        self._last_block = await self._get_block_number()
+
+        latest = await self._get_block_number()
+        restored = await self._restore_last_block()
+
+        if restored is not None and latest - restored <= _MAX_BLOCK_GAP:
+            self._last_block = restored
+            logger.info(
+                "order_flow_restored_block",
+                restored_block=restored,
+                latest_block=latest,
+                gap=latest - restored,
+            )
+        elif restored is not None:
+            self._last_block = latest - _COLD_START_BLOCKS
+            logger.warning(
+                "order_flow_stale_block_discarded",
+                restored_block=restored,
+                latest_block=latest,
+                gap=latest - restored,
+            )
+        else:
+            self._last_block = latest - _COLD_START_BLOCKS
+            logger.info("order_flow_cold_start", from_block=self._last_block, latest=latest)
+
         self._task = asyncio.create_task(self._poll_loop())
         logger.info("order_flow_polling_started", from_block=self._last_block)
 
@@ -355,15 +394,19 @@ class OrderFlowMonitor:
             try:
                 current_block = await self._get_block_number()
                 if current_block > self._last_block:
-                    logs = await self._get_logs(self._last_block + 1, current_block)
+                    from_block = self._last_block + 1
+                    logs = await self._get_logs(from_block, current_block)
                     for log in logs:
                         self._handle_log(log)
                     self._last_block = current_block
+                    await self._save_last_block()
                     logger.debug(
                         "order_flow_poll_ok",
-                        from_block=self._last_block,
+                        from_block=from_block,
                         to_block=current_block,
                         logs=len(logs),
+                        blocks_scanned=current_block - from_block + 1,
+                        cu_estimate=_CU_PER_POLL,
                     )
             except asyncio.CancelledError:
                 raise
@@ -404,6 +447,52 @@ class OrderFlowMonitor:
         async with self._session.post(self._http_url, json=payload) as resp:
             data = await resp.json()
             return data.get("result", [])
+
+    async def _save_last_block(self) -> None:
+        """Persist _last_block to SystemState table (best-effort, non-blocking)."""
+        if self._session_factory is None:
+            return
+        try:
+            from sqlalchemy import select
+
+            from arbo.utils.db import SystemState
+
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(SystemState).where(SystemState.key == _DB_KEY)
+                )
+                row = result.scalar_one_or_none()
+                if row is not None:
+                    row.value = str(self._last_block)
+                else:
+                    session.add(SystemState(key=_DB_KEY, value=str(self._last_block)))
+                await session.commit()
+        except Exception as e:
+            logger.debug("order_flow_save_block_error", error=str(e))
+
+    async def _restore_last_block(self) -> int | None:
+        """Read last processed block from SystemState table.
+
+        Returns:
+            Block number or None if not found / no DB.
+        """
+        if self._session_factory is None:
+            return None
+        try:
+            from sqlalchemy import select
+
+            from arbo.utils.db import SystemState
+
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(SystemState.value).where(SystemState.key == _DB_KEY)
+                )
+                row = result.scalar_one_or_none()
+                if row is not None:
+                    return int(row)
+        except Exception as e:
+            logger.debug("order_flow_restore_block_error", error=str(e))
+        return None
 
     def _handle_log(self, log: dict[str, Any]) -> None:
         """Parse log, filter by matched tokens, feed to RollingWindow."""

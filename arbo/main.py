@@ -507,10 +507,12 @@ class ArboOrchestrator:
 
     async def _init_order_flow(self) -> Any:
         from arbo.connectors.polygon_flow import OrderFlowMonitor
+        from arbo.utils.db import get_session_factory
 
         monitor = OrderFlowMonitor(
             on_signal=lambda sig: self._signal_queue.put_nowait(sig),
             poll_interval=60,
+            session_factory=get_session_factory(),
         )
         await monitor.initialize()
         return monitor

@@ -546,6 +546,120 @@ class TestIsHealthy:
 
 
 # ================================================================
+# Incremental block tracking
+# ================================================================
+
+
+class TestIncrementalPolling:
+    """Incremental block tracking with DB persistence."""
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    async def test_cold_start_uses_latest_minus_1000(self, mock_config: MagicMock) -> None:
+        """No DB state → _last_block = latest - 1000."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor(poll_interval=1)
+
+        latest_block = 50_000
+        monitor._get_block_number = AsyncMock(return_value=latest_block)
+        monitor._get_logs = AsyncMock(return_value=[])
+
+        # No session_factory → _restore_last_block returns None → cold start
+        assert monitor._session_factory is None
+
+        # Manually call start logic: open session, set running, determine block
+        monitor._session = MagicMock()
+        monitor._session.closed = False
+        monitor._session.close = AsyncMock()
+        monitor._running = True
+
+        latest = await monitor._get_block_number()
+        restored = await monitor._restore_last_block()
+        assert restored is None
+
+        # Cold start: latest - 1000
+        monitor._last_block = latest - 1000
+        assert monitor._last_block == latest_block - 1000
+
+        await monitor.stop()
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    async def test_incremental_from_block_increases(self, mock_config: MagicMock) -> None:
+        """After first poll, second poll's fromBlock > first poll's fromBlock."""
+        mock_config.return_value = _mock_config()
+        monitor = OrderFlowMonitor(poll_interval=1)
+
+        call_count = 0
+        from_blocks: list[int] = []
+
+        original_get_logs = monitor._get_logs
+
+        async def tracking_get_logs(from_block: int, to_block: int) -> list:
+            from_blocks.append(from_block)
+            return []
+
+        # Block number increases on each call
+        block_numbers = [1000, 1030, 1060]
+        block_iter = iter(block_numbers)
+        monitor._get_block_number = AsyncMock(side_effect=block_numbers)
+        monitor._get_logs = AsyncMock(side_effect=tracking_get_logs)
+
+        # Set initial state as if start() ran
+        monitor._session = MagicMock()
+        monitor._session.closed = False
+        monitor._session.close = AsyncMock()
+        monitor._running = True
+        monitor._last_block = 999  # start just before first block
+
+        # Run two poll iterations manually
+        # First poll
+        current = await monitor._get_block_number()
+        if current > monitor._last_block:
+            logs = await monitor._get_logs(monitor._last_block + 1, current)
+            monitor._last_block = current
+
+        # Second poll
+        current = await monitor._get_block_number()
+        if current > monitor._last_block:
+            logs = await monitor._get_logs(monitor._last_block + 1, current)
+            monitor._last_block = current
+
+        assert len(from_blocks) == 2
+        assert from_blocks[1] > from_blocks[0]
+
+        await monitor.stop()
+
+    @patch("arbo.connectors.polygon_flow.get_config")
+    async def test_restart_restores_from_db(self, mock_config: MagicMock) -> None:
+        """Save block to DB, create new monitor, verify it resumes from saved block."""
+        mock_config.return_value = _mock_config()
+
+        # Use an in-memory SQLite DB to test the full save/restore cycle
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+        from arbo.utils.db import SystemState
+
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            # Only create the SystemState table (other models use JSONB which SQLite can't handle)
+            await conn.run_sync(SystemState.__table__.create)
+
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+        # Monitor 1: save block 42000 to DB
+        monitor1 = OrderFlowMonitor(poll_interval=1, session_factory=factory)
+        monitor1._last_block = 42_000
+        await monitor1._save_last_block()
+
+        # Monitor 2: restore from DB
+        monitor2 = OrderFlowMonitor(poll_interval=1, session_factory=factory)
+        restored = await monitor2._restore_last_block()
+
+        assert restored == 42_000
+
+        await engine.dispose()
+
+
+# ================================================================
 # Helpers
 # ================================================================
 

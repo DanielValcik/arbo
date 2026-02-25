@@ -247,6 +247,19 @@ class DailyTradeCounter(Base):
 
 
 # ================================================================
+# SYSTEM_STATE: Generic key-value store for persistent system state
+# ================================================================
+class SystemState(Base):
+    __tablename__ = "system_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ================================================================
 # NEWS_ITEMS: Raw news for LLM analysis (Layer 8 / news agent)
 # ================================================================
 class NewsItem(Base):
