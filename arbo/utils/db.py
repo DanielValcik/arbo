@@ -404,6 +404,37 @@ class ResolutionChain(Base):
 
 
 # ================================================================
+# RDH: SOCIAL_MOMENTUM — LunarCrush social data (Strategy B2)
+# ================================================================
+class SocialMomentum(Base):
+    __tablename__ = "social_momentum"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    social_dominance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sentiment: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    galaxy_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    alt_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interactions_24h: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    social_volume_24h: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_cap: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    percent_change_24h: Mapped[float | None] = mapped_column(Float, nullable=True)
+    percent_change_7d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    percent_change_30d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="lunarcrush")
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_social_momentum_symbol_ts", "symbol", captured_at.desc()),
+        Index("idx_social_momentum_captured", "captured_at"),
+    )
+
+
+# ================================================================
 # RDH: STRATEGY_ALLOCATIONS — Per-strategy capital tracking
 # ================================================================
 class StrategyAllocation(Base):

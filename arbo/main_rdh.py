@@ -85,6 +85,10 @@ class RDHOrchestrator:
         self._strategy_b: Any = None
         self._strategy_c: Any = None
 
+        # B2 social momentum
+        self._lunarcrush: Any = None
+        self._social_divergence: Any = None
+
         # Infrastructure
         self._report_generator: Any = None
         self._slack_bot: Any = None
@@ -150,6 +154,11 @@ class RDHOrchestrator:
             with contextlib.suppress(Exception):
                 await self._discovery.close()
 
+        # Close LunarCrush client
+        if self._lunarcrush is not None:
+            with contextlib.suppress(Exception):
+                await self._lunarcrush.close()
+
         logger.info("rdh_stopped")
 
     # ------------------------------------------------------------------
@@ -199,6 +208,14 @@ class RDHOrchestrator:
 
         # Kaito client (for Strategy B — stub mode)
         self._kaito = await self._init_optional("KaitoClient", self._init_kaito)
+
+        # LunarCrush client (for Strategy B2 — social momentum)
+        self._lunarcrush = await self._init_optional("LunarCrush", self._init_lunarcrush)
+
+        # Social divergence calculator (for Strategy B2)
+        self._social_divergence = await self._init_optional(
+            "SocialDivergence", self._init_social_divergence
+        )
 
         # Strategy A: Theta Decay
         self._strategy_a = await self._init_optional("StrategyA", self._init_strategy_a)
@@ -267,6 +284,22 @@ class RDHOrchestrator:
         from arbo.connectors.kaito_api import KaitoClient
 
         return KaitoClient(mode="stub")
+
+    async def _init_lunarcrush(self) -> Any:
+        import os
+
+        from arbo.connectors.lunarcrush_client import LunarCrushClient
+
+        api_key = os.environ.get("LUNARCRUSH_API_KEY", "")
+        if not api_key:
+            logger.info("lunarcrush_no_key", msg="LUNARCRUSH_API_KEY not set, skipping")
+            return None
+        return LunarCrushClient(api_key=api_key)
+
+    async def _init_social_divergence(self) -> Any:
+        from arbo.strategies.social_divergence import SocialDivergenceCalculator
+
+        return SocialDivergenceCalculator()
 
     async def _init_strategy_a(self) -> Any:
         from arbo.strategies.theta_decay import ThetaDecay
@@ -387,6 +420,10 @@ class RDHOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._data_collector(), name="data_collector")
         )
+        if self._lunarcrush is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._lunarcrush_collector(), name="lunarcrush_collector")
+            )
         if self._slack_bot is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._slack_bot.start(), name="slack_bot")
@@ -843,6 +880,145 @@ class RDHOrchestrator:
                 logger.info("data_collected", markets=min(len(markets), 200))
             except Exception as e:
                 logger.debug("data_collector_error", error=str(e))
+
+    # ------------------------------------------------------------------
+    # LunarCrush collector (B2-04: 4x daily)
+    # ------------------------------------------------------------------
+
+    async def _lunarcrush_collector(self) -> None:
+        """Fetch LunarCrush snapshot, store in DB, run divergence calc.
+
+        Runs every 6 hours (4x daily): 00:00, 06:00, 12:00, 18:00 UTC.
+        Sequence: fetch → store → calculate divergence → log signals.
+        """
+        interval = 21600  # 6 hours in seconds
+
+        while not self._shutdown_event.is_set():
+            if self._lunarcrush is None:
+                await asyncio.sleep(60)
+                continue
+
+            try:
+                # 1. Fetch snapshot
+                coins = await self._lunarcrush.get_coins_snapshot(limit=100)
+                if not coins:
+                    logger.warning("lunarcrush_empty_snapshot")
+                    await asyncio.sleep(interval)
+                    continue
+
+                logger.info(
+                    "lunarcrush_fetched",
+                    coins=len(coins),
+                    **self._lunarcrush.usage_stats,
+                )
+
+                # 2. Store in DB
+                await self._store_social_momentum(coins)
+
+                # 3. Run divergence calculation
+                await self._run_divergence_calc()
+
+            except Exception as e:
+                logger.error("lunarcrush_collector_error", error=str(e))
+
+            # Sleep until next cycle
+            for _ in range(interval):
+                if self._shutdown_event.is_set():
+                    return
+                await asyncio.sleep(1)
+
+    async def _store_social_momentum(self, coins: list[Any]) -> None:
+        """Store LunarCrush coin snapshots in social_momentum table."""
+        try:
+            from arbo.utils.db import SocialMomentum, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                for coin in coins:
+                    row = SocialMomentum(
+                        symbol=coin.symbol,
+                        name=coin.name,
+                        social_dominance=coin.social_dominance,
+                        sentiment=coin.sentiment,
+                        galaxy_score=coin.galaxy_score,
+                        alt_rank=coin.alt_rank,
+                        interactions_24h=coin.interactions_24h,
+                        social_volume_24h=coin.social_volume_24h,
+                        price=coin.price,
+                        market_cap=coin.market_cap,
+                        percent_change_24h=coin.percent_change_24h,
+                        percent_change_7d=coin.percent_change_7d,
+                        percent_change_30d=coin.percent_change_30d,
+                        source="lunarcrush",
+                    )
+                    session.add(row)
+                await session.commit()
+            logger.info("social_momentum_stored", count=len(coins))
+        except Exception as e:
+            logger.warning("social_momentum_store_error", error=str(e))
+
+    async def _run_divergence_calc(self) -> None:
+        """Load recent snapshots from DB, run divergence calculator."""
+        if self._social_divergence is None:
+            return
+
+        try:
+            from sqlalchemy import text
+
+            from arbo.strategies.social_divergence import MomentumSnapshot
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                # Load latest 4 snapshots per symbol (24h window)
+                result = await session.execute(
+                    text("""
+                        SELECT symbol, social_dominance, sentiment,
+                               interactions_24h, price, percent_change_24h,
+                               captured_at
+                        FROM social_momentum
+                        WHERE captured_at > NOW() - INTERVAL '25 hours'
+                        ORDER BY symbol, captured_at ASC
+                    """)
+                )
+                rows = result.fetchall()
+
+            if not rows:
+                return
+
+            # Group by symbol
+            snapshots_by_coin: dict[str, list[MomentumSnapshot]] = {}
+            for row in rows:
+                symbol = row[0]
+                snap = MomentumSnapshot(
+                    symbol=symbol,
+                    social_dominance=float(row[1] or 0),
+                    sentiment=int(row[2] or 0),
+                    interactions_24h=int(row[3] or 0),
+                    price=float(row[4] or 0),
+                    percent_change_24h=float(row[5] or 0),
+                    captured_at=row[6],
+                )
+                if symbol not in snapshots_by_coin:
+                    snapshots_by_coin[symbol] = []
+                snapshots_by_coin[symbol].append(snap)
+
+            # Keep only latest 4 per coin
+            for symbol in snapshots_by_coin:
+                snapshots_by_coin[symbol] = snapshots_by_coin[symbol][-4:]
+
+            # Calculate divergence signals
+            signals = self._social_divergence.calculate_signals(snapshots_by_coin)
+
+            if signals:
+                logger.info(
+                    "divergence_signals_found",
+                    count=len(signals),
+                    symbols=[s.symbol for s in signals[:5]],
+                )
+
+        except Exception as e:
+            logger.warning("divergence_calc_error", error=str(e))
 
     # ------------------------------------------------------------------
     # Properties (for dashboard/Slack integration)
