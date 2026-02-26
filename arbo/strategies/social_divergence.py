@@ -1,18 +1,18 @@
-"""Social Momentum Divergence calculator (Strategy B2).
+"""Social Momentum Divergence calculator v2 (Strategy B2-13).
 
-Detects divergences between crypto social momentum (LunarCrush data) and
-Polymarket contract prices. Generates signals when social attention moves
-significantly but the prediction market price hasn't caught up.
+Detects divergences between on-chain/social momentum (Santiment + CoinGecko)
+and Polymarket contract prices. Generates signals when on-chain activity
+diverges significantly from the prediction market price.
 
 Algorithm:
-1. Load latest 4 snapshots (24h window) from social_momentum table
+1. Load latest 2-4 snapshots (24h window) from social_momentum_v2 table
 2. Calculate momentum vectors per coin:
-   - social_momentum_score = weighted(Δsocial_dominance × 0.4,
-     Δsentiment × 0.3, Δinteractions × 0.3)
-   - price_momentum = percent_change_24h
-3. Map coins → Polymarket contracts (manual lookup table)
+   - social_momentum_score = weighted(delta_daa x 0.30, delta_tx x 0.20,
+     delta_dev x 0.10, delta_volume x 0.40)
+   - price_momentum = price_change_24h
+3. Map coins -> Polymarket contracts (manual lookup table)
 4. Divergence = social_momentum_score - (normalized price_momentum)
-5. Signal when |divergence| > threshold (default 2σ from rolling mean)
+5. Signal when |divergence| > threshold (default 2-sigma from rolling mean)
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 from arbo.utils.logger import get_logger
 
 logger = get_logger("social_divergence")
 
-# Default weights for momentum score
-W_SOCIAL_DOMINANCE = 0.4
-W_SENTIMENT = 0.3
-W_INTERACTIONS = 0.3
+# New weights for Santiment + CoinGecko momentum score
+W_DAILY_ACTIVE_ADDRESSES = 0.30
+W_TRANSACTIONS = 0.20
+W_DEV_ACTIVITY = 0.10
+W_VOLUME = 0.40
 
 # Minimum number of snapshots needed for calculation
 MIN_SNAPSHOTS = 2
@@ -46,14 +46,15 @@ DEFAULT_SIGMA_THRESHOLD = 2.0
 
 @dataclass(frozen=True)
 class MomentumSnapshot:
-    """A single social momentum snapshot for a coin."""
+    """A single social momentum snapshot for a coin (v2: Santiment + CoinGecko)."""
 
     symbol: str
-    social_dominance: float
-    sentiment: int  # 0-100
-    interactions_24h: int
+    daily_active_addresses: float
+    transactions_count: float
+    dev_activity: float
+    volume_24h: float
     price: float
-    percent_change_24h: float
+    price_change_24h: float
     captured_at: datetime
 
 
@@ -61,17 +62,17 @@ class MomentumSnapshot:
 class DivergenceSignal:
     """Signal when social momentum diverges from market price.
 
-    Positive divergence = social momentum UP but PM price flat/down (BUY signal)
-    Negative divergence = social momentum DOWN but PM price flat/up (SELL signal)
+    Positive divergence = on-chain activity UP but PM price flat/down (BUY signal)
+    Negative divergence = on-chain activity DOWN but PM price flat/up (SELL signal)
     """
 
     symbol: str
     social_momentum_score: float  # -1 to +1 (normalized)
-    price_momentum: float  # percent_change_24h from LunarCrush
+    price_momentum: float  # price_change_24h from CoinGecko
     divergence: float  # social_momentum - normalized_price_momentum
     z_score: float  # divergence in standard deviations
     direction: str  # "LONG" or "SHORT"
-    confidence: float  # 0.0 – 1.0
+    confidence: float  # 0.0 - 1.0
     polymarket_condition_ids: list[str]  # matched PM contracts
     detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -98,8 +99,7 @@ class DivergenceSignal:
 # Start with top 10 most liquid crypto PM markets.
 # Format: {SYMBOL: [condition_id_1, condition_id_2, ...]}
 COIN_TO_PM_CONTRACTS: dict[str, list[str]] = {
-    # Populated at runtime from DB or config. Initial manual entries below.
-    # These are placeholder examples — update with actual condition IDs.
+    # Populated at runtime from DB or config.
 }
 
 
@@ -109,7 +109,11 @@ COIN_TO_PM_CONTRACTS: dict[str, list[str]] = {
 
 
 class SocialDivergenceCalculator:
-    """Calculates divergence between social momentum and market prices.
+    """Calculates divergence between on-chain momentum and market prices.
+
+    Uses Santiment on-chain metrics (DAA, transactions, dev activity) and
+    CoinGecko volume data to compute a composite momentum score, then
+    compares against price momentum to detect divergences.
 
     Args:
         sigma_threshold: Number of standard deviations for signal threshold.
@@ -148,7 +152,7 @@ class SocialDivergenceCalculator:
         self,
         snapshots_by_coin: dict[str, list[MomentumSnapshot]],
     ) -> list[DivergenceSignal]:
-        """Calculate divergence signals from social momentum snapshots.
+        """Calculate divergence signals from momentum snapshots.
 
         Args:
             snapshots_by_coin: Dict of {symbol: [snapshots]} sorted by
@@ -168,7 +172,7 @@ class SocialDivergenceCalculator:
 
             # Calculate momentum score
             momentum_score = self._compute_momentum_score(snapshots)
-            price_momentum = snapshots[-1].percent_change_24h
+            price_momentum = snapshots[-1].price_change_24h
 
             # Normalize price momentum to [-1, 1] range
             # Using tanh for smooth clamping (±50% maps to ~±0.46)
@@ -228,10 +232,12 @@ class SocialDivergenceCalculator:
         return signals
 
     def _compute_momentum_score(self, snapshots: list[MomentumSnapshot]) -> float:
-        """Compute weighted social momentum score from snapshots.
+        """Compute weighted on-chain momentum score from snapshots.
 
-        Measures the change in social metrics between the oldest and
+        Measures the change in on-chain/volume metrics between the oldest and
         newest snapshot in the window.
+
+        Weights: DAA x 0.30, Transactions x 0.20, Dev x 0.10, Volume x 0.40.
 
         Returns:
             Normalized score in [-1, 1] range.
@@ -239,27 +245,24 @@ class SocialDivergenceCalculator:
         oldest = snapshots[0]
         newest = snapshots[-1]
 
-        # Delta social dominance (relative change)
-        if oldest.social_dominance > 0:
-            d_dominance = (newest.social_dominance - oldest.social_dominance) / oldest.social_dominance
-        else:
-            d_dominance = 0.0
+        # Delta daily active addresses (relative change)
+        d_daa = _safe_delta(oldest.daily_active_addresses, newest.daily_active_addresses)
 
-        # Delta sentiment (absolute change, normalized to [-1, 1])
-        # Sentiment is 0-100, so delta can be -100 to +100
-        d_sentiment = (newest.sentiment - oldest.sentiment) / 100.0
+        # Delta transactions (relative change)
+        d_tx = _safe_delta(oldest.transactions_count, newest.transactions_count)
 
-        # Delta interactions (relative change)
-        if oldest.interactions_24h > 0:
-            d_interactions = (newest.interactions_24h - oldest.interactions_24h) / oldest.interactions_24h
-        else:
-            d_interactions = 0.0
+        # Delta dev activity (relative change)
+        d_dev = _safe_delta(oldest.dev_activity, newest.dev_activity)
+
+        # Delta volume (relative change)
+        d_vol = _safe_delta(oldest.volume_24h, newest.volume_24h)
 
         # Weighted combination
         raw_score = (
-            W_SOCIAL_DOMINANCE * d_dominance
-            + W_SENTIMENT * d_sentiment
-            + W_INTERACTIONS * d_interactions
+            W_DAILY_ACTIVE_ADDRESSES * d_daa
+            + W_TRANSACTIONS * d_tx
+            + W_DEV_ACTIVITY * d_dev
+            + W_VOLUME * d_vol
         )
 
         # Clamp to [-1, 1] using tanh
@@ -296,3 +299,10 @@ class SocialDivergenceCalculator:
             "sigma_threshold": self._sigma_threshold,
             "tracked_coins": len(self._divergence_history),
         }
+
+
+def _safe_delta(old_val: float, new_val: float) -> float:
+    """Compute relative change, handling zero base values."""
+    if old_val > 0:
+        return (new_val - old_val) / old_val
+    return 0.0

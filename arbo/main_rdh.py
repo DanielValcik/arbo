@@ -85,8 +85,9 @@ class RDHOrchestrator:
         self._strategy_b: Any = None
         self._strategy_c: Any = None
 
-        # B2 social momentum
-        self._lunarcrush: Any = None
+        # B2 social momentum (Santiment + CoinGecko)
+        self._santiment: Any = None
+        self._coingecko: Any = None
         self._social_divergence: Any = None
 
         # Infrastructure
@@ -154,10 +155,13 @@ class RDHOrchestrator:
             with contextlib.suppress(Exception):
                 await self._discovery.close()
 
-        # Close LunarCrush client
-        if self._lunarcrush is not None:
+        # Close Santiment + CoinGecko clients
+        if self._santiment is not None:
             with contextlib.suppress(Exception):
-                await self._lunarcrush.close()
+                await self._santiment.close()
+        if self._coingecko is not None:
+            with contextlib.suppress(Exception):
+                await self._coingecko.close()
 
         logger.info("rdh_stopped")
 
@@ -202,15 +206,16 @@ class RDHOrchestrator:
         self._gemini = await self._init_optional("GeminiAgent", self._init_gemini)
 
         # Flow tracker (for Strategy A)
-        self._flow_tracker = await self._init_optional(
-            "MarketFlowTracker", self._init_flow_tracker
-        )
+        self._flow_tracker = await self._init_optional("MarketFlowTracker", self._init_flow_tracker)
 
         # Kaito client (for Strategy B — stub mode)
         self._kaito = await self._init_optional("KaitoClient", self._init_kaito)
 
-        # LunarCrush client (for Strategy B2 — social momentum)
-        self._lunarcrush = await self._init_optional("LunarCrush", self._init_lunarcrush)
+        # Santiment client (for Strategy B2 — on-chain metrics)
+        self._santiment = await self._init_optional("Santiment", self._init_santiment)
+
+        # CoinGecko client (for Strategy B2 — market + community metrics)
+        self._coingecko = await self._init_optional("CoinGecko", self._init_coingecko)
 
         # Social divergence calculator (for Strategy B2)
         self._social_divergence = await self._init_optional(
@@ -285,16 +290,21 @@ class RDHOrchestrator:
 
         return KaitoClient(mode="stub")
 
-    async def _init_lunarcrush(self) -> Any:
+    async def _init_santiment(self) -> Any:
+        from arbo.connectors.santiment_client import SantimentClient
+
+        return SantimentClient()
+
+    async def _init_coingecko(self) -> Any:
         import os
 
-        from arbo.connectors.lunarcrush_client import LunarCrushClient
+        from arbo.connectors.coingecko_client import CoinGeckoClient
 
-        api_key = os.environ.get("LUNARCRUSH_API_KEY", "")
+        api_key = os.environ.get("COINGECKO_API_KEY", "")
         if not api_key:
-            logger.info("lunarcrush_no_key", msg="LUNARCRUSH_API_KEY not set, skipping")
+            logger.info("coingecko_no_key", msg="COINGECKO_API_KEY not set, skipping")
             return None
-        return LunarCrushClient(api_key=api_key)
+        return CoinGeckoClient(api_key=api_key)
 
     async def _init_social_divergence(self) -> Any:
         from arbo.strategies.social_divergence import SocialDivergenceCalculator
@@ -420,9 +430,11 @@ class RDHOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._data_collector(), name="data_collector")
         )
-        if self._lunarcrush is not None:
+        if self._santiment is not None or self._coingecko is not None:
             self._internal_tasks.append(
-                asyncio.create_task(self._lunarcrush_collector(), name="lunarcrush_collector")
+                asyncio.create_task(
+                    self._social_momentum_collector(), name="social_momentum_collector"
+                )
             )
         if self._slack_bot is not None:
             self._internal_tasks.append(
@@ -478,7 +490,9 @@ class RDHOrchestrator:
                 cutoff = time.monotonic() - _ERROR_WINDOW_S
                 state.error_timestamps = [t for t in state.error_timestamps if t > cutoff]
                 if len(state.error_timestamps) >= _ERROR_THRESHOLD:
-                    logger.error("task_error_threshold", task=name, count=len(state.error_timestamps))
+                    logger.error(
+                        "task_error_threshold", task=name, count=len(state.error_timestamps)
+                    )
                     state.permanent_stop = True
                     continue
 
@@ -720,9 +734,7 @@ class RDHOrchestrator:
                     cached = self._discovery.get_by_condition_id(cid)
                     if cached is not None and cached.end_date:
                         try:
-                            end_dt = datetime.fromisoformat(
-                                cached.end_date.replace("Z", "+00:00")
-                            )
+                            end_dt = datetime.fromisoformat(cached.end_date.replace("Z", "+00:00"))
                             if end_dt > now:
                                 continue
                         except (ValueError, TypeError):
@@ -882,44 +894,86 @@ class RDHOrchestrator:
                 logger.debug("data_collector_error", error=str(e))
 
     # ------------------------------------------------------------------
-    # LunarCrush collector (B2-04: 4x daily)
+    # Social momentum collector (B2-14: Santiment + CoinGecko, 4x daily)
     # ------------------------------------------------------------------
 
-    async def _lunarcrush_collector(self) -> None:
-        """Fetch LunarCrush snapshot, store in DB, run divergence calc.
+    async def _social_momentum_collector(self) -> None:
+        """Fetch Santiment + CoinGecko data, store in DB, run divergence calc.
 
         Runs every 6 hours (4x daily): 00:00, 06:00, 12:00, 18:00 UTC.
-        Sequence: fetch → store → calculate divergence → log signals.
+        Sequence: fetch on-chain (Santiment) + market (CoinGecko) → merge → store → divergence.
         """
         interval = 21600  # 6 hours in seconds
 
-        while not self._shutdown_event.is_set():
-            if self._lunarcrush is None:
-                await asyncio.sleep(60)
-                continue
+        # Coins to track (top 20 by market cap)
+        from arbo.connectors.santiment_client import SYMBOL_TO_SLUG
 
+        symbols = list(SYMBOL_TO_SLUG.keys())
+
+        while not self._shutdown_event.is_set():
             try:
-                # 1. Fetch snapshot
-                coins = await self._lunarcrush.get_coins_snapshot(limit=100)
-                if not coins:
-                    logger.warning("lunarcrush_empty_snapshot")
+                # 1. Fetch CoinGecko market data (bulk — 1 API call)
+                cg_data: dict[str, Any] = {}
+                if self._coingecko is not None:
+                    markets = await self._coingecko.get_markets_bulk(per_page=100)
+                    for coin in markets:
+                        cg_data[coin.symbol.upper()] = coin
+                    logger.info(
+                        "coingecko_fetched",
+                        coins=len(markets),
+                        **self._coingecko.usage_stats,
+                    )
+
+                # 2. Fetch Santiment on-chain metrics (batch — 3 API calls)
+                san_data: dict[str, dict[str, float]] = {}
+                if self._santiment is not None:
+                    from arbo.connectors.santiment_client import SantimentClient
+
+                    slugs = SantimentClient.slugs_for_symbols(symbols)
+                    all_metrics = await self._santiment.get_all_metrics(slugs, days=2)
+
+                    # Reverse map slug → symbol for merging
+                    slug_to_sym = {v: k for k, v in SYMBOL_TO_SLUG.items()}
+                    for slug, metrics in all_metrics.items():
+                        sym = slug_to_sym.get(slug, "")
+                        if not sym:
+                            continue
+                        san_data[sym] = {
+                            "daily_active_addresses": (
+                                metrics["daily_active_addresses"][-1].value
+                                if metrics["daily_active_addresses"]
+                                else 0.0
+                            ),
+                            "dev_activity": (
+                                metrics["dev_activity"][-1].value
+                                if metrics["dev_activity"]
+                                else 0.0
+                            ),
+                            "transactions_count": (
+                                metrics["transaction_volume"][-1].value
+                                if metrics["transaction_volume"]
+                                else 0.0
+                            ),
+                        }
+                    logger.info(
+                        "santiment_fetched",
+                        coins=len(san_data),
+                        **self._santiment.usage_stats,
+                    )
+
+                if not cg_data and not san_data:
+                    logger.warning("social_momentum_no_data")
                     await asyncio.sleep(interval)
                     continue
 
-                logger.info(
-                    "lunarcrush_fetched",
-                    coins=len(coins),
-                    **self._lunarcrush.usage_stats,
-                )
+                # 3. Merge and store in DB
+                await self._store_social_momentum_v2(symbols, san_data, cg_data)
 
-                # 2. Store in DB
-                await self._store_social_momentum(coins)
-
-                # 3. Run divergence calculation
+                # 4. Run divergence calculation
                 await self._run_divergence_calc()
 
             except Exception as e:
-                logger.error("lunarcrush_collector_error", error=str(e))
+                logger.error("social_momentum_collector_error", error=str(e))
 
             # Sleep until next cycle
             for _ in range(interval):
@@ -927,33 +981,55 @@ class RDHOrchestrator:
                     return
                 await asyncio.sleep(1)
 
-    async def _store_social_momentum(self, coins: list[Any]) -> None:
-        """Store LunarCrush coin snapshots in social_momentum table."""
+    async def _store_social_momentum_v2(
+        self,
+        symbols: list[str],
+        san_data: dict[str, dict[str, float]],
+        cg_data: dict[str, Any],
+    ) -> None:
+        """Merge Santiment + CoinGecko data and store in social_momentum_v2."""
         try:
-            from arbo.utils.db import SocialMomentum, get_session_factory
+            from arbo.connectors.coingecko_client import SYMBOL_TO_COINGECKO_ID
+            from arbo.connectors.santiment_client import SYMBOL_TO_SLUG
+            from arbo.utils.db import SocialMomentumV2, get_session_factory
 
             factory = get_session_factory()
+            count = 0
             async with factory() as session:
-                for coin in coins:
-                    row = SocialMomentum(
-                        symbol=coin.symbol,
-                        name=coin.name,
-                        social_dominance=coin.social_dominance,
-                        sentiment=coin.sentiment,
-                        galaxy_score=coin.galaxy_score,
-                        alt_rank=coin.alt_rank,
-                        interactions_24h=coin.interactions_24h,
-                        social_volume_24h=coin.social_volume_24h,
-                        price=coin.price,
-                        market_cap=coin.market_cap,
-                        percent_change_24h=coin.percent_change_24h,
-                        percent_change_7d=coin.percent_change_7d,
-                        percent_change_30d=coin.percent_change_30d,
-                        source="lunarcrush",
+                for sym in symbols:
+                    slug = SYMBOL_TO_SLUG.get(sym, "")
+                    cg_id = SYMBOL_TO_COINGECKO_ID.get(sym, "")
+                    san = san_data.get(sym, {})
+                    cg = cg_data.get(sym)
+
+                    # Skip if no data at all
+                    if not san and cg is None:
+                        continue
+
+                    row = SocialMomentumV2(
+                        symbol=sym,
+                        slug=slug,
+                        coingecko_id=cg_id or None,
+                        # Santiment metrics
+                        daily_active_addresses=san.get("daily_active_addresses"),
+                        transactions_count=san.get("transactions_count"),
+                        dev_activity=san.get("dev_activity"),
+                        # CoinGecko market metrics
+                        price=cg.current_price if cg else None,
+                        market_cap=cg.market_cap if cg else None,
+                        volume_24h=cg.total_volume if cg else None,
+                        price_change_24h=(cg.price_change_percentage_24h if cg else None),
+                        price_change_7d=(cg.price_change_percentage_7d if cg else None),
+                        price_change_30d=(cg.price_change_percentage_30d if cg else None),
+                        # CoinGecko community (populated if detail fetched)
+                        twitter_followers=None,
+                        reddit_subscribers=None,
+                        source="santiment+coingecko",
                     )
                     session.add(row)
+                    count += 1
                 await session.commit()
-            logger.info("social_momentum_stored", count=len(coins))
+            logger.info("social_momentum_v2_stored", count=count)
         except Exception as e:
             logger.warning("social_momentum_store_error", error=str(e))
 
@@ -971,16 +1047,14 @@ class RDHOrchestrator:
             factory = get_session_factory()
             async with factory() as session:
                 # Load latest 4 snapshots per symbol (24h window)
-                result = await session.execute(
-                    text("""
-                        SELECT symbol, social_dominance, sentiment,
-                               interactions_24h, price, percent_change_24h,
+                result = await session.execute(text("""
+                        SELECT symbol, daily_active_addresses, transactions_count,
+                               dev_activity, volume_24h, price, price_change_24h,
                                captured_at
-                        FROM social_momentum
+                        FROM social_momentum_v2
                         WHERE captured_at > NOW() - INTERVAL '25 hours'
                         ORDER BY symbol, captured_at ASC
-                    """)
-                )
+                    """))
                 rows = result.fetchall()
 
             if not rows:
@@ -992,12 +1066,13 @@ class RDHOrchestrator:
                 symbol = row[0]
                 snap = MomentumSnapshot(
                     symbol=symbol,
-                    social_dominance=float(row[1] or 0),
-                    sentiment=int(row[2] or 0),
-                    interactions_24h=int(row[3] or 0),
-                    price=float(row[4] or 0),
-                    percent_change_24h=float(row[5] or 0),
-                    captured_at=row[6],
+                    daily_active_addresses=float(row[1] or 0),
+                    transactions_count=float(row[2] or 0),
+                    dev_activity=float(row[3] or 0),
+                    volume_24h=float(row[4] or 0),
+                    price=float(row[5] or 0),
+                    price_change_24h=float(row[6] or 0),
+                    captured_at=row[7],
                 )
                 if symbol not in snapshots_by_coin:
                     snapshots_by_coin[symbol] = []
