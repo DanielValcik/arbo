@@ -186,8 +186,8 @@ class TestConvenienceMethods:
         assert "daily_active_addresses" in query
         assert "bitcoin" in result
 
-    async def test_get_dev_activity(self) -> None:
-        """get_dev_activity calls correct metric."""
+    async def test_get_dev_activity_returns_empty(self) -> None:
+        """get_dev_activity returns empty lists (not supported on free tier batch)."""
         client = SantimentClient()
         mock_session = AsyncMock()
         mock_session.post = MagicMock(return_value=_mock_response(MOCK_BATCH_RESPONSE))
@@ -195,11 +195,12 @@ class TestConvenienceMethods:
         client._session = mock_session
         client._owns_session = False
 
-        await client.get_dev_activity(["bitcoin"])
+        result = await client.get_dev_activity(["bitcoin"])
 
-        call_args = mock_session.post.call_args
-        query = call_args.kwargs["json"]["query"]
-        assert "dev_activity" in query
+        # No API call should be made — dev_activity is not supported via batch
+        mock_session.post.assert_not_called()
+        assert "bitcoin" in result
+        assert result["bitcoin"] == []
 
     async def test_get_transaction_count(self) -> None:
         """get_transaction_count calls correct metric."""
@@ -217,7 +218,7 @@ class TestConvenienceMethods:
         assert "transaction_volume" in query
 
     async def test_get_all_metrics_parallel(self) -> None:
-        """get_all_metrics fetches 3 metrics in parallel."""
+        """get_all_metrics fetches 2 metrics via API + returns empty dev_activity."""
         client = SantimentClient()
         mock_session = AsyncMock()
         mock_session.post = MagicMock(return_value=_mock_response(MOCK_BATCH_RESPONSE))
@@ -231,8 +232,10 @@ class TestConvenienceMethods:
         assert "daily_active_addresses" in result["bitcoin"]
         assert "dev_activity" in result["bitcoin"]
         assert "transaction_volume" in result["bitcoin"]
-        # 3 API calls (one per metric)
-        assert mock_session.post.call_count == 3
+        # dev_activity returns empty (not supported), so only 2 API calls
+        assert mock_session.post.call_count == 2
+        # dev_activity should be empty list
+        assert result["bitcoin"]["dev_activity"] == []
 
 
 # ---------------------------------------------------------------------------

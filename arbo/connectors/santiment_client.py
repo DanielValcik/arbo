@@ -1,13 +1,17 @@
 """Santiment Free GraphQL connector for on-chain metrics (Strategy B2-10).
 
-Fetches daily_active_addresses, dev_activity, and transaction_count via
-Santiment's free GraphQL API. Uses batch queries (timeseriesDataPerSlug) to
-minimize API call count within the 1,000/month free tier limit.
+Fetches daily_active_addresses and transaction_count via Santiment's free
+GraphQL API. Uses batch queries (timeseriesDataPerSlug) to minimize API call
+count within the 1,000/month free tier limit.
+
+Note: dev_activity is NOT supported via timeseriesDataPerSlug on the free tier.
+It has been removed from batch queries. The get_dev_activity() method returns
+empty data for backward compatibility.
 
 Interface contract:
   - get_metric_batch(metric, slugs, from_dt, to_dt) → dict[slug, list[DataPoint]]
   - get_daily_active_addresses(slugs, days) → dict[slug, list[DataPoint]]
-  - get_dev_activity(slugs, days) → dict[slug, list[DataPoint]]
+  - get_dev_activity(slugs, days) → dict[slug, list[DataPoint]]  (returns empty — not supported)
   - get_transaction_count(slugs, days) → dict[slug, list[DataPoint]]
 
 Auth: None (free tier).
@@ -62,14 +66,22 @@ SYMBOL_TO_SLUG: dict[str, str] = {
     "AAVE": "aave",
 }
 
-# Metrics available on free tier
+# Metrics available on free tier via timeseriesDataPerSlug
+# NOTE: dev_activity is NOT supported via batch queries on free tier.
+# It returns "The timeseries_data_per_slug function is not implemented for dev_activity".
 FREE_METRICS = frozenset(
     {
         "daily_active_addresses",
         "active_addresses_24h",
-        "dev_activity",
         "transaction_volume",
         "price_usd",
+    }
+)
+
+# Metrics that exist on Santiment but are NOT available via batch queries (free tier)
+UNSUPPORTED_BATCH_METRICS = frozenset(
+    {
+        "dev_activity",
     }
 )
 
@@ -411,13 +423,19 @@ class SantimentClient:
         slugs: list[str],
         days: int = 2,
     ) -> dict[str, list[SantimentDataPoint]]:
-        """Fetch dev activity for multiple coins."""
-        from_dt = datetime.now(UTC) - timedelta(days=days)
-        return await self.get_metric_batch(
-            metric="dev_activity",
-            slugs=slugs,
-            from_dt=from_dt,
+        """Return empty data — dev_activity is NOT supported via batch queries on free tier.
+
+        The Santiment free tier returns:
+        "The timeseries_data_per_slug function is not implemented for dev_activity"
+
+        This method is kept for backward compatibility but always returns empty lists.
+        """
+        logger.debug(
+            "santiment_dev_activity_skipped",
+            reason="not supported via timeseriesDataPerSlug on free tier",
+            slugs=len(slugs),
         )
+        return {slug: [] for slug in slugs}
 
     async def get_transaction_count(
         self,
@@ -441,7 +459,10 @@ class SantimentClient:
         slugs: list[str],
         days: int = 2,
     ) -> dict[str, dict[str, list[SantimentDataPoint]]]:
-        """Fetch all free metrics for multiple coins (3 API calls).
+        """Fetch all free-tier batch metrics for multiple coins (2 API calls).
+
+        Note: dev_activity is not supported via timeseriesDataPerSlug on free tier,
+        so it returns empty lists. The key is still present for backward compatibility.
 
         Returns:
             Dict of {slug: {metric: [DataPoint, ...]}}.
