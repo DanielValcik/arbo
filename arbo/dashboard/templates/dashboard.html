@@ -17,6 +17,7 @@
             --yellow: #d29922;
             --blue: #58a6ff;
             --purple: #bc8cff;
+            --orange: #f0883e;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -35,6 +36,7 @@
             border-bottom: 1px solid var(--border);
         }
         .header h1 { font-size: 18px; letter-spacing: 2px; }
+        .header-sub { font-size: 11px; color: var(--text-dim); margin-left: 8px; }
         .badge {
             padding: 3px 10px;
             border-radius: 4px;
@@ -102,40 +104,6 @@
         .positive { color: var(--green); }
         .negative { color: var(--red); }
         .neutral { color: var(--text-dim); }
-        .cat-breakdown {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .cat-card {
-            background: rgba(22, 27, 34, 0.8);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 8px 10px;
-            font-size: 11px;
-        }
-        .cat-card-title {
-            font-weight: 700;
-            margin-bottom: 4px;
-            font-size: 12px;
-        }
-        .cat-stat {
-            display: flex;
-            justify-content: space-between;
-            color: var(--text-dim);
-        }
-        .cat-badge {
-            display: inline-block;
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-        .cat-soccer { background: var(--green); color: #000; }
-        .cat-crypto { background: var(--blue); color: #000; }
-        .cat-politics { background: var(--purple); color: #000; }
-        .cat-other { background: var(--text-dim); color: #000; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -159,19 +127,60 @@
             max-width: 250px;
         }
         tr:hover { background: rgba(88, 166, 255, 0.05); }
-        .layer-grid {
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+        }
+        .strategy-card {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 11px;
+        }
+        .strategy-card.halted { border-color: var(--red); }
+        .strategy-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .strategy-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .strategy-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .strat-a { background: var(--orange); color: #000; }
+        .strat-b { background: var(--purple); color: #000; }
+        .strat-c { background: var(--blue); color: #000; }
+        .strategy-stat {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-dim);
+            padding: 1px 0;
+        }
+        .strategy-stat span:last-child { color: var(--text); }
+        .task-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 8px;
+            margin-top: 10px;
         }
-        .layer-card {
+        .task-card {
             background: rgba(22, 27, 34, 0.8);
             border: 1px solid var(--border);
             border-radius: 4px;
             padding: 10px;
             font-size: 11px;
         }
-        .layer-header {
+        .task-header {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -186,7 +195,7 @@
         .dot-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
         .dot-yellow { background: var(--yellow); box-shadow: 0 0 4px var(--yellow); }
         .dot-red { background: var(--red); box-shadow: 0 0 4px var(--red); }
-        .layer-stat {
+        .task-stat {
             display: flex;
             justify-content: space-between;
             color: var(--text-dim);
@@ -218,14 +227,28 @@
             height: 200px;
             width: 100%;
         }
+        .alloc-chart-container {
+            position: relative;
+            height: 160px;
+            width: 100%;
+        }
         .loading {
             color: var(--text-dim);
             text-align: center;
             padding: 20px;
         }
+        .halted-badge {
+            background: var(--red);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 700;
+        }
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
-            .layer-grid { grid-template-columns: repeat(2, 1fr); }
+            .strategy-grid { grid-template-columns: 1fr; }
+            .task-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -233,18 +256,19 @@
     <div class="header">
         <div style="display:flex;align-items:center;gap:12px">
             <h1>ARBO</h1>
+            <span class="header-sub">RDH</span>
             <span class="badge badge-{{ mode }}">{{ mode }}</span>
         </div>
         <div class="refresh-info">Last refresh: <span id="lastRefresh">--</span></div>
     </div>
 
     <div class="filter-bar">
-        <label>Category:</label>
-        <select id="categoryFilter" onchange="applyFilter()">
+        <label>Strategy:</label>
+        <select id="strategyFilter" onchange="applyFilter()">
             <option value="all">All</option>
-            <option value="Soccer">Soccer</option>
-            <option value="Crypto">Crypto</option>
-            <option value="Politics">Politics</option>
+            <option value="A">A — Theta Decay</option>
+            <option value="B">B — Reflexivity Surfer</option>
+            <option value="C">C — Compound Weather</option>
         </select>
     </div>
 
@@ -258,7 +282,6 @@
                 <div class="metric"><div class="metric-value" id="pWeeklyPnl">--</div><div class="metric-label">Weekly P&L</div></div>
                 <div class="metric"><div class="metric-value" id="pRoi">--</div><div class="metric-label">Total ROI</div></div>
             </div>
-            <div class="cat-breakdown" id="categoryBreakdown"></div>
         </div>
 
         <!-- P&L Chart -->
@@ -269,12 +292,25 @@
             </div>
         </div>
 
-        <!-- Layer Status -->
+        <!-- Strategy Status -->
         <div class="card grid-full">
-            <div class="card-title">Layer Status</div>
-            <div class="layer-grid" id="layerGrid">
+            <div class="card-title">Strategy Status</div>
+            <div class="strategy-grid" id="strategyGrid">
                 <div class="loading">Loading...</div>
             </div>
+            <div class="card-title" style="margin-top:14px">Task Status</div>
+            <div class="task-grid" id="taskGrid">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Capital Allocation -->
+        <div class="card">
+            <div class="card-title">Capital Allocation</div>
+            <div class="alloc-chart-container">
+                <canvas id="allocChart"></canvas>
+            </div>
+            <div id="allocDetails" style="margin-top:8px;font-size:11px"></div>
         </div>
 
         <!-- Risk -->
@@ -302,14 +338,14 @@
         </div>
 
         <!-- Infrastructure -->
-        <div class="card">
+        <div class="card grid-full">
             <div class="card-title">Infrastructure</div>
             <div class="metrics" id="infraMetrics">
                 <div class="metric"><div class="metric-value" id="iUptime">--</div><div class="metric-label">Uptime</div></div>
                 <div class="metric"><div class="metric-value" id="iMemory">--</div><div class="metric-label">Memory (MB)</div></div>
                 <div class="metric"><div class="metric-value" id="iCpu">--</div><div class="metric-label">CPU %</div></div>
+                <div class="metric"><div class="metric-value" id="iActiveTasks">--</div><div class="metric-label">Active Tasks</div></div>
                 <div class="metric"><div class="metric-value" id="iOddsQuota">--</div><div class="metric-label">Odds Quota</div></div>
-                <div class="metric"><div class="metric-value" id="iConfluence">--</div><div class="metric-label">Confluence Min</div></div>
             </div>
         </div>
 
@@ -321,18 +357,17 @@
                     <thead>
                         <tr>
                             <th>Market</th>
-                            <th>Category</th>
+                            <th>Strategy</th>
                             <th>Side</th>
                             <th>Size</th>
                             <th>Avg Price</th>
                             <th>Current</th>
                             <th>Unrealized P&L</th>
-                            <th>Layer</th>
                             <th>Opened</th>
                         </tr>
                     </thead>
                     <tbody id="positionsBody">
-                        <tr><td colspan="9" class="loading">Loading...</td></tr>
+                        <tr><td colspan="8" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -346,18 +381,16 @@
                     <thead>
                         <tr>
                             <th>Time</th>
-                            <th>Category</th>
-                            <th>Layer</th>
+                            <th>Strategy</th>
                             <th>Market</th>
                             <th>Direction</th>
                             <th>Edge</th>
                             <th>Confidence</th>
-                            <th>Confluence</th>
                             <th>Reason</th>
                         </tr>
                     </thead>
                     <tbody id="signalsBody">
-                        <tr><td colspan="9" class="loading">Loading...</td></tr>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -372,20 +405,18 @@
                         <tr>
                             <th>#</th>
                             <th>Market</th>
-                            <th>Category</th>
-                            <th>Layer</th>
+                            <th>Strategy</th>
                             <th>Side</th>
                             <th>Price</th>
                             <th>Size</th>
                             <th>Edge</th>
-                            <th>Confluence</th>
                             <th>Status</th>
                             <th>P&L</th>
                             <th>Time</th>
                         </tr>
                     </thead>
                     <tbody id="tradesBody">
-                        <tr><td colspan="12" class="loading">Loading...</td></tr>
+                        <tr><td colspan="10" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -394,6 +425,7 @@
 
     <script>
     let pnlChart = null;
+    let allocChart = null;
     let currentFilter = 'all';
 
     // Store latest data for re-filtering
@@ -401,21 +433,38 @@
     let latestSignals = [];
     let latestTrades = [];
 
-    function catBadge(cat) {
-        const c = (cat || 'Other').toLowerCase();
-        const cls = c === 'soccer' ? 'cat-soccer' :
-                    c === 'crypto' ? 'cat-crypto' :
-                    c === 'politics' ? 'cat-politics' : 'cat-other';
-        return `<span class="cat-badge ${cls}">${cat || 'Other'}</span>`;
+    // Layer number → strategy mapping
+    function layerToStrategy(layer) {
+        if (layer === null || layer === undefined) return '--';
+        // RDH signals use layer field to store strategy identifier
+        const s = String(layer);
+        if (s === 'A' || s === 'B' || s === 'C') return s;
+        // Legacy layer numbers: approximate mapping
+        if (s === '1' || s === '2') return 'A';
+        if (s === '8') return 'B';
+        if (s === '6') return 'C';
+        return s;
     }
 
-    function matchesFilter(category) {
+    function stratBadge(strategy) {
+        const s = String(strategy || '--');
+        let cls = 'strat-a';
+        let label = 'A';
+        if (s === 'B' || s === 'strategy_B') { cls = 'strat-b'; label = 'B'; }
+        else if (s === 'C' || s === 'strategy_C') { cls = 'strat-c'; label = 'C'; }
+        else if (s === 'A' || s === 'strategy_A') { cls = 'strat-a'; label = 'A'; }
+        else { return `<span class="strategy-badge" style="background:var(--text-dim);color:#000">${s}</span>`; }
+        return `<span class="strategy-badge ${cls}">${label}</span>`;
+    }
+
+    function matchesFilter(item) {
         if (currentFilter === 'all') return true;
-        return (category || '').toLowerCase() === currentFilter.toLowerCase();
+        const strat = layerToStrategy(item.layer);
+        return strat === currentFilter;
     }
 
     function applyFilter() {
-        currentFilter = document.getElementById('categoryFilter').value;
+        currentFilter = document.getElementById('strategyFilter').value;
         renderPositions();
         renderSignals();
         renderTrades();
@@ -489,26 +538,6 @@
         roiEl.textContent = fmtPct(data.roi_pct);
         roiEl.className = 'metric-value ' + pnlClass(data.roi_pct);
 
-        // Category P&L breakdown
-        const catDiv = document.getElementById('categoryBreakdown');
-        const cats = data.category_pnl || {};
-        const catEntries = Object.entries(cats);
-        if (catEntries.length > 0) {
-            catDiv.innerHTML = catEntries.map(([cat, d]) => {
-                const pnl = (d.realized_pnl || 0) + (d.unrealized_pnl || 0);
-                return `
-                    <div class="cat-card">
-                        <div class="cat-card-title">${catBadge(cat)}</div>
-                        <div class="cat-stat"><span>Trades</span><span>${d.trades || 0}</span></div>
-                        <div class="cat-stat"><span>Open</span><span>${d.open_positions || 0}</span></div>
-                        <div class="cat-stat"><span>Invested</span><span>$${(d.invested_open || 0).toFixed(2)}</span></div>
-                        <div class="cat-stat"><span>P&L</span><span class="${pnlClass(pnl)}">${fmtPnl(pnl)}</span></div>
-                    </div>`;
-            }).join('');
-        } else {
-            catDiv.innerHTML = '<div style="color:var(--text-dim);font-size:11px">No trade data yet</div>';
-        }
-
         // Update chart
         if (data.snapshots && data.snapshots.length > 0) {
             const labels = data.snapshots.map(s => fmtShortTime(s.timestamp));
@@ -540,10 +569,7 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        hover: {
-                            mode: 'index',
-                            intersect: false,
-                        },
+                        hover: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
                             tooltip: {
@@ -581,53 +607,155 @@
         }
     }
 
-    async function updateLayers() {
-        const data = await fetchJSON('/api/layers');
-        if (!data) return;
+    async function updateStrategies() {
+        const [stratData, taskData] = await Promise.all([
+            fetchJSON('/api/strategies'),
+            fetchJSON('/api/layers'),
+        ]);
 
-        const grid = document.getElementById('layerGrid');
-        if (!data.layers || data.layers.length === 0) {
-            grid.innerHTML = '<div class="loading">No layer data</div>';
-            return;
+        // Strategy cards
+        const stratGrid = document.getElementById('strategyGrid');
+        if (!stratData || !stratData.strategies || stratData.strategies.length === 0) {
+            stratGrid.innerHTML = '<div class="loading">No strategy data</div>';
+        } else {
+            stratGrid.innerHTML = stratData.strategies.map(s => {
+                const haltedHtml = s.is_halted ? '<span class="halted-badge">HALTED</span>' : '';
+                const cardClass = s.is_halted ? 'strategy-card halted' : 'strategy-card';
+                const pnlCls = pnlClass(s.total_pnl);
+                const weekPnlCls = pnlClass(s.weekly_pnl);
+                return `
+                    <div class="${cardClass}">
+                        <div class="strategy-header">
+                            <span>${stratBadge(s.id)} <span class="strategy-name">${s.name}</span></span>
+                            ${haltedHtml}
+                        </div>
+                        <div class="strategy-stat"><span>Allocated</span><span>$${(s.allocated || 0).toFixed(0)}</span></div>
+                        <div class="strategy-stat"><span>Deployed</span><span>$${(s.deployed || 0).toFixed(2)}</span></div>
+                        <div class="strategy-stat"><span>Available</span><span>$${(s.available || 0).toFixed(2)}</span></div>
+                        <div class="strategy-stat"><span>Positions</span><span>${s.positions || 0}</span></div>
+                        <div class="strategy-stat"><span>Weekly P&L</span><span class="${weekPnlCls}">${fmtPnl(s.weekly_pnl)}</span></div>
+                        <div class="strategy-stat"><span>Total P&L</span><span class="${pnlCls}">${fmtPnl(s.total_pnl)}</span></div>
+                    </div>`;
+            }).join('');
         }
 
-        grid.innerHTML = data.layers.map(l => {
-            const dotClass = 'dot-' + l.status;
-            const hb = l.heartbeat_ago_s < 60 ? l.heartbeat_ago_s + 's' :
-                       l.heartbeat_ago_s < 3600 ? Math.floor(l.heartbeat_ago_s/60) + 'm' :
-                       Math.floor(l.heartbeat_ago_s/3600) + 'h';
-            const cats = l.categories ? `<div class="layer-stat"><span>Categories</span><span>${l.categories}</span></div>` : '';
-            return `
-                <div class="layer-card">
-                    <div class="layer-header">
-                        <span class="status-dot ${dotClass}"></span>
-                        <span style="font-weight:600">${l.name}</span>
-                    </div>
-                    <div class="layer-stat"><span>Signals 24h</span><span>${l.signals_24h}</span></div>
-                    <div class="layer-stat"><span>Last heartbeat</span><span>${hb} ago</span></div>
-                    <div class="layer-stat"><span>Restarts</span><span>${l.restart_count}</span></div>
-                    ${cats}
-                </div>`;
-        }).join('');
+        // Task cards
+        const taskGrid = document.getElementById('taskGrid');
+        if (!taskData || !taskData.layers || taskData.layers.length === 0) {
+            taskGrid.innerHTML = '<div class="loading">No task data</div>';
+        } else {
+            taskGrid.innerHTML = taskData.layers.map(t => {
+                const dotClass = 'dot-' + t.status;
+                const hb = t.heartbeat_ago_s < 60 ? t.heartbeat_ago_s + 's' :
+                           t.heartbeat_ago_s < 3600 ? Math.floor(t.heartbeat_ago_s/60) + 'm' :
+                           Math.floor(t.heartbeat_ago_s/3600) + 'h';
+                return `
+                    <div class="task-card">
+                        <div class="task-header">
+                            <span class="status-dot ${dotClass}"></span>
+                            <span style="font-weight:600">${t.label || t.name}</span>
+                        </div>
+                        <div class="task-stat"><span>Last heartbeat</span><span>${hb} ago</span></div>
+                        <div class="task-stat"><span>Restarts</span><span>${t.restart_count}</span></div>
+                    </div>`;
+            }).join('');
+        }
+    }
+
+    async function updateCapital() {
+        const data = await fetchJSON('/api/capital');
+        if (!data || data.error) return;
+
+        const allocs = data.allocations || [];
+        const reserve = data.reserve || 0;
+
+        // Details text
+        const detailsDiv = document.getElementById('allocDetails');
+        const totalDeployed = data.total_deployed || 0;
+        const totalCapital = data.total_capital || 0;
+        const utilPct = totalCapital > 0 ? (totalDeployed / totalCapital * 100).toFixed(1) : '0.0';
+        detailsDiv.innerHTML = `
+            <div style="display:flex;justify-content:space-between;color:var(--text-dim)">
+                <span>Total Deployed</span><span>$${totalDeployed.toFixed(2)} (${utilPct}%)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;color:var(--text-dim)">
+                <span>Reserve</span><span>$${reserve.toFixed(0)}</span>
+            </div>`;
+
+        // Bar chart
+        const labels = allocs.map(a => a.name).concat(['Reserve']);
+        const deployed = allocs.map(a => a.deployed || 0).concat([0]);
+        const available = allocs.map(a => a.available || 0).concat([reserve]);
+
+        if (allocChart) {
+            allocChart.data.labels = labels;
+            allocChart.data.datasets[0].data = deployed;
+            allocChart.data.datasets[1].data = available;
+            allocChart.update('none');
+        } else {
+            const ctx = document.getElementById('allocChart').getContext('2d');
+            allocChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Deployed',
+                            data: deployed,
+                            backgroundColor: '#58a6ff',
+                            borderRadius: 3,
+                        },
+                        {
+                            label: 'Available',
+                            data: available,
+                            backgroundColor: 'rgba(48,54,61,0.6)',
+                            borderRadius: 3,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#8b949e', font: { size: 10 }, boxWidth: 12 }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: { color: '#8b949e', font: { size: 10 } },
+                            grid: { display: false },
+                        },
+                        y: {
+                            stacked: true,
+                            ticks: { color: '#8b949e', font: { size: 9 } },
+                            grid: { color: 'rgba(48,54,61,0.3)' },
+                        }
+                    }
+                }
+            });
+        }
     }
 
     function renderPositions() {
         const tbody = document.getElementById('positionsBody');
-        const filtered = latestPositions.filter(p => matchesFilter(p.category));
+        const filtered = latestPositions.filter(p => matchesFilter(p));
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
             return;
         }
         tbody.innerHTML = filtered.map(p => `
             <tr>
                 <td title="${p.market}">${truncate(p.market, 35)}</td>
-                <td>${catBadge(p.category)}</td>
+                <td>${stratBadge(layerToStrategy(p.layer))}</td>
                 <td>${p.side}</td>
                 <td>$${(p.size || 0).toFixed(2)}</td>
                 <td>${(p.avg_price || 0).toFixed(4)}</td>
                 <td>${p.current_price !== null ? p.current_price.toFixed(4) : '--'}</td>
                 <td class="${pnlClass(p.unrealized_pnl)}">${fmtPnl(p.unrealized_pnl)}</td>
-                <td>L${p.layer}</td>
                 <td>${fmtTime(p.opened_at)}</td>
             </tr>
         `).join('');
@@ -642,22 +770,20 @@
 
     function renderSignals() {
         const tbody = document.getElementById('signalsBody');
-        const filtered = latestSignals.filter(s => matchesFilter(s.category));
+        const filtered = latestSignals.filter(s => matchesFilter(s));
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No signals yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-dim);text-align:center">No signals yet</td></tr>';
             return;
         }
         tbody.innerHTML = filtered.slice(0, 50).map(s => `
             <tr>
                 <td>${fmtTime(s.timestamp)}</td>
-                <td>${catBadge(s.category)}</td>
-                <td>L${s.layer}</td>
+                <td>${stratBadge(layerToStrategy(s.layer))}</td>
                 <td title="${s.market}">${truncate(s.market, 30)}</td>
                 <td>${s.direction}</td>
                 <td>${s.edge !== null ? (s.edge * 100).toFixed(1) + '%' : '--'}</td>
                 <td>${s.confidence !== null ? (s.confidence * 100).toFixed(0) + '%' : '--'}</td>
-                <td>${s.confluence_score !== null ? s.confluence_score : '--'}</td>
-                <td title="${s.reason}">${truncate(s.reason, 25)}</td>
+                <td title="${s.reason}">${truncate(s.reason, 30)}</td>
             </tr>
         `).join('');
     }
@@ -704,22 +830,18 @@
         document.getElementById('iUptime').textContent = data.uptime_human || '--';
         document.getElementById('iMemory').textContent = data.memory_mb || '--';
         document.getElementById('iCpu').textContent = (data.cpu_pct || 0).toFixed(1);
+        document.getElementById('iActiveTasks').textContent = data.active_tasks !== undefined ? data.active_tasks : '--';
 
         const q = data.odds_api_quota || {};
         document.getElementById('iOddsQuota').textContent =
             q.remaining !== 'N/A' ? q.remaining + '/' + q.total : 'N/A';
-
-        const cEl = document.getElementById('iConfluence');
-        const cVal = data.confluence_threshold;
-        cEl.textContent = cVal !== undefined ? cVal : '--';
-        cEl.style.color = (cVal === 1) ? 'var(--yellow)' : '';
     }
 
     function renderTrades() {
         const tbody = document.getElementById('tradesBody');
-        const filtered = latestTrades.filter(t => matchesFilter(t.category));
+        const filtered = latestTrades.filter(t => matchesFilter(t));
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="12" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
             return;
         }
         tbody.innerHTML = filtered.map(t => {
@@ -730,13 +852,11 @@
                 <tr>
                     <td>${t.id}</td>
                     <td title="${t.market}">${truncate(t.market, 25)}</td>
-                    <td>${catBadge(t.category)}</td>
-                    <td>L${t.layer}</td>
+                    <td>${stratBadge(layerToStrategy(t.layer))}</td>
                     <td>${t.side}</td>
                     <td>${(t.price || 0).toFixed(4)}</td>
                     <td>$${(t.size || 0).toFixed(2)}</td>
                     <td>${t.edge !== null ? (t.edge * 100).toFixed(1) + '%' : '--'}</td>
-                    <td>${t.confluence_score !== null ? t.confluence_score : '--'}</td>
                     <td style="color:${statusColor}">${t.status}</td>
                     <td class="${pnlClass(t.actual_pnl)}">${fmtPnl(t.actual_pnl)}</td>
                     <td>${fmtTime(t.placed_at)}</td>
@@ -754,7 +874,8 @@
     async function fetchAll() {
         await Promise.all([
             updatePortfolio(),
-            updateLayers(),
+            updateStrategies(),
+            updateCapital(),
             updatePositions(),
             updateSignals(),
             updateRisk(),

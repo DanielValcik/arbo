@@ -111,31 +111,22 @@ class MockConfig:
     bankroll = 2000.0
 
 
-class MockOddsClient:
-    """Mock Odds API client."""
-
-    _remaining_quota = 18500
-
-
 class MockOrchestrator:
-    """Mock orchestrator for testing dashboard endpoints."""
+    """Mock orchestrator for testing dashboard endpoints (RDH architecture)."""
 
     _mode = "paper"
     _capital = Decimal("2000.00")
     _start_time = time.monotonic() - 3600  # 1 hour ago
     _paper_engine = MockPaperEngine()
-    _odds_client = MockOddsClient()
     _config = MockConfig()
-    _llm_degraded = False
 
     def __init__(self) -> None:
         self._risk_manager = MockRiskManager()
-        self._layers = {
+        self._tasks = {
             "discovery": MockLayerState("discovery"),
-            "L1_market_maker": MockLayerState("L1_market_maker"),
-            "L2_value_signal": MockLayerState("L2_value_signal"),
-            "L3_semantic_graph": MockLayerState("L3_semantic_graph"),
-            "L7_order_flow": MockLayerState("L7_order_flow", restart_count=2),
+            "strategy_A": MockLayerState("strategy_A"),
+            "strategy_B": MockLayerState("strategy_B"),
+            "strategy_C": MockLayerState("strategy_C", restart_count=2),
         }
 
 
@@ -213,6 +204,7 @@ class TestDashboardPage:
     def test_contains_api_endpoints(self, client: TestClient) -> None:
         resp = client.get("/", auth=AUTH)
         assert "/api/portfolio" in resp.text
+        assert "/api/strategies" in resp.text
         assert "/api/layers" in resp.text
 
 
@@ -258,31 +250,40 @@ class TestPortfolioAPI:
 
 
 class TestLayersAPI:
-    """Test /api/layers endpoint."""
+    """Test /api/layers endpoint (RDH tasks)."""
 
-    def test_returns_layer_statuses(self, client: TestClient) -> None:
+    def test_returns_task_statuses(self, client: TestClient) -> None:
         resp = client.get("/api/layers", auth=AUTH)
         assert resp.status_code == 200
         data = resp.json()
         assert "layers" in data
         layers = data["layers"]
-        assert len(layers) == 5
+        assert len(layers) == 4
 
-        # Check layer structure
-        layer = layers[0]
-        assert "name" in layer
-        assert "status" in layer
-        assert "heartbeat_ago_s" in layer
-        assert "restart_count" in layer
-        assert "signals_24h" in layer
+        # Check task structure
+        task = layers[0]
+        assert "name" in task
+        assert "label" in task
+        assert "status" in task
+        assert "heartbeat_ago_s" in task
+        assert "restart_count" in task
 
-    def test_layer_status_colors(self, client: TestClient, mock_orch: MockOrchestrator) -> None:
-        # L7 has restart_count=2 → should be yellow
+    def test_task_status_colors(self, client: TestClient, mock_orch: MockOrchestrator) -> None:
+        # strategy_C has restart_count=2 → should be yellow
         resp = client.get("/api/layers", auth=AUTH)
         data = resp.json()
-        l7 = next(layer for layer in data["layers"] if layer["name"] == "L7_order_flow")
-        assert l7["status"] == "yellow"
-        assert l7["restart_count"] == 2
+        sc = next(t for t in data["layers"] if t["name"] == "strategy_C")
+        assert sc["status"] == "yellow"
+        assert sc["restart_count"] == 2
+
+    def test_task_labels(self, client: TestClient) -> None:
+        resp = client.get("/api/layers", auth=AUTH)
+        data = resp.json()
+        labels = {t["name"]: t["label"] for t in data["layers"]}
+        assert labels["discovery"] == "Discovery"
+        assert labels["strategy_A"] == "Strategy A — Theta Decay"
+        assert labels["strategy_B"] == "Strategy B — Reflexivity Surfer"
+        assert labels["strategy_C"] == "Strategy C — Compound Weather"
 
 
 class TestRiskAPI:
@@ -323,21 +324,24 @@ class TestInfraAPI:
         assert "uptime_human" in data
         assert "memory_mb" in data
         assert "cpu_pct" in data
-        assert "odds_api_quota" in data
+        assert "active_tasks" in data
         assert data["mode"] == "paper"
-        assert "confluence_threshold" in data
-        assert data["confluence_threshold"] == 2
 
     def test_uptime_is_positive(self, client: TestClient) -> None:
         resp = client.get("/api/infra", auth=AUTH)
         data = resp.json()
         assert data["uptime_s"] > 0
 
-    def test_odds_quota_returned(self, client: TestClient) -> None:
+    def test_active_tasks_count(self, client: TestClient) -> None:
         resp = client.get("/api/infra", auth=AUTH)
         data = resp.json()
-        assert data["odds_api_quota"]["remaining"] == 18500
-        assert data["odds_api_quota"]["total"] == 20000
+        # 4 tasks, all enabled, none permanently stopped
+        assert data["active_tasks"] == 4
+
+    def test_odds_quota_na_without_client(self, client: TestClient) -> None:
+        resp = client.get("/api/infra", auth=AUTH)
+        data = resp.json()
+        assert data["odds_api_quota"]["remaining"] == "N/A"
 
 
 class TestSignalsAPI:
@@ -483,3 +487,12 @@ class TestHelpers:
         assert _dec(Decimal("1.23")) == 1.23
         assert _dec(42) == 42.0
         assert _dec(3.14) == 3.14
+
+    def test_create_app_injects_orchestrator(self) -> None:
+        from arbo.dashboard.web import create_app, state
+
+        mock = MockOrchestrator()
+        result = create_app(mock)
+        assert result is app
+        assert state.orchestrator is mock
+        state.orchestrator = None

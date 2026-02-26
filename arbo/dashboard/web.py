@@ -6,7 +6,6 @@ Integrated into the orchestrator as an internal task (same pattern as Slack bot)
 
 from __future__ import annotations
 
-import contextlib
 import os
 import secrets
 import time
@@ -85,19 +84,6 @@ def _dec(val: Any) -> float | None:
         return float(val)
     return float(val)
 
-
-# Layer → category mapping (legacy)
-_LAYER_CATEGORIES: dict[str, str] = {
-    "L1_market_maker": "Soccer",
-    "L2_value_signal": "Soccer + Crypto + Politics",
-    "L3_semantic_graph": "All",
-    "L4_whale_copy": "All",
-    "L5_logical_arb": "All",
-    "L6_temporal_crypto": "Crypto",
-    "L7_order_flow": "All",
-    "L8_attention": "All",
-    "L9_sports_latency": "Soccer",
-}
 
 # Strategy metadata (RDH architecture)
 _STRATEGY_META: dict[str, dict[str, str]] = {
@@ -419,7 +405,7 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
 
 @app.get("/api/layers")
 async def api_layers(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Per-layer status with category info."""
+    """Per-task status (RDH: _tasks, legacy: _layers)."""
     orch = state.orchestrator
     if orch is None:
         return {"layers": []}
@@ -427,58 +413,41 @@ async def api_layers(_user: str = Depends(_verify_credentials)) -> dict[str, Any
     now = time.monotonic()
     layers: list[dict[str, Any]] = []
 
-    # Query signal counts per layer (last 24h)
-    signal_counts: dict[int, int] = {}
-    try:
-        from arbo.utils.db import Signal as DBSignal
-        from arbo.utils.db import get_session_factory
+    # Use _tasks (RDH) or _layers (legacy)
+    task_dict: dict[str, Any] = getattr(orch, "_tasks", None) or getattr(
+        orch, "_layers", {}
+    )
 
-        factory = get_session_factory()
-        async with factory() as session:
-            cutoff = datetime.now(UTC) - timedelta(hours=24)
-            result = await session.execute(
-                sa.select(DBSignal.layer, sa.func.count())
-                .where(DBSignal.detected_at > cutoff)
-                .group_by(DBSignal.layer)
-            )
-            for row in result.all():
-                signal_counts[row[0]] = row[1]
-    except Exception as e:
-        logger.warning("layer_signal_count_error", error=str(e))
+    # Strategy name mapping for RDH tasks
+    task_labels: dict[str, str] = {
+        "discovery": "Discovery",
+        "strategy_A": "Strategy A — Theta Decay",
+        "strategy_B": "Strategy B — Reflexivity Surfer",
+        "strategy_C": "Strategy C — Compound Weather",
+    }
 
-    for name, ls in orch._layers.items():
-        heartbeat_ago = now - ls.last_heartbeat
-        task_running = ls.task is not None and not ls.task.done()
+    for name, ts in task_dict.items():
+        heartbeat_ago = now - ts.last_heartbeat
+        task_running = ts.task is not None and not ts.task.done()
 
         # Determine status color
-        if ls.permanent_stop or (ls.task and ls.task.done()):
+        if ts.permanent_stop or (ts.task and ts.task.done()) or heartbeat_ago > 300:
             status_color = "red"
-        elif heartbeat_ago > 300 or ls.restart_count > 3:
-            status_color = "yellow"
-            if heartbeat_ago > 300:
-                status_color = "red"
-        elif ls.restart_count > 0 and ls.restart_count <= 3:
+        elif ts.restart_count > 0:
             status_color = "yellow"
         else:
             status_color = "green"
 
-        # Extract layer number from name
-        layer_num = 0
-        if name.startswith("L") and "_" in name:
-            with contextlib.suppress(ValueError, IndexError):
-                layer_num = int(name.split("_")[0][1:])
-
         layers.append(
             {
                 "name": name,
+                "label": task_labels.get(name, name),
                 "status": status_color,
                 "running": task_running,
-                "enabled": ls.enabled,
-                "permanent_stop": ls.permanent_stop,
+                "enabled": ts.enabled,
+                "permanent_stop": ts.permanent_stop,
                 "heartbeat_ago_s": int(heartbeat_ago),
-                "restart_count": ls.restart_count,
-                "signals_24h": signal_counts.get(layer_num, 0),
-                "categories": _LAYER_CATEGORIES.get(name, ""),
+                "restart_count": ts.restart_count,
             }
         )
 
@@ -528,7 +497,7 @@ async def api_risk(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
 
 @app.get("/api/infra")
 async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Infrastructure: uptime, system resources, Odds API quota."""
+    """Infrastructure: uptime, system resources, strategy task count."""
     orch = state.orchestrator
     uptime_s = int(time.monotonic() - orch._start_time) if orch and orch._start_time else 0
 
@@ -537,15 +506,17 @@ async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]
     mem_info = process.memory_info()
     cpu_pct = process.cpu_percent(interval=0)
 
-    # Odds API quota
+    # Odds API quota (available on legacy orchestrator, optional on RDH)
     odds_quota: dict[str, Any] = {"remaining": "N/A", "total": "N/A"}
-    if orch and orch._odds_client:
-        remaining = getattr(orch._odds_client, "_remaining_quota", None)
+    odds_client = getattr(orch, "_odds_client", None) if orch else None
+    if odds_client is not None:
+        remaining = getattr(odds_client, "_remaining_quota", None)
         if remaining is not None:
             odds_quota = {"remaining": remaining, "total": 20000}
 
-    # Confluence threshold — legacy, hardcoded (config removed in RDH-309)
-    confluence_threshold = 2
+    # Active strategy/task count
+    task_dict = getattr(orch, "_tasks", {}) if orch else {}
+    active_tasks = sum(1 for ts in task_dict.values() if ts.enabled and not ts.permanent_stop)
 
     return {
         "uptime_s": uptime_s,
@@ -554,9 +525,8 @@ async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]
         "cpu_pct": round(cpu_pct, 1),
         "system_memory_pct": round(psutil.virtual_memory().percent, 1),
         "odds_api_quota": odds_quota,
-        "llm_degraded": orch._llm_degraded if orch else False,
-        "mode": orch._mode if orch else "unknown",
-        "confluence_threshold": confluence_threshold,
+        "active_tasks": active_tasks,
+        "mode": getattr(orch, "_mode", "unknown") if orch else "unknown",
     }
 
 
@@ -764,3 +734,12 @@ def _format_uptime(seconds: int) -> str:
         parts.append(f"{hours}h")
     parts.append(f"{minutes}m")
     return " ".join(parts)
+
+
+def create_app(orchestrator: Any) -> FastAPI:
+    """Factory function for RDH orchestrator integration.
+
+    Called by main_rdh.py to inject the orchestrator into dashboard state.
+    """
+    state.orchestrator = orchestrator
+    return app
