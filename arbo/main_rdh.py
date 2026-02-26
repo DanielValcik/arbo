@@ -362,8 +362,18 @@ class RDHOrchestrator:
     async def _init_slack_bot(self) -> Any:
         from arbo.dashboard.slack_bot import SlackBot
 
-        bot = SlackBot(orchestrator=self)
-        return bot
+        cfg = self._config
+        return SlackBot(
+            bot_token=cfg.slack_bot_token,
+            app_token=cfg.slack_app_token,
+            channel_id=cfg.slack_channel_id,
+            get_status_fn=self._get_status_for_slack,
+            get_pnl_fn=self._get_pnl_for_slack,
+            shutdown_fn=self._slack_shutdown,
+            daily_brief_channel_id=cfg.slack_daily_brief_channel_id,
+            review_queue_channel_id=cfg.slack_review_queue_channel_id,
+            weekly_report_channel_id=cfg.slack_weekly_report_channel_id,
+        )
 
     async def _init_web_dashboard(self) -> Any:
         from arbo.dashboard.web import create_app
@@ -378,6 +388,43 @@ class RDHOrchestrator:
             strategy = getattr(pos, "strategy", "")
             if strategy in ("A", "B", "C"):
                 self._risk_manager.strategy_post_trade(strategy, pos.size)
+
+    # ------------------------------------------------------------------
+    # Slack callbacks
+    # ------------------------------------------------------------------
+
+    async def _get_status_for_slack(self) -> dict[str, Any]:
+        """Build system status dict for /status command."""
+        active = sum(
+            1
+            for s in self._tasks.values()
+            if s.enabled and not s.permanent_stop and s.task and not s.task.done()
+        )
+        balance = str(self._paper_engine.balance) if self._paper_engine else "N/A"
+        positions = len(self._paper_engine.open_positions) if self._paper_engine else 0
+        uptime = int(time.monotonic() - self._start_time) if self._start_time else 0
+
+        return {
+            "mode": self._mode,
+            "uptime_s": uptime,
+            "layers_active": active,
+            "layers_total": len(self._tasks),
+            "balance": balance,
+            "open_positions": positions,
+        }
+
+    async def _get_pnl_for_slack(self) -> dict[str, Any]:
+        """Build P&L dict for /pnl command."""
+        if self._paper_engine is None:
+            return {}
+        return self._paper_engine.get_stats()
+
+    async def _slack_shutdown(self) -> None:
+        """Emergency shutdown triggered via /kill."""
+        logger.critical("emergency_shutdown_via_slack")
+        if self._slack_bot is not None:
+            await self._slack_bot.send_alert("Emergency shutdown triggered via `/kill` command")
+        self._shutdown_event.set()
 
     # ------------------------------------------------------------------
     # Strategy tasks
