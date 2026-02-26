@@ -326,7 +326,7 @@ class TestInfraAPI:
         assert "odds_api_quota" in data
         assert data["mode"] == "paper"
         assert "confluence_threshold" in data
-        assert data["confluence_threshold"] == 1
+        assert data["confluence_threshold"] == 2
 
     def test_uptime_is_positive(self, client: TestClient) -> None:
         resp = client.get("/api/infra", auth=AUTH)

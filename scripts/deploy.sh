@@ -26,6 +26,8 @@ rsync -avz --delete \
     --exclude 'Screenshot*' \
     --exclude 'ARBO_CTO_Development_Brief_v3.md' \
     --exclude 'Arbo_CTO_Handoff_Memo.md' \
+    --exclude 'CTO_REBUILD_PLAN.md' \
+    --exclude 'CTO_MEMO*' \
     ./ "${VPS}:${REMOTE_DIR}/"
 
 echo "=== Installing dependencies ==="

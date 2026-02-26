@@ -13,63 +13,6 @@ polymarket:
   max_retries: 3
   timeout_seconds: 10
 
-# --- Layer 1: Market Making ---
-market_maker:
-  min_spread: 0.02
-  min_volume_24h: 1000
-  max_volume_24h: 50000
-  max_inventory_imbalance: 0.6
-  order_size_pct: 0.025
-  heartbeat_interval_s: 30
-  prefer_fee_markets: true
-
-# --- Layer 2: Value Betting ---
-# edge_threshold and kelly_fraction tuned via backtest (2026-02-21)
-value_model:
-  edge_threshold: 0.05
-  scan_interval_s: 300
-  min_training_samples: 200
-  xgboost_weight: 0.5
-  llm_weight: 0.3
-  historical_weight: 0.2
-  kelly_fraction: 0.25
-  max_position_pct: 0.05
-  crypto_edge_threshold: 0.03
-  politics_edge_threshold: 0.04
-  max_politics_per_scan: 10
-
-# --- Layer 4: Confluence ---
-confluence:
-  min_score: 2  # D2 (2026-02-25): restored to 2 (was 1 for diagnostic mode)
-  standard_size_pct: 0.025
-  double_size_pct: 0.05
-  whale_min_confidence: 0.6
-  whale_poll_interval_s: 4
-  whale_detection_target_s: 10
-
-# --- Layer 5: Logical Arb ---
-logical_arb:
-  min_pricing_violation: 0.03
-  scan_interval_s: 900
-  llm_model: "gemini-2.5-flash"
-  max_llm_calls_per_hour: 40
-  negrisk_sum_threshold: 0.03
-
-# --- Binance public API ---
-binance:
-  base_url: "https://api.binance.com"
-  futures_url: "https://fapi.binance.com"
-  max_requests_per_min: 100
-  cache_ttl: 300
-
-# --- Layer 6: Temporal Crypto ---
-temporal_crypto:
-  spot_sources: ["binance_ws", "coinbase_ws"]
-  price_deviation_threshold: 0.005
-  market_lag_window_s: 60
-  use_postonly: true
-  max_trades_per_hour: 20
-
 # --- Layer 7: Order Flow ---
 order_flow:
   ctf_exchange: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
@@ -77,31 +20,6 @@ order_flow:
   flow_imbalance_threshold: 0.65
   rolling_windows: [3600, 14400, 86400]
   min_converging_signals: 2
-
-# --- Layer 8: Attention Markets ---
-attention_markets:
-  sentiment_scan_interval_s: 1800
-  min_divergence: 0.05
-  max_position_pct: 0.05
-  sources: ["twitter", "reddit", "tiktok"]
-  llm_model: "gemini-2.5-flash"
-
-# --- Layer 9: Sports Latency ---
-sports_latency:
-  max_trade_size: 200
-  max_trades_per_hour: 10
-  min_probability_extreme: 0.95
-
-# --- The Odds API ---
-# h2h + totals = 2 credits/req. Cache 1800s → ~48 calls/day × 3 leagues = 288 credits/day = ~8.6K/month
-# Was 900s (854 credits/day = 25.6K/month, over 20K tier). 1800s is safe margin.
-odds_api:
-  base_url: "https://api.the-odds-api.com/v4"
-  regions: "eu"
-  markets: "h2h,totals"
-  odds_format: "decimal"
-  min_remaining_quota: 100
-  cache_ttl: 1800
 
 # --- LLM provider ---
 llm:
@@ -147,6 +65,20 @@ theta_decay:
   max_concurrent_positions: 10  # Max concurrent theta positions
   excluded_categories: ["crypto"]
   snapshot_interval_s: 300      # 5 min taker flow snapshots
+
+# --- Strategy B: Reflexivity Surfer ---
+reflexivity:
+  boom_divergence_threshold: -0.10   # Divergence < -10% → Phase 2 (buy YES)
+  peak_divergence_threshold: 0.20    # Divergence > +20% → Phase 3 (buy NO)
+  phase2_max_position: 20            # $10-20 for Phase 2
+  phase3_max_position: 50            # $20-50 for Phase 3-4
+  phase2_stop_loss: 0.15             # -15% stop loss Phase 2
+  phase3_stop_loss: 0.25             # -25% stop loss Phase 3-4
+  max_concurrent_per_phase: 5        # Max 5 positions per phase type
+  scan_interval_s: 600               # 10 min between scans
+  min_volume_24h: 5000               # $5K minimum volume
+  min_liquidity: 2000                # $2K minimum liquidity
+  kaito_cache_ttl_s: 300             # 5 min Kaito data cache
 
 # --- Strategy allocations: DOCUMENTATION ONLY ---
 # Actual values are HARDCODED in arbo/core/risk_manager.py

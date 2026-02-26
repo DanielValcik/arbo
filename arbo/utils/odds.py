@@ -86,3 +86,36 @@ def half_kelly(
 
     half = full_kelly * Decimal("0.5")
     return min(half, max_position_pct)
+
+
+def quarter_kelly(
+    model_prob: Decimal,
+    market_price: Decimal,
+    max_position_pct: Decimal = Decimal("0.05"),
+) -> Decimal:
+    """Calculate quarter-Kelly position size for Polymarket.
+
+    More conservative than half-Kelly — used by Strategy A (Theta Decay)
+    and Strategy C (Compound Weather) for smaller, higher-frequency positions.
+
+    Args:
+        model_prob: Our estimated probability (0-1).
+        market_price: Polymarket price (0-1).
+        max_position_pct: Maximum position as fraction of capital.
+
+    Returns:
+        Fraction of capital to allocate (0 to max_position_pct).
+    """
+    if market_price <= 0 or market_price >= 1:
+        return Decimal(0)
+    if model_prob <= 0 or model_prob >= 1:
+        return Decimal(0)
+
+    decimal_odds = Decimal(1) / market_price
+    full_kelly = (model_prob * decimal_odds - Decimal(1)) / (decimal_odds - Decimal(1))
+
+    if full_kelly <= 0:
+        return Decimal(0)
+
+    quarter = full_kelly * Decimal("0.25")
+    return min(quarter, max_position_pct)

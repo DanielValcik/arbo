@@ -1,14 +1,14 @@
-"""Tests for PM-104: Gemini LLM Probability Agent.
+"""Tests for Gemini LLM agent (RDH-307).
 
 Tests verify:
 1. RateLimiter: allows, blocks, replenishes
-2. Prompt building: includes question + context
-3. Predict: valid response, Gemini fail→Claude, both fail→None,
-   rate limited→None, invalid JSON→fallback, clamp probability,
-   empty reasoning→fallback
+2. raw_query: Gemini primary, Claude fallback, both fail, rate limited
+3. query_mindshare: builds prompt, clamps values, handles missing fields
 4. Initialize: no key logs warning
+5. _extract_json: various LLM response formats
 
-Acceptance: valid JSON with probability [0,1], non-empty reasoning, <5s response.
+Acceptance: raw_query works, rate limiter works, _extract_json works,
+predict() removed, query_mindshare works.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from arbo.agents.gemini_agent import GeminiAgent, LLMPrediction, RateLimiter, _extract_json
+from arbo.agents.gemini_agent import GeminiAgent, RateLimiter, _extract_json
 
 # ================================================================
 # RateLimiter
@@ -54,65 +54,32 @@ class TestRateLimiter:
 
 
 # ================================================================
-# Prompt building
+# raw_query
 # ================================================================
 
 
-class TestPrompt:
-    """Prompt includes question and context."""
-
-    @patch("arbo.agents.gemini_agent.get_config")
-    def test_prompt_includes_context(self, mock_config: MagicMock) -> None:
-        mock_config.return_value = _mock_config()
-        agent = GeminiAgent()
-
-        prompt = agent._build_prompt(
-            question="Will Arsenal win the Premier League?",
-            current_price=0.35,
-            category="soccer",
-            volume_24h=50000.0,
-        )
-
-        assert "Arsenal" in prompt
-        assert "Premier League" in prompt
-        assert "0.3500" in prompt
-        assert "soccer" in prompt
-        assert "$50,000" in prompt
-
-
-# ================================================================
-# Predict
-# ================================================================
-
-
-class TestPredict:
-    """GeminiAgent.predict() with mocked LLM calls."""
+class TestRawQuery:
+    """GeminiAgent.raw_query() with mocked LLM calls."""
 
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        """Set up agent with mocked config."""
         with patch("arbo.agents.gemini_agent.get_config") as mock_cfg:
             mock_cfg.return_value = _mock_config()
             self.agent = GeminiAgent()
 
-    async def test_valid_gemini_response(self) -> None:
-        """Gemini returns valid JSON → LLMPrediction."""
+    async def test_gemini_returns_json(self) -> None:
+        """Gemini returns valid JSON → parsed dict."""
         mock_model = MagicMock()
         response = MagicMock()
-        response.text = json.dumps(
-            {"probability": 0.65, "confidence": 0.8, "reasoning": "Strong form this season."}
-        )
+        response.text = json.dumps({"result": "ok", "score": 0.85})
         mock_model.generate_content.return_value = response
         self.agent._gemini_model = mock_model
 
-        result = await self.agent.predict("Will Arsenal win?", 0.35, "soccer", 5000.0)
+        result = await self.agent.raw_query("Analyze this topic")
 
         assert result is not None
-        assert isinstance(result, LLMPrediction)
-        assert result.probability == 0.65
-        assert result.confidence == 0.8
-        assert result.provider == "gemini"
-        assert result.reasoning == "Strong form this season."
+        assert result["result"] == "ok"
+        assert result["score"] == 0.85
 
     async def test_gemini_fails_fallback_to_claude(self) -> None:
         """Gemini error → falls back to Claude."""
@@ -123,20 +90,15 @@ class TestPredict:
         mock_claude = AsyncMock()
         claude_response = MagicMock()
         claude_response.content = [
-            MagicMock(
-                text=json.dumps(
-                    {"probability": 0.70, "confidence": 0.6, "reasoning": "Fallback analysis."}
-                )
-            )
+            MagicMock(text=json.dumps({"result": "fallback", "score": 0.7}))
         ]
         mock_claude.messages.create.return_value = claude_response
         self.agent._anthropic_client = mock_claude
 
-        result = await self.agent.predict("Will Arsenal win?", 0.35)
+        result = await self.agent.raw_query("Analyze this")
 
         assert result is not None
-        assert result.provider == "claude"
-        assert result.probability == 0.70
+        assert result["result"] == "fallback"
         assert self.agent._fallback_calls == 1
 
     async def test_both_fail_returns_none(self) -> None:
@@ -149,7 +111,7 @@ class TestPredict:
         mock_claude.messages.create.side_effect = Exception("Claude down")
         self.agent._anthropic_client = mock_claude
 
-        result = await self.agent.predict("Will Arsenal win?", 0.35)
+        result = await self.agent.raw_query("Analyze this")
         assert result is None
 
     async def test_rate_limited_returns_none(self) -> None:
@@ -158,7 +120,7 @@ class TestPredict:
         self.agent._gemini_model = mock_model
         self.agent._rate_limiter = RateLimiter(max_calls=0)
 
-        result = await self.agent.predict("Question?", 0.5)
+        result = await self.agent.raw_query("Question?")
 
         assert result is None
         mock_model.generate_content.assert_not_called()
@@ -174,45 +136,131 @@ class TestPredict:
         mock_claude = AsyncMock()
         claude_response = MagicMock()
         claude_response.content = [
-            MagicMock(
-                text=json.dumps({"probability": 0.55, "confidence": 0.5, "reasoning": "Backup."})
-            )
+            MagicMock(text=json.dumps({"result": "backup"}))
         ]
         mock_claude.messages.create.return_value = claude_response
         self.agent._anthropic_client = mock_claude
 
-        result = await self.agent.predict("Question?", 0.5)
+        result = await self.agent.raw_query("Question?")
         assert result is not None
-        assert result.provider == "claude"
+        assert result["result"] == "backup"
 
-    async def test_clamp_probability(self) -> None:
-        """Probability outside [0,1] gets clamped."""
-        mock_model = MagicMock()
-        response = MagicMock()
-        response.text = json.dumps(
-            {"probability": 1.5, "confidence": -0.3, "reasoning": "Over-confident model."}
-        )
-        mock_model.generate_content.return_value = response
-        self.agent._gemini_model = mock_model
-
-        result = await self.agent.predict("Question?", 0.5)
-
-        assert result is not None
-        assert result.probability == 1.0  # Clamped from 1.5
-        assert result.confidence == 0.0  # Clamped from -0.3
-
-    async def test_empty_reasoning_returns_none(self) -> None:
-        """Empty reasoning string → rejected, falls back."""
-        mock_model = MagicMock()
-        response = MagicMock()
-        response.text = json.dumps({"probability": 0.5, "confidence": 0.5, "reasoning": ""})
-        mock_model.generate_content.return_value = response
-        self.agent._gemini_model = mock_model
-
-        # No Claude fallback configured
+    async def test_no_providers_returns_none(self) -> None:
+        """No Gemini or Claude configured → None."""
+        self.agent._gemini_model = None
         self.agent._anthropic_client = None
 
-        result = await self.agent.predict("Question?", 0.5)
+        result = await self.agent.raw_query("Question?")
+        assert result is None
+
+
+# ================================================================
+# query_mindshare
+# ================================================================
+
+
+class TestQueryMindshare:
+    """GeminiAgent.query_mindshare() — Kaito LLM fallback."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        with patch("arbo.agents.gemini_agent.get_config") as mock_cfg:
+            mock_cfg.return_value = _mock_config()
+            self.agent = GeminiAgent()
+
+    async def test_valid_mindshare_response(self) -> None:
+        """Returns clamped mindshare data from LLM."""
+        mock_model = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps({
+            "mindshare_score": 0.35,
+            "sentiment": 0.6,
+            "confidence": 0.7,
+            "reasoning": "High social buzz around this topic.",
+        })
+        mock_model.generate_content.return_value = response
+        self.agent._gemini_model = mock_model
+
+        result = await self.agent.query_mindshare("Bitcoin ETF approval")
+
+        assert result is not None
+        assert result["mindshare_score"] == 0.35
+        assert result["sentiment"] == 0.6
+        assert result["confidence"] == 0.7
+        assert "buzz" in result["reasoning"]
+
+    async def test_clamps_out_of_range_values(self) -> None:
+        """Values outside valid ranges are clamped."""
+        mock_model = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps({
+            "mindshare_score": 1.5,  # > 1.0
+            "sentiment": -2.0,  # < -1.0
+            "confidence": 3.0,  # > 1.0
+            "reasoning": "Extreme values test.",
+        })
+        mock_model.generate_content.return_value = response
+        self.agent._gemini_model = mock_model
+
+        result = await self.agent.query_mindshare("Test topic")
+
+        assert result is not None
+        assert result["mindshare_score"] == 1.0
+        assert result["sentiment"] == -1.0
+        assert result["confidence"] == 1.0
+
+    async def test_includes_market_question_in_prompt(self) -> None:
+        """Market question is included in the prompt sent to LLM."""
+        mock_model = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps({
+            "mindshare_score": 0.2,
+            "sentiment": 0.0,
+            "confidence": 0.5,
+            "reasoning": "Moderate attention.",
+        })
+        mock_model.generate_content.return_value = response
+        self.agent._gemini_model = mock_model
+
+        await self.agent.query_mindshare(
+            "Trump",
+            market_question="Will Trump win?",
+            current_price=0.55,
+        )
+
+        call_args = mock_model.generate_content.call_args[0][0]
+        assert "Trump" in call_args
+        assert "Will Trump win?" in call_args
+        assert "0.5500" in call_args
+
+    async def test_rate_limited_returns_none(self) -> None:
+        """Rate limited → returns None."""
+        self.agent._rate_limiter = RateLimiter(max_calls=0)
+        result = await self.agent.query_mindshare("Bitcoin")
+        assert result is None
+
+    async def test_handles_missing_fields(self) -> None:
+        """LLM response missing some fields still works (no clamp crash)."""
+        mock_model = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps({
+            "reasoning": "Minimal response.",
+        })
+        mock_model.generate_content.return_value = response
+        self.agent._gemini_model = mock_model
+
+        result = await self.agent.query_mindshare("Topic")
+
+        assert result is not None
+        assert result["reasoning"] == "Minimal response."
+        assert "mindshare_score" not in result
+
+    async def test_llm_fails_returns_none(self) -> None:
+        """Both providers fail → None."""
+        self.agent._gemini_model = None
+        self.agent._anthropic_client = None
+
+        result = await self.agent.query_mindshare("Bitcoin")
         assert result is None
 
 
@@ -254,16 +302,38 @@ class TestStats:
 
         mock_model = MagicMock()
         response = MagicMock()
-        response.text = json.dumps({"probability": 0.5, "confidence": 0.5, "reasoning": "Test."})
+        response.text = json.dumps({"result": "ok"})
         mock_model.generate_content.return_value = response
         agent._gemini_model = mock_model
 
-        await agent.predict("Q?", 0.5)
+        await agent.raw_query("Test query")
 
         stats = agent.stats
         assert stats["total_calls"] == 1
         assert stats["fallback_calls"] == 0
         assert stats["remaining_hourly"] == 59  # 60 - 1
+
+
+# ================================================================
+# predict() removed
+# ================================================================
+
+
+class TestPredictRemoved:
+    """Verify predict() method no longer exists (RDH-307)."""
+
+    @patch("arbo.agents.gemini_agent.get_config")
+    def test_predict_removed(self, mock_config: MagicMock) -> None:
+        """predict() method has been removed."""
+        mock_config.return_value = _mock_config()
+        agent = GeminiAgent()
+        assert not hasattr(agent, "predict")
+
+    def test_llm_prediction_removed(self) -> None:
+        """LLMPrediction dataclass has been removed from module."""
+        import arbo.agents.gemini_agent as mod
+
+        assert not hasattr(mod, "LLMPrediction")
 
 
 # ================================================================
@@ -309,7 +379,7 @@ class TestExtractJson:
 def _mock_config() -> MagicMock:
     """Create a mock ArboConfig for testing."""
     config = MagicMock()
-    config.llm.gemini_model = "gemini-2.0-flash"
+    config.llm.gemini_model = "gemini-2.5-flash"
     config.llm.claude_model = "claude-haiku-4-5-20251001"
     config.llm.max_calls_per_hour = 60
     config.gemini_api_key = "test-gemini-key"

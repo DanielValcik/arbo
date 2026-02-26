@@ -544,10 +544,8 @@ async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]
         if remaining is not None:
             odds_quota = {"remaining": remaining, "total": 20000}
 
-    # Confluence threshold
-    confluence_threshold = 2  # default
-    if orch and hasattr(orch, "_config") and hasattr(orch._config, "confluence"):
-        confluence_threshold = orch._config.confluence.min_score
+    # Confluence threshold — legacy, hardcoded (config removed in RDH-309)
+    confluence_threshold = 2
 
     return {
         "uptime_s": uptime_s,

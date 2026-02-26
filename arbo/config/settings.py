@@ -35,74 +35,6 @@ class PolymarketConfig(BaseModel):
     timeout_seconds: int = 10
 
 
-class MarketMakerConfig(BaseModel):
-    """Layer 1: Market Making parameters."""
-
-    min_spread: float = 0.04
-    min_volume_24h: int = 1000
-    max_volume_24h: int = 50000
-    max_inventory_imbalance: float = 0.6
-    order_size_pct: float = 0.025
-    heartbeat_interval_s: int = 30
-    prefer_fee_markets: bool = True
-
-
-class ValueModelConfig(BaseModel):
-    """Layer 2: Value Betting parameters."""
-
-    edge_threshold: float = 0.03
-    scan_interval_s: int = 300
-    min_training_samples: int = 200
-    xgboost_weight: float = 0.5
-    llm_weight: float = 0.3
-    historical_weight: float = 0.2
-    kelly_fraction: float = 0.5
-    max_position_pct: float = 0.05
-    crypto_edge_threshold: float = 0.03
-    politics_edge_threshold: float = 0.04
-    max_politics_per_scan: int = 10
-
-
-class ConfluenceConfig(BaseModel):
-    """Layer 4: Confluence scoring parameters."""
-
-    min_score: int = 2
-    standard_size_pct: float = 0.025
-    double_size_pct: float = 0.05
-    whale_min_confidence: float = 0.6
-    whale_poll_interval_s: int = 4
-    whale_detection_target_s: int = 10
-
-
-class LogicalArbConfig(BaseModel):
-    """Layer 5: Logical arbitrage parameters."""
-
-    min_pricing_violation: float = 0.03
-    scan_interval_s: int = 900
-    llm_model: str = "gemini-2.5-flash"
-    max_llm_calls_per_hour: int = 40
-    negrisk_sum_threshold: float = 0.03
-
-
-class BinanceConfig(BaseModel):
-    """Binance public API configuration."""
-
-    base_url: str = "https://api.binance.com"
-    futures_url: str = "https://fapi.binance.com"
-    max_requests_per_min: int = 100
-    cache_ttl: int = 300
-
-
-class TemporalCryptoConfig(BaseModel):
-    """Layer 6: Temporal crypto arbitrage parameters."""
-
-    spot_sources: list[str] = ["binance_ws", "coinbase_ws"]
-    price_deviation_threshold: float = 0.005
-    market_lag_window_s: int = 60
-    use_postonly: bool = True
-    max_trades_per_hour: int = 20
-
-
 class OrderFlowConfig(BaseModel):
     """Layer 7: Smart money order flow parameters."""
 
@@ -111,26 +43,6 @@ class OrderFlowConfig(BaseModel):
     flow_imbalance_threshold: float = 0.65
     rolling_windows: list[int] = [3600, 14400, 86400]
     min_converging_signals: int = 2
-
-
-class AttentionMarketsConfig(BaseModel):
-    """Layer 8: Attention Markets parameters."""
-
-    sentiment_scan_interval_s: int = 1800
-    min_divergence: float = 0.05
-    max_position_pct: float = 0.05
-    sources: list[str] = ["twitter", "reddit", "tiktok"]
-    llm_model: str = "gemini-2.5-flash"
-
-
-class SportsLatencyConfig(BaseModel):
-    """Layer 9: Live sports latency parameters."""
-
-    max_trade_size: int = 200
-    max_trades_per_hour: int = 10
-    min_probability_extreme: float = 0.95
-    max_fee_pct: float = 0.003
-    poll_interval_s: int = 5
 
 
 class WeatherConfig(BaseModel):
@@ -168,15 +80,20 @@ class ThetaDecayConfig(BaseModel):
     snapshot_interval_s: int = 300  # 5 min taker flow snapshots
 
 
-class OddsApiConfig(BaseModel):
-    """The Odds API configuration — DEPRECATED (RDH pivot, subscription cancelled)."""
+class ReflexivitySurferConfig(BaseModel):
+    """Strategy B: Reflexivity Surfer configuration."""
 
-    base_url: str = "https://api.the-odds-api.com/v4"
-    regions: str = "eu"
-    markets: str = "h2h"
-    odds_format: str = "decimal"
-    min_remaining_quota: int = 100
-    cache_ttl: int = 900
+    boom_divergence_threshold: float = -0.10  # Divergence < -10% → Phase 2 (buy YES)
+    peak_divergence_threshold: float = 0.20  # Divergence > +20% → Phase 3 (sell YES, buy NO)
+    phase2_max_position: float = 20.0  # $10-20 for Phase 2 positions
+    phase3_max_position: float = 50.0  # $20-50 for Phase 3-4 positions
+    phase2_stop_loss: float = 0.15  # -15% stop loss for Phase 2
+    phase3_stop_loss: float = 0.25  # -25% stop loss for Phase 3-4
+    max_concurrent_per_phase: int = 5  # Max 5 positions per phase type
+    scan_interval_s: int = 600  # 10 min between scans
+    min_volume_24h: float = 5000.0  # $5K minimum 24h volume
+    min_liquidity: float = 2000.0  # $2K minimum liquidity
+    kaito_cache_ttl_s: int = 300  # 5 min Kaito data cache
 
 
 class LLMConfig(BaseModel):
@@ -289,18 +206,10 @@ class ArboConfig(BaseSettings):
 
     # Nested config (loaded from YAML)
     polymarket: PolymarketConfig = PolymarketConfig()
-    market_maker: MarketMakerConfig = MarketMakerConfig()
-    value_model: ValueModelConfig = ValueModelConfig()
-    confluence: ConfluenceConfig = ConfluenceConfig()
-    logical_arb: LogicalArbConfig = LogicalArbConfig()
-    binance: BinanceConfig = BinanceConfig()
-    temporal_crypto: TemporalCryptoConfig = TemporalCryptoConfig()
     order_flow: OrderFlowConfig = OrderFlowConfig()
-    attention_markets: AttentionMarketsConfig = AttentionMarketsConfig()
-    sports_latency: SportsLatencyConfig = SportsLatencyConfig()
     weather: WeatherConfig = WeatherConfig()
     theta_decay: ThetaDecayConfig = ThetaDecayConfig()
-    odds_api: OddsApiConfig = OddsApiConfig()
+    reflexivity: ReflexivitySurferConfig = ReflexivitySurferConfig()
     llm: LLMConfig = LLMConfig()
     risk: RiskConfig = RiskConfig()
     dashboard: DashboardConfig = DashboardConfig()

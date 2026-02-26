@@ -386,12 +386,12 @@ class ArboOrchestrator:
     async def _init_binance_client(self) -> Any:
         from arbo.connectors.binance_client import BinanceClient
 
-        cfg = self._config.binance
+        # Legacy L6 — hardcoded defaults (config removed in RDH-309)
         client = BinanceClient(
-            base_url=cfg.base_url,
-            futures_url=cfg.futures_url,
-            max_requests_per_min=cfg.max_requests_per_min,
-            cache_ttl=cfg.cache_ttl,
+            base_url="https://api.binance.com",
+            futures_url="https://fapi.binance.com",
+            max_requests_per_min=100,
+            cache_ttl=300,
         )
         await client.initialize()
         return client
@@ -448,19 +448,19 @@ class ArboOrchestrator:
         else:
             logger.warning("xgboost_model_not_found", path=str(model_path))
 
-        vm_cfg = self._config.value_model
+        # Legacy L2 — hardcoded defaults (config removed in RDH-309)
         return ValueSignalGenerator(
             discovery=self._discovery,
             odds_client=self._odds_client,
             matcher=self._event_matcher,
             value_model=value_model,
-            edge_threshold=vm_cfg.edge_threshold,
+            edge_threshold=0.05,
             crypto_model=self._crypto_model,
             binance_client=self._binance_client,
             gemini=self._gemini,
-            crypto_edge_threshold=vm_cfg.crypto_edge_threshold,
-            politics_edge_threshold=vm_cfg.politics_edge_threshold,
-            max_politics_per_scan=vm_cfg.max_politics_per_scan,
+            crypto_edge_threshold=0.03,
+            politics_edge_threshold=0.04,
+            max_politics_per_scan=10,
         )
 
     async def _init_market_graph(self) -> Any:
@@ -2029,15 +2029,20 @@ class ArboOrchestrator:
 
 
 def main() -> None:
-    """CLI entry point for Arbo orchestrator."""
-    parser = argparse.ArgumentParser(description="Arbo Trading System")
-    parser.add_argument("--mode", default="paper", choices=["paper", "live"])
+    """CLI entry point for legacy 9-layer orchestrator.
+
+    For the new 3-strategy RDH orchestrator, use:
+      python -m arbo --mode rdh
+    """
+    parser = argparse.ArgumentParser(description="Arbo Trading System (Legacy)")
+    parser.add_argument("--mode", default="paper", choices=["paper", "live", "legacy"])
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
     setup_logging(log_level=args.log_level)
 
-    orchestrator = ArboOrchestrator(mode=args.mode)
+    effective_mode = "paper" if args.mode == "legacy" else args.mode
+    orchestrator = ArboOrchestrator(mode=effective_mode)
     asyncio.run(orchestrator.start())
 
 
