@@ -355,10 +355,15 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
 
 @app.get("/api/signals")
-async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+async def api_signals(
+    _user: str = Depends(_verify_credentials),
+    strategy: str | None = None,
+) -> dict[str, Any]:
     """Last 100 tradeable signals (edge ≤ 12%) with market names and category.
 
     Signals with edge > 12% are excluded (model error / line mismatch).
+    By default only RDH signals are shown (layer=0). Pass strategy=A/B/C to
+    filter further, or strategy=all to include legacy signals.
     """
     signals: list[dict[str, Any]] = []
     max_edge = Decimal("0.12")
@@ -368,13 +373,26 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
 
         factory = get_session_factory()
         async with factory() as session:
-            result = await session.execute(
+            query = (
                 sa.select(DBSignal, Market.question, Market.category)
                 .outerjoin(Market, DBSignal.market_condition_id == Market.condition_id)
                 .where(DBSignal.edge <= max_edge)
-                .order_by(DBSignal.detected_at.desc())
-                .limit(100)
             )
+
+            # Strategy filter: default = RDH only (layer 0)
+            if strategy and strategy.upper() in ("A", "B", "C"):
+                # Filter to specific strategy via JSONB details->>'strategy'
+                query = query.where(
+                    DBSignal.details["strategy"].astext == strategy.upper()
+                )
+            elif strategy and strategy.lower() == "all":
+                pass  # Show everything including legacy
+            else:
+                # Default: only RDH signals (layer=0)
+                query = query.where(DBSignal.layer == 0)
+
+            query = query.order_by(DBSignal.detected_at.desc()).limit(100)
+            result = await session.execute(query)
             for row in result.all():
                 sig = row[0]
                 question = row[1] or sig.market_condition_id[:20]
@@ -384,10 +402,12 @@ async def api_signals(_user: str = Depends(_verify_credentials)) -> dict[str, An
                 category = details.get("category", row[2] or "other")
                 if isinstance(category, str):
                     category = category.capitalize()
+                sig_strategy = details.get("strategy", "")
                 signals.append(
                     {
                         "timestamp": sig.detected_at.isoformat() if sig.detected_at else None,
                         "layer": sig.layer,
+                        "strategy": sig_strategy,
                         "market": question,
                         "direction": sig.direction,
                         "edge": _dec(sig.edge),

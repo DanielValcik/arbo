@@ -353,6 +353,13 @@ class TestSignalsAPI:
         data = resp.json()
         assert "signals" in data
 
+    def test_strategy_filter_param(self, client: TestClient) -> None:
+        """Strategy filter query param accepted without error."""
+        for param in ("A", "B", "C", "all"):
+            resp = client.get(f"/api/signals?strategy={param}", auth=AUTH)
+            assert resp.status_code == 200
+            assert "signals" in resp.json()
+
 
 class TestTradesAPI:
     """Test /api/trades endpoint."""

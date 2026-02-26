@@ -459,7 +459,7 @@
 
     function matchesFilter(item) {
         if (currentFilter === 'all') return true;
-        const strat = layerToStrategy(item.layer);
+        const strat = item.strategy || layerToStrategy(item.layer);
         return strat === currentFilter;
     }
 
@@ -778,7 +778,7 @@
         tbody.innerHTML = filtered.slice(0, 50).map(s => `
             <tr>
                 <td>${fmtTime(s.timestamp)}</td>
-                <td>${stratBadge(layerToStrategy(s.layer))}</td>
+                <td>${stratBadge(s.strategy || layerToStrategy(s.layer))}</td>
                 <td title="${s.market}">${truncate(s.market, 30)}</td>
                 <td>${s.direction}</td>
                 <td>${s.edge !== null ? (s.edge * 100).toFixed(1) + '%' : '--'}</td>
