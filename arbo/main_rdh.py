@@ -620,9 +620,20 @@ class RDHOrchestrator:
             logger.info("strategy_a_exits", count=len(exits))
 
     async def _run_strategy_b(self) -> None:
-        """Run Strategy B: Reflexivity Surfer poll cycle + exit checks."""
+        """Run Strategy B: Reflexivity Surfer poll cycle + exit checks.
+
+        DISABLED: Strategy B requires live Kaito API. Stub mode generates
+        fake probabilities (~0.50) that cause every low-priced market to
+        trigger BOOM phase entry, resulting in random garbage trades.
+        Re-enable when Kaito API integration is live.
+        """
         if self._strategy_b is None:
             return
+
+        # Block trading in stub mode — stub Kaito causes random entries
+        if self._kaito is not None and not getattr(self._kaito, "_live_mode", False):
+            return
+
         trades = await self._strategy_b.poll_cycle(self._markets)
         if trades:
             logger.info("strategy_b_trades", count=len(trades))
@@ -655,25 +666,22 @@ class RDHOrchestrator:
         return prices
 
     async def _save_trades_to_db(self, trades: list[dict[str, Any]]) -> None:
-        """Best-effort save trade records to database."""
-        try:
-            from arbo.utils.db import PaperTradeRow, get_session_factory
-
-            factory = get_session_factory()
-            async with factory() as session:
-                for trade in trades:
-                    row = PaperTradeRow(
-                        market_condition_id=trade.get("condition_id", ""),
-                        token_id=trade.get("token_id", ""),
-                        side=trade.get("side", ""),
-                        price=float(trade.get("price", 0)),
-                        size=float(trade.get("size", 0)),
-                        strategy=trade.get("strategy", ""),
-                    )
-                    session.add(row)
-                await session.commit()
-        except Exception as e:
-            logger.debug("save_trades_db_error", error=str(e))
+        """Best-effort save trade records to database via paper engine."""
+        if self._paper_engine is None:
+            return
+        for trade_dict in trades:
+            # Find the matching in-memory trade from paper engine
+            trade_obj = None
+            for t in reversed(self._paper_engine.trade_history):
+                cond = trade_dict.get("condition_id", "")
+                if t.market_condition_id == cond and t.status.value == "open":
+                    trade_obj = t
+                    break
+            if trade_obj is not None:
+                try:
+                    await self._paper_engine.save_trade_to_db(trade_obj)
+                except Exception as e:
+                    logger.warning("save_trade_db_error", error=str(e))
 
     # ------------------------------------------------------------------
     # Health monitor
