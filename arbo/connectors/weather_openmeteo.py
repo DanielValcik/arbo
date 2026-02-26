@@ -27,8 +27,20 @@ logger = get_logger("weather_openmeteo")
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 CACHE_TTL_S = 3600  # 1 hour
 
-# Cities covered by Open-Meteo
-_COVERED_CITIES = {City.SEOUL, City.BUENOS_AIRES}
+# Cities covered by Open-Meteo (free, global coverage, no API key)
+_COVERED_CITIES = {
+    City.SEOUL,
+    City.BUENOS_AIRES,
+    City.ATLANTA,
+    City.TORONTO,
+    City.ANKARA,
+    City.SAO_PAULO,
+    City.MIAMI,
+    City.PARIS,
+    City.DALLAS,
+    City.SEATTLE,
+    City.WELLINGTON,
+}
 
 # Exponential backoff config
 _MAX_RETRIES = 3

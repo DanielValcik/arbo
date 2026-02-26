@@ -4,11 +4,13 @@ Scans Polymarket weather markets via Gamma API, parses temperature bucket ranges
 from market titles, and calculates edge by comparing forecast probabilities
 against market prices.
 
-Polymarket weather markets typically have titles like:
-- "Will the high temperature in NYC be above 75°F on March 15?"
-- "NYC high temperature on March 15: 70-74°F?"
-- "High temperature in Chicago on March 10?"
-  with outcomes like "Above 50°F", "45-50°F", "Below 45°F"
+Polymarket weather markets use NegRisk events with titles like:
+- Event: "Highest temperature in NYC on February 26?"
+- Child markets (9 per event):
+  - "Will the highest temperature in New York City be 33°F or below on February 26?"
+  - "Will the highest temperature in New York City be between 34-35°F on February 26?"
+  - "Will the highest temperature in Seoul be 6°C on February 26?"
+  - "Will the highest temperature in London be 8°C or below on February 26?"
 """
 
 from __future__ import annotations
@@ -36,36 +38,61 @@ _CITY_PATTERNS: dict[City, list[str]] = {
     City.LONDON: ["london"],
     City.SEOUL: ["seoul"],
     City.BUENOS_AIRES: ["buenos aires"],
+    City.ATLANTA: ["atlanta"],
+    City.TORONTO: ["toronto"],
+    City.ANKARA: ["ankara"],
+    City.SAO_PAULO: ["sao paulo", "são paulo"],
+    City.MIAMI: ["miami"],
+    City.PARIS: ["paris"],
+    City.DALLAS: ["dallas"],
+    City.SEATTLE: ["seattle"],
+    City.WELLINGTON: ["wellington"],
 }
 
 # Temperature bucket patterns in market questions
-# Matches: "70-74°F", "above 75°F", "below 45°F", "70°F to 74°F"
+# Real Polymarket formats:
+#   Range: "between 34-35°F", "between 76-77°F"
+#   Exact: "be 6°C on", "be 9°C on"
+#   Below: "33°F or below", "8°C or below", "-7°C or below"
 _BUCKET_PATTERNS = [
-    # Range: "70-74°F" or "70 to 74°F" or "70°F - 74°F" or "between 70 and 74°F"
+    # Range: "between 34-35°F" (Polymarket US cities)
     re.compile(
-        r"(\d+)\s*°?\s*[fFcC]?\s*(?:-|to|–)\s*(\d+)\s*°\s*([fFcC])",
+        r"between\s+(-?\d+)\s*-\s*(-?\d+)\s*°\s*([fFcC])",
         re.IGNORECASE,
     ),
+    # Range: "70-74°F" or "70 to 74°F" or "70°F - 74°F"
     re.compile(
-        r"between\s+(\d+)\s*(?:°\s*[fFcC])?\s+and\s+(\d+)\s*°\s*([fFcC])",
+        r"(-?\d+)\s*°?\s*[fFcC]?\s*(?:-|to|–)\s*(-?\d+)\s*°\s*([fFcC])",
         re.IGNORECASE,
     ),
-    # Above/below: "above 75°F", "75°F or above", ">= 75°F"
+    # Range: "between 70 and 74°F"
     re.compile(
-        r"(?:above|over|>=?|more than|higher than)\s+(\d+)\s*°\s*([fFcC])",
+        r"between\s+(-?\d+)\s*(?:°\s*[fFcC])?\s+and\s+(-?\d+)\s*°\s*([fFcC])",
         re.IGNORECASE,
     ),
+    # Below: "-7°C or below", "33°F or below"
     re.compile(
-        r"(\d+)\s*°\s*([fFcC])\s+(?:or above|or more|or higher|\+)",
+        r"(-?\d+)\s*°\s*([fFcC])\s+or\s+below",
         re.IGNORECASE,
     ),
     # Below: "below 45°F", "under 45°F"
     re.compile(
-        r"(?:below|under|<=?|less than|lower than)\s+(\d+)\s*°\s*([fFcC])",
+        r"(?:below|under|<=?|less than|lower than)\s+(-?\d+)\s*°\s*([fFcC])",
         re.IGNORECASE,
     ),
+    # Above: "75°F or above"
     re.compile(
-        r"(\d+)\s*°\s*([fFcC])\s+(?:or below|or less|or lower|-)",
+        r"(-?\d+)\s*°\s*([fFcC])\s+(?:or above|or more|or higher|\+)",
+        re.IGNORECASE,
+    ),
+    # Above: "above 75°F", "over 75°F"
+    re.compile(
+        r"(?:above|over|>=?|more than|higher than)\s+(-?\d+)\s*°\s*([fFcC])",
+        re.IGNORECASE,
+    ),
+    # Exact single temp: "be 6°C on" (Polymarket non-US cities, 1-degree buckets)
+    re.compile(
+        r"be\s+(-?\d+)\s*°\s*([fFcC])\s+on\b",
         re.IGNORECASE,
     ),
 ]
@@ -93,8 +120,8 @@ _MONTH_MAP: dict[str, int] = {
 }
 
 # High vs low temperature indicator
-_HIGH_KEYWORDS = ["high temperature", "high temp", "daily high"]
-_LOW_KEYWORDS = ["low temperature", "low temp", "daily low", "overnight low"]
+_HIGH_KEYWORDS = ["highest temperature", "high temperature", "high temp", "daily high"]
+_LOW_KEYWORDS = ["lowest temperature", "low temperature", "low temp", "daily low", "overnight low"]
 
 
 @dataclass
@@ -174,11 +201,18 @@ def parse_target_date(text: str, default_year: int = 2026) -> date | None:
 
 
 def parse_temperature_bucket(text: str) -> TemperatureBucket | None:
-    """Parse a temperature bucket from market question or outcome text."""
+    """Parse a temperature bucket from market question or outcome text.
+
+    Handles Polymarket formats:
+    - Range: "between 34-35°F" or "70-74°F"
+    - Below: "33°F or below", "-7°C or below"
+    - Above: "75°F or above"
+    - Exact: "be 6°C on" (single-degree bucket)
+    """
     text_clean = text.strip()
 
-    # Try range patterns first: "70-74°F"
-    for pattern in _BUCKET_PATTERNS[:2]:
+    # Try range patterns (indices 0-2): "between 34-35°F", "70-74°F", "between 70 and 74°F"
+    for pattern in _BUCKET_PATTERNS[:3]:
         match = pattern.search(text_clean)
         if match:
             groups = match.groups()
@@ -187,13 +221,30 @@ def parse_temperature_bucket(text: str) -> TemperatureBucket | None:
             unit = groups[2].upper()
             if unit == "F":
                 low = fahrenheit_to_celsius(low)
-                high = fahrenheit_to_celsius(high)
+                high = fahrenheit_to_celsius(high + 1)  # inclusive upper bound
+            else:
+                high = high + 1  # °C ranges are inclusive
             return TemperatureBucket(
                 low_c=low, high_c=high, bucket_type="range", original_text=text_clean
             )
 
-    # Try "above" patterns
-    for pattern in _BUCKET_PATTERNS[2:4]:
+    # Try "below" patterns (indices 3-4): "33°F or below", "below 45°F"
+    for pattern in _BUCKET_PATTERNS[3:5]:
+        match = pattern.search(text_clean)
+        if match:
+            groups = match.groups()
+            threshold = float(groups[0])
+            unit = groups[1].upper()
+            if unit == "F":
+                threshold = fahrenheit_to_celsius(threshold + 1)  # "33 or below" = < 34
+            else:
+                threshold = threshold + 1  # "8°C or below" = < 9
+            return TemperatureBucket(
+                low_c=None, high_c=threshold, bucket_type="below", original_text=text_clean
+            )
+
+    # Try "above" patterns (indices 5-6): "75°F or above", "above 75°F"
+    for pattern in _BUCKET_PATTERNS[5:7]:
         match = pattern.search(text_clean)
         if match:
             groups = match.groups()
@@ -205,18 +256,21 @@ def parse_temperature_bucket(text: str) -> TemperatureBucket | None:
                 low_c=threshold, high_c=None, bucket_type="above", original_text=text_clean
             )
 
-    # Try "below" patterns
-    for pattern in _BUCKET_PATTERNS[4:6]:
-        match = pattern.search(text_clean)
-        if match:
-            groups = match.groups()
-            threshold = float(groups[0])
-            unit = groups[1].upper()
-            if unit == "F":
-                threshold = fahrenheit_to_celsius(threshold)
-            return TemperatureBucket(
-                low_c=None, high_c=threshold, bucket_type="below", original_text=text_clean
-            )
+    # Try exact single-value pattern (index 7): "be 6°C on"
+    match = _BUCKET_PATTERNS[7].search(text_clean)
+    if match:
+        groups = match.groups()
+        value = float(groups[0])
+        unit = groups[1].upper()
+        if unit == "F":
+            low = fahrenheit_to_celsius(value)
+            high = fahrenheit_to_celsius(value + 1)
+        else:
+            low = value
+            high = value + 1  # single-degree bucket: [6, 7)
+        return TemperatureBucket(
+            low_c=low, high_c=high, bucket_type="range", original_text=text_clean
+        )
 
     return None
 
@@ -396,12 +450,15 @@ def scan_weather_markets(
         List of WeatherSignal objects sorted by edge descending.
     """
     signals = []
+    weather_count = 0
+    parse_fail_count = 0
     for market in markets:
-        # Only look at weather-categorized or fee-free markets
+        # Only look at weather-categorized markets
         category = getattr(market, "category", "")
         if category != "weather":
             continue
 
+        weather_count += 1
         signal = scan_weather_market(market, forecasts, min_edge, min_volume)
         if signal:
             signals.append(signal)
@@ -414,6 +471,29 @@ def scan_weather_markets(
                 forecast_temp=round(signal.forecast_temp_c, 1),
                 market_price=signal.market.market_price,
             )
+        else:
+            # Debug: log why parsing failed
+            q = getattr(market, "question", "")
+            city = parse_city(q)
+            target_date = parse_target_date(q)
+            bucket = parse_temperature_bucket(q)
+            if city is None or target_date is None or bucket is None:
+                parse_fail_count += 1
+                logger.debug(
+                    "weather_parse_fail",
+                    question=q[:100],
+                    city_ok=city is not None,
+                    date_ok=target_date is not None,
+                    bucket_ok=bucket is not None,
+                )
+
+    if weather_count > 0:
+        logger.info(
+            "weather_scan_summary",
+            weather_markets=weather_count,
+            signals=len(signals),
+            parse_failures=parse_fail_count,
+        )
 
     # Sort by edge descending
     signals.sort(key=lambda s: s.edge, reverse=True)

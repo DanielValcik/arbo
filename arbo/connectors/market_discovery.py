@@ -574,6 +574,68 @@ class MarketDiscovery:
             )
         return all_markets
 
+    async def _fetch_weather_events(self) -> list[GammaMarket]:
+        """Fetch weather temperature events via /events endpoint.
+
+        Weather temperature markets (e.g., "Highest temperature in NYC on Feb 26?")
+        are NegRisk events that do NOT appear in the standard /markets endpoint.
+        They must be fetched via /events?tag_slug=weather.
+
+        Returns:
+            List of GammaMarket objects from weather temperature events.
+        """
+        if not self._session:
+            return []
+
+        all_markets: list[GammaMarket] = []
+        try:
+            params = {
+                "tag_slug": "weather",
+                "active": "true",
+                "closed": "false",
+                "limit": "100",
+            }
+            url = f"{self._gamma_url}/events"
+            async with self._session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    logger.warning("weather_events_error", status=resp.status)
+                    return []
+                events = await resp.json()
+                if not isinstance(events, list):
+                    return []
+
+                for event in events:
+                    title = (event.get("title", "") or "").lower()
+                    # Only process temperature events (skip earthquakes, hurricanes, etc.)
+                    if "temperature" not in title:
+                        continue
+
+                    nested = event.get("markets", [])
+                    if not isinstance(nested, list):
+                        continue
+
+                    for raw_market in nested:
+                        if not isinstance(raw_market, dict):
+                            continue
+                        if raw_market.get("closed", False):
+                            continue
+                        if not raw_market.get("active", True):
+                            continue
+                        market = GammaMarket(raw_market)
+                        market.category = "weather"
+                        if market.condition_id and market.active:
+                            all_markets.append(market)
+
+            logger.info(
+                "weather_events_fetched",
+                events=len([e for e in events if "temperature" in (e.get("title", "") or "").lower()]),
+                markets=len(all_markets),
+            )
+        except Exception as e:
+            logger.warning("weather_events_exception", error=str(e))
+
+        return all_markets
+
     async def refresh(self) -> list[GammaMarket]:
         """Refresh market catalog if refresh interval has elapsed.
 
@@ -589,6 +651,10 @@ class MarketDiscovery:
         # Fetch sports match-level events (moneyline, spreads, totals)
         sports_markets = await self._fetch_sports_events()
         markets.extend(sports_markets)
+
+        # Fetch weather temperature events (NegRisk, not in /markets endpoint)
+        weather_markets = await self._fetch_weather_events()
+        markets.extend(weather_markets)
 
         self._markets = {m.condition_id: m for m in markets}
         self._last_refresh = now

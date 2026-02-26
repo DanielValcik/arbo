@@ -77,6 +77,7 @@ class RDHOrchestrator:
         self._paper_engine: Any = None
         self._discovery: Any = None
         self._gemini: Any = None
+        self._order_flow_monitor: Any = None
         self._flow_tracker: Any = None
         self._kaito: Any = None
 
@@ -155,6 +156,11 @@ class RDHOrchestrator:
             with contextlib.suppress(Exception):
                 await self._discovery.close()
 
+        # Close order flow monitor
+        if self._order_flow_monitor is not None:
+            with contextlib.suppress(Exception):
+                await self._order_flow_monitor.stop()
+
         # Close Santiment + CoinGecko clients
         if self._santiment is not None:
             with contextlib.suppress(Exception):
@@ -205,8 +211,17 @@ class RDHOrchestrator:
         # Gemini agent
         self._gemini = await self._init_optional("GeminiAgent", self._init_gemini)
 
-        # Flow tracker (for Strategy A)
-        self._flow_tracker = await self._init_optional("MarketFlowTracker", self._init_flow_tracker)
+        # Order flow monitor (for Strategy A — on-chain taker flow from Polygon)
+        self._order_flow_monitor = await self._init_optional(
+            "OrderFlowMonitor", self._init_order_flow_monitor
+        )
+        # Flow tracker is exposed from the monitor (or standalone fallback)
+        if self._order_flow_monitor is not None:
+            self._flow_tracker = self._order_flow_monitor.market_tracker
+        else:
+            self._flow_tracker = await self._init_optional(
+                "MarketFlowTracker", self._init_flow_tracker
+            )
 
         # Kaito client (for Strategy B — stub mode)
         self._kaito = await self._init_optional("KaitoClient", self._init_kaito)
@@ -279,6 +294,26 @@ class RDHOrchestrator:
         g = GeminiAgent()
         await g.initialize()
         return g
+
+    async def _init_order_flow_monitor(self) -> Any:
+        """Initialize OrderFlowMonitor for on-chain taker flow (Strategy A)."""
+        from arbo.connectors.polygon_flow import OrderFlowMonitor
+
+        session_factory = None
+        try:
+            from arbo.utils.db import get_session_factory
+
+            session_factory = get_session_factory()
+        except Exception:
+            pass
+
+        monitor = OrderFlowMonitor(
+            on_signal=None,  # Strategy A uses peak detection, not L7 signals
+            poll_interval=60,
+            session_factory=session_factory,
+        )
+        await monitor.initialize()
+        return monitor
 
     async def _init_flow_tracker(self) -> Any:
         from arbo.connectors.polygon_flow import MarketFlowTracker
@@ -456,6 +491,13 @@ class RDHOrchestrator:
 
     def _start_internal_tasks(self) -> None:
         """Start infrastructure tasks."""
+        # Start OrderFlowMonitor polling (Strategy A on-chain flow)
+        if self._order_flow_monitor is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(
+                    self._order_flow_monitor.start(), name="order_flow_monitor"
+                )
+            )
         self._internal_tasks.append(
             asyncio.create_task(self._health_monitor(), name="health_monitor")
         )

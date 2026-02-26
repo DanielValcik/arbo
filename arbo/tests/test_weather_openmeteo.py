@@ -184,12 +184,16 @@ class TestOpenMeteoGetAll:
     async def test_get_all_forecasts(self) -> None:
         client = OpenMeteoWeatherClient()
         with aioresponses() as m:
-            m.get(OPENMETEO_URL, payload=SAMPLE_OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=SAMPLE_OPENMETEO_RESPONSE)
+            # Register one mock response per covered city (11 total)
+            for _ in range(11):
+                m.get(OPENMETEO_URL, payload=SAMPLE_OPENMETEO_RESPONSE)
             forecasts = await client.get_all_forecasts()
             await client.close()
 
-        assert len(forecasts) == 2
+        assert len(forecasts) == 11
         cities = {f.city for f in forecasts}
         assert City.SEOUL in cities
         assert City.BUENOS_AIRES in cities
+        assert City.ATLANTA in cities
+        assert City.TORONTO in cities
+        assert City.WELLINGTON in cities

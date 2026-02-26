@@ -28,6 +28,15 @@ class City(str, Enum):
     LONDON = "london"
     SEOUL = "seoul"
     BUENOS_AIRES = "buenos_aires"
+    ATLANTA = "atlanta"
+    TORONTO = "toronto"
+    ANKARA = "ankara"
+    SAO_PAULO = "sao_paulo"
+    MIAMI = "miami"
+    PARIS = "paris"
+    DALLAS = "dallas"
+    SEATTLE = "seattle"
+    WELLINGTON = "wellington"
 
 
 # Coordinates for each city (latitude, longitude)
@@ -37,6 +46,15 @@ CITY_COORDS: dict[City, tuple[float, float]] = {
     City.LONDON: (51.5074, -0.1278),
     City.SEOUL: (37.5665, 126.9780),
     City.BUENOS_AIRES: (-34.6037, -58.3816),
+    City.ATLANTA: (33.749, -84.388),
+    City.TORONTO: (43.6532, -79.3832),
+    City.ANKARA: (39.9334, 32.8597),
+    City.SAO_PAULO: (-23.5505, -46.6333),
+    City.MIAMI: (25.7617, -80.1918),
+    City.PARIS: (48.8566, 2.3522),
+    City.DALLAS: (32.7767, -96.7970),
+    City.SEATTLE: (47.6062, -122.3321),
+    City.WELLINGTON: (-41.2865, 174.7762),
 }
 
 # Which source covers which cities
@@ -46,6 +64,15 @@ CITY_SOURCE_MAP: dict[City, WeatherSource] = {
     City.LONDON: WeatherSource.MET_OFFICE,
     City.SEOUL: WeatherSource.OPEN_METEO,
     City.BUENOS_AIRES: WeatherSource.OPEN_METEO,
+    City.ATLANTA: WeatherSource.OPEN_METEO,
+    City.TORONTO: WeatherSource.OPEN_METEO,
+    City.ANKARA: WeatherSource.OPEN_METEO,
+    City.SAO_PAULO: WeatherSource.OPEN_METEO,
+    City.MIAMI: WeatherSource.OPEN_METEO,
+    City.PARIS: WeatherSource.OPEN_METEO,
+    City.DALLAS: WeatherSource.OPEN_METEO,
+    City.SEATTLE: WeatherSource.OPEN_METEO,
+    City.WELLINGTON: WeatherSource.OPEN_METEO,
 }
 
 

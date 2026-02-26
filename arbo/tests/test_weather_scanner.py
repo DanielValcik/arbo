@@ -96,6 +96,22 @@ class TestParseCity:
     def test_buenos_aires(self) -> None:
         assert parse_city("Buenos Aires temperature above 30°C?") == City.BUENOS_AIRES
 
+    def test_new_york_city_full(self) -> None:
+        """Polymarket uses 'New York City' in child markets."""
+        assert parse_city("Will the highest temperature in New York City be between 34-35°F on February 26?") == City.NYC
+
+    def test_sao_paulo(self) -> None:
+        assert parse_city("Highest temperature in Sao Paulo on February 26?") == City.SAO_PAULO
+
+    def test_dallas(self) -> None:
+        assert parse_city("Highest temperature in Dallas on February 27?") == City.DALLAS
+
+    def test_miami(self) -> None:
+        assert parse_city("Will the highest temperature in Miami be between 76-77°F on February 26?") == City.MIAMI
+
+    def test_wellington(self) -> None:
+        assert parse_city("Highest temperature in Wellington on February 28?") == City.WELLINGTON
+
     def test_unknown_city(self) -> None:
         assert parse_city("Will it rain tomorrow?") is None
 
@@ -127,7 +143,8 @@ class TestParseBucket:
         assert bucket is not None
         assert bucket.bucket_type == "range"
         assert abs(bucket.low_c - fahrenheit_to_celsius(70)) < 0.1
-        assert abs(bucket.high_c - fahrenheit_to_celsius(74)) < 0.1
+        # Upper bound is inclusive: 74°F → converted as (74+1)°F
+        assert abs(bucket.high_c - fahrenheit_to_celsius(75)) < 0.1
 
     def test_above_fahrenheit(self) -> None:
         bucket = parse_temperature_bucket("above 75°F")
@@ -141,14 +158,15 @@ class TestParseBucket:
         assert bucket is not None
         assert bucket.bucket_type == "below"
         assert bucket.low_c is None
-        assert abs(bucket.high_c - fahrenheit_to_celsius(45)) < 0.1
+        # "below 45°F" → high_c = fahrenheit_to_celsius(45+1) for inclusive bound
+        assert abs(bucket.high_c - fahrenheit_to_celsius(46)) < 0.1
 
     def test_celsius_range(self) -> None:
         bucket = parse_temperature_bucket("20-25°C")
         assert bucket is not None
         assert bucket.bucket_type == "range"
         assert bucket.low_c == 20.0
-        assert bucket.high_c == 25.0
+        assert bucket.high_c == 26.0  # inclusive upper: 25+1
 
     def test_above_with_or(self) -> None:
         bucket = parse_temperature_bucket("75°F or above")
@@ -157,6 +175,46 @@ class TestParseBucket:
 
     def test_no_bucket(self) -> None:
         assert parse_temperature_bucket("Will it rain?") is None
+
+    def test_polymarket_between_range(self) -> None:
+        """Real Polymarket: 'between 34-35°F'."""
+        bucket = parse_temperature_bucket(
+            "Will the highest temperature in New York City be between 34-35°F on February 26?"
+        )
+        assert bucket is not None
+        assert bucket.bucket_type == "range"
+        assert abs(bucket.low_c - fahrenheit_to_celsius(34)) < 0.1
+        assert abs(bucket.high_c - fahrenheit_to_celsius(36)) < 0.1  # 35+1
+
+    def test_polymarket_exact_celsius(self) -> None:
+        """Real Polymarket: 'be 6°C on' — single-degree bucket."""
+        bucket = parse_temperature_bucket(
+            "Will the highest temperature in Seoul be 6°C on February 26?"
+        )
+        assert bucket is not None
+        assert bucket.bucket_type == "range"
+        assert bucket.low_c == 6.0
+        assert bucket.high_c == 7.0  # [6, 7)
+
+    def test_polymarket_or_below(self) -> None:
+        """Real Polymarket: '33°F or below'."""
+        bucket = parse_temperature_bucket(
+            "Will the highest temperature in New York City be 33°F or below on February 26?"
+        )
+        assert bucket is not None
+        assert bucket.bucket_type == "below"
+        assert bucket.low_c is None
+        assert abs(bucket.high_c - fahrenheit_to_celsius(34)) < 0.1  # 33+1
+
+    def test_polymarket_negative_celsius_or_below(self) -> None:
+        """Real Polymarket: '-7°C or below'."""
+        bucket = parse_temperature_bucket(
+            "Will the highest temperature in Toronto be -7°C or below on February 26?"
+        )
+        assert bucket is not None
+        assert bucket.bucket_type == "below"
+        assert bucket.low_c is None
+        assert bucket.high_c == -6.0  # -7+1
 
 
 class TestBucketContains:
