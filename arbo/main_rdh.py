@@ -288,7 +288,7 @@ class RDHOrchestrator:
     async def _init_kaito(self) -> Any:
         from arbo.connectors.kaito_api import KaitoClient
 
-        return KaitoClient(mode="stub")
+        return KaitoClient(live_mode=False)
 
     async def _init_santiment(self) -> Any:
         from arbo.connectors.santiment_client import SantimentClient
