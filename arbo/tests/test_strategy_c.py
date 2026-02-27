@@ -281,9 +281,7 @@ class TestResolutionHandling:
         risk.strategy_post_trade("C", Decimal("50"))
 
         # Resolve with profit
-        next_city = strategy.handle_resolution(
-            chain.chain_id, "nyc_mkt", pnl=Decimal("10")
-        )
+        next_city = strategy.handle_resolution("nyc_mkt", pnl=Decimal("10"))
 
         assert next_city == City.CHICAGO
         assert chain.cumulative_pnl == Decimal("10")
@@ -417,9 +415,7 @@ class TestE2EWithRealPaperEngine:
         real_risk.strategy_post_trade("C", Decimal("50"))
 
         # Resolve NYC with profit → should advance to Chicago
-        next_city = real_strategy.handle_resolution(
-            chain.chain_id, "nyc_mkt", pnl=Decimal("15")
-        )
+        next_city = real_strategy.handle_resolution("nyc_mkt", pnl=Decimal("15"))
         assert next_city == City.CHICAGO
         assert chain.current_capital == Decimal("215")
 
@@ -429,9 +425,7 @@ class TestE2EWithRealPaperEngine:
         real_risk.strategy_post_trade("C", Decimal("50"))
 
         # Resolve Chicago with loss → chain complete (only 2 cities)
-        next_city = real_strategy.handle_resolution(
-            chain.chain_id, "chi_mkt", pnl=Decimal("-5")
-        )
+        next_city = real_strategy.handle_resolution("chi_mkt", pnl=Decimal("-5"))
         assert next_city is None  # Chain complete
         assert chain.cumulative_pnl == Decimal("10")  # 15 - 5
         assert chain.is_complete

@@ -272,6 +272,20 @@ class ResolutionChainEngine:
         )
         return next_city
 
+    def find_chain_by_market_id(self, market_id: str) -> str | None:
+        """Find chain_id by its active market_id.
+
+        Args:
+            market_id: The Polymarket condition_id to look up.
+
+        Returns:
+            The chain_id if found, None otherwise.
+        """
+        for chain in self._chains.values():
+            if chain.active_market_id == market_id:
+                return chain.chain_id
+        return None
+
     def get_chain(self, chain_id: str) -> ResolutionChainState | None:
         """Get current state of a chain."""
         return self._chains.get(chain_id)

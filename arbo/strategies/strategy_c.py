@@ -32,6 +32,7 @@ logger = get_logger("strategy_c")
 
 STRATEGY_ID = "C"
 DEFAULT_SCAN_INTERVAL_S = 1800  # 30 minutes
+MAX_VOLUME_POSITION_PCT = Decimal("0.05")  # Max 5% of 24h volume per position
 
 
 class StrategyC:
@@ -169,6 +170,19 @@ class StrategyC:
             for position in ladder.positions:
                 signal = position.signal
 
+                # Volume-based position cap: max 5% of 24h volume
+                volume_cap = Decimal(str(signal.market.volume_24h)) * MAX_VOLUME_POSITION_PCT
+                trade_size = min(position.size_usdc, volume_cap)
+                if trade_size < Decimal("1"):
+                    logger.info(
+                        "trade_skipped_volume_cap",
+                        city=signal.market.city.value,
+                        volume_24h=signal.market.volume_24h,
+                        volume_cap=str(volume_cap),
+                        kelly_size=str(position.size_usdc),
+                    )
+                    continue
+
                 # Build trade request for risk manager
                 trade_req = TradeRequest(
                     market_id=signal.market.condition_id,
@@ -179,7 +193,7 @@ class StrategyC:
                     ),
                     side="BUY",
                     price=Decimal(str(signal.market.market_price)),
-                    size=position.size_usdc,
+                    size=trade_size,
                     layer=0,  # Strategy C uses strategy field, not layer
                     market_category="weather",
                     strategy=STRATEGY_ID,
@@ -206,13 +220,13 @@ class StrategyC:
                         layer=0,
                         market_category="weather",
                         strategy=STRATEGY_ID,
-                        pre_computed_size=position.size_usdc,
+                        pre_computed_size=trade_size,
                     )
                     if trade_result:
                         self._risk.post_trade_update(
-                            signal.market.condition_id, "weather", position.size_usdc
+                            signal.market.condition_id, "weather", trade_size
                         )
-                        self._risk.strategy_post_trade(STRATEGY_ID, position.size_usdc)
+                        self._risk.strategy_post_trade(STRATEGY_ID, trade_size)
                         traded_signals.append(signal)
                         self._trades_placed += 1
 
@@ -220,7 +234,9 @@ class StrategyC:
                             "paper_trade_placed",
                             city=signal.market.city.value,
                             direction=signal.direction,
-                            size=str(position.size_usdc),
+                            size=str(trade_size),
+                            kelly_size=str(position.size_usdc),
+                            volume_cap=str(volume_cap),
                             edge=round(signal.edge, 4),
                         )
 
@@ -236,13 +252,14 @@ class StrategyC:
 
     def handle_resolution(
         self,
-        chain_id: str,
         market_id: str,
         pnl: Decimal,
     ) -> City | None:
         """Handle a market resolution within a chain.
 
-        Returns the next city to deploy to, or None if chain is done.
+        Looks up the chain by active market_id internally.
+
+        Returns the next city to deploy to, or None if chain is done / no chain.
         """
         # Update risk manager
         self._risk.post_trade_update(
@@ -250,7 +267,12 @@ class StrategyC:
         )
         self._risk.strategy_post_trade(STRATEGY_ID, abs(pnl), pnl=pnl)
 
-        # Advance chain
+        # Find and advance chain
+        chain_id = self._chain_engine.find_chain_by_market_id(market_id)
+        if chain_id is None:
+            logger.info("resolution_no_chain", market_id=market_id)
+            return None
+
         return self._chain_engine.resolve(chain_id, market_id, pnl)
 
     @property
