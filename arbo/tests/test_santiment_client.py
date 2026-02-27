@@ -202,23 +202,23 @@ class TestConvenienceMethods:
         assert "bitcoin" in result
         assert result["bitcoin"] == []
 
-    async def test_get_transaction_count(self) -> None:
-        """get_transaction_count calls correct metric."""
+    async def test_get_transaction_count_returns_empty(self) -> None:
+        """get_transaction_count returns empty — 30d lag on free tier."""
         client = SantimentClient()
         mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=_mock_response(MOCK_BATCH_RESPONSE))
         mock_session.closed = False
         client._session = mock_session
         client._owns_session = False
 
-        await client.get_transaction_count(["bitcoin"])
+        result = await client.get_transaction_count(["bitcoin"])
 
-        call_args = mock_session.post.call_args
-        query = call_args.kwargs["json"]["query"]
-        assert "transaction_volume" in query
+        # No API call should be made — transaction_volume has 30d lag
+        mock_session.post.assert_not_called()
+        assert "bitcoin" in result
+        assert result["bitcoin"] == []
 
     async def test_get_all_metrics_parallel(self) -> None:
-        """get_all_metrics fetches 2 metrics via API + returns empty dev_activity."""
+        """get_all_metrics fetches DAA via API + returns empty dev/tx."""
         client = SantimentClient()
         mock_session = AsyncMock()
         mock_session.post = MagicMock(return_value=_mock_response(MOCK_BATCH_RESPONSE))
@@ -232,10 +232,10 @@ class TestConvenienceMethods:
         assert "daily_active_addresses" in result["bitcoin"]
         assert "dev_activity" in result["bitcoin"]
         assert "transaction_volume" in result["bitcoin"]
-        # dev_activity returns empty (not supported), so only 2 API calls
-        assert mock_session.post.call_count == 2
-        # dev_activity should be empty list
+        # dev_activity + transaction_volume return empty (not supported), so only 1 API call
+        assert mock_session.post.call_count == 1
         assert result["bitcoin"]["dev_activity"] == []
+        assert result["bitcoin"]["transaction_volume"] == []
 
 
 # ---------------------------------------------------------------------------

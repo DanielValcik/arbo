@@ -66,22 +66,22 @@ SYMBOL_TO_SLUG: dict[str, str] = {
     "AAVE": "aave",
 }
 
-# Metrics available on free tier via timeseriesDataPerSlug
+# Metrics available on free tier via timeseriesDataPerSlug (recent data)
 # NOTE: dev_activity is NOT supported via batch queries on free tier.
-# It returns "The timeseries_data_per_slug function is not implemented for dev_activity".
+# NOTE: transaction_volume has 30-day lag on free tier (recent data unavailable).
 FREE_METRICS = frozenset(
     {
         "daily_active_addresses",
         "active_addresses_24h",
-        "transaction_volume",
         "price_usd",
     }
 )
 
-# Metrics that exist on Santiment but are NOT available via batch queries (free tier)
+# Metrics that exist on Santiment but are NOT available for recent data (free tier)
 UNSUPPORTED_BATCH_METRICS = frozenset(
     {
-        "dev_activity",
+        "dev_activity",         # "not implemented for dev_activity"
+        "transaction_volume",   # 30-day lag, recent queries rejected
     }
 )
 
@@ -442,17 +442,19 @@ class SantimentClient:
         slugs: list[str],
         days: int = 2,
     ) -> dict[str, list[SantimentDataPoint]]:
-        """Fetch transaction count for multiple coins.
+        """Return empty data — transaction_volume has 30-day lag on Santiment Free tier.
 
-        Note: On Santiment Free tier, transaction_count has a 30-day lag.
-        For recent data, prefer daily_active_addresses (no lag).
+        The free tier restricts transaction_volume to data older than 30 days:
+        "Both `from` and `to` parameters are outside the allowed interval"
+
+        This method is kept for backward compatibility but always returns empty lists.
         """
-        from_dt = datetime.now(UTC) - timedelta(days=days)
-        return await self.get_metric_batch(
-            metric="transaction_volume",
-            slugs=slugs,
-            from_dt=from_dt,
+        logger.debug(
+            "santiment_transaction_volume_skipped",
+            reason="30-day lag on free tier, recent data unavailable",
+            slugs=len(slugs),
         )
+        return {slug: [] for slug in slugs}
 
     async def get_all_metrics(
         self,
@@ -467,11 +469,25 @@ class SantimentClient:
         Returns:
             Dict of {slug: {metric: [DataPoint, ...]}}.
         """
-        daa, dev, tx = await asyncio.gather(
+        results = await asyncio.gather(
             self.get_daily_active_addresses(slugs, days),
             self.get_dev_activity(slugs, days),
             self.get_transaction_count(slugs, days),
+            return_exceptions=True,
         )
+
+        empty: dict[str, list[SantimentDataPoint]] = {slug: [] for slug in slugs}
+        daa = results[0] if not isinstance(results[0], BaseException) else empty
+        dev = results[1] if not isinstance(results[1], BaseException) else empty
+        tx = results[2] if not isinstance(results[2], BaseException) else empty
+
+        for i, name in enumerate(["daily_active_addresses", "dev_activity", "transaction_volume"]):
+            if isinstance(results[i], BaseException):
+                logger.warning(
+                    "santiment_metric_failed",
+                    metric=name,
+                    error=str(results[i]),
+                )
 
         result: dict[str, dict[str, list[SantimentDataPoint]]] = {}
         for slug in slugs:
