@@ -473,6 +473,35 @@ class RiskManager:
         logger.info("strategy_halt_reset", strategy=strategy, by="ceo_override")
         return True
 
+    def restore_position(
+        self,
+        market_id: str,
+        size: Decimal,
+        strategy: str,
+        market_category: str = "unknown",
+    ) -> None:
+        """Restore a position into risk state after restart.
+
+        Calls both post_trade_update (exposure/market tracking) and
+        strategy_post_trade (per-strategy deployed/position_count).
+
+        Args:
+            market_id: Market condition ID.
+            size: Position size in USDC.
+            strategy: Strategy identifier ("A", "B", "C").
+            market_category: Market category for concentration tracking.
+        """
+        self.post_trade_update(market_id, market_category, size, pnl=None)
+        if strategy in self._state.strategies:
+            self.strategy_post_trade(strategy, size)
+        logger.info(
+            "position_restored",
+            market_id=market_id[:20],
+            size=str(size),
+            strategy=strategy,
+            category=market_category,
+        )
+
     def _maybe_reset_periods(self) -> None:
         """Reset daily/weekly counters if period has elapsed."""
         now = datetime.now(UTC)

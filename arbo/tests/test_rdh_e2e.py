@@ -257,28 +257,30 @@ class TestE2EStrategyA:
 
 
 class TestE2EStrategyB:
-    """Strategy B runs in stub mode."""
+    """Strategy B runs with social divergence signals."""
 
     @patch("arbo.main_rdh.get_config")
     async def test_strategy_b_stub_mode(self, mock_config: MagicMock) -> None:
-        """Strategy B poll_cycle runs without Kaito API (stub mode)."""
+        """Strategy B poll_cycle runs with update_signals injection."""
         mock_config.return_value = _mock_config()
 
         from arbo.main_rdh import RDHOrchestrator
 
         orch = RDHOrchestrator(mode="paper")
 
-        mock_b = AsyncMock()
-        mock_b.poll_cycle = AsyncMock(return_value=[])  # Stub returns no live data
+        mock_b = MagicMock()
+        mock_b.update_signals = MagicMock()  # Sync method
+        mock_b.poll_cycle = AsyncMock(return_value=[])
         mock_b.check_exits = MagicMock(return_value=[])
-        mock_b.stats = {"strategy": "B", "kaito_mode": "stub"}
+        mock_b.stats = {"strategy": "B", "data_source": "social_divergence"}
         orch._strategy_b = mock_b
         orch._markets = []
 
         await orch._run_strategy_b()
 
+        mock_b.update_signals.assert_called_once()
         mock_b.poll_cycle.assert_called_once()
-        assert orch._strategy_b.stats["kaito_mode"] == "stub"
+        assert orch._strategy_b.stats["data_source"] == "social_divergence"
 
 
 class TestE2EReports:
@@ -328,13 +330,13 @@ class TestE2EDashboard:
         orch = RDHOrchestrator(mode="paper")
 
         orch._strategy_a = MagicMock(stats={"strategy": "A", "trades": 2})
-        orch._strategy_b = MagicMock(stats={"strategy": "B", "trades": 0, "kaito_mode": "stub"})
+        orch._strategy_b = MagicMock(stats={"strategy": "B", "trades": 0, "data_source": "social_divergence"})
         orch._strategy_c = MagicMock(stats={"strategy": "C", "trades": 5})
 
         stats = orch.strategy_stats
         assert len(stats) == 3
         assert stats["A"]["trades"] == 2
-        assert stats["B"]["kaito_mode"] == "stub"
+        assert stats["B"]["data_source"] == "social_divergence"
         assert stats["C"]["trades"] == 5
 
     @patch("arbo.main_rdh.get_config")
@@ -407,10 +409,11 @@ class TestE2EFullCycle:
         mock_a.stats = {"strategy": "A", "trades_placed": 0, "active_positions": 0}
         orch._strategy_a = mock_a
 
-        mock_b = AsyncMock()
+        mock_b = MagicMock()
+        mock_b.update_signals = MagicMock()
         mock_b.poll_cycle = AsyncMock(return_value=[])
         mock_b.check_exits = MagicMock(return_value=[])
-        mock_b.stats = {"strategy": "B", "trades_placed": 0, "kaito_mode": "stub"}
+        mock_b.stats = {"strategy": "B", "trades_placed": 0, "data_source": "social_divergence"}
         orch._strategy_b = mock_b
 
         mock_c = AsyncMock()
@@ -438,4 +441,4 @@ class TestE2EFullCycle:
         # Verify stats
         stats = orch.strategy_stats
         assert stats["C"]["trades_placed"] == 1
-        assert stats["B"]["kaito_mode"] == "stub"
+        assert stats["B"]["data_source"] == "social_divergence"

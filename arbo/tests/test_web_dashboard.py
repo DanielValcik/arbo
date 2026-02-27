@@ -71,18 +71,24 @@ class MockStrategyState:
         return self.allocated - self.deployed
 
 
-class MockRiskManager:
-    """Mock risk manager."""
+class MockRiskState:
+    """Mock risk state."""
 
-    _daily_pnl = Decimal("-50.00")
-    _weekly_pnl = Decimal("-100.00")
-    _category_exposure: ClassVar[dict[str, Decimal]] = {
+    daily_pnl = Decimal("-50.00")
+    weekly_pnl = Decimal("-100.00")
+    category_exposure: ClassVar[dict[str, Decimal]] = {
         "soccer": Decimal("150.00"),
         "crypto": Decimal("80.00"),
     }
+
+
+class MockRiskManager:
+    """Mock risk manager."""
+
     _shutdown = False
 
     def __init__(self) -> None:
+        self._state = MockRiskState()
         self._strategies: dict[str, MockStrategyState] = {
             "A": MockStrategyState(),
             "B": MockStrategyState(allocated=Decimal("400"), deployed=Decimal("0")),

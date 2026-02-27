@@ -99,6 +99,7 @@ class RDHOrchestrator:
         # Runtime state
         self._start_time: float = 0.0
         self._markets: list[Any] = []
+        self._latest_divergence_signals: list[Any] = []
 
     # ------------------------------------------------------------------
     # Public API
@@ -362,8 +363,8 @@ class RDHOrchestrator:
 
         s = ReflexivitySurfer(
             risk_manager=self._risk_manager,
-            kaito_client=self._kaito,
             paper_engine=self._paper_engine,
+            divergence_calc=self._social_divergence,
         )
         await s.init()
         return s
@@ -416,13 +417,25 @@ class RDHOrchestrator:
         return create_app(self)
 
     def _sync_risk_from_positions(self) -> None:
-        """Sync risk manager per-strategy deployed capital from open positions."""
+        """Sync risk manager state from open positions after restart.
+
+        Uses restore_position() to update both global exposure tracking
+        (open_positions_value, market_positions, category_exposure) and
+        per-strategy state (deployed, position_count).
+        """
         if self._paper_engine is None or self._risk_manager is None:
             return
+        # Strategy → category mapping for exposure tracking
+        _strategy_category = {"C": "weather", "A": "crypto", "B": "crypto"}
         for pos in self._paper_engine.open_positions:
             strategy = getattr(pos, "strategy", "")
-            if strategy in ("A", "B", "C"):
-                self._risk_manager.strategy_post_trade(strategy, pos.size)
+            category = _strategy_category.get(strategy, "other")
+            self._risk_manager.restore_position(
+                market_id=pos.market_condition_id,
+                size=pos.size,
+                strategy=strategy,
+                market_category=category,
+            )
 
     # ------------------------------------------------------------------
     # Slack callbacks
@@ -612,6 +625,7 @@ class RDHOrchestrator:
         if trades:
             logger.info("strategy_a_trades", count=len(trades))
             await self._save_trades_to_db(trades)
+            await self._save_signals_to_db(trades, strategy="A")
 
         # Check exits
         prices = self._get_current_prices()
@@ -622,22 +636,21 @@ class RDHOrchestrator:
     async def _run_strategy_b(self) -> None:
         """Run Strategy B: Reflexivity Surfer poll cycle + exit checks.
 
-        DISABLED: Strategy B requires live Kaito API. Stub mode generates
-        fake probabilities (~0.50) that cause every low-priced market to
-        trigger BOOM phase entry, resulting in random garbage trades.
-        Re-enable when Kaito API integration is live.
+        Feeds latest divergence signals from Santiment + CoinGecko before
+        each poll cycle. Strategy B's data_source_live guard will return []
+        if signals are empty or stale (> 7h old).
         """
         if self._strategy_b is None:
             return
 
-        # Block trading in stub mode — stub Kaito causes random entries
-        if self._kaito is not None and not getattr(self._kaito, "_live_mode", False):
-            return
+        # Feed latest divergence signals before poll cycle
+        self._strategy_b.update_signals(self._latest_divergence_signals)
 
         trades = await self._strategy_b.poll_cycle(self._markets)
         if trades:
             logger.info("strategy_b_trades", count=len(trades))
             await self._save_trades_to_db(trades)
+            await self._save_signals_to_db(trades, strategy="B")
 
         # Check exits
         prices = self._get_current_prices()
@@ -653,6 +666,7 @@ class RDHOrchestrator:
         if trades:
             logger.info("strategy_c_trades", count=len(trades))
             await self._save_trades_to_db(trades)
+            await self._save_signals_to_db(trades, strategy="C")
 
     def _get_current_prices(self) -> dict[str, Decimal]:
         """Get current YES prices from discovery cache for exit checks."""
@@ -665,23 +679,98 @@ class RDHOrchestrator:
                     prices[market.condition_id] = market.price_yes
         return prices
 
-    async def _save_trades_to_db(self, trades: list[dict[str, Any]]) -> None:
-        """Best-effort save trade records to database via paper engine."""
+    async def _save_trades_to_db(self, trades: list[Any]) -> None:
+        """Best-effort save trade records to database via paper engine.
+
+        Handles both dict-type trades (Strategy A/B) and WeatherSignal
+        objects (Strategy C) by extracting condition_id from the appropriate
+        location.
+        """
         if self._paper_engine is None:
             return
-        for trade_dict in trades:
+        for trade_item in trades:
+            # Extract condition_id from dict or WeatherSignal
+            if isinstance(trade_item, dict):
+                cond = trade_item.get("condition_id", "")
+            elif hasattr(trade_item, "market"):
+                # WeatherSignal: condition_id is at signal.market.condition_id
+                cond = getattr(trade_item.market, "condition_id", "")
+            else:
+                cond = ""
+
+            if not cond:
+                continue
+
             # Find the matching in-memory trade from paper engine
             trade_obj = None
             for t in reversed(self._paper_engine.trade_history):
-                cond = trade_dict.get("condition_id", "")
                 if t.market_condition_id == cond and t.status.value == "open":
                     trade_obj = t
                     break
             if trade_obj is not None:
                 try:
                     await self._paper_engine.save_trade_to_db(trade_obj)
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     logger.warning("save_trade_db_error", error=str(e))
+
+    async def _save_signals_to_db(self, trades: list[Any], strategy: str) -> None:
+        """Best-effort save traded signals to the signals DB table.
+
+        Handles both dict-type trades (Strategy A/B) and WeatherSignal
+        objects (Strategy C).
+        """
+        try:
+            from arbo.utils.db import Signal as SignalDB
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                for trade_item in trades:
+                    if isinstance(trade_item, dict):
+                        # Strategy A/B dict format
+                        cond = trade_item.get("condition_id", "")
+                        direction = trade_item.get("side", "BUY_YES")
+                        edge = trade_item.get("edge")
+                        details = {
+                            "strategy": strategy,
+                            "category": "crypto",
+                            **{
+                                k: v
+                                for k, v in trade_item.items()
+                                if k not in ("condition_id",)
+                            },
+                        }
+                    elif hasattr(trade_item, "market"):
+                        # WeatherSignal
+                        cond = trade_item.market.condition_id
+                        direction = trade_item.direction
+                        edge = trade_item.edge
+                        details = {
+                            "strategy": strategy,
+                            "category": "weather",
+                            "city": trade_item.market.city.value,
+                            "forecast_temp_c": trade_item.forecast_temp_c,
+                            "forecast_prob": round(trade_item.forecast_probability, 4),
+                            "market_price": trade_item.market.market_price,
+                            "confidence": trade_item.confidence,
+                        }
+                    else:
+                        continue
+
+                    row = SignalDB(
+                        layer=0,
+                        market_condition_id=cond,
+                        direction=direction,
+                        edge=Decimal(str(round(edge, 4))) if edge else None,
+                        confidence=None,
+                        details=details,
+                        confluence_score=None,
+                    )
+                    session.add(row)
+                await session.commit()
+            logger.info("signals_saved_to_db", count=len(trades), strategy=strategy)
+        except Exception as e:
+            logger.warning("signals_save_failed", error=str(e))
 
     # ------------------------------------------------------------------
     # Health monitor
@@ -877,6 +966,22 @@ class RDHOrchestrator:
                         strategy=strategy,
                         pnl=str(pnl),
                     )
+
+                    # Slack notification
+                    if self._slack is not None:
+                        market_name = getattr(market, "question", cid[:40]) or cid[:40]
+                        result_status = "won" if winning else "lost"
+                        try:
+                            await self._slack.send_resolution_alert(
+                                market=market_name,
+                                strategy=strategy or "?",
+                                side=pos.side or "?",
+                                size=float(getattr(pos, "size", 0)),
+                                pnl=float(pnl),
+                                status=result_status,
+                            )
+                        except Exception as slack_err:
+                            logger.warning("resolution_slack_error", error=str(slack_err))
 
             except Exception as e:
                 logger.error("resolution_check_error", error=str(e))
@@ -1181,6 +1286,9 @@ class RDHOrchestrator:
 
             # Calculate divergence signals
             signals = self._social_divergence.calculate_signals(snapshots_by_coin)
+
+            # Store for Strategy B consumption
+            self._latest_divergence_signals = signals
 
             if signals:
                 logger.info(

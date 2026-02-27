@@ -145,6 +145,7 @@ class PaperPosition(Base):
     current_price: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
     unrealized_pnl: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     layer: Mapped[int] = mapped_column(Integer, nullable=False)
+    strategy: Mapped[str | None] = mapped_column(String(8), nullable=True)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

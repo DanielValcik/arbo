@@ -340,7 +340,7 @@ def scan_weather_market(
     market: Any,
     forecasts: dict[City, WeatherForecast],
     min_edge: float = 0.05,
-    min_volume: float = 10000.0,
+    min_volume: float = 2000.0,
 ) -> WeatherSignal | None:
     """Analyze a single weather market for trading opportunities.
 
@@ -436,7 +436,7 @@ def scan_weather_markets(
     markets: list[Any],
     forecasts: dict[City, WeatherForecast],
     min_edge: float = 0.05,
-    min_volume: float = 10000.0,
+    min_volume: float = 2000.0,
 ) -> list[WeatherSignal]:
     """Scan all markets for weather trading opportunities.
 

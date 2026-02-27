@@ -96,13 +96,13 @@ class TestVolumeFilter:
     """Test minimum volume threshold."""
 
     def test_low_volume_rejected(self) -> None:
-        signal = _make_signal(volume_24h=5000.0)
+        signal = _make_signal(volume_24h=1500.0)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "volume" in decision.reason.lower()
 
     def test_above_volume_passes(self) -> None:
-        signal = _make_signal(volume_24h=15000.0)
+        signal = _make_signal(volume_24h=3000.0)
         decision = check_signal_quality(signal, _recent_time())
         assert decision.passed
 
@@ -111,7 +111,7 @@ class TestLiquidityFilter:
     """Test minimum liquidity threshold."""
 
     def test_low_liquidity_rejected(self) -> None:
-        signal = _make_signal(liquidity=2000.0)
+        signal = _make_signal(liquidity=500.0)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "liquidity" in decision.reason.lower()

@@ -16,10 +16,10 @@ logger = get_logger("weather_quality_gate")
 
 # Quality gate thresholds
 MIN_EDGE = 0.05  # 5% minimum edge
-MIN_VOLUME_24H = 10_000.0  # $10K minimum volume
+MIN_VOLUME_24H = 2_000.0  # $2K minimum volume (weather markets are niche)
 MIN_CONFIDENCE = 0.5  # Minimum forecast confidence
 MAX_FORECAST_AGE_HOURS = 6  # Forecast must be less than 6 hours old
-MIN_LIQUIDITY = 5_000.0  # $5K minimum liquidity
+MIN_LIQUIDITY = 1_000.0  # $1K minimum liquidity (weather markets are niche)
 
 
 @dataclass
@@ -142,9 +142,13 @@ def filter_signals(
         if decision.passed:
             passed.append(signal)
         else:
-            logger.debug(
+            logger.info(
                 "quality_gate_rejected",
                 city=signal.market.city.value,
+                edge=round(signal.edge, 4),
+                volume=signal.market.volume_24h,
+                liquidity=signal.market.liquidity,
+                market_price=signal.market.market_price,
                 reason=decision.reason,
             )
 

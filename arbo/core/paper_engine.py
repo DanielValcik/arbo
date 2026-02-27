@@ -429,6 +429,8 @@ class PaperTradingEngine:
     async def save_trade_to_db(self, trade: PaperTrade) -> None:
         """Persist a paper trade to the database (best-effort)."""
         try:
+            from sqlalchemy.exc import SQLAlchemyError
+
             from arbo.utils.db import PaperTrade as PaperTradeDB
             from arbo.utils.db import get_session_factory
 
@@ -453,12 +455,14 @@ class PaperTradingEngine:
                 )
                 session.add(db_trade)
                 await session.commit()
-        except Exception as e:
+        except (SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning("save_trade_to_db_failed", error=str(e))
 
     async def save_snapshot_to_db(self, snapshot: PortfolioSnapshot) -> None:
         """Persist a portfolio snapshot to the database (best-effort)."""
         try:
+            from sqlalchemy.exc import SQLAlchemyError
+
             from arbo.utils.db import PaperSnapshot as PaperSnapshotDB
             from arbo.utils.db import get_session_factory
 
@@ -474,13 +478,14 @@ class PaperTradingEngine:
                 )
                 session.add(db_snap)
                 await session.commit()
-        except Exception as e:
+        except (SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning("save_snapshot_to_db_failed", error=str(e))
 
     async def sync_positions_to_db(self) -> None:
         """Upsert current open positions to the database (best-effort)."""
         try:
             from sqlalchemy import delete
+            from sqlalchemy.exc import SQLAlchemyError
 
             from arbo.utils.db import PaperPosition as PaperPositionDB
             from arbo.utils.db import get_session_factory
@@ -498,10 +503,11 @@ class PaperTradingEngine:
                         current_price=pos.current_price,
                         unrealized_pnl=pos.unrealized_pnl,
                         layer=pos.layer,
+                        strategy=pos.strategy or None,
                     )
                     session.add(db_pos)
                 await session.commit()
-        except Exception as e:
+        except (SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning("sync_positions_to_db_failed", error=str(e))
 
     async def update_resolved_trades_in_db(self, token_id: str) -> None:
@@ -543,6 +549,7 @@ class PaperTradingEngine:
         """Restore open positions and balance from the database on startup."""
         try:
             from sqlalchemy import select
+            from sqlalchemy.exc import SQLAlchemyError
 
             from arbo.utils.db import PaperPosition as PaperPositionDB
             from arbo.utils.db import PaperSnapshot as PaperSnapshotDB
@@ -566,6 +573,7 @@ class PaperTradingEngine:
                             else Decimal("0")
                         ),
                         layer=db_pos.layer,
+                        strategy=getattr(db_pos, "strategy", "") or "",
                         current_price=(
                             Decimal(str(db_pos.current_price)) if db_pos.current_price else None
                         ),
@@ -606,7 +614,7 @@ class PaperTradingEngine:
                 else:
                     logger.info("no_db_state_found", using="initial_capital")
 
-        except Exception as e:
+        except (SQLAlchemyError, ImportError, ValueError, TypeError) as e:
             logger.warning("load_state_from_db_failed", error=str(e))
 
     def get_stats(self) -> dict[str, object]:

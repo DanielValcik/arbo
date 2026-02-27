@@ -344,6 +344,7 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         "current_price": _dec(pos.current_price),
                         "unrealized_pnl": _dec(pos.unrealized_pnl),
                         "layer": pos.layer,
+                        "strategy": getattr(pos, "strategy", "") or "",
                         "category": category,
                         "opened_at": pos.opened_at.isoformat() if pos.opened_at else None,
                     }
@@ -376,7 +377,7 @@ async def api_signals(
             query = (
                 sa.select(DBSignal, Market.question, Market.category)
                 .outerjoin(Market, DBSignal.market_condition_id == Market.condition_id)
-                .where(DBSignal.edge <= max_edge)
+                .where(sa.or_(DBSignal.edge <= max_edge, DBSignal.edge.is_(None)))
             )
 
             # Strategy filter: default = RDH only (layer 0)
@@ -488,10 +489,11 @@ async def api_risk(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     capital = _dec(orch._capital) or 1.0
 
     # Get exposure state from risk manager
-    daily_pnl = _dec(getattr(rm, "_daily_pnl", Decimal("0"))) or 0.0
-    weekly_pnl = _dec(getattr(rm, "_weekly_pnl", Decimal("0"))) or 0.0
+    rs = rm._state if hasattr(rm, "_state") else None
+    daily_pnl = _dec(rs.daily_pnl if rs else Decimal("0")) or 0.0
+    weekly_pnl = _dec(rs.weekly_pnl if rs else Decimal("0")) or 0.0
     category_exposure: dict[str, float] = {}
-    raw_cat = getattr(rm, "_category_exposure", {})
+    raw_cat = rs.category_exposure if rs else {}
     for cat, val in raw_cat.items():
         category_exposure[cat] = _dec(val) or 0.0
 
@@ -583,6 +585,7 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
                         "id": trade.id,
                         "market": question,
                         "layer": trade.layer,
+                        "strategy": getattr(trade, "strategy", "") or "",
                         "side": trade.side,
                         "price": _dec(trade.price),
                         "size": _dec(trade.size),
@@ -600,6 +603,57 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
                 )
     except Exception as e:
         logger.warning("trades_query_error", error=str(e))
+
+    return {"trades": trades}
+
+
+@app.get("/api/closed-positions")
+async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Closed (resolved) positions — won and lost trades."""
+    trades: list[dict[str, Any]] = []
+    try:
+        from arbo.utils.db import Market, PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(PaperTrade, Market.question, Market.category)
+                .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
+                .order_by(PaperTrade.resolved_at.desc())
+                .limit(50)
+            )
+            for row in result.all():
+                trade = row[0]
+                question = row[1] or trade.market_condition_id[:20]
+                category = (row[2] or "other").capitalize()
+                if category == "Other":
+                    category = _infer_category(question)
+                trades.append(
+                    {
+                        "id": trade.id,
+                        "market": question,
+                        "strategy": getattr(trade, "strategy", "") or "",
+                        "side": trade.side,
+                        "price": _dec(trade.price),
+                        "size": _dec(trade.size),
+                        "status": trade.status,
+                        "actual_pnl": _dec(trade.actual_pnl),
+                        "category": category,
+                        "placed_at": trade.placed_at.isoformat() if trade.placed_at else None,
+                        "resolved_at": (
+                            trade.resolved_at.isoformat() if trade.resolved_at else None
+                        ),
+                    }
+                )
+    except Exception as e:
+        logger.warning("closed_positions_query_error", error=str(e))
 
     return {"trades": trades}
 

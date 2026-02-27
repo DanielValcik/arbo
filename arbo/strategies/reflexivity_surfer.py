@@ -1,7 +1,7 @@
 """Strategy B: Reflexivity Surfer — Trade Soros-style reflexive feedback loops.
 
-Monitors markets where social attention (Kaito mindshare/sentiment) diverges
-from Polymarket price. Uses a 4-phase state machine per market:
+Monitors markets where social momentum (Santiment + CoinGecko divergence)
+diverges from Polymarket price. Uses a 4-phase state machine per market:
 
   Phase 1 (Start) — No divergence, monitoring
   Phase 2 (Boom)  — Price trails below actual attention (buy YES)
@@ -17,31 +17,33 @@ Exit:
   - Phase 3-4: stop loss -25%
   - Partial exit at +30% gain
 
-Uses Kaito API (stub mode) for mindshare/sentiment data.
-Falls back to Gemini Flash for LLM-based sentiment estimation.
+Uses SocialDivergenceCalculator for on-chain momentum signals.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import IntEnum
 from typing import Any
 
 from arbo.config.settings import get_config
-from arbo.connectors.kaito_api import KaitoClient
 from arbo.core.risk_manager import (
     MAX_POSITION_PCT,
     RiskManager,
     TradeRequest,
 )
+from arbo.strategies.social_divergence import DivergenceSignal
 from arbo.utils.logger import get_logger
 
 logger = get_logger("reflexivity_surfer")
 
 STRATEGY_ID = "B"
 KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly
+
+# Maximum age of divergence signals before they're considered stale
+_SIGNAL_MAX_AGE = timedelta(hours=7)
 
 
 class Phase(IntEnum):
@@ -61,7 +63,7 @@ class MarketPhase:
     topic: str
     phase: Phase = Phase.START
     last_divergence: float = 0.0
-    last_kaito_prob: float = 0.5
+    last_social_prob: float = 0.5
     last_market_price: float = 0.5
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     entered_phase_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -86,23 +88,24 @@ class ReflexivitySurfer:
     """Strategy B: Reflexivity Surfer — trade reflexive feedback loops.
 
     Lifecycle:
-    1. Scan markets and fetch Kaito attention data
-    2. Compute divergence: (market_price - kaito_prob) / kaito_prob
-    3. Transition phase state machine per market
-    4. Trade on phase transitions (Phase 2 → buy YES, Phase 3 → buy NO)
-    5. Manage exits (stop loss, partial exit)
+    1. Receive divergence signals from SocialDivergenceCalculator
+    2. Match signals to Polymarket markets via condition_id
+    3. Compute divergence (sign-inverted: social positive = BOOM)
+    4. Transition phase state machine per market
+    5. Trade on phase transitions (Phase 2 → buy YES, Phase 3 → buy NO)
+    6. Manage exits (stop loss, partial exit)
     """
 
     def __init__(
         self,
         risk_manager: RiskManager,
-        kaito_client: KaitoClient,
         paper_engine: Any = None,
+        divergence_calc: Any = None,
     ) -> None:
         cfg = get_config().reflexivity
         self._risk = risk_manager
-        self._kaito = kaito_client
         self._paper_engine = paper_engine
+        self._divergence_calc = divergence_calc
 
         # Config
         self._boom_threshold = cfg.boom_divergence_threshold  # -0.10
@@ -122,18 +125,21 @@ class ReflexivitySurfer:
         self._trades_placed: int = 0
         self._last_scan: datetime | None = None
 
+        # Divergence signal injection
+        self._latest_signals: list[DivergenceSignal] = []
+        self._signals_updated_at: datetime | None = None
+
     async def init(self) -> None:
         """Initialize strategy."""
         logger.info(
             "reflexivity_init",
             boom_threshold=self._boom_threshold,
             peak_threshold=self._peak_threshold,
-            kaito_mode="stub" if self._kaito.is_stub else "live",
+            data_source="social_divergence",
         )
 
     async def close(self) -> None:
         """Clean up resources."""
-        await self._kaito.close()
         logger.info(
             "reflexivity_close",
             signals=self._signals_generated,
@@ -141,8 +147,26 @@ class ReflexivitySurfer:
             tracked_markets=len(self._phases),
         )
 
+    @property
+    def data_source_live(self) -> bool:
+        """True only if divergence signals are non-empty and fresh (< 7h old)."""
+        if not self._latest_signals:
+            return False
+        if self._signals_updated_at is None:
+            return False
+        return (datetime.now(UTC) - self._signals_updated_at) < _SIGNAL_MAX_AGE
+
+    def update_signals(self, signals: list[DivergenceSignal]) -> None:
+        """Update latest divergence signals from orchestrator.
+
+        Called by orchestrator before each poll cycle.
+        """
+        self._latest_signals = signals
+        self._signals_updated_at = datetime.now(UTC)
+        logger.info("reflexivity_signals_updated", count=len(signals))
+
     async def poll_cycle(self, markets: list[Any]) -> list[dict[str, Any]]:
-        """Run one poll cycle: fetch attention, compute divergence, trade.
+        """Run one poll cycle: match signals to markets, compute divergence, trade.
 
         Args:
             markets: List of GammaMarket objects from market discovery.
@@ -151,6 +175,10 @@ class ReflexivitySurfer:
             List of trade results for markets where trades were placed.
         """
         self._last_scan = datetime.now(UTC)
+
+        # Guard: no signals or stale → do nothing (CEO safety directive)
+        if not self.data_source_live:
+            return []
 
         # Check strategy allocation
         strategy_state = self._risk.get_strategy_state(STRATEGY_ID)
@@ -165,60 +193,69 @@ class ReflexivitySurfer:
         if available_capital <= Decimal("0"):
             return []
 
-        # Filter candidate markets
+        # Filter candidate markets and build lookup by condition_id
         candidates = self._filter_candidates(markets)
         if not candidates:
             return []
+        market_lookup: dict[str, Any] = {mkt.condition_id: mkt for mkt in candidates}
 
         traded = []
-        for mkt in candidates:
-            # Already have position in this market
-            if mkt.condition_id in self._active_positions:
-                continue
+        for signal in self._latest_signals:
+            # Match signal to markets via polymarket_condition_ids
+            for cond_id in signal.polymarket_condition_ids:
+                mkt = market_lookup.get(cond_id)
+                if mkt is None:
+                    continue
 
-            # Fetch Kaito attention data
-            topic = mkt.question if hasattr(mkt, "question") else mkt.condition_id
-            attention = await self._kaito.get_market_attention(mkt.condition_id, topic)
+                # Already have position in this market
+                if cond_id in self._active_positions:
+                    continue
 
-            # Compute divergence
-            market_price = float(mkt.price_yes or Decimal("0.5"))
-            kaito_prob = attention.kaito_probability
-            if kaito_prob <= 0:
-                continue
+                # Negate divergence: social positive = BOOM (price should go up)
+                # Old Kaito: positive divergence = overpriced (PEAK)
+                # New social: positive divergence = social UP / price flat (BOOM)
+                divergence = -signal.divergence
+                social_prob = signal.confidence
 
-            divergence = (market_price - kaito_prob) / kaito_prob
+                if social_prob <= 0:
+                    continue
 
-            # Update phase state machine
-            old_phase = self._get_phase(mkt.condition_id)
-            new_phase = self._transition_phase(mkt.condition_id, topic, divergence, kaito_prob, market_price)
+                market_price = float(mkt.price_yes or Decimal("0.5"))
 
-            # Count positions per phase
-            phase2_count = sum(
-                1 for p in self._active_positions.values() if p.phase_at_entry == Phase.BOOM
-            )
-            phase3_count = sum(
-                1 for p in self._active_positions.values() if p.phase_at_entry in (Phase.PEAK, Phase.BUST)
-            )
+                # Update phase state machine
+                topic = mkt.question if hasattr(mkt, "question") else cond_id
+                old_phase = self._get_phase(cond_id)
+                new_phase = self._transition_phase(
+                    cond_id, topic, divergence, social_prob, market_price
+                )
 
-            # Trade on phase transitions
-            result = None
-            if new_phase == Phase.BOOM and old_phase == Phase.START:
-                # Phase 2: buy YES (momentum)
-                if phase2_count < self._max_per_phase:
-                    result = self._execute_entry(
-                        mkt, Phase.BOOM, divergence, available_capital
-                    )
-            elif new_phase == Phase.PEAK and old_phase in (Phase.START, Phase.BOOM):
-                # Phase 3: buy NO (reversal)
-                if phase3_count < self._max_per_phase:
-                    result = self._execute_entry(
-                        mkt, Phase.PEAK, divergence, available_capital
-                    )
+                # Count positions per phase
+                phase2_count = sum(
+                    1 for p in self._active_positions.values() if p.phase_at_entry == Phase.BOOM
+                )
+                phase3_count = sum(
+                    1
+                    for p in self._active_positions.values()
+                    if p.phase_at_entry in (Phase.PEAK, Phase.BUST)
+                )
 
-            if result is not None:
-                traded.append(result)
-                available_capital -= Decimal(str(result["size"]))
-                self._signals_generated += 1
+                # Trade on phase transitions
+                result = None
+                if new_phase == Phase.BOOM and old_phase == Phase.START:
+                    if phase2_count < self._max_per_phase:
+                        result = self._execute_entry(
+                            mkt, Phase.BOOM, divergence, available_capital
+                        )
+                elif new_phase == Phase.PEAK and old_phase in (Phase.START, Phase.BOOM):
+                    if phase3_count < self._max_per_phase:
+                        result = self._execute_entry(
+                            mkt, Phase.PEAK, divergence, available_capital
+                        )
+
+                if result is not None:
+                    traded.append(result)
+                    available_capital -= Decimal(str(result["size"]))
+                    self._signals_generated += 1
 
         return traded
 
@@ -257,7 +294,7 @@ class ReflexivitySurfer:
         condition_id: str,
         topic: str,
         divergence: float,
-        kaito_prob: float,
+        social_prob: float,
         market_price: float,
     ) -> Phase:
         """Transition the phase state machine for a market.
@@ -315,7 +352,7 @@ class ReflexivitySurfer:
             )
 
         mp.last_divergence = divergence
-        mp.last_kaito_prob = kaito_prob
+        mp.last_social_prob = social_prob
         mp.last_market_price = market_price
         mp.updated_at = now
 
@@ -554,7 +591,8 @@ class ReflexivitySurfer:
             "active_positions": len(self._active_positions),
             "tracked_markets": len(self._phases),
             "phase_distribution": phase_counts,
-            "kaito_mode": "stub" if self._kaito.is_stub else "live",
+            "data_source": "social_divergence",
+            "data_source_live": self.data_source_live,
             "last_scan": self._last_scan.isoformat() if self._last_scan else None,
             "deployed": str(strategy_state.deployed) if strategy_state else "0",
             "available": str(strategy_state.available) if strategy_state else "0",

@@ -152,7 +152,8 @@ class TestTradeWithStrategyField:
 
         orch = RDHOrchestrator(mode="paper")
 
-        mock_strategy = AsyncMock()
+        mock_strategy = MagicMock()
+        mock_strategy.update_signals = MagicMock()
         mock_strategy.poll_cycle = AsyncMock(
             return_value=[
                 {

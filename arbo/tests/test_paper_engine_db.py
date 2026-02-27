@@ -7,6 +7,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from arbo.core.paper_engine import (
     PaperTrade,
@@ -80,7 +81,7 @@ class TestSaveTradeToDb:
 
         with patch(
             "arbo.utils.db.get_session_factory",
-            side_effect=Exception("DB down"),
+            side_effect=OperationalError("SELECT 1", {}, Exception("DB down")),
         ):
             # Should not raise
             await engine.save_trade_to_db(trade)
@@ -119,6 +120,7 @@ class TestLoadStateFromDb:
         mock_pos.avg_price = Decimal("0.50")
         mock_pos.size = Decimal("100.00")
         mock_pos.layer = 2
+        mock_pos.strategy = "A"
         mock_pos.current_price = Decimal("0.55")
 
         # Mock DB snapshot
@@ -149,7 +151,7 @@ class TestLoadStateFromDb:
         """DB failure should not crash the engine."""
         with patch(
             "arbo.utils.db.get_session_factory",
-            side_effect=Exception("DB down"),
+            side_effect=OperationalError("SELECT 1", {}, Exception("DB down")),
         ):
             await engine.load_state_from_db()
 

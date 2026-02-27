@@ -230,6 +230,30 @@ class SlackBot:
         """Send a weekly report to #weekly-report."""
         await self._post(self._weekly_report_channel, text="Weekly Report", blocks=blocks)
 
+    # --- Position resolution notifications (→ #daily-brief) ---
+
+    async def send_resolution_alert(
+        self,
+        market: str,
+        strategy: str,
+        side: str,
+        size: float,
+        pnl: float,
+        status: str,
+    ) -> None:
+        """Send a notification when a position is resolved (won/lost)."""
+        emoji = ":white_check_mark:" if status == "won" else ":x:"
+        pnl_sign = "+" if pnl >= 0 else ""
+        strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
+        strat_label = f"{strategy} ({strat_names.get(strategy, '?')})"
+        text = (
+            f"{emoji} *Position Resolved — {status.upper()}*\n"
+            f"*Market:* {market[:80]}\n"
+            f"*Strategy:* {strat_label}  |  *Side:* {side}  |  *Size:* ${size:.2f}\n"
+            f"*P&L:* {pnl_sign}${pnl:.2f}"
+        )
+        await self._post(self._daily_brief_channel, text=text)
+
     # --- Legacy / fallback (default channel) ---
 
     async def send_blocks(self, blocks: list[dict[str, Any]], text: str = "") -> None:

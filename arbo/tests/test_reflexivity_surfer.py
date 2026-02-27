@@ -1,4 +1,4 @@
-"""Tests for Strategy B: Reflexivity Surfer (RDH-302).
+"""Tests for Strategy B: Reflexivity Surfer (RDH-302, updated for DivergenceSignal).
 
 Tests verify:
 1. Phase state machine transitions (Start → Boom → Peak → Bust → Start)
@@ -8,6 +8,7 @@ Tests verify:
 5. Max 5 concurrent per phase type
 6. strategy="B" on paper trades
 7. Partial exit at +30%
+8. data_source_live guard (no signals → no trades)
 """
 
 from __future__ import annotations
@@ -19,12 +20,6 @@ from typing import Any
 
 import pytest
 
-from arbo.connectors.kaito_api import (
-    KaitoClient,
-    MarketAttention,
-    MindshareData,
-    SentimentData,
-)
 from arbo.core.paper_engine import PaperTradingEngine
 from arbo.core.risk_manager import RiskManager
 from arbo.strategies.reflexivity_surfer import (
@@ -32,6 +27,7 @@ from arbo.strategies.reflexivity_surfer import (
     Phase,
     ReflexivitySurfer,
 )
+from arbo.strategies.social_divergence import DivergenceSignal
 
 
 # ================================================================
@@ -64,26 +60,24 @@ class MockReflexMarket:
             self.end_date = (datetime.now(UTC) + timedelta(days=14)).isoformat()
 
 
-def _make_kaito_overrides(
-    topic: str,
-    mindshare_score: float = 0.2,
-    sentiment: float = 0.3,
-    kaito_prob: float = 0.5,
-) -> dict[str, tuple[MindshareData, SentimentData]]:
-    """Create Kaito stub overrides for a specific probability estimate."""
-    # Reverse-engineer the sentiment/trend values that produce the desired kaito_prob
-    # The probability formula: base(0.5) + sentiment*0.2*confidence + trend*0.1
-    # We want to control kaito_prob indirectly through stub overrides
-    ms = MindshareData(topic=topic, score=mindshare_score, trend=0.0, volume=1000)
-    sd = SentimentData(
-        topic=topic,
-        sentiment=sentiment,
-        confidence=0.7,
-        sample_size=300,
-        bullish_pct=0.5 + sentiment * 0.3,
-        bearish_pct=0.5 - sentiment * 0.3,
+def _make_divergence_signal(
+    symbol: str = "BTC",
+    divergence: float = 0.3,
+    confidence: float = 0.65,
+    direction: str = "LONG",
+    condition_ids: list[str] | None = None,
+) -> DivergenceSignal:
+    """Create a DivergenceSignal for testing."""
+    return DivergenceSignal(
+        symbol=symbol,
+        social_momentum_score=divergence * 0.8,
+        price_momentum=-divergence * 0.5,
+        divergence=divergence,
+        z_score=divergence * 3.0,
+        direction=direction,
+        confidence=confidence,
+        polymarket_condition_ids=condition_ids or ["cond_reflex_1"],
     )
-    return {topic: (ms, sd)}
 
 
 # ================================================================
@@ -101,11 +95,9 @@ class TestPhaseStateMachine:
 
     @pytest.fixture
     def strategy(self, risk: RiskManager) -> ReflexivitySurfer:
-        kaito = KaitoClient()
         paper = PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
         return ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
 
@@ -174,53 +166,46 @@ class TestReflexivityTrading:
         return PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
 
     async def test_boom_buys_yes(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
-        """Phase 2 (BOOM): buys YES when divergence < -10%."""
-        # Kaito estimates prob=0.65, market price=0.55 → divergence = (0.55-0.65)/0.65 = -0.154
-        ms = MindshareData(topic="Will Bitcoin reach $100K?", score=0.3, trend=0.5, volume=2000)
-        sd = SentimentData(
-            topic="Will Bitcoin reach $100K?",
-            sentiment=0.6, confidence=0.85,
-            sample_size=500, bullish_pct=0.75, bearish_pct=0.25,
-        )
-        overrides = {"Will Bitcoin reach $100K?": (ms, sd)}
-        kaito = KaitoClient(stub_overrides=overrides)
-
+        """Phase 2 (BOOM): buys YES when divergence triggers boom."""
         strategy = ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
         await strategy.init()
+
+        # Social divergence positive = social UP = BOOM (after negation → negative = BOOM)
+        signal = _make_divergence_signal(
+            divergence=0.20,  # positive social → negated to -0.20 → BOOM
+            confidence=0.65,
+            condition_ids=["cond_reflex_1"],
+        )
+        strategy.update_signals([signal])
 
         mkt = MockReflexMarket(price_yes=Decimal("0.55"))
         traded = await strategy.poll_cycle([mkt])
 
-        # Should trade if divergence meets boom threshold
-        # The kaito_probability is computed from stub data, depends on sentiment
         if len(traded) > 0:
             assert traded[0]["strategy"] == "B"
-            assert traded[0]["side"] in ("BUY_YES", "BUY_NO")
+            assert traded[0]["side"] == "BUY_YES"
+            assert traded[0]["phase"] == "BOOM"
 
         await strategy.close()
 
     async def test_peak_buys_no(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
-        """Phase 3 (PEAK): buys NO when divergence > +20%."""
-        # Market price=0.70, Kaito estimates prob=0.50 → divergence = (0.70-0.50)/0.50 = +0.40
-        ms = MindshareData(topic="Will event happen?", score=0.1, trend=-0.3, volume=300)
-        sd = SentimentData(
-            topic="Will event happen?",
-            sentiment=-0.5, confidence=0.7,
-            sample_size=200, bullish_pct=0.3, bearish_pct=0.7,
-        )
-        overrides = {"Will event happen?": (ms, sd)}
-        kaito = KaitoClient(stub_overrides=overrides)
-
+        """Phase 3 (PEAK): buys NO when divergence triggers peak."""
         strategy = ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
         await strategy.init()
+
+        # Negative social divergence → negated to positive → PEAK
+        signal = _make_divergence_signal(
+            divergence=-0.30,  # social DOWN → negated to +0.30 → PEAK
+            confidence=0.60,
+            condition_ids=["cond_peak"],
+        )
+        strategy.update_signals([signal])
 
         mkt = MockReflexMarket(
             condition_id="cond_peak",
@@ -232,30 +217,62 @@ class TestReflexivityTrading:
 
         if len(traded) > 0:
             assert traded[0]["strategy"] == "B"
-            assert traded[0]["phase"] in ("BOOM", "PEAK")
+            assert traded[0]["phase"] == "PEAK"
 
         await strategy.close()
 
-    async def test_no_trade_at_start(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
-        """No trade when market is in Phase START (no divergence)."""
-        # Market price ≈ Kaito estimate → no divergence
-        ms = MindshareData(topic="neutral market", score=0.15, trend=0.0, volume=500)
-        sd = SentimentData(
-            topic="neutral market",
-            sentiment=0.0, confidence=0.5,
-            sample_size=200, bullish_pct=0.5, bearish_pct=0.5,
-        )
-        overrides = {"neutral market": (ms, sd)}
-        kaito = KaitoClient(stub_overrides=overrides)
-
+    async def test_no_signals_returns_empty(
+        self, risk: RiskManager, paper: PaperTradingEngine
+    ) -> None:
+        """No trade when data_source_live is False (no signals)."""
         strategy = ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
         await strategy.init()
 
-        # Price near Kaito estimate → divergence near 0 → stays START
+        # Don't call update_signals → data_source_live = False
+        mkt = MockReflexMarket()
+        traded = await strategy.poll_cycle([mkt])
+        assert len(traded) == 0
+        await strategy.close()
+
+    async def test_stale_signals_returns_empty(
+        self, risk: RiskManager, paper: PaperTradingEngine
+    ) -> None:
+        """No trade when signals are older than 7 hours."""
+        strategy = ReflexivitySurfer(
+            risk_manager=risk,
+            paper_engine=paper,
+        )
+        await strategy.init()
+
+        signal = _make_divergence_signal(divergence=0.30, condition_ids=["cond_reflex_1"])
+        strategy.update_signals([signal])
+        # Artificially age the timestamp
+        strategy._signals_updated_at = datetime.now(UTC) - timedelta(hours=8)
+
+        mkt = MockReflexMarket()
+        traded = await strategy.poll_cycle([mkt])
+        assert len(traded) == 0
+        await strategy.close()
+
+    async def test_no_trade_at_start(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
+        """No trade when divergence is small (stays in START phase)."""
+        strategy = ReflexivitySurfer(
+            risk_manager=risk,
+            paper_engine=paper,
+        )
+        await strategy.init()
+
+        # Small divergence → after negation stays in [-10%, +20%] → START
+        signal = _make_divergence_signal(
+            divergence=0.03,  # negated → -0.03, within START range
+            confidence=0.50,
+            condition_ids=["cond_neutral"],
+        )
+        strategy.update_signals([signal])
+
         mkt = MockReflexMarket(
             condition_id="cond_neutral",
             question="neutral market",
@@ -266,17 +283,23 @@ class TestReflexivityTrading:
         assert len(traded) == 0
         await strategy.close()
 
-    async def test_strategy_b_on_trade(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
+    async def test_strategy_b_on_trade(
+        self, risk: RiskManager, paper: PaperTradingEngine
+    ) -> None:
         """All trades have strategy='B'."""
-        kaito = KaitoClient()
         strategy = ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
         await strategy.init()
 
-        # Force a large divergence by manipulating market directly
+        signal = _make_divergence_signal(
+            divergence=-0.35,  # negated to +0.35 → PEAK
+            confidence=0.65,
+            condition_ids=["cond_forced"],
+        )
+        strategy.update_signals([signal])
+
         mkt = MockReflexMarket(
             condition_id="cond_forced",
             question="forced divergence",
@@ -290,23 +313,22 @@ class TestReflexivityTrading:
 
         await strategy.close()
 
-    async def test_no_duplicate_positions(self, risk: RiskManager, paper: PaperTradingEngine) -> None:
+    async def test_no_duplicate_positions(
+        self, risk: RiskManager, paper: PaperTradingEngine
+    ) -> None:
         """Same market doesn't get traded twice."""
-        ms = MindshareData(topic="dup test", score=0.05, trend=-0.4, volume=200)
-        sd = SentimentData(
-            topic="dup test",
-            sentiment=-0.6, confidence=0.8,
-            sample_size=300, bullish_pct=0.2, bearish_pct=0.8,
-        )
-        overrides = {"dup test": (ms, sd)}
-        kaito = KaitoClient(stub_overrides=overrides)
-
         strategy = ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
         await strategy.init()
+
+        signal = _make_divergence_signal(
+            divergence=-0.35,  # negated to +0.35 → PEAK
+            confidence=0.70,
+            condition_ids=["cond_dup"],
+        )
+        strategy.update_signals([signal])
 
         mkt = MockReflexMarket(
             condition_id="cond_dup",
@@ -320,6 +342,7 @@ class TestReflexivityTrading:
         first_count = strategy._trades_placed
 
         # Second cycle — same market, should not trade again
+        strategy.update_signals([signal])  # refresh signals
         await strategy.poll_cycle([mkt])
         assert strategy._trades_placed == first_count
 
@@ -341,11 +364,9 @@ class TestReflexivityExits:
 
     @pytest.fixture
     def strategy(self, risk: RiskManager) -> ReflexivitySurfer:
-        kaito = KaitoClient()
         paper = PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
         return ReflexivitySurfer(
             risk_manager=risk,
-            kaito_client=kaito,
             paper_engine=paper,
         )
 
@@ -426,24 +447,36 @@ class TestReflexivityStats:
 
     def test_stats_structure(self, risk: RiskManager) -> None:
         """Stats dict has expected keys."""
-        kaito = KaitoClient()
         paper = PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
         strategy = ReflexivitySurfer(
-            risk_manager=risk, kaito_client=kaito, paper_engine=paper
+            risk_manager=risk, paper_engine=paper
         )
         stats = strategy.stats
         assert stats["strategy"] == "B"
-        assert stats["kaito_mode"] == "stub"
+        assert stats["data_source"] == "social_divergence"
+        assert stats["data_source_live"] is False  # no signals yet
         assert "active_positions" in stats
         assert "phase_distribution" in stats
         assert "deployed" in stats
 
-    def test_phase_distribution(self, risk: RiskManager) -> None:
-        """Phase distribution counts markets in each phase."""
-        kaito = KaitoClient()
+    def test_data_source_live_after_update(self, risk: RiskManager) -> None:
+        """data_source_live becomes True after update_signals with non-empty list."""
         paper = PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
         strategy = ReflexivitySurfer(
-            risk_manager=risk, kaito_client=kaito, paper_engine=paper
+            risk_manager=risk, paper_engine=paper
+        )
+        assert strategy.data_source_live is False
+
+        signal = _make_divergence_signal()
+        strategy.update_signals([signal])
+        assert strategy.data_source_live is True
+        assert strategy.stats["data_source_live"] is True
+
+    def test_phase_distribution(self, risk: RiskManager) -> None:
+        """Phase distribution counts markets in each phase."""
+        paper = PaperTradingEngine(initial_capital=Decimal("2000"), risk_manager=risk)
+        strategy = ReflexivitySurfer(
+            risk_manager=risk, paper_engine=paper
         )
         strategy._transition_phase("c1", "t1", -0.15, 0.55, 0.47)
         strategy._transition_phase("c2", "t2", 0.25, 0.40, 0.50)

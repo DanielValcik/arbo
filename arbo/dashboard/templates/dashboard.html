@@ -373,6 +373,31 @@
             </div>
         </div>
 
+        <!-- Closed Positions -->
+        <div class="card grid-full">
+            <div class="card-title">Closed Positions</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Market</th>
+                            <th>Strategy</th>
+                            <th>Side</th>
+                            <th>Size</th>
+                            <th>Entry Price</th>
+                            <th>Result</th>
+                            <th>P&L</th>
+                            <th>Resolved</th>
+                        </tr>
+                    </thead>
+                    <tbody id="closedBody">
+                        <tr><td colspan="9" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Live Signals -->
         <div class="card grid-full">
             <div class="card-title">Recent Signals</div>
@@ -430,6 +455,7 @@
 
     // Store latest data for re-filtering
     let latestPositions = [];
+    let latestClosed = [];
     let latestSignals = [];
     let latestTrades = [];
 
@@ -466,6 +492,7 @@
     function applyFilter() {
         currentFilter = document.getElementById('strategyFilter').value;
         renderPositions();
+        renderClosed();
         renderSignals();
         renderTrades();
     }
@@ -750,7 +777,7 @@
         tbody.innerHTML = filtered.map(p => `
             <tr>
                 <td title="${p.market}">${truncate(p.market, 35)}</td>
-                <td>${stratBadge(layerToStrategy(p.layer))}</td>
+                <td>${stratBadge(p.strategy || layerToStrategy(p.layer))}</td>
                 <td>${p.side}</td>
                 <td>$${(p.size || 0).toFixed(2)}</td>
                 <td>${(p.avg_price || 0).toFixed(4)}</td>
@@ -766,6 +793,37 @@
         if (!data) return;
         latestPositions = data.positions || [];
         renderPositions();
+    }
+
+    function renderClosed() {
+        const tbody = document.getElementById('closedBody');
+        const filtered = latestClosed.filter(t => matchesFilter(t));
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No closed positions yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map(t => {
+            const statusColor = t.status === 'won' ? 'var(--green)' : 'var(--red)';
+            return `
+                <tr>
+                    <td>${t.id}</td>
+                    <td title="${t.market}">${truncate(t.market, 30)}</td>
+                    <td>${stratBadge(t.strategy)}</td>
+                    <td>${t.side}</td>
+                    <td>$${(t.size || 0).toFixed(2)}</td>
+                    <td>${(t.price || 0).toFixed(4)}</td>
+                    <td style="color:${statusColor};font-weight:600">${t.status.toUpperCase()}</td>
+                    <td class="${pnlClass(t.actual_pnl)}">${fmtPnl(t.actual_pnl)}</td>
+                    <td>${fmtTime(t.resolved_at)}</td>
+                </tr>`;
+        }).join('');
+    }
+
+    async function updateClosed() {
+        const data = await fetchJSON('/api/closed-positions');
+        if (!data) return;
+        latestClosed = data.trades || [];
+        renderClosed();
     }
 
     function renderSignals() {
@@ -852,7 +910,7 @@
                 <tr>
                     <td>${t.id}</td>
                     <td title="${t.market}">${truncate(t.market, 25)}</td>
-                    <td>${stratBadge(layerToStrategy(t.layer))}</td>
+                    <td>${stratBadge(t.strategy || layerToStrategy(t.layer))}</td>
                     <td>${t.side}</td>
                     <td>${(t.price || 0).toFixed(4)}</td>
                     <td>$${(t.size || 0).toFixed(2)}</td>
@@ -877,6 +935,7 @@
             updateStrategies(),
             updateCapital(),
             updatePositions(),
+            updateClosed(),
             updateSignals(),
             updateRisk(),
             updateInfra(),
