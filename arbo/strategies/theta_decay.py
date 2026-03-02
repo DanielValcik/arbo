@@ -101,6 +101,7 @@ class ThetaDecay:
             List of trade results for markets where trades were placed.
         """
         self._last_scan = datetime.now(UTC)
+        logger.info("theta_decay_poll_start", markets_available=len(markets))
 
         # Check strategy allocation state
         strategy_state = self._risk.get_strategy_state(STRATEGY_ID)
@@ -215,7 +216,7 @@ class ThetaDecay:
 
             candidates.append(mkt)
 
-        logger.debug(
+        logger.info(
             "theta_decay_candidates",
             total_markets=len(markets),
             candidates=len(candidates),

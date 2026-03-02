@@ -57,6 +57,7 @@ _COLD_START_BLOCKS = 1000  # ~30 min of Polygon blocks on first run
 _DB_KEY = "l7_last_processed_block"  # DB persistence key
 _CU_PER_POLL = 85  # estimated CU per poll (blockNumber 10 + getLogs 75)
 _MAX_BLOCK_GAP = 10_000  # discard restored block if >10K behind (~5h)
+_MAX_BLOCK_RANGE = 200  # max blocks per getLogs query (~7 min of Polygon, ~26K events)
 
 
 @dataclass
@@ -199,7 +200,16 @@ class RollingWindow:
 def parse_order_filled(log: dict[str, Any]) -> OrderFilledEvent | None:
     """Parse raw Ethereum log into OrderFilledEvent.
 
-    Decodes ABI-encoded data from eth_subscribe log result.
+    CTF Exchange OrderFilled event layout:
+      topics[0] = event signature hash
+      topics[1] = orderHash (bytes32, indexed)
+      topics[2] = maker (address, indexed)
+      topics[3] = taker (address, indexed)
+      data[0:64]   = makerAssetId (uint256)
+      data[64:128]  = takerAssetId (uint256)
+      data[128:192] = makerAmountFilled (uint256)
+      data[192:256] = takerAmountFilled (uint256)
+      data[256:320] = fee (uint256)
 
     Args:
         log: Raw log dict with 'topics', 'data', 'blockNumber' fields.
@@ -211,25 +221,25 @@ def parse_order_filled(log: dict[str, Any]) -> OrderFilledEvent | None:
         topics = log.get("topics", [])
         data = log.get("data", "")
 
-        if len(topics) < 3:
+        if len(topics) < 4:
             return None
 
-        # topics[1] = orderHash (bytes32), topics[2] = maker (address, padded)
+        # topics[1] = orderHash, topics[2] = maker, topics[3] = taker (all indexed)
         order_hash = topics[1]
         maker = "0x" + topics[2][-40:]
+        taker = "0x" + topics[3][-40:]
 
-        # Decode non-indexed data fields (each 32 bytes = 64 hex chars)
+        # Decode non-indexed data fields (5 fields x 64 hex chars = 320)
         data_hex = data[2:] if data.startswith("0x") else data
 
-        if len(data_hex) < 384:  # 6 fields x 64 chars
+        if len(data_hex) < 320:  # 5 fields x 64 chars
             return None
 
-        taker = "0x" + data_hex[24:64]
-        maker_asset_id = int(data_hex[64:128], 16)
-        taker_asset_id = int(data_hex[128:192], 16)
-        maker_amount_raw = int(data_hex[192:256], 16)
-        taker_amount_raw = int(data_hex[256:320], 16)
-        fee_raw = int(data_hex[320:384], 16)
+        maker_asset_id = int(data_hex[0:64], 16)
+        taker_asset_id = int(data_hex[64:128], 16)
+        maker_amount_raw = int(data_hex[128:192], 16)
+        taker_amount_raw = int(data_hex[192:256], 16)
+        fee_raw = int(data_hex[256:320], 16)
 
         block_hex = log.get("blockNumber", "0x0")
         block_number = int(block_hex, 16) if isinstance(block_hex, str) else int(block_hex)
@@ -563,8 +573,10 @@ class OrderFlowMonitor:
         session_factory: async_sessionmaker | None = None,
     ) -> None:
         config = get_config()
-        self._http_url = config.polygon_rpc_url
+        # Prefer Alchemy for getLogs (dRPC free tier doesn't handle CTF Exchange volume)
+        self._http_url = config.alchemy_polygon_url or config.polygon_rpc_url
         self._ctf_exchange = config.order_flow.ctf_exchange
+        self._neg_risk_ctf_exchange = config.order_flow.neg_risk_ctf_exchange
         self._zscore_threshold = config.order_flow.volume_zscore_threshold
         self._imbalance_threshold = Decimal(str(config.order_flow.flow_imbalance_threshold))
         self._min_converging = config.order_flow.min_converging_signals
@@ -580,17 +592,22 @@ class OrderFlowMonitor:
         self._matched_tokens: set[str] = set()
         self._total_events = 0
         self._signals_emitted = 0
+        self._poll_count = 0
         self._topic: str = ""
 
     async def initialize(self) -> None:
         """Compute event topic hash."""
         self._topic = _compute_topic()
         if not self._http_url:
-            logger.warning("order_flow_no_rpc_url", msg="DRPC_API_URL not set")
+            logger.warning("order_flow_no_rpc_url", msg="No Polygon RPC URL configured")
+        rpc_provider = "alchemy" if "alchemy" in self._http_url else "drpc"
         logger.info(
             "order_flow_initialized",
+            rpc_provider=rpc_provider,
             ctf_exchange=self._ctf_exchange,
+            neg_risk_ctf_exchange=self._neg_risk_ctf_exchange,
             poll_interval=self._poll_interval,
+            topic=self._topic[:18] + "...",
         )
 
     async def start(self) -> None:
@@ -674,29 +691,44 @@ class OrderFlowMonitor:
         self._matched_tokens = token_ids
 
     async def _poll_loop(self) -> None:
-        """Poll eth_getLogs every interval."""
+        """Poll eth_getLogs every interval, chunking large ranges."""
         while self._running:
             try:
                 current_block = await self._get_block_number()
                 if current_block > self._last_block:
-                    from_block = self._last_block + 1
-                    logs = await self._get_logs(from_block, current_block)
-                    for log in logs:
-                        self._handle_log(log)
+                    scan_from = self._last_block + 1
+                    chunk_start = scan_from
+                    total_logs = 0
+
+                    # Chunk large block ranges to avoid timeout/oversized responses
+                    while chunk_start <= current_block and self._running:
+                        chunk_end = min(chunk_start + _MAX_BLOCK_RANGE - 1, current_block)
+                        logs = await self._get_logs(chunk_start, chunk_end)
+                        for log in logs:
+                            self._handle_log(log)
+                        total_logs += len(logs)
+                        chunk_start = chunk_end + 1
+
                     self._last_block = current_block
+                    self._poll_count += 1
                     await self._save_last_block()
-                    logger.debug(
+                    logger.info(
                         "order_flow_poll_ok",
-                        from_block=from_block,
+                        from_block=scan_from,
                         to_block=current_block,
-                        logs=len(logs),
-                        blocks_scanned=current_block - from_block + 1,
-                        cu_estimate=_CU_PER_POLL,
+                        logs=total_logs,
+                        total_events=self._total_events,
+                        blocks_scanned=current_block - scan_from + 1,
+                        poll_count=self._poll_count,
                     )
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.warning("order_flow_poll_error", error=str(e))
+                logger.warning(
+                    "order_flow_poll_error",
+                    error=str(e) or type(e).__name__,
+                    error_type=type(e).__name__,
+                )
             # Sleep in 1s increments for responsive shutdown
             for _ in range(self._poll_interval):
                 if not self._running:
@@ -708,29 +740,40 @@ class OrderFlowMonitor:
         if self._session is None:
             raise RuntimeError("Session not initialized")
         payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []}
-        async with self._session.post(self._http_url, json=payload) as resp:
+        async with self._session.post(self._http_url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             data = await resp.json()
+            if "error" in data:
+                raise RuntimeError(f"RPC error: {data['error']}")
             return int(data["result"], 16)
 
     async def _get_logs(self, from_block: int, to_block: int) -> list[dict[str, Any]]:
-        """eth_getLogs for OrderFilled events (~75 CU per call)."""
+        """eth_getLogs for OrderFilled events on both CTF exchanges (~75-150 CU)."""
         if self._session is None:
             raise RuntimeError("Session not initialized")
+
+        # Query both standard and NegRisk CTF Exchange contracts
+        addresses = [self._ctf_exchange]
+        if self._neg_risk_ctf_exchange and self._neg_risk_ctf_exchange != self._ctf_exchange:
+            addresses.append(self._neg_risk_ctf_exchange)
+
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "eth_getLogs",
             "params": [
                 {
-                    "address": self._ctf_exchange,
+                    "address": addresses if len(addresses) > 1 else self._ctf_exchange,
                     "topics": [self._topic],
                     "fromBlock": hex(from_block),
                     "toBlock": hex(to_block),
                 }
             ],
         }
-        async with self._session.post(self._http_url, json=payload) as resp:
+        async with self._session.post(self._http_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             data = await resp.json()
+            if "error" in data:
+                logger.warning("rpc_get_logs_error", error=data["error"])
+                return []
             return data.get("result", [])
 
     async def _save_last_block(self) -> None:
@@ -806,7 +849,7 @@ class OrderFlowMonitor:
         signal = self._check_convergence(event.token_id)
         if signal is not None:
             self._signals_emitted += 1
-            logger.info(
+            logger.debug(
                 "order_flow_signal",
                 token_id=signal.token_id[:20],
                 edge=str(signal.edge),
@@ -814,13 +857,20 @@ class OrderFlowMonitor:
             if self._on_signal is not None:
                 self._on_signal(signal)
 
+    _WARMUP_POLLS = 5  # Need multiple poll cycles before convergence checks are meaningful
+
     def _check_convergence(self, token_id: str) -> Signal | None:
         """Check if multiple flow signals converge for a token.
 
         Requires >=2 of: z-score spike, flow imbalance, delta trending.
+        Skips convergence during warmup period (first N polls) to avoid cold-start false positives.
         """
         window = self._windows.get(token_id)
         if window is None:
+            return None
+
+        # Skip convergence check during warmup (need multiple polls for meaningful z-scores)
+        if self._poll_count < self._WARMUP_POLLS:
             return None
 
         converging = 0

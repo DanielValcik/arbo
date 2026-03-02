@@ -132,8 +132,9 @@ class TestMomentumScore:
         assert signals[0].social_momentum_score < 0
 
     def test_no_divergence_when_aligned(self) -> None:
-        """On-chain up AND price up → no divergence signal."""
+        """On-chain up AND price up by similar magnitude → no divergence signal."""
         calc = SocialDivergenceCalculator(sigma_threshold=2.0)
+        # Use ~15% on-chain growth to match 15% price growth — truly aligned.
         snapshots = {
             "ETH": [
                 _make_snapshot(
@@ -147,10 +148,10 @@ class TestMomentumScore:
                 ),
                 _make_snapshot(
                     symbol="ETH",
-                    daily_active_addresses=400000.0,
-                    transactions_count=200000.0,
-                    dev_activity=80.0,
-                    volume_24h=20000000000.0,
+                    daily_active_addresses=230000.0,
+                    transactions_count=115000.0,
+                    dev_activity=46.0,
+                    volume_24h=11500000000.0,
                     price_change_24h=15.0,
                     hours_ago=0,
                 ),
@@ -159,7 +160,7 @@ class TestMomentumScore:
 
         signals = calc.calculate_signals(snapshots)
 
-        # Both on-chain and price up → aligned → below threshold (likely)
+        # Both on-chain and price up by similar magnitude → aligned → below threshold
         assert len(signals) == 0
 
 
@@ -169,7 +170,7 @@ class TestMomentumScore:
 
 
 class TestWeightDistribution:
-    """Tests for the new weight distribution (DAA x 0.30, TX x 0.20, DEV x 0.10, VOL x 0.40)."""
+    """Tests for weight distribution (DAA x 0.45, VOL x 0.55; TX/DEV stubbed at 0)."""
 
     def test_volume_dominates(self) -> None:
         """Volume has highest weight (0.40), so volume spike should dominate."""

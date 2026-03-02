@@ -785,6 +785,20 @@ class RDHOrchestrator:
             await asyncio.sleep(interval)
             now = time.monotonic()
 
+            # Log OrderFlowMonitor stats for Strategy A diagnostics
+            if self._order_flow_monitor is not None:
+                ofm_stats = self._order_flow_monitor.stats
+                logger.info(
+                    "order_flow_health",
+                    is_healthy=self._order_flow_monitor.is_healthy,
+                    total_events=ofm_stats["total_events"],
+                    signals_emitted=ofm_stats["signals_emitted"],
+                    active_tokens=ofm_stats["active_tokens"],
+                    registered_markets=(
+                        self._order_flow_monitor.market_tracker.registered_markets
+                    ),
+                )
+
             for name, state in self._tasks.items():
                 if state.permanent_stop or not state.enabled:
                     continue
@@ -987,12 +1001,13 @@ class RDHOrchestrator:
                 logger.error("resolution_check_error", error=str(e))
 
     async def _daily_report_scheduler(self) -> None:
-        """Daily report at configured UTC hour."""
+        """Daily report at configured UTC hour and minute."""
         target_hour = self._orch_cfg.daily_report_hour_utc
+        target_minute = self._orch_cfg.daily_report_minute_utc
 
         while not self._shutdown_event.is_set():
             now = datetime.now(UTC)
-            if now.hour == target_hour and now.minute < 5:
+            if now.hour == target_hour and target_minute <= now.minute < target_minute + 5:
                 await self._send_daily_report()
                 await asyncio.sleep(3600)
             else:
@@ -1283,6 +1298,35 @@ class RDHOrchestrator:
             # Keep only latest 4 per coin
             for symbol in snapshots_by_coin:
                 snapshots_by_coin[symbol] = snapshots_by_coin[symbol][-4:]
+
+            # Build coin → PM condition_ids mapping from discovered crypto markets
+            symbol_names = {
+                "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
+                "XRP": "xrp", "ADA": "cardano", "DOGE": "dogecoin",
+                "AVAX": "avalanche", "DOT": "polkadot", "LINK": "chainlink",
+                "MATIC": "matic", "UNI": "uniswap", "ATOM": "cosmos",
+                "LTC": "litecoin", "NEAR": "near", "ARB": "arbitrum",
+                "OP": "optimism", "APT": "aptos",
+            }
+            coin_mapping: dict[str, list[str]] = {}
+            for mkt in self._markets:
+                if not getattr(mkt, "active", False) or getattr(mkt, "closed", False):
+                    continue
+                q_lower = getattr(mkt, "question", "").lower()
+                for symbol, name in symbol_names.items():
+                    if symbol.lower() in q_lower or name in q_lower:
+                        if symbol not in coin_mapping:
+                            coin_mapping[symbol] = []
+                        cid = getattr(mkt, "condition_id", "")
+                        if cid and cid not in coin_mapping[symbol]:
+                            coin_mapping[symbol].append(cid)
+            self._social_divergence.set_coin_mapping(coin_mapping)
+            logger.info(
+                "coin_mapping_built",
+                mapped_coins=len(coin_mapping),
+                total_contracts=sum(len(v) for v in coin_mapping.values()),
+                symbols=list(coin_mapping.keys())[:10],
+            )
 
             # Calculate divergence signals
             signals = self._social_divergence.calculate_signals(snapshots_by_coin)

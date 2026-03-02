@@ -39,6 +39,7 @@ class OrderFlowConfig(BaseModel):
     """Layer 7: Smart money order flow parameters."""
 
     ctf_exchange: str = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+    neg_risk_ctf_exchange: str = "0xC5d563A36AE78145C45a50134d48A1215220f80a"
     volume_zscore_threshold: float = 2.0
     flow_imbalance_threshold: float = 0.65
     rolling_windows: list[int] = [3600, 14400, 86400]
@@ -133,9 +134,10 @@ class OrchestratorConfig(BaseModel):
     signal_batch_timeout_s: float = 2.0
     dashboard_update_interval_s: int = 60
     snapshot_interval_s: int = 3600
-    daily_report_hour_utc: int = 23
-    weekly_report_day: int = 6  # Sunday
-    weekly_report_hour_utc: int = 20
+    daily_report_hour_utc: int = 7  # 8:07 CET / 9:07 CEST (minute set in scheduler)
+    daily_report_minute_utc: int = 7
+    weekly_report_day: int = 0  # Monday
+    weekly_report_hour_utc: int = 8  # 9:00 CET / 10:00 CEST
 
 
 class PollingConfig(BaseModel):
@@ -183,6 +185,7 @@ class ArboConfig(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     alchemy_key: str = Field(default="", alias="ALCHEMY_KEY")
+    alchemy_polygon_url: str = Field(default="", alias="ALCHEMY_POLYGON_URL")
     polygon_rpc_url: str = Field(default="", alias="DRPC_API_URL")
     metoffice_api_key: str = Field(default="", alias="METOFFICE_API_KEY")
 

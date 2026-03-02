@@ -27,16 +27,19 @@ from arbo.utils.logger import get_logger
 logger = get_logger("social_divergence")
 
 # New weights for Santiment + CoinGecko momentum score
-W_DAILY_ACTIVE_ADDRESSES = 0.30
-W_TRANSACTIONS = 0.20
-W_DEV_ACTIVITY = 0.10
-W_VOLUME = 0.40
+# TX (0.20) and DEV (0.10) are always 0 on Santiment free tier,
+# so redistribute their weight to DAA and VOL.
+W_DAILY_ACTIVE_ADDRESSES = 0.45
+W_TRANSACTIONS = 0.0  # Santiment free tier: 30d lag, effectively stubbed
+W_DEV_ACTIVITY = 0.0  # Santiment free tier: unavailable
+W_VOLUME = 0.55
 
 # Minimum number of snapshots needed for calculation
 MIN_SNAPSHOTS = 2
 
 # Default divergence threshold (in standard deviations)
-DEFAULT_SIGMA_THRESHOLD = 2.0
+# Lowered from 2.0: with few data points and low variance, 2σ is unreachable.
+DEFAULT_SIGMA_THRESHOLD = 1.0
 
 
 # ================================================================
@@ -192,6 +195,18 @@ class SocialDivergenceCalculator:
             # Calculate z-score from rolling stats
             z_score = self._compute_z_score(divergence, history)
 
+            logger.info(
+                "divergence_calc_per_coin",
+                symbol=symbol,
+                momentum_score=round(momentum_score, 4),
+                price_momentum=round(price_momentum, 2),
+                divergence=round(divergence, 4),
+                z_score=round(z_score, 2),
+                threshold=self._sigma_threshold,
+                history_len=len(history),
+                pm_contracts=len(self._coin_mapping.get(symbol, [])),
+            )
+
             # Check threshold
             if abs(z_score) < self._sigma_threshold:
                 continue
@@ -237,7 +252,7 @@ class SocialDivergenceCalculator:
         Measures the change in on-chain/volume metrics between the oldest and
         newest snapshot in the window.
 
-        Weights: DAA x 0.30, Transactions x 0.20, Dev x 0.10, Volume x 0.40.
+        Weights: DAA x 0.45, Volume x 0.55 (TX/DEV stubbed on free tier).
 
         Returns:
             Normalized score in [-1, 1] range.
@@ -276,9 +291,9 @@ class SocialDivergenceCalculator:
         or zero variance.
         """
         if len(history) < 3:
-            # Not enough data for meaningful z-score, use raw divergence
-            # Scale by a fixed factor to make it comparable
-            return value * 3.0  # Amplify early signals slightly
+            # Not enough data for meaningful z-score, use raw divergence.
+            # Need ~0.125 divergence to cross 1.0σ threshold (achievable).
+            return value * 8.0
 
         mean = sum(history) / len(history)
         variance = sum((x - mean) ** 2 for x in history) / len(history)

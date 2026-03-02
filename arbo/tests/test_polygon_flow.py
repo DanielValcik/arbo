@@ -43,13 +43,15 @@ def _make_log(
     fee: int = 500_000,  # 0.5 USDC
     block_number: str = "0x100",
 ) -> dict:
-    """Build a mock Ethereum log for OrderFilled."""
-    order_hash = "0x" + "ab" * 32
-    taker_hex = "00" * 12 + "22" * 20
+    """Build a mock Ethereum log for OrderFilled.
 
-    # Encode data fields (each 32 bytes = 64 hex)
+    CTF Exchange event layout: 4 topics (sig, orderHash, maker, taker)
+    and 5 data fields (makerAssetId, takerAssetId, makerAmt, takerAmt, fee).
+    """
+    order_hash = "0x" + "ab" * 32
+
+    # Encode data fields (5 fields, each 32 bytes = 64 hex)
     data_parts = [
-        taker_hex,  # taker address (padded to 32 bytes)
         f"{maker_asset_id:064x}",
         f"{taker_asset_id:064x}",
         f"{maker_amount:064x}",
@@ -61,8 +63,9 @@ def _make_log(
     return {
         "topics": [
             "0x" + "00" * 32,  # event topic
-            order_hash,  # orderHash
-            "0x" + "00" * 12 + "11" * 20,  # maker (padded)
+            order_hash,  # orderHash (indexed)
+            "0x" + "00" * 12 + "11" * 20,  # maker (indexed, padded)
+            "0x" + "00" * 12 + "22" * 20,  # taker (indexed, padded)
         ],
         "data": data,
         "blockNumber": block_number,
@@ -177,7 +180,12 @@ class TestOrderFilledParsing:
     def test_short_data_returns_none(self) -> None:
         """Log with insufficient data field returns None."""
         log = {
-            "topics": ["0x" + "00" * 32, "0x" + "ab" * 32, "0x" + "11" * 32],
+            "topics": [
+                "0x" + "00" * 32,
+                "0x" + "ab" * 32,
+                "0x" + "11" * 32,
+                "0x" + "22" * 32,
+            ],
             "data": "0x0000",
             "blockNumber": "0x0",
         }
@@ -215,6 +223,7 @@ class TestConvergence:
         """Uniform flow → no signal."""
         mock_config.return_value = _mock_config()
         monitor = OrderFlowMonitor()
+        monitor._poll_count = 10  # Past warmup
 
         # Add some uniform data
         window = RollingWindow()
@@ -236,6 +245,7 @@ class TestConvergence:
         """Z-score spike + flow imbalance → signal."""
         mock_config.return_value = _mock_config()
         monitor = OrderFlowMonitor()
+        monitor._poll_count = 10  # Past warmup
 
         window = RollingWindow()
         now = time.monotonic()
@@ -263,6 +273,7 @@ class TestConvergence:
         """Z-score spike + delta trending → signal."""
         mock_config.return_value = _mock_config()
         monitor = OrderFlowMonitor()
+        monitor._poll_count = 10  # Past warmup
 
         window = RollingWindow()
         now = time.monotonic()
@@ -287,6 +298,7 @@ class TestConvergence:
         """Signal contains correct details."""
         mock_config.return_value = _mock_config()
         monitor = OrderFlowMonitor()
+        monitor._poll_count = 10  # Past warmup
 
         window = RollingWindow()
         now = time.monotonic()
@@ -406,6 +418,7 @@ class TestPollingLifecycle:
         mock_config.return_value = _mock_config()
         received: list[Signal] = []
         monitor = OrderFlowMonitor(on_signal=lambda s: received.append(s))
+        monitor._poll_count = 10  # Past warmup
 
         # Build convergent data directly in the window
         window = RollingWindow()
@@ -1203,8 +1216,10 @@ class TestTakerFlowDBPersistence:
 def _mock_config() -> MagicMock:
     """Create a mock ArboConfig for order flow tests."""
     config = MagicMock()
+    config.alchemy_polygon_url = ""  # Empty = fallback to polygon_rpc_url
     config.polygon_rpc_url = "https://lb.drpc.live/polygon/test-key"
     config.order_flow.ctf_exchange = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+    config.order_flow.neg_risk_ctf_exchange = "0xC5d563A36AE78145C45a50134d48A1215220f80a"
     config.order_flow.volume_zscore_threshold = 2.0
     config.order_flow.flow_imbalance_threshold = 0.65
     config.order_flow.min_converging_signals = 2
