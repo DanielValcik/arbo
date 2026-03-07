@@ -245,10 +245,104 @@
             font-size: 10px;
             font-weight: 700;
         }
+        /* Tab navigation */
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .tab-btn {
+            padding: 10px 24px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active {
+            color: var(--blue);
+            border-bottom-color: var(--blue);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* CryptoArb pair cards */
+        .pair-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .pair-card {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 11px;
+        }
+        .pair-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .pair-name { font-weight: 700; font-size: 13px; }
+        .pos-badge {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .pos-long { background: var(--green); color: #000; }
+        .pos-short { background: var(--red); color: #fff; }
+        .pos-flat { background: var(--border); color: var(--text-dim); }
+        .pair-stat {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-dim);
+            padding: 1px 0;
+        }
+        .pair-stat span:last-child { color: var(--text); }
+        .stale-banner {
+            background: var(--yellow);
+            color: #000;
+            text-align: center;
+            padding: 6px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .alert-item {
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+            font-size: 11px;
+        }
+        .alert-type {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 700;
+            margin-right: 6px;
+            text-transform: uppercase;
+        }
+        .alert-extreme_z { background: var(--red); color: #fff; }
+        .alert-drawdown { background: var(--red); color: #fff; }
+        .alert-kalman_divergence { background: var(--orange); color: #000; }
+        .alert-data_stale { background: var(--yellow); color: #000; }
+        .alert-error { background: var(--red); color: #fff; }
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
             .strategy-grid { grid-template-columns: 1fr; }
             .task-grid { grid-template-columns: repeat(2, 1fr); }
+            .pair-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
@@ -262,6 +356,12 @@
         <div class="refresh-info">Last refresh: <span id="lastRefresh">--</span></div>
     </div>
 
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('arbo')">ARBO</button>
+        <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
+    </div>
+
+    <div id="arboContent" class="tab-content active">
     <div class="filter-bar">
         <label>Strategy:</label>
         <select id="strategyFilter" onchange="applyFilter()">
@@ -447,6 +547,88 @@
             </div>
         </div>
     </div>
+    </div><!-- end arboContent -->
+
+    <div id="cryptoarbContent" class="tab-content">
+        <div id="cryptoarbStale" class="stale-banner" style="display:none">DATA STALE — CryptoArb has not updated in over 2 hours</div>
+        <div class="grid">
+            <!-- Portfolio Overview -->
+            <div class="card">
+                <div class="card-title">Portfolio Overview</div>
+                <div class="metrics" id="caPortfolioMetrics">
+                    <div class="metric"><div class="metric-value" id="caEquity">--</div><div class="metric-label">Equity</div></div>
+                    <div class="metric"><div class="metric-value" id="caDrawdown">--</div><div class="metric-label">Drawdown</div></div>
+                    <div class="metric"><div class="metric-value" id="caTrades">--</div><div class="metric-label">Trades</div></div>
+                    <div class="metric"><div class="metric-value" id="caWinRate">--</div><div class="metric-label">Win Rate</div></div>
+                    <div class="metric"><div class="metric-value" id="caSharpe">--</div><div class="metric-label">Sharpe</div></div>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="card">
+                <div class="card-title">System Status</div>
+                <div style="font-size:12px;line-height:2">
+                    <div class="pair-stat"><span>Last Daily Update</span><span id="caLastDaily">--</span></div>
+                    <div class="pair-stat"><span>Last Signal Eval</span><span id="caLastEval">--</span></div>
+                    <div class="pair-stat"><span>Mode</span><span id="caMode">--</span></div>
+                </div>
+            </div>
+
+            <!-- Pair Cards -->
+            <div class="card grid-full">
+                <div class="card-title">Pair Status</div>
+                <div class="pair-grid" id="caPairGrid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Equity Chart -->
+            <div class="card">
+                <div class="card-title">Equity Curve</div>
+                <div class="chart-container">
+                    <canvas id="caEquityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Z-Score Chart -->
+            <div class="card">
+                <div class="card-title">Z-Score Monitor</div>
+                <div class="chart-container">
+                    <canvas id="caZChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Trade History -->
+            <div class="card grid-full">
+                <div class="card-title">Trade History</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Pair</th>
+                                <th>Direction</th>
+                                <th>Entry Z</th>
+                                <th>P&L</th>
+                                <th>Entry</th>
+                                <th>Exit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="caTradesBody">
+                            <tr><td colspan="6" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="card grid-full">
+                <div class="card-title">Alerts</div>
+                <div id="caAlerts">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div><!-- end cryptoarbContent -->
 
     <script>
     let pnlChart = null;
@@ -943,6 +1125,234 @@
         ]);
         document.getElementById('lastRefresh').textContent =
             new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+
+    // ===== Tab switching =====
+    let activeTab = 'arbo';
+    let caEquityChart = null;
+    let caZChart = null;
+    let caRefreshInterval = null;
+
+    function switchTab(tab) {
+        activeTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+        document.getElementById(tab === 'arbo' ? 'arboContent' : 'cryptoarbContent').classList.add('active');
+
+        if (tab === 'cryptoarb') {
+            fetchCryptoArb();
+            if (!caRefreshInterval) caRefreshInterval = setInterval(fetchCryptoArb, 60000);
+        } else {
+            if (caRefreshInterval) { clearInterval(caRefreshInterval); caRefreshInterval = null; }
+        }
+    }
+
+    // ===== CryptoArb dashboard =====
+    const PAIR_COLORS = {
+        'SOL_ETH': '#9945FF',
+        'BNB_ETH': '#F0B90B',
+        'ADA_ETH': '#0033AD',
+        'ATOM_ETH': '#2E3148',
+        'XRP_ETH': '#23292F',
+    };
+    const PAIR_COLORS_BRIGHT = {
+        'SOL_ETH': '#bc8cff',
+        'BNB_ETH': '#F0B90B',
+        'ADA_ETH': '#58a6ff',
+        'ATOM_ETH': '#8b949e',
+        'XRP_ETH': '#3fb950',
+    };
+
+    function zColor(z) {
+        const abs = Math.abs(z);
+        if (abs > 1.5) return 'var(--red)';
+        if (abs > 0.8) return 'var(--yellow)';
+        return 'var(--green)';
+    }
+
+    async function fetchCryptoArb() {
+        const [overview, charts, trades, alerts] = await Promise.all([
+            fetchJSON('/api/cryptoarb/overview'),
+            fetchJSON('/api/cryptoarb/charts'),
+            fetchJSON('/api/cryptoarb/trades'),
+            fetchJSON('/api/cryptoarb/alerts'),
+        ]);
+        if (overview) renderCaOverview(overview);
+        if (charts) renderCaCharts(charts);
+        if (trades) renderCaTrades(trades);
+        if (alerts) renderCaAlerts(alerts);
+        document.getElementById('lastRefresh').textContent =
+            new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+
+    function renderCaOverview(d) {
+        if (d.error) {
+            document.getElementById('caEquity').textContent = 'OFFLINE';
+            return;
+        }
+        document.getElementById('cryptoarbStale').style.display = d.stale ? 'block' : 'none';
+        document.getElementById('caEquity').textContent = d.equity.toFixed(4);
+        const ddEl = document.getElementById('caDrawdown');
+        ddEl.textContent = d.drawdown_pct.toFixed(2) + '%';
+        ddEl.className = 'metric-value ' + (d.drawdown_pct < -5 ? 'negative' : 'neutral');
+        document.getElementById('caTrades').textContent = d.total_trades;
+        document.getElementById('caWinRate').textContent = d.win_rate.toFixed(1) + '%';
+        document.getElementById('caSharpe').textContent = d.sharpe.toFixed(2);
+        document.getElementById('caLastDaily').textContent = d.last_daily_update || '--';
+        document.getElementById('caLastEval').textContent = d.last_signal_eval ? fmtTime(d.last_signal_eval) : '--';
+        document.getElementById('caMode').textContent = d.mode.toUpperCase();
+
+        // Pair cards
+        const grid = document.getElementById('caPairGrid');
+        const pairs = d.pairs || {};
+        const names = Object.keys(pairs);
+        if (names.length === 0) {
+            grid.innerHTML = '<div class="loading">No pairs</div>';
+            return;
+        }
+        grid.innerHTML = names.map(name => {
+            const p = pairs[name];
+            const posClass = p.position === 'LONG' ? 'pos-long' : (p.position === 'SHORT' ? 'pos-short' : 'pos-flat');
+            return `
+                <div class="pair-card">
+                    <div class="pair-header">
+                        <span class="pair-name">${name.replace('_', '/')}</span>
+                        <span class="pos-badge ${posClass}">${p.position}</span>
+                    </div>
+                    <div class="pair-stat"><span>Z-score</span><span style="color:${zColor(p.z)}">${p.z.toFixed(3)}</span></div>
+                    <div class="pair-stat"><span>dZ(3d)</span><span>${p.dz_3d >= 0 ? '+' : ''}${p.dz_3d.toFixed(3)}</span></div>
+                    <div class="pair-stat"><span>Allocation</span><span>${(p.allocation * 100).toFixed(0)}%</span></div>
+                    <div class="pair-stat"><span>Trade P&L</span><span class="${pnlClass(p.trade_pnl)}">${p.trade_pnl.toFixed(4)}</span></div>
+                    <div class="pair-stat"><span>ACF</span><span>${p.acf.toFixed(3)}</span></div>
+                    <div class="pair-stat"><span>Beta Stab</span><span>${p.beta_stability.toFixed(3)}</span></div>
+                </div>`;
+        }).join('');
+    }
+
+    function renderCaCharts(d) {
+        if (d.error) return;
+
+        // Equity chart
+        const eqData = d.equity || [];
+        const eqLabels = eqData.map(s => fmtShortTime(s.t) || s.t);
+        const eqValues = eqData.map(s => s.v);
+
+        if (caEquityChart) {
+            caEquityChart.data.labels = eqLabels;
+            caEquityChart.data.datasets[0].data = eqValues;
+            caEquityChart.update('none');
+        } else if (eqValues.length > 0) {
+            const ctx = document.getElementById('caEquityChart').getContext('2d');
+            caEquityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: eqLabels,
+                    datasets: [{
+                        label: 'Equity',
+                        data: eqValues,
+                        borderColor: '#3fb950',
+                        backgroundColor: 'rgba(63,185,80,0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1, titleColor: '#8b949e', bodyColor: '#e6edf3' } },
+                    scales: {
+                        x: { ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 }, grid: { color: 'rgba(48,54,61,0.3)' } },
+                        y: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: 'rgba(48,54,61,0.3)' } }
+                    }
+                }
+            });
+        }
+
+        // Z-score chart
+        const zSeries = d.z_scores || {};
+        const pairNames = Object.keys(zSeries);
+        if (pairNames.length === 0) return;
+
+        // Use the longest series for labels
+        let maxLen = 0;
+        let labelSource = [];
+        for (const name of pairNames) {
+            if (zSeries[name].length > maxLen) {
+                maxLen = zSeries[name].length;
+                labelSource = zSeries[name];
+            }
+        }
+        const zLabels = labelSource.map(s => fmtShortTime(s.t) || s.t);
+
+        const datasets = pairNames.map(name => ({
+            label: name.replace('_', '/'),
+            data: zSeries[name].map(s => s.z),
+            borderColor: PAIR_COLORS_BRIGHT[name] || '#8b949e',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: false,
+        }));
+
+        if (caZChart) {
+            caZChart.data.labels = zLabels;
+            caZChart.data.datasets = datasets;
+            caZChart.update('none');
+        } else if (maxLen > 0) {
+            const ctx = document.getElementById('caZChart').getContext('2d');
+            caZChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: zLabels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#8b949e', font: { size: 10 }, boxWidth: 12 } },
+                        tooltip: { mode: 'index', intersect: false, backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1, titleColor: '#8b949e', bodyColor: '#e6edf3' }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 }, grid: { color: 'rgba(48,54,61,0.3)' } },
+                        y: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: 'rgba(48,54,61,0.3)' } }
+                    }
+                }
+            });
+        }
+    }
+
+    function renderCaTrades(d) {
+        const tbody = document.getElementById('caTradesBody');
+        const trades = d.trades || [];
+        if (trades.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim);text-align:center">No trades yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = trades.map(t => `
+            <tr>
+                <td>${(t.pair || '').replace('_', '/')}</td>
+                <td>${t.dir}</td>
+                <td>${(t.entry_z || 0).toFixed(3)}</td>
+                <td class="${pnlClass(t.pnl)}">${(t.pnl >= 0 ? '+' : '') + (t.pnl || 0).toFixed(4)}</td>
+                <td>${fmtTime(t.entry_time)}</td>
+                <td>${fmtTime(t.exit_time)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderCaAlerts(d) {
+        const container = document.getElementById('caAlerts');
+        const alerts = d.alerts || [];
+        if (alerts.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:12px">No alerts</div>';
+            return;
+        }
+        container.innerHTML = alerts.slice(0, 20).map(a => `
+            <div class="alert-item">
+                <span class="alert-type alert-${a.type}">${a.type}</span>
+                <span style="color:var(--text-dim);font-size:10px;margin-right:8px">${fmtTime(a.timestamp)}</span>
+                ${a.message}
+            </div>
+        `).join('');
     }
 
     // Initial load + auto-refresh every 30s

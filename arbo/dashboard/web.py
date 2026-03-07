@@ -25,6 +25,56 @@ from arbo.utils.logger import get_logger
 
 logger = get_logger("web_dashboard")
 
+# ---------------------------------------------------------------------------
+# CryptoArb state reader (file-based bridge)
+# ---------------------------------------------------------------------------
+
+CRYPTOARB_STATE_PATH = os.getenv(
+    "CRYPTOARB_STATE_PATH", "/opt/cryptoarb/production_data/state.json"
+)
+
+
+class CryptoArbReader:
+    """Reads CryptoArb state.json with caching and stale detection."""
+
+    CACHE_TTL = 10  # seconds
+    STALE_THRESHOLD = 7200  # 2 hours
+
+    def __init__(self, path: str = CRYPTOARB_STATE_PATH):
+        self.path = path
+        self._cache: dict[str, Any] | None = None
+        self._cache_time: float = 0.0
+
+    def read(self) -> dict[str, Any] | None:
+        """Read state.json with 10s cache. Returns None if file missing."""
+        now = time.time()
+        if self._cache is not None and (now - self._cache_time) < self.CACHE_TTL:
+            return self._cache
+        try:
+            import json as _json
+
+            with open(self.path) as f:
+                data = _json.load(f)
+            self._cache = data
+            self._cache_time = now
+            return data
+        except FileNotFoundError:
+            return None
+        except Exception:
+            # JSON parse error — return cached value if available
+            return self._cache
+
+    def is_stale(self) -> bool:
+        """Check if state.json mtime is older than 2h."""
+        try:
+            mtime = os.path.getmtime(self.path)
+            return (time.time() - mtime) > self.STALE_THRESHOLD
+        except OSError:
+            return True
+
+
+_cryptoarb = CryptoArbReader()
+
 
 # ---------------------------------------------------------------------------
 # Shared state — injected by orchestrator at init
@@ -789,6 +839,138 @@ async def api_taker_flow(_user: str = Depends(_verify_credentials)) -> dict[str,
         logger.warning("taker_flow_query_error", error=str(e))
 
     return {"snapshots": snapshots}
+
+
+# ---------------------------------------------------------------------------
+# CryptoArb API endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/cryptoarb/overview")
+async def api_cryptoarb_overview(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Portfolio overview + all pair summaries."""
+    data = _cryptoarb.read()
+    if data is None:
+        return {"error": "CryptoArb state not available"}
+
+    # Compute win rate from trade returns
+    trade_returns = data.get("trade_returns", [])
+    wins = sum(1 for r in trade_returns if r > 0)
+    win_rate = (wins / len(trade_returns) * 100) if trade_returns else 0.0
+
+    # Compute drawdown from equity history
+    equity_hist = data.get("equity_history", [])
+    drawdown = 0.0
+    if equity_hist:
+        peak = equity_hist[0]
+        for v in equity_hist:
+            if v > peak:
+                peak = v
+            dd = (v - peak) / peak if peak > 0 else 0.0
+            if dd < drawdown:
+                drawdown = dd
+
+    # Compute Sharpe estimate from trade returns
+    import math
+
+    sharpe = 0.0
+    if len(trade_returns) > 1:
+        mean_r = sum(trade_returns) / len(trade_returns)
+        var_r = sum((r - mean_r) ** 2 for r in trade_returns) / (len(trade_returns) - 1)
+        if var_r > 0:
+            sharpe = mean_r / math.sqrt(var_r) * math.sqrt(365)
+
+    pairs = {}
+    for name, ps in data.get("pairs", {}).items():
+        z_hist = ps.get("z_history", [])
+        current_z = z_hist[-1] if z_hist else 0.0
+        dz = (z_hist[-1] - z_hist[-4]) if len(z_hist) >= 4 else 0.0
+        pos = ps.get("position", 0)
+        pairs[name] = {
+            "position": "LONG" if pos == 1 else ("SHORT" if pos == -1 else "FLAT"),
+            "z": round(current_z, 4),
+            "dz_3d": round(dz, 4),
+            "allocation": ps.get("allocation", 0.0),
+            "trade_pnl": round(ps.get("trade_pnl", 0.0), 6),
+            "acf": round(ps.get("acf", 0.0), 3),
+            "beta_stability": round(ps.get("beta_stability", 1.0), 3),
+            "entry_z": ps.get("entry_z", 0.0),
+        }
+
+    return {
+        "equity": data.get("portfolio_equity", 1.0),
+        "drawdown_pct": round(drawdown * 100, 2),
+        "total_trades": data.get("total_trades", 0),
+        "win_rate": round(win_rate, 1),
+        "sharpe": round(sharpe, 2),
+        "last_daily_update": data.get("last_daily_update", ""),
+        "last_signal_eval": data.get("last_signal_eval", ""),
+        "stale": _cryptoarb.is_stale(),
+        "mode": "paper",
+        "pairs": pairs,
+    }
+
+
+@app.get("/api/cryptoarb/charts")
+async def api_cryptoarb_charts(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Timestamped equity + Z-score series for Chart.js."""
+    data = _cryptoarb.read()
+    if data is None:
+        return {"error": "CryptoArb state not available"}
+
+    # Equity series
+    equity_snapshots = data.get("equity_snapshots", [])
+    if not equity_snapshots:
+        # Fallback: index-based from equity_history
+        equity_hist = data.get("equity_history", [])
+        equity_snapshots = [{"t": str(i), "v": v} for i, v in enumerate(equity_hist[-365:])]
+
+    # Z-score series per pair
+    z_series: dict[str, list[dict]] = {}
+    for name, ps in data.get("pairs", {}).items():
+        snaps = ps.get("z_snapshots", [])
+        if snaps:
+            z_series[name] = snaps
+        else:
+            # Fallback: index-based from z_history
+            z_hist = ps.get("z_history", [])
+            z_series[name] = [{"t": str(i), "z": v} for i, v in enumerate(z_hist)]
+
+    return {
+        "equity": equity_snapshots,
+        "z_scores": z_series,
+    }
+
+
+@app.get("/api/cryptoarb/trades")
+async def api_cryptoarb_trades(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Trade log (most recent first)."""
+    data = _cryptoarb.read()
+    if data is None:
+        return {"error": "CryptoArb state not available"}
+
+    trade_log = data.get("trade_log", [])
+    # Return most recent first
+    return {"trades": list(reversed(trade_log))}
+
+
+@app.get("/api/cryptoarb/alerts")
+async def api_cryptoarb_alerts(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Alert history (most recent first)."""
+    data = _cryptoarb.read()
+    if data is None:
+        return {"error": "CryptoArb state not available"}
+
+    alerts = data.get("alerts", [])
+    return {"alerts": list(reversed(alerts))}
 
 
 # ---------------------------------------------------------------------------
