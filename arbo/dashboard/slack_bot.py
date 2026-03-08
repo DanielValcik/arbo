@@ -454,20 +454,30 @@ class SlackBot:
             },
         ]
 
-        # Pair summary line
+        # Pairs — two-column grid via fields (max 10 fields per block)
         pairs = data.get("pairs", {})
         if pairs:
-            pair_parts = []
+            pair_fields = []
             for name, info in pairs.items():
                 pos = info.get("position", 0)
                 z = info.get("z", 0.0)
-                pos_label = {1: "LONG", -1: "SHORT"}.get(pos, "FLAT")
-                pair_parts.append(f"{name} {pos_label} Z={z:+.2f}")
-            pair_text = " | ".join(pair_parts)
+                label = name.replace("_", "/")
+                pos_label = {1: ":large_green_circle: LONG", -1: ":red_circle: SHORT"}.get(pos, ":white_circle: FLAT")
+                pair_fields.append(
+                    {"type": "mrkdwn", "text": f"*{label}*\n{pos_label}  `spread: {z:+.2f}σ`"}
+                )
+            blocks.append(
+                {"type": "section", "fields": pair_fields}
+            )
             blocks.append(
                 {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"*Pairs:* {pair_text}"},
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "Spread = how far the pair deviates from fair value (in std devs). Entry typically at |0.4–0.7σ|.",
+                        }
+                    ],
                 }
             )
 
