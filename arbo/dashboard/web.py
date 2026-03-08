@@ -65,10 +65,26 @@ class CryptoArbReader:
             return self._cache
 
     def is_stale(self) -> bool:
-        """Check if state.json mtime is older than 2h."""
+        """Check if CryptoArb data is stale.
+
+        Uses last_daily_update from state: stale if it's more than 1 day old.
+        Falls back to file mtime (24h threshold) if field is missing.
+        """
+        data = self.read()
+        if data is None:
+            return True
+        last_daily = data.get("last_daily_update", "")
+        if last_daily:
+            try:
+                last_date = datetime.strptime(last_daily, "%Y-%m-%d").date()
+                today = datetime.now(UTC).date()
+                return (today - last_date).days > 1
+            except ValueError:
+                pass
+        # Fallback: file mtime > 24h
         try:
             mtime = os.path.getmtime(self.path)
-            return (time.time() - mtime) > self.STALE_THRESHOLD
+            return (time.time() - mtime) > 86400
         except OSError:
             return True
 
