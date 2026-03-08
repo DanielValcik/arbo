@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
+import os
 import signal
 import time
 from dataclasses import dataclass, field
@@ -271,6 +273,9 @@ class RDHOrchestrator:
         # Sync risk manager state from restored positions
         self._sync_risk_from_positions()
 
+        # Restore realized P&L from DB into risk manager
+        await self._restore_pnl_from_db()
+
     async def _init_optional(self, name: str, factory: Any) -> Any:
         """Initialize an optional component. Returns None on failure."""
         try:
@@ -409,6 +414,7 @@ class RDHOrchestrator:
             daily_brief_channel_id=cfg.slack_daily_brief_channel_id,
             review_queue_channel_id=cfg.slack_review_queue_channel_id,
             weekly_report_channel_id=cfg.slack_weekly_report_channel_id,
+            get_cryptoarb_fn=self._get_cryptoarb_for_slack,
         )
 
     async def _init_web_dashboard(self) -> Any:
@@ -437,6 +443,96 @@ class RDHOrchestrator:
                 market_category=category,
             )
 
+    async def _restore_pnl_from_db(self) -> None:
+        """Restore realized P&L from paper_trades into risk manager on startup.
+
+        Queries resolved trades (won/lost) from DB, groups by strategy,
+        and sets weekly_pnl and total_pnl on each StrategyState.
+        """
+        if self._risk_manager is None:
+            return
+        try:
+            import sqlalchemy as sa
+
+            from arbo.utils.db import PaperTrade, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                # Total P&L per strategy (all resolved trades)
+                result = await session.execute(
+                    sa.select(
+                        PaperTrade.strategy,
+                        sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    )
+                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.strategy.isnot(None))
+                    .group_by(PaperTrade.strategy)
+                )
+                for row in result.all():
+                    strategy = row[0]
+                    total_pnl = row[1]
+                    ss = self._risk_manager.get_strategy_state(strategy)
+                    if ss is not None:
+                        ss.total_pnl = Decimal(str(total_pnl))
+
+                # Weekly P&L per strategy (resolved this ISO week)
+                from datetime import UTC, datetime, timedelta
+
+                now = datetime.now(UTC)
+                monday = now - timedelta(days=now.weekday())
+                week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                result = await session.execute(
+                    sa.select(
+                        PaperTrade.strategy,
+                        sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    )
+                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.strategy.isnot(None))
+                    .where(PaperTrade.resolved_at >= week_start)
+                    .group_by(PaperTrade.strategy)
+                )
+                for row in result.all():
+                    strategy = row[0]
+                    weekly_pnl = row[1]
+                    ss = self._risk_manager.get_strategy_state(strategy)
+                    if ss is not None:
+                        ss.weekly_pnl = Decimal(str(weekly_pnl))
+
+                # Also restore global daily/weekly P&L
+                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                result = await session.execute(
+                    sa.select(
+                        sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    )
+                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.resolved_at >= today)
+                )
+                daily_total = result.scalar()
+                if daily_total:
+                    self._risk_manager._state.daily_pnl = Decimal(str(daily_total))
+
+                result = await session.execute(
+                    sa.select(
+                        sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    )
+                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.resolved_at >= week_start)
+                )
+                weekly_total = result.scalar()
+                if weekly_total:
+                    self._risk_manager._state.weekly_pnl = Decimal(str(weekly_total))
+
+            logger.info(
+                "pnl_restored_from_db",
+                strategies={
+                    s: str(ss.total_pnl)
+                    for s, ss in self._risk_manager._state.strategies.items()
+                },
+            )
+        except Exception as e:
+            logger.warning("pnl_restore_failed", error=str(e))
+
     # ------------------------------------------------------------------
     # Slack callbacks
     # ------------------------------------------------------------------
@@ -452,7 +548,7 @@ class RDHOrchestrator:
         positions = len(self._paper_engine.open_positions) if self._paper_engine else 0
         uptime = int(time.monotonic() - self._start_time) if self._start_time else 0
 
-        return {
+        status: dict[str, Any] = {
             "mode": self._mode,
             "uptime_s": uptime,
             "layers_active": active,
@@ -460,6 +556,13 @@ class RDHOrchestrator:
             "balance": balance,
             "open_positions": positions,
         }
+
+        # Append CryptoArb summary if available
+        ca = await self._get_cryptoarb_for_slack()
+        if ca is not None:
+            status["cryptoarb"] = ca
+
+        return status
 
     async def _get_pnl_for_slack(self) -> dict[str, Any]:
         """Build P&L dict for /pnl command."""
@@ -473,6 +576,59 @@ class RDHOrchestrator:
         if self._slack_bot is not None:
             await self._slack_bot.send_alert("Emergency shutdown triggered via `/kill` command")
         self._shutdown_event.set()
+
+    # ------------------------------------------------------------------
+    # CryptoArb integration (file-based bridge via state.json)
+    # ------------------------------------------------------------------
+
+    def _read_cryptoarb_state(self) -> dict[str, Any] | None:
+        """Read CryptoArb state.json from disk. Returns raw dict or None."""
+        path = os.getenv(
+            "CRYPTOARB_STATE_PATH",
+            "/opt/cryptoarb/production_data/state.json",
+        )
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            logger.debug("cryptoarb_state_read_error", error=str(e), path=path)
+            return None
+
+    async def _get_cryptoarb_for_slack(self) -> dict[str, Any] | None:
+        """Build CryptoArb summary dict for Slack from state.json."""
+        raw = self._read_cryptoarb_state()
+        if raw is None:
+            return None
+
+        equity = raw.get("portfolio_equity", 1.0)
+        equity_hist = raw.get("equity_history", [])
+        peak = max(equity_hist) if equity_hist else equity
+        drawdown_pct = ((peak - equity) / peak * 100) if peak > 0 else 0.0
+
+        trade_returns = raw.get("trade_returns", [])
+        total_trades = raw.get("total_trades", 0)
+        wins = sum(1 for r in trade_returns if r > 0)
+        win_rate = (wins / len(trade_returns) * 100) if trade_returns else 0.0
+
+        pairs_raw = raw.get("pairs", {})
+        pairs: dict[str, dict[str, Any]] = {}
+        for name, info in pairs_raw.items():
+            z_hist = info.get("z_history", [])
+            pairs[name] = {
+                "position": info.get("position", 0),
+                "z": z_hist[-1] if z_hist else 0.0,
+            }
+
+        return {
+            "equity": equity,
+            "drawdown_pct": drawdown_pct,
+            "trades": total_trades,
+            "win_rate": win_rate,
+            "mode": "live" if raw.get("last_signal_eval") else "idle",
+            "last_signal_eval": raw.get("last_signal_eval", ""),
+            "pairs": pairs,
+            "alerts": raw.get("alerts", []),
+        }
 
     # ------------------------------------------------------------------
     # Strategy tasks
@@ -627,8 +783,8 @@ class RDHOrchestrator:
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="A")
 
-        # Check exits
-        prices = self._get_current_prices()
+        # Check exits — Strategy A holds NO tokens, needs NO prices
+        prices = self._get_current_prices(price_type="no")
         exits = self._strategy_a.check_exits(prices)
         if exits:
             logger.info("strategy_a_exits", count=len(exits))
@@ -668,15 +824,26 @@ class RDHOrchestrator:
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="C")
 
-    def _get_current_prices(self) -> dict[str, Decimal]:
-        """Get current YES prices from discovery cache for exit checks."""
+    def _get_current_prices(
+        self, price_type: str = "yes"
+    ) -> dict[str, Decimal]:
+        """Get current prices from discovery cache for exit checks.
+
+        Args:
+            price_type: "yes" for YES prices, "no" for NO prices.
+        """
         prices: dict[str, Decimal] = {}
         if self._discovery is None:
             return prices
         for market in self._markets:
-            if hasattr(market, "condition_id") and hasattr(market, "price_yes"):
-                if market.price_yes is not None:
-                    prices[market.condition_id] = market.price_yes
+            if not hasattr(market, "condition_id"):
+                continue
+            if price_type == "no":
+                p = getattr(market, "price_no", None)
+            else:
+                p = getattr(market, "price_yes", None)
+            if p is not None:
+                prices[market.condition_id] = p
         return prices
 
     async def _save_trades_to_db(self, trades: list[Any]) -> None:
@@ -1045,6 +1212,15 @@ class RDHOrchestrator:
             formatted = self._report_generator.format_slack_report(report)
             if self._slack_bot is not None:
                 await self._slack_bot.send_daily_report(formatted["blocks"])
+                # Append CryptoArb update as a separate message
+                try:
+                    ca_data = await self._get_cryptoarb_for_slack()
+                    if ca_data is not None:
+                        ca_blocks = self._slack_bot._format_cryptoarb_blocks(ca_data)
+                        await self._slack_bot.send_cryptoarb_update(ca_blocks)
+                        logger.info("cryptoarb_daily_report_sent")
+                except Exception as ca_err:
+                    logger.warning("cryptoarb_daily_report_error", error=str(ca_err))
             logger.info("daily_report_sent")
         except Exception as e:
             logger.error("daily_report_error", error=str(e))

@@ -23,6 +23,7 @@ logger = get_logger("slack_bot")
 StatusCallback = Callable[[], Awaitable[dict[str, Any]]]
 PnlCallback = Callable[[], Awaitable[dict[str, Any]]]
 ShutdownCallback = Callable[[], Awaitable[None]]
+CryptoArbCallback = Callable[[], Awaitable[dict[str, Any] | None]]
 
 
 class SlackBot:
@@ -51,6 +52,7 @@ class SlackBot:
         daily_brief_channel_id: str = "",
         review_queue_channel_id: str = "",
         weekly_report_channel_id: str = "",
+        get_cryptoarb_fn: CryptoArbCallback | None = None,
     ) -> None:
         self._bot_token = bot_token
         self._app_token = app_token
@@ -58,6 +60,7 @@ class SlackBot:
         self._get_status_fn = get_status_fn
         self._get_pnl_fn = get_pnl_fn
         self._shutdown_fn = shutdown_fn
+        self._get_cryptoarb_fn = get_cryptoarb_fn
         # Dedicated channels (fall back to default if not configured)
         self._daily_brief_channel = daily_brief_channel_id or channel_id
         self._review_queue_channel = review_queue_channel_id or channel_id
@@ -170,6 +173,16 @@ class SlackBot:
                     pnl = await self._get_pnl_fn()
                     blocks = self._format_pnl_blocks(pnl)
                     await say(blocks=blocks, text="P&L Summary")
+                elif command in ("cryptoarb", "ca"):
+                    if self._get_cryptoarb_fn is None:
+                        await say(text="CryptoArb integration not configured.")
+                    else:
+                        data = await self._get_cryptoarb_fn()
+                        if data is None:
+                            await say(text="CryptoArb state unavailable.")
+                        else:
+                            blocks = self._format_cryptoarb_blocks(data)
+                            await say(blocks=blocks, text="CryptoArb Status")
                 elif command == "kill":
                     await say(text="Emergency shutdown initiated...")
                     logger.critical("slack_kill_command_received")
@@ -179,6 +192,7 @@ class SlackBot:
                         text="*Arbo Commands:*\n"
                         "• `@arbo status` — system status\n"
                         "• `@arbo pnl` — P&L summary\n"
+                        "• `@arbo cryptoarb` — CryptoArb status\n"
                         "• `@arbo kill` — emergency shutdown"
                     )
                 else:
@@ -317,6 +331,33 @@ class SlackBot:
                 }
             )
 
+        # CryptoArb compact section (appended when data is present)
+        ca = status.get("cryptoarb")
+        if ca:
+            equity = ca.get("equity", 0.0)
+            pairs = ca.get("pairs", {})
+            active = [
+                f"{p}: {'LONG' if info.get('position', 0) > 0 else 'SHORT'}"
+                for p, info in pairs.items()
+                if info.get("position", 0) != 0
+            ]
+            active_text = ", ".join(active) if active else "none"
+            last_update = ca.get("last_signal_eval", "?")
+            blocks.append({"type": "divider"})
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*CryptoArb* — Equity: {equity:.4f} | "
+                            f"Active: {active_text} | "
+                            f"Updated: {last_update}"
+                        ),
+                    },
+                }
+            )
+
         return blocks
 
     @staticmethod
@@ -382,3 +423,71 @@ class SlackBot:
             )
 
         return blocks
+
+    # ------------------------------------------------------------------
+    # CryptoArb formatters
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_cryptoarb_blocks(data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Format CryptoArb status as Block Kit blocks."""
+        equity = data.get("equity", 1.0)
+        drawdown = data.get("drawdown_pct", 0.0)
+        trades = data.get("trades", 0)
+        win_rate = data.get("win_rate", 0.0)
+        mode = data.get("mode", "unknown")
+
+        blocks: list[dict[str, Any]] = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "CryptoArb Status"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Equity:* {equity:.4f}"},
+                    {"type": "mrkdwn", "text": f"*Drawdown:* {drawdown:.1f}%"},
+                    {"type": "mrkdwn", "text": f"*Trades:* {trades}"},
+                    {"type": "mrkdwn", "text": f"*Win Rate:* {win_rate:.0f}%"},
+                    {"type": "mrkdwn", "text": f"*Mode:* {mode}"},
+                ],
+            },
+        ]
+
+        # Pair summary line
+        pairs = data.get("pairs", {})
+        if pairs:
+            pair_parts = []
+            for name, info in pairs.items():
+                pos = info.get("position", 0)
+                z = info.get("z", 0.0)
+                pos_label = {1: "LONG", -1: "SHORT"}.get(pos, "FLAT")
+                pair_parts.append(f"{name} {pos_label} Z={z:+.2f}")
+            pair_text = " | ".join(pair_parts)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*Pairs:* {pair_text}"},
+                }
+            )
+
+        # Alerts (last 5)
+        alerts = data.get("alerts", [])
+        if alerts:
+            alert_lines = [f"  {a.get('t', '?')}: {a.get('msg', '?')}" for a in alerts[-5:]]
+            alert_text = "\n".join(alert_lines)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Alerts:*\n```\n{alert_text}\n```",
+                    },
+                }
+            )
+
+        return blocks
+
+    async def send_cryptoarb_update(self, blocks: list[dict[str, Any]]) -> None:
+        """Send a CryptoArb update to #daily-brief."""
+        await self._post(self._daily_brief_channel, text="CryptoArb Update", blocks=blocks)
