@@ -51,18 +51,35 @@ weather:
 
 # --- Strategy A: Theta Decay ---
 theta_decay:
-  zscore_threshold: 3.0         # 3σ peak optimism
+  # Spike detection
+  zscore_threshold: 3.0         # 3σ peak optimism (autoresearch: 3.0 optimal)
   rolling_window_hours: 4       # 4h rolling z-score window
-  longshot_price_max: 0.15      # YES < $0.15
-  min_volume_24h: 10000         # $10K min volume
+  spike_lookback_ticks: 20      # Rolling window for z-score (autoresearch: 30->20)
+  min_history_ticks: 11         # Min ticks before z-score (autoresearch: 12->11)
+  # Market filtering
+  longshot_price_max: 0.092     # YES < $0.092 (autoresearch: 0.15->0.092)
+  min_volume_24h: 13500         # $13.5K min volume (autoresearch: 10K->13.5K)
   min_age_hours: 24             # Market must be 24h+ old
-  resolution_window_days_min: 3 # 3-30 days to resolution
-  resolution_window_days_max: 30
+  resolution_window_days_min: 2 # 2-21 days to resolution (autoresearch: 3->2)
+  resolution_window_days_max: 21 # (autoresearch: 30->21)
+  # Entry model — price-dependent discount (autoresearch structural breakthrough)
+  discount_factor: 0.375        # Base discount (autoresearch: 0.50->0.375)
+  discount_price_scale_intercept: -1.80  # price_scale = intercept + slope * (price/max)
+  discount_price_scale_slope: 2.75       # Lower price → more aggressive discount
+  min_edge: 0.055               # Min edge to enter (autoresearch: 0.03->0.055)
+  max_edge: 0.50                # Max edge (suspicious)
+  # Quality gate — resolution-adjusted zscore
+  zscore_days_pivot: 10         # Days threshold for penalty
+  zscore_penalty_power: 2       # Quadratic penalty for longer dates
+  zscore_penalty_coeff: 0.0005  # Penalty coefficient
+  # Exit rules
   partial_exit_pct: 0.50        # Sell 50% at NO +50%
-  stop_loss_pct: 0.30           # Exit all at NO -30%
-  position_size_min: 20         # $20 min position
-  position_size_max: 50         # $50 max position
-  max_concurrent_positions: 10  # Max concurrent theta positions
+  stop_loss_pct: 0.20           # Exit all at NO -20% (autoresearch: 0.30->0.20)
+  # Sizing (%-based, autoresearch)
+  kelly_fraction: 0.032         # Ultra-conservative (autoresearch: 0.25->0.032)
+  position_pct_min: 0.02        # Min 2% of capital per position
+  position_pct_max: 0.05        # Max 5% of capital per position
+  max_concurrent_positions: 25  # (autoresearch: 10->25)
   excluded_categories: ["crypto"]
   snapshot_interval_s: 300      # 5 min taker flow snapshots
 

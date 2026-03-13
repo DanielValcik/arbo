@@ -1,13 +1,17 @@
 """Strategy A: Theta Decay — Sell Optimism Premium on Longshots.
 
-Monitors longshot YES contracts (price < $0.15) for 3σ YES taker flow spikes
+Monitors longshot YES contracts (price < $0.092) for 3σ YES taker flow spikes
 (peak retail optimism). When detected, buys the NO side and holds to
 resolution. Captures the theta-like decay as hype fades.
 
-Entry: YES < $0.15, 3σ YES taker spike → buy NO
-Exit: Hold to resolution, partial exit at NO +50%, stop loss at NO -30%
-Sizing: $20-50, quarter-Kelly
-Max concurrent: 10 positions
+Key autoresearch discovery: price-dependent discount factor — cheaper longshots
+have more optimism bias, so the model discounts them more aggressively.
+See research_a/AUTORESEARCH_A_REPORT.md for optimization details.
+
+Entry: YES < $0.092, 3σ YES taker spike → buy NO (price-dependent discount model)
+Exit: Hold to resolution, partial exit at NO +50%, stop loss at NO -20%
+Sizing: 2-5% of capital, Kelly fraction 0.032
+Max concurrent: 25 positions
 """
 
 from __future__ import annotations
@@ -28,18 +32,18 @@ from arbo.utils.logger import get_logger
 logger = get_logger("theta_decay")
 
 STRATEGY_ID = "A"
-KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly
 
 
 class ThetaDecay:
     """Strategy A: Theta Decay — sell optimism premium on longshot markets.
 
     Lifecycle:
-    1. Filter markets for longshot YES < $0.15 with sufficient volume
+    1. Filter markets for longshot YES < $0.092 with sufficient volume
     2. Register candidates with MarketFlowTracker for taker flow monitoring
     3. Wait for 3σ YES taker flow spike (peak retail optimism)
-    4. Buy NO side when spike detected
-    5. Hold to resolution (partial exit / stop loss via exit monitor)
+    4. Compute edge via price-dependent discount model
+    5. Buy NO side when spike detected and edge passes quality gate
+    6. Hold to resolution (partial exit / stop loss via exit monitor)
     """
 
     def __init__(
@@ -53,19 +57,36 @@ class ThetaDecay:
         self._flow_tracker = flow_tracker
         self._paper_engine = paper_engine
 
-        # Config
+        # Market filtering
         self._zscore_threshold = cfg.zscore_threshold
         self._longshot_max = Decimal(str(cfg.longshot_price_max))
         self._min_volume = Decimal(str(cfg.min_volume_24h))
         self._min_age_hours = cfg.min_age_hours
         self._resolution_min_days = cfg.resolution_window_days_min
         self._resolution_max_days = cfg.resolution_window_days_max
+        self._excluded_categories = set(cfg.excluded_categories)
+
+        # Entry model — price-dependent discount (autoresearch)
+        self._discount_factor = cfg.discount_factor
+        self._price_scale_intercept = cfg.discount_price_scale_intercept
+        self._price_scale_slope = cfg.discount_price_scale_slope
+        self._min_edge = Decimal(str(cfg.min_edge))
+        self._max_edge = Decimal(str(cfg.max_edge))
+
+        # Quality gate — resolution-adjusted zscore
+        self._zscore_days_pivot = cfg.zscore_days_pivot
+        self._zscore_penalty_power = cfg.zscore_penalty_power
+        self._zscore_penalty_coeff = cfg.zscore_penalty_coeff
+
+        # Exit rules
         self._partial_exit_pct = cfg.partial_exit_pct
         self._stop_loss_pct = cfg.stop_loss_pct
-        self._pos_min = Decimal(str(cfg.position_size_min))
-        self._pos_max = Decimal(str(cfg.position_size_max))
+
+        # Sizing (%-based)
+        self._kelly_fraction = cfg.kelly_fraction
+        self._pos_pct_min = cfg.position_pct_min
+        self._pos_pct_max = cfg.position_pct_max
         self._max_concurrent = cfg.max_concurrent_positions
-        self._excluded_categories = set(cfg.excluded_categories)
 
         # State
         self._signals_generated: int = 0
@@ -167,16 +188,7 @@ class ThetaDecay:
         return traded
 
     def _filter_candidates(self, markets: list[Any]) -> list[Any]:
-        """Filter markets matching theta decay criteria.
-
-        Criteria:
-        - YES price < longshot_price_max ($0.15)
-        - 24h volume >= min_volume_24h ($10K)
-        - Category NOT in excluded_categories (crypto)
-        - Fee disabled (we want fee-free markets)
-        - Active, not closed
-        - Resolution window: 3-30 days from now
-        """
+        """Filter markets matching theta decay criteria."""
         now = datetime.now(UTC)
         candidates = []
 
@@ -206,7 +218,7 @@ class ThetaDecay:
             if not mkt.active or mkt.closed:
                 continue
 
-            # Resolution window: 3-30 days
+            # Resolution window
             if not self._check_resolution_window(mkt, now):
                 continue
 
@@ -224,7 +236,7 @@ class ThetaDecay:
         return candidates
 
     def _check_resolution_window(self, mkt: Any, now: datetime) -> bool:
-        """Check if market resolves within 3-30 day window."""
+        """Check if market resolves within configured day window."""
         end_date_str = getattr(mkt, "end_date", None)
         if not end_date_str:
             return False
@@ -241,38 +253,94 @@ class ThetaDecay:
         except (ValueError, TypeError):
             return False
 
+    def _compute_edge(
+        self, price_yes: Decimal, zscore: float, days_to_resolution: int
+    ) -> tuple[Decimal, Decimal] | None:
+        """Compute edge using price-dependent discount model.
+
+        Autoresearch discovery: cheaper longshots have more optimism bias.
+        price_scale = intercept + slope * (price_yes / longshot_max)
+        effective_discount = discount_factor * price_scale
+
+        Also applies resolution-adjusted z-score threshold (quadratic penalty
+        for longer-dated markets).
+
+        Returns:
+            (edge, model_no_prob) or None if quality gate fails.
+        """
+        f_price = float(price_yes)
+        f_max = float(self._longshot_max)
+
+        # Resolution-adjusted z-score threshold
+        days_excess = max(0, days_to_resolution - self._zscore_days_pivot)
+        adj_threshold = self._zscore_threshold + (
+            days_excess ** self._zscore_penalty_power * self._zscore_penalty_coeff
+        )
+        if zscore < adj_threshold:
+            return None
+
+        # Price-dependent discount
+        price_scale = self._price_scale_intercept + self._price_scale_slope * (f_price / f_max)
+        effective_discount = self._discount_factor * price_scale
+
+        model_yes_prob = f_price * effective_discount
+        model_no_prob = 1.0 - model_yes_prob
+        no_price = 1.0 - f_price
+        edge = model_no_prob - no_price
+
+        edge_dec = Decimal(str(round(edge, 6)))
+        model_no_dec = Decimal(str(round(model_no_prob, 6)))
+
+        # Edge bounds check
+        if edge_dec < self._min_edge or edge_dec > self._max_edge:
+            return None
+
+        return edge_dec, model_no_dec
+
     def _compute_size(
-        self, price_no: Decimal, edge: Decimal, available: Decimal
+        self, price_no: Decimal, edge: Decimal, available: Decimal, total: Decimal
     ) -> Decimal:
-        """Compute position size with quarter-Kelly, clamped to $20-50.
+        """Compute position size with ultra-conservative Kelly, %-based bounds.
 
         Args:
             price_no: NO token price (our entry price).
             edge: Estimated edge (model_prob - market_price).
             available: Available capital for Strategy A.
+            total: Total Strategy A allocation.
 
         Returns:
             Position size in USDC.
         """
-        # Quarter-Kelly: f* = (edge / odds) * fraction
-        odds = float(price_no)
-        if odds <= 0 or odds >= 1:
+        f_no = float(price_no)
+        if f_no <= 0 or f_no >= 1:
             return Decimal("0")
 
-        kelly = (float(edge) / (1 - odds)) * float(KELLY_FRACTION)
-        raw_size = Decimal(str(max(0, kelly))) * available
+        # Kelly: f* = edge / (1/no_price - 1) * kelly_fraction
+        odds_minus_1 = (1.0 / f_no) - 1.0
+        if odds_minus_1 <= 0:
+            return Decimal("0")
 
-        # Clamp to position limits
-        size = max(self._pos_min, min(self._pos_max, raw_size))
+        kelly_raw = float(edge) / odds_minus_1
+        kelly_adjusted = kelly_raw * self._kelly_fraction
+        raw_size = kelly_adjusted * float(available)
+
+        # Clamp to %-based position bounds
+        f_total = float(total)
+        min_size = f_total * self._pos_pct_min
+        max_size = f_total * self._pos_pct_max
+        clamped = max(min_size, min(max_size, raw_size))
 
         # Don't exceed available capital
-        size = min(size, available)
+        clamped = min(clamped, float(available) * 0.95)
 
-        # Cap at MAX_POSITION_PCT of total capital
-        max_pos = self._risk._state.capital * MAX_POSITION_PCT
-        size = min(size, max_pos)
+        if clamped < min_size:
+            return Decimal("0")
 
-        return size.quantize(Decimal("0.01"))
+        # Cap at MAX_POSITION_PCT of total capital (risk manager constraint)
+        max_pos = float(self._risk._state.capital * MAX_POSITION_PCT)
+        clamped = min(clamped, max_pos)
+
+        return Decimal(str(round(clamped, 2)))
 
     def _execute_entry(
         self,
@@ -295,18 +363,33 @@ class ThetaDecay:
         if price_no is None or price_yes is None:
             return None
 
-        # Our model: longshot YES with 3σ hype → probability of YES is much
-        # lower than market implies. Edge = price_no - model_no_prob.
-        # Conservative estimate: YES actual prob ≈ price_yes * 0.5
-        # (hype inflated by 2x), so NO prob ≈ 1 - (price_yes * 0.5)
-        model_no_prob = Decimal("1") - (price_yes * Decimal("0.5"))
-        edge = model_no_prob - price_no
-        if edge <= Decimal("0.03"):
+        # Compute days to resolution for quality gate
+        now = datetime.now(UTC)
+        end_date_str = getattr(mkt, "end_date", None)
+        days_to_res = 15  # Default if can't compute
+        if end_date_str:
+            try:
+                if isinstance(end_date_str, str):
+                    end_dt = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                else:
+                    end_dt = end_date_str
+                days_to_res = (end_dt - now).days
+            except (ValueError, TypeError):
+                pass
+
+        # Compute edge with price-dependent discount + quality gate
+        result = self._compute_edge(price_yes, peak.zscore, days_to_res)
+        if result is None:
             return None
+        edge, model_no_prob = result
+
+        # Get total capital for %-based sizing
+        strategy_state = self._risk.get_strategy_state(STRATEGY_ID)
+        total_capital = strategy_state.allocated if strategy_state else available_capital
 
         # Compute size
-        size = self._compute_size(price_no, edge, available_capital)
-        if size < self._pos_min:
+        size = self._compute_size(price_no, edge, available_capital, total_capital)
+        if size <= Decimal("0"):
             return None
 
         # Build trade request for risk check

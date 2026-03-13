@@ -63,20 +63,41 @@ class WeatherConfig(BaseModel):
 
 
 class ThetaDecayConfig(BaseModel):
-    """Strategy A: Theta Decay configuration."""
+    """Strategy A: Theta Decay configuration.
 
+    Parameters optimized by autoresearch (13.40 → 315.05 composite score).
+    See research_a/AUTORESEARCH_A_REPORT.md for full details.
+    """
+
+    # Spike detection
     zscore_threshold: float = 3.0  # 3σ peak optimism threshold
     rolling_window_hours: int = 4  # 4h rolling window for z-score
-    longshot_price_max: float = 0.15  # YES must be < $0.15
-    min_volume_24h: float = 10000.0  # $10K minimum 24h volume
+    spike_lookback_ticks: int = 20  # Rolling window for z-score (autoresearch: 30→20)
+    min_history_ticks: int = 11  # Min ticks before z-score (autoresearch: 12→11)
+    # Market filtering
+    longshot_price_max: float = 0.092  # YES < $0.092 (autoresearch: 0.15→0.092)
+    min_volume_24h: float = 13500.0  # $13.5K min volume (autoresearch: 10K→13.5K)
     min_age_hours: int = 24  # Market must exist for 24h+
-    resolution_window_days_min: int = 3  # At least 3 days to resolution
-    resolution_window_days_max: int = 30  # At most 30 days to resolution
+    resolution_window_days_min: int = 2  # Min days to resolution (autoresearch: 3→2)
+    resolution_window_days_max: int = 21  # Max days to resolution (autoresearch: 30→21)
+    # Entry model — price-dependent discount (autoresearch structural breakthrough)
+    discount_factor: float = 0.375  # Base discount (autoresearch: 0.50→0.375)
+    discount_price_scale_intercept: float = -1.80  # price_scale = intercept + slope*(price/max)
+    discount_price_scale_slope: float = 2.75  # Lower price → more aggressive discount
+    min_edge: float = 0.055  # Min edge to enter (autoresearch: 0.03→0.055)
+    max_edge: float = 0.50  # Max edge (suspicious → skip)
+    # Quality gate — resolution-adjusted zscore
+    zscore_days_pivot: int = 10  # Days threshold for penalty
+    zscore_penalty_power: int = 2  # Quadratic penalty for longer dates
+    zscore_penalty_coeff: float = 0.0005  # Penalty coefficient
+    # Exit rules
     partial_exit_pct: float = 0.50  # Sell 50% at NO +50%
-    stop_loss_pct: float = 0.30  # Exit all at NO -30%
-    position_size_min: float = 20.0  # $20 minimum position
-    position_size_max: float = 50.0  # $50 maximum position
-    max_concurrent_positions: int = 10  # Max 10 concurrent theta positions
+    stop_loss_pct: float = 0.20  # Exit all at NO -20% (autoresearch: 0.30→0.20)
+    # Sizing (%-based)
+    kelly_fraction: float = 0.032  # Ultra-conservative (autoresearch: 0.25→0.032)
+    position_pct_min: float = 0.02  # Min 2% of capital per position
+    position_pct_max: float = 0.05  # Max 5% of capital per position
+    max_concurrent_positions: int = 25  # Max concurrent (autoresearch: 10→25)
     excluded_categories: list[str] = ["crypto"]  # Skip finance/crypto categories
     snapshot_interval_s: int = 300  # 5 min taker flow snapshots
 
