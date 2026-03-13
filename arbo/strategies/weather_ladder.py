@@ -10,11 +10,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from arbo.core.risk_manager import KELLY_FRACTION
 from arbo.strategies.weather_scanner import WeatherSignal
 from arbo.utils.logger import get_logger
 
 logger = get_logger("weather_ladder")
+
+# ── Strategy C sizing (autoresearch-optimized) ──
+# These override the global KELLY_FRACTION from risk_manager (0.25) for Strategy C.
+# Autoresearch found ultra-conservative sizing optimal for weather markets.
+KELLY_FRACTION = Decimal("0.01")  # 1% Kelly (not quarter-Kelly 25%)
+_KELLY_MULTIPLIER = 0.35  # Additional scaling factor
+_KELLY_RAW_CAP = 0.40  # Cap raw kelly to reduce variance from high-edge trades
 
 # Maximum concurrent ladder positions per city per day
 MAX_LADDER_POSITIONS = 3
@@ -53,22 +59,19 @@ def calculate_kelly_size(
     kelly_fraction: Decimal = KELLY_FRACTION,
     max_position_size: Decimal | None = None,
 ) -> Decimal:
-    """Calculate Quarter-Kelly position size.
+    """Calculate autoresearch-optimized Kelly position size.
 
     Kelly formula: f* = (p*b - q) / b
     where p = probability of winning, b = odds, q = 1 - p
 
-    For binary markets:
-        p = forecast_probability (our edge-adjusted probability)
-        b = (1/price) - 1  (decimal odds minus 1)
-
-    We use Quarter-Kelly (KELLY_FRACTION = 0.25) for conservative sizing.
+    Strategy C uses ultra-conservative sizing: KELLY_FRACTION=0.01 * 0.35x multiplier,
+    with kelly_raw capped at 0.40 to reduce variance from high-edge trades.
 
     Args:
         edge: Expected edge (forecast_prob - market_price).
         price: Market price of the YES token.
         available_capital: Capital available for this strategy.
-        kelly_fraction: Kelly fraction multiplier (default 0.25).
+        kelly_fraction: Kelly fraction multiplier (default 0.01).
         max_position_size: Hard cap on position size (from risk manager).
 
     Returns:
@@ -88,8 +91,11 @@ def calculate_kelly_size(
     if kelly_raw <= 0:
         return Decimal("0")
 
-    # Apply Kelly fraction (Quarter-Kelly)
-    kelly_adjusted = kelly_raw * float(kelly_fraction)
+    # Cap kelly_raw to reduce variance from high-edge trades
+    kelly_raw = min(kelly_raw, _KELLY_RAW_CAP)
+
+    # Apply Kelly fraction + multiplier (autoresearch-optimized)
+    kelly_adjusted = kelly_raw * float(kelly_fraction) * _KELLY_MULTIPLIER
 
     # Calculate size
     size = available_capital * Decimal(str(kelly_adjusted))
