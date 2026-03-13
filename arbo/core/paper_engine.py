@@ -20,6 +20,9 @@ from arbo.utils.odds import half_kelly
 
 logger = get_logger("paper_engine")
 
+# Polygon gas cost per transaction (~$0.007)
+POLYGON_GAS_COST_USD = Decimal("0.007")
+
 
 class TradeStatus(Enum):
     OPEN = "open"
@@ -66,6 +69,7 @@ class PaperPosition:
     layer: int
     strategy: str = ""
     current_price: Decimal | None = None
+    opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def unrealized_pnl(self) -> Decimal:
@@ -262,8 +266,8 @@ class PaperTradingEngine:
         # Calculate shares
         shares = (size / fill_price).quantize(Decimal("0.01"))
 
-        # Deduct from balance
-        self._balance -= size
+        # Deduct from balance (trade size + Polygon gas)
+        self._balance -= size + POLYGON_GAS_COST_USD
 
         # Create trade
         trade = PaperTrade(
@@ -279,7 +283,7 @@ class PaperTradingEngine:
             edge=edge,
             confluence_score=confluence_score,
             kelly_fraction=kelly,
-            fee=fee * size,
+            fee=fee * size + POLYGON_GAS_COST_USD,
             strategy=strategy,
         )
         self._next_trade_id += 1
@@ -366,8 +370,8 @@ class PaperTradingEngine:
             else:
                 pnl = pos.shares * pos.avg_price
 
-        # Return invested capital + P&L to balance
-        self._balance += pos.size + pnl
+        # Return invested capital + P&L to balance (minus gas for claim tx)
+        self._balance += pos.size + pnl - POLYGON_GAS_COST_USD
 
         # Track per-layer P&L
         layer = pos.layer
@@ -509,6 +513,7 @@ class PaperTradingEngine:
                         unrealized_pnl=pos.unrealized_pnl,
                         layer=pos.layer,
                         strategy=pos.strategy or None,
+                        opened_at=pos.opened_at,
                     )
                     session.add(db_pos)
                 await session.commit()
@@ -582,6 +587,7 @@ class PaperTradingEngine:
                         current_price=(
                             Decimal(str(db_pos.current_price)) if db_pos.current_price else None
                         ),
+                        opened_at=db_pos.opened_at or datetime.now(UTC),
                     )
                     self._positions[pos.token_id] = pos
 

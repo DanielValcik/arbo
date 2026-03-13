@@ -66,6 +66,10 @@ class OrderbookProvider:
         self._cache_ttl = cache_ttl_s
         self._cache: dict[str, OrderbookSnapshot] = {}
 
+    def invalidate(self, token_id: str) -> None:
+        """Remove a token from the cache to force a fresh fetch."""
+        self._cache.pop(token_id, None)
+
     async def get_snapshot(
         self,
         token_id: str,

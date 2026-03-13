@@ -816,6 +816,7 @@ class RDHOrchestrator:
             logger.info("strategy_a_trades", count=len(trades))
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="A")
+            await self._paper_engine.sync_positions_to_db()
 
         # Check exits — Strategy A holds NO tokens, needs NO prices
         prices = self._get_current_prices(price_type="no")
@@ -841,6 +842,7 @@ class RDHOrchestrator:
             logger.info("strategy_b_trades", count=len(trades))
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="B")
+            await self._paper_engine.sync_positions_to_db()
 
         # Check exits
         prices = self._get_current_prices()
@@ -857,6 +859,7 @@ class RDHOrchestrator:
             logger.info("strategy_c_trades", count=len(trades))
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="C")
+            await self._paper_engine.sync_positions_to_db()
 
     def _get_current_prices(
         self, price_type: str = "yes"
@@ -1092,23 +1095,53 @@ class RDHOrchestrator:
                 logger.error("snapshot_error", error=str(e))
 
     async def _position_price_updater(self) -> None:
-        """Update open position prices every 5 minutes."""
+        """Update open position prices every 5 minutes.
+
+        Priority: CLOB /price (real-time) > Gamma API (cached).
+        """
         while not self._shutdown_event.is_set():
             await asyncio.sleep(300)
-            if self._paper_engine is None or self._discovery is None:
+            if self._paper_engine is None:
                 continue
             try:
                 updated = 0
                 for pos in self._paper_engine.open_positions:
-                    market = self._discovery.get_by_condition_id(pos.market_condition_id)
-                    if market is None:
-                        continue
-                    if pos.token_id == market.token_id_yes and market.price_yes is not None:
-                        self._paper_engine.update_position_price(pos.token_id, market.price_yes)
+                    new_price = None
+
+                    # Try CLOB first (NegRisk price endpoint — real-time)
+                    if self._orderbook_provider is not None:
+                        try:
+                            snap = await self._orderbook_provider.get_snapshot(
+                                pos.token_id, neg_risk=True
+                            )
+                            if snap is not None and snap.midpoint is not None:
+                                new_price = snap.midpoint
+                        except Exception:
+                            pass  # Fall through to Gamma
+
+                    # Fallback: Gamma API cached prices
+                    if new_price is None and self._discovery is not None:
+                        market = self._discovery.get_by_condition_id(
+                            pos.market_condition_id
+                        )
+                        if market is not None:
+                            if (
+                                pos.token_id == market.token_id_yes
+                                and market.price_yes is not None
+                            ):
+                                new_price = market.price_yes
+                            elif (
+                                pos.token_id == market.token_id_no
+                                and market.price_no is not None
+                            ):
+                                new_price = market.price_no
+
+                    if new_price is not None:
+                        self._paper_engine.update_position_price(
+                            pos.token_id, new_price
+                        )
                         updated += 1
-                    elif pos.token_id == market.token_id_no and market.price_no is not None:
-                        self._paper_engine.update_position_price(pos.token_id, market.price_no)
-                        updated += 1
+
                 if updated > 0:
                     await self._paper_engine.sync_positions_to_db()
             except Exception as e:

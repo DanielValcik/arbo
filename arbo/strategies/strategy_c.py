@@ -13,6 +13,7 @@ Poll cycle: fetch forecasts → scan markets → quality gate → ladder → exe
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -38,6 +39,9 @@ logger = get_logger("strategy_c")
 STRATEGY_ID = "C"
 DEFAULT_SCAN_INTERVAL_S = 1800  # 30 minutes
 MAX_VOLUME_POSITION_PCT = Decimal("0.05")  # Max 5% of 24h volume per position
+LATENCY_RECHECK_DELAY_S = 2.0  # Simulate order signing + submission latency
+VOLATILITY_GUARD_CENTS = Decimal("0.05")  # Skip if price moves >5 cents in 2s
+MAX_DRIFT_LOG_SIZE = 1000  # Rolling window for drift analytics
 
 
 class StrategyC:
@@ -72,6 +76,10 @@ class StrategyC:
         self._last_scan: datetime | None = None
         self._signals_generated: int = 0
         self._trades_placed: int = 0
+
+        # Price drift tracking (latency re-check analytics)
+        self._drift_log: list[dict[str, Any]] = []
+        self._trades_skipped_volatility: int = 0
 
     async def init(self) -> None:
         """Initialize weather clients."""
@@ -240,21 +248,84 @@ class StrategyC:
                         )
                         trade_size = depth
 
-                    # Get real fill price from CLOB
-                    clob_fill = estimate_fill_price(ob_snap, "BUY", trade_size)
-                    if clob_fill is not None:
-                        execution_price = clob_fill
-                        delta = float(clob_fill - gamma_price)
-                        logger.info(
-                            "clob_price_vs_gamma",
-                            city=signal.market.city.value,
-                            gamma=str(gamma_price),
-                            clob_fill=str(clob_fill),
-                            spread=str(ob_snap.spread),
-                            delta=round(delta, 4),
+                    # Get initial fill price from CLOB (P1)
+                    p1 = estimate_fill_price(ob_snap, "BUY", trade_size)
+                    if p1 is not None:
+                        # For BUY_NO, expected NO price = 1 - gamma_yes
+                        expected_price = (
+                            gamma_price
+                            if signal.direction == "BUY_YES"
+                            else Decimal("1") - gamma_price
+                        )
+                        gamma_delta = float(p1 - expected_price)
+
+                        # Sanity check: CLOB fill too far from Gamma expected
+                        if abs(gamma_delta) > 0.15:
+                            logger.warning(
+                                "clob_fill_anomaly",
+                                city=signal.market.city.value,
+                                direction=signal.direction,
+                                expected=str(expected_price),
+                                clob_fill=str(p1),
+                                delta=round(gamma_delta, 4),
+                            )
+                            continue
+
+                        # --- Latency re-check: simulate order signing delay ---
+                        await asyncio.sleep(LATENCY_RECHECK_DELAY_S)
+                        self._orderbook.invalidate(token_id)
+                        ob_snap_2 = await self._orderbook.get_snapshot(
+                            token_id, neg_risk=True
+                        )
+                        p2 = (
+                            estimate_fill_price(ob_snap_2, "BUY", trade_size)
+                            if ob_snap_2 is not None
+                            else None
                         )
 
-                        # Revalidate edge with real CLOB price
+                        # Track drift for analytics
+                        drift = float(p2 - p1) if p2 is not None else 0.0
+                        drift_entry = {
+                            "p1": float(p1),
+                            "p2": float(p2) if p2 else None,
+                            "delta": round(drift, 6),
+                            "city": signal.market.city.value,
+                            "direction": signal.direction,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                        self._drift_log.append(drift_entry)
+                        if len(self._drift_log) > MAX_DRIFT_LOG_SIZE:
+                            self._drift_log = self._drift_log[-MAX_DRIFT_LOG_SIZE:]
+
+                        # Use P2 as fill price (more realistic)
+                        clob_fill = p2 if p2 is not None else p1
+                        execution_price = clob_fill
+
+                        # Volatility guard: skip if price moved >5 cents
+                        if p2 is not None and abs(p2 - p1) > VOLATILITY_GUARD_CENTS:
+                            self._trades_skipped_volatility += 1
+                            logger.warning(
+                                "trade_skipped_volatility",
+                                city=signal.market.city.value,
+                                p1=str(p1),
+                                p2=str(p2),
+                                drift=round(drift, 4),
+                            )
+                            continue
+
+                        logger.info(
+                            "clob_latency_recheck",
+                            city=signal.market.city.value,
+                            direction=signal.direction,
+                            gamma_yes=str(gamma_price),
+                            expected=str(expected_price),
+                            p1=str(p1),
+                            p2=str(clob_fill),
+                            drift=round(drift, 4),
+                            gamma_delta=round(gamma_delta, 4),
+                        )
+
+                        # Revalidate edge with real CLOB price (P2)
                         clob_edge = float(
                             Decimal(str(signal.forecast_probability)) - clob_fill
                         )
@@ -360,10 +431,27 @@ class StrategyC:
 
         return self._chain_engine.resolve(chain_id, market_id, pnl)
 
+    def get_drift_log(self) -> list[dict[str, Any]]:
+        """Return drift log for dashboard analytics."""
+        return list(self._drift_log)
+
     @property
     def stats(self) -> dict[str, Any]:
         """Current strategy statistics."""
         strategy_state = self._risk.get_strategy_state(STRATEGY_ID)
+
+        # Drift summary
+        drift_samples = len(self._drift_log)
+        avg_drift = 0.0
+        avg_abs_drift = 0.0
+        max_abs_drift = 0.0
+        if drift_samples > 0:
+            deltas = [d["delta"] for d in self._drift_log]
+            abs_deltas = [abs(d) for d in deltas]
+            avg_drift = round(sum(deltas) / drift_samples, 6)
+            avg_abs_drift = round(sum(abs_deltas) / drift_samples, 6)
+            max_abs_drift = round(max(abs_deltas), 6)
+
         return {
             "strategy": STRATEGY_ID,
             "signals_generated": self._signals_generated,
@@ -375,4 +463,9 @@ class StrategyC:
             "deployed": str(strategy_state.deployed) if strategy_state else "N/A",
             "available": str(strategy_state.available) if strategy_state else "N/A",
             "is_halted": strategy_state.is_halted if strategy_state else False,
+            "drift_samples": drift_samples,
+            "avg_drift": avg_drift,
+            "avg_abs_drift": avg_abs_drift,
+            "max_abs_drift": max_abs_drift,
+            "trades_skipped_volatility": self._trades_skipped_volatility,
         }

@@ -252,7 +252,8 @@ class TestPortfolioAPI:
         resp = client.get("/api/portfolio", auth=AUTH)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["balance"] == 2050.0
+        # balance = initial (2000) + sum of strategy total_pnl (3×25=75) = 2075
+        assert data["balance"] == 2075.0
 
 
 class TestLayersAPI:

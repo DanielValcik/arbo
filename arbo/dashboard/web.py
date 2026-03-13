@@ -202,7 +202,12 @@ async def dashboard_page(
     """Serve the main dashboard HTML page."""
     orch = state.orchestrator
     mode = orch._mode if orch else "unknown"
-    return templates.TemplateResponse("dashboard.html", {"request": request, "mode": mode})
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "mode": mode,
+        "nightcap_api_url": os.environ.get("NIGHTCAP_API_URL", ""),
+        "nightcap_api_key": os.environ.get("NIGHTCAP_API_KEY", ""),
+    })
 
 
 @app.get("/api/portfolio")
@@ -217,9 +222,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
     total_value = _dec(engine.total_value) if engine else 0.0
     initial = _dec(orch._capital)
 
-    # Query DB for daily/weekly P&L and snapshots
-    daily_pnl = 0.0
-    weekly_pnl = 0.0
+    # Query DB for snapshots and per-category breakdown
     snapshots: list[dict[str, Any]] = []
     category_pnl: dict[str, dict[str, Any]] = {}
 
@@ -234,35 +237,6 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
         factory = get_session_factory()
         async with factory() as session:
-            # Daily P&L = change in total portfolio value since midnight UTC
-            today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-            result = await session.execute(
-                sa.select(PaperSnapshot.total_value)
-                .where(PaperSnapshot.snapshot_at <= today)
-                .order_by(PaperSnapshot.snapshot_at.desc())
-                .limit(1)
-            )
-            day_start_value = _dec(result.scalar())
-            if day_start_value is not None:
-                daily_pnl = round((total_value or 0.0) - day_start_value, 2)
-            else:
-                # No snapshot before today — use initial capital
-                daily_pnl = round((total_value or 0.0) - (initial or 0.0), 2)
-
-            # Weekly P&L = change in total portfolio value since Monday 00:00 UTC
-            week_start = today - timedelta(days=today.weekday())
-            result = await session.execute(
-                sa.select(PaperSnapshot.total_value)
-                .where(PaperSnapshot.snapshot_at <= week_start)
-                .order_by(PaperSnapshot.snapshot_at.desc())
-                .limit(1)
-            )
-            week_start_value = _dec(result.scalar())
-            if week_start_value is not None:
-                weekly_pnl = round((total_value or 0.0) - week_start_value, 2)
-            else:
-                weekly_pnl = round((total_value or 0.0) - (initial or 0.0), 2)
-
             # Per-category P&L: join trades with markets to get category
             # Exclude pre-validation trades from dashboard metrics
             result = await session.execute(
@@ -337,19 +311,62 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     }
                 )
             snapshots.reverse()
+
+            # Reconstruct corrected chart from cumulative realized P&L at each snapshot time.
+            # Paper engine balance drifts after restarts; use trade-level P&L instead.
+            if snapshots:
+                import bisect
+
+                result = await session.execute(
+                    sa.select(PaperTrade.resolved_at, PaperTrade.actual_pnl)
+                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.resolved_at.isnot(None))
+                    .where(
+                        sa.or_(
+                            PaperTrade.notes.is_(None),
+                            PaperTrade.notes != "pre-validation",
+                        )
+                    )
+                    .order_by(PaperTrade.resolved_at)
+                )
+                trades_pnl = [
+                    (row.resolved_at.isoformat(), _dec(row.actual_pnl) or 0.0)
+                    for row in result.all()
+                ]
+
+                # Build cumulative P&L series from trades
+                trade_times = [t[0] for t in trades_pnl]
+                cumulative = []
+                running = 0.0
+                for _, pnl in trades_pnl:
+                    running += pnl
+                    cumulative.append(running)
+
+                # For each snapshot, find cumulative realized P&L at that time
+                init = initial or 0.0
+                for s in snapshots:
+                    ts = s["timestamp"] or ""
+                    idx = bisect.bisect_right(trade_times, ts) - 1
+                    realized_at_time = cumulative[idx] if idx >= 0 else 0.0
+                    s["total_value"] = round(
+                        init + realized_at_time + (s["unrealized_pnl"] or 0.0), 2
+                    )
     except Exception as e:
         logger.warning("portfolio_query_error", error=str(e))
 
-    total_pnl = (total_value or 0.0) - (initial or 0.0)
-    roi_pct = (total_pnl / initial * 100) if initial else 0.0
-
-    # Per-strategy P&L from risk manager
+    # Per-strategy P&L from risk manager (reliable source of truth)
     strategy_pnl: dict[str, dict[str, Any]] = {}
+    realized_total_pnl = 0.0
+    realized_weekly_pnl = 0.0
     if orch._risk_manager:
         rm = orch._risk_manager
         for sid, meta in _STRATEGY_META.items():
             ss = rm.get_strategy_state(sid)
             if ss:
+                s_total = _dec(ss.total_pnl) or 0.0
+                s_weekly = _dec(ss.weekly_pnl) or 0.0
+                realized_total_pnl += s_total
+                realized_weekly_pnl += s_weekly
                 strategy_pnl[sid] = {
                     "name": meta["name"],
                     "allocated": _dec(ss.allocated),
@@ -361,12 +378,71 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     "is_halted": ss.is_halted,
                 }
 
+    # Unrealized P&L from open positions
+    unrealized_pnl = 0.0
+    if engine:
+        pos_dict = getattr(engine, "_positions", None) or getattr(engine, "positions", {})
+        for pos in pos_dict.values():
+            unrealized_pnl += _dec(getattr(pos, "unrealized_pnl", 0)) or 0.0
+
+    # Use strategy-level P&L (reliable) instead of snapshot-based (drifts after restarts)
+    total_pnl = realized_total_pnl + unrealized_pnl
+    corrected_total_value = (initial or 0.0) + total_pnl
+    roi_pct = (total_pnl / initial * 100) if initial else 0.0
+
+    # Monthly P&L from resolved trades this calendar month
+    monthly_pnl = 0.0
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory as _gsf
+
+        factory = _gsf()
+        async with factory() as session:
+            month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            result = await session.execute(
+                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0))
+                .where(PaperTrade.resolved_at >= month_start)
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
+            )
+            monthly_pnl = _dec(result.scalar()) or 0.0
+    except Exception as e:
+        logger.warning("monthly_pnl_query_error", error=str(e))
+
+    # Daily P&L from resolved trades today
+    realized_daily_pnl = 0.0
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory as _gsf2
+
+        factory = _gsf2()
+        async with factory() as session:
+            today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            result = await session.execute(
+                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0))
+                .where(PaperTrade.resolved_at >= today_start)
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
+            )
+            realized_daily_pnl = _dec(result.scalar()) or 0.0
+    except Exception as e:
+        logger.warning("daily_pnl_query_error", error=str(e))
+
     return {
-        "balance": balance,
-        "total_value": total_value,
+        "balance": round(corrected_total_value, 2),
+        "total_value": round(corrected_total_value, 2),
         "initial_capital": initial,
-        "daily_pnl": daily_pnl,
-        "weekly_pnl": weekly_pnl,
+        "daily_pnl": round(realized_daily_pnl, 2),
+        "weekly_pnl": round(realized_weekly_pnl, 2),
+        "monthly_pnl": round(monthly_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "roi_pct": round(roi_pct, 2),
         "snapshots": snapshots,
@@ -567,8 +643,11 @@ async def api_risk(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     daily_limit = capital * 0.10
     weekly_limit = capital * 0.20
 
-    daily_utilization = abs(daily_pnl) / daily_limit * 100 if daily_limit else 0.0
-    weekly_utilization = abs(weekly_pnl) / weekly_limit * 100 if weekly_limit else 0.0
+    # Only show utilization on LOSSES (positive P&L = no risk concern)
+    daily_loss = max(0.0, -daily_pnl)
+    weekly_loss = max(0.0, -weekly_pnl)
+    daily_utilization = daily_loss / daily_limit * 100 if daily_limit else 0.0
+    weekly_utilization = weekly_loss / weekly_limit * 100 if weekly_limit else 0.0
 
     return {
         "daily_pnl": daily_pnl,
@@ -724,6 +803,72 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
     return {"trades": trades}
 
 
+@app.get("/api/daily-pnl")
+async def api_daily_pnl(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Daily realized P&L aggregated by date, plus per-strategy daily averages."""
+    days: list[dict[str, Any]] = []
+    avg_by_strategy: dict[str, float] = {}
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            # Daily totals
+            result = await session.execute(
+                sa.select(
+                    sa.func.date(PaperTrade.resolved_at).label("day"),
+                    sa.func.sum(PaperTrade.actual_pnl).label("pnl"),
+                    sa.func.count().label("trades"),
+                )
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.resolved_at.isnot(None))
+                .group_by(sa.func.date(PaperTrade.resolved_at))
+                .order_by(sa.func.date(PaperTrade.resolved_at))
+            )
+            for row in result.all():
+                days.append(
+                    {
+                        "date": row.day.isoformat() if row.day else None,
+                        "pnl": round(float(row.pnl or 0), 2),
+                        "trades": row.trades,
+                    }
+                )
+
+            # Per-strategy: total P&L and number of distinct days
+            strat_result = await session.execute(
+                sa.select(
+                    PaperTrade.strategy,
+                    sa.func.sum(PaperTrade.actual_pnl).label("total_pnl"),
+                    sa.func.count(sa.func.distinct(sa.func.date(PaperTrade.resolved_at))).label(
+                        "num_days"
+                    ),
+                )
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.resolved_at.isnot(None))
+                .where(PaperTrade.strategy.isnot(None))
+                .group_by(PaperTrade.strategy)
+            )
+            for row in strat_result.all():
+                strat = row.strategy or "?"
+                total = float(row.total_pnl or 0)
+                num_days = row.num_days or 1
+                avg_by_strategy[strat] = round(total / num_days, 2)
+
+    except Exception as e:
+        logger.warning("daily_pnl_query_error", error=str(e))
+
+    # Overall daily average
+    num_total_days = len(days) or 1
+    total_pnl = sum(d["pnl"] for d in days)
+    avg_total = round(total_pnl / num_total_days, 2)
+
+    return {
+        "days": days,
+        "avg_daily": avg_total,
+        "avg_by_strategy": avg_by_strategy,
+    }
+
+
 @app.get("/api/strategies")
 async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Per-strategy status: allocation, P&L, positions, halt state."""
@@ -857,6 +1002,33 @@ async def api_taker_flow(_user: str = Depends(_verify_credentials)) -> dict[str,
     return {"snapshots": snapshots}
 
 
+@app.get("/api/drift")
+async def api_drift(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Price drift analytics from Strategy C latency re-check."""
+    orch = state.orchestrator
+    if orch is None:
+        return {"samples": 0, "avg_drift": 0, "avg_abs_drift": 0, "max_abs_drift": 0,
+                "skipped_volatility": 0, "recent": []}
+
+    sc = getattr(orch, "_strategy_c", None)
+    if sc is None:
+        return {"samples": 0, "avg_drift": 0, "avg_abs_drift": 0, "max_abs_drift": 0,
+                "skipped_volatility": 0, "recent": []}
+
+    log = sc.get_drift_log()
+    stats = sc.stats
+    # Last 50 entries for the chart
+    recent = log[-50:] if log else []
+    return {
+        "samples": stats.get("drift_samples", 0),
+        "avg_drift": stats.get("avg_drift", 0),
+        "avg_abs_drift": stats.get("avg_abs_drift", 0),
+        "max_abs_drift": stats.get("max_abs_drift", 0),
+        "skipped_volatility": stats.get("trades_skipped_volatility", 0),
+        "recent": recent,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CryptoArb API endpoints
 # ---------------------------------------------------------------------------
@@ -913,6 +1085,8 @@ async def api_cryptoarb_overview(
             "acf": round(ps.get("acf", 0.0), 3),
             "beta_stability": round(ps.get("beta_stability", 1.0), 3),
             "entry_z": ps.get("entry_z", 0.0),
+            "entry_time": ps.get("entry_time", ""),
+            "hold_count": ps.get("hold_count", 0),
         }
 
     return {
