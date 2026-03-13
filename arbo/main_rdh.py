@@ -93,6 +93,12 @@ class RDHOrchestrator:
         self._coingecko: Any = None
         self._social_divergence: Any = None
 
+        # Strategy C live price layer
+        self._poly_client_readonly: Any = None
+        self._orderbook_provider: Any = None
+        self._iem_client: Any = None
+        self._weather_resolver: Any = None
+
         # Infrastructure
         self._report_generator: Any = None
         self._slack_bot: Any = None
@@ -375,12 +381,40 @@ class RDHOrchestrator:
         return s
 
     async def _init_strategy_c(self) -> Any:
+        from arbo.connectors.orderbook_provider import OrderbookProvider
+        from arbo.connectors.polymarket_client import PolymarketClient
+        from arbo.connectors.weather_iem import IEMClient
         from arbo.strategies.strategy_c import StrategyC
+        from arbo.strategies.weather_resolution import WeatherResolutionChecker
+
+        # Read-only CLOB client for live NegRisk prices
+        try:
+            pc = PolymarketClient()
+            await pc.initialize()
+            self._poly_client_readonly = pc
+            self._orderbook_provider = OrderbookProvider(poly_client=pc, cache_ttl_s=30.0)
+            logger.info("clob_live_price_layer_ready")
+        except Exception as e:
+            logger.warning("clob_live_price_layer_failed", error=str(e))
+            self._orderbook_provider = None
+
+        # IEM METAR client for weather resolution
+        try:
+            iem = IEMClient()
+            await iem.initialize()
+            self._iem_client = iem
+            self._weather_resolver = WeatherResolutionChecker(iem)
+            logger.info("iem_metar_resolution_ready")
+        except Exception as e:
+            logger.warning("iem_init_failed", error=str(e))
+            self._iem_client = None
+            self._weather_resolver = None
 
         s = StrategyC(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
             metoffice_api_key=self._config.metoffice_api_key,
+            orderbook_provider=self._orderbook_provider,
         )
         await s.init()
         return s
@@ -1113,20 +1147,44 @@ class RDHOrchestrator:
                         fetched[cid] = market
 
                     market = fetched[cid]
-                    if market is None or not market.closed:
-                        continue
 
-                    yes_price = market.price_yes
-                    if yes_price is None:
-                        continue
+                    # Strategy C: try METAR-based resolution first
+                    winning = None
+                    strategy = getattr(pos, "strategy", "")
+                    if strategy == "C" and self._weather_resolver is not None:
+                        try:
+                            metar_result = await self._weather_resolver.check_resolution(
+                                pos, market
+                            )
+                            if metar_result is not None:
+                                _is_resolved, winning = metar_result
+                                logger.info(
+                                    "metar_resolution_used",
+                                    condition_id=cid[:20],
+                                    winning=winning,
+                                )
+                        except Exception as metar_err:
+                            logger.warning(
+                                "metar_resolution_error",
+                                error=str(metar_err),
+                            )
 
-                    yes_won = yes_price > Decimal("0.5")
-                    if pos.token_id == market.token_id_yes:
-                        winning = yes_won
-                    elif pos.token_id == market.token_id_no:
-                        winning = not yes_won
-                    else:
-                        continue
+                    # Fallback: price-based resolution (requires market closed)
+                    if winning is None:
+                        if market is None or not market.closed:
+                            continue
+
+                        yes_price = market.price_yes
+                        if yes_price is None:
+                            continue
+
+                        yes_won = yes_price > Decimal("0.5")
+                        if pos.token_id == market.token_id_yes:
+                            winning = yes_won
+                        elif pos.token_id == market.token_id_no:
+                            winning = not yes_won
+                        else:
+                            continue
 
                     pnl = self._paper_engine.resolve_market(pos.token_id, winning)
 

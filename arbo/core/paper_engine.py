@@ -154,6 +154,9 @@ class PaperTradingEngine:
         is_whale_copy: bool = False,
         strategy: str = "",
         pre_computed_size: Decimal | None = None,
+        volume_24h: Decimal | None = None,
+        liquidity: Decimal | None = None,
+        clob_fill_price: Decimal | None = None,
     ) -> PaperTrade | None:
         """Place a simulated paper trade.
 
@@ -246,8 +249,10 @@ class PaperTradingEngine:
             )
             return None
 
-        # Apply slippage
-        if side == "BUY":
+        # Apply slippage — use real CLOB fill price when available
+        if clob_fill_price is not None:
+            fill_price = min(max(clob_fill_price, Decimal("0.001")), Decimal("0.999"))
+        elif side == "BUY":
             fill_price = market_price * (Decimal("1") + self._slippage_pct)
         else:
             fill_price = market_price * (Decimal("1") - self._slippage_pct)

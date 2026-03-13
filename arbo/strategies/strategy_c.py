@@ -17,6 +17,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from arbo.connectors.orderbook_provider import (
+    OrderbookProvider,
+    available_depth,
+    estimate_fill_price,
+)
 from arbo.connectors.weather_models import City, WeatherForecast
 from arbo.connectors.weather_noaa import NOAAWeatherClient
 from arbo.connectors.weather_metoffice import MetOfficeWeatherClient
@@ -49,10 +54,12 @@ class StrategyC:
         risk_manager: RiskManager,
         paper_engine: Any = None,
         metoffice_api_key: str = "",
+        orderbook_provider: OrderbookProvider | None = None,
     ) -> None:
         self._risk = risk_manager
         self._paper_engine = paper_engine
         self._metoffice_key = metoffice_api_key
+        self._orderbook = orderbook_provider
 
         # Weather clients
         self._noaa: NOAAWeatherClient | None = None
@@ -164,7 +171,25 @@ class StrategyC:
         max_pos = self._risk._state.capital * MAX_POSITION_PCT
         ladders = build_ladders_by_city(qualified, available_capital, max_position_size=max_pos)
 
-        # 6. Execute via paper engine (or live in the future)
+        # 6. Fetch live CLOB prices for all tokens we might trade
+        token_ids = []
+        for ladder in ladders:
+            for position in ladder.positions:
+                sig = position.signal
+                tid = (
+                    sig.market.token_id_yes
+                    if sig.direction == "BUY_YES"
+                    else sig.market.token_id_no
+                )
+                token_ids.append(tid)
+
+        ob_snapshots: dict[str, Any] = {}
+        if self._orderbook and token_ids:
+            ob_snapshots = await self._orderbook.get_snapshots_batch(
+                token_ids, neg_risk=True
+            )
+
+        # 7. Execute via paper engine (or live in the future)
         traded_signals = []
         for ladder in ladders:
             for position in ladder.positions:
@@ -183,16 +208,72 @@ class StrategyC:
                     )
                     continue
 
+                token_id = (
+                    signal.market.token_id_yes
+                    if signal.direction == "BUY_YES"
+                    else signal.market.token_id_no
+                )
+
+                # CLOB live price: use real NegRisk price if available
+                gamma_price = Decimal(str(signal.market.market_price))
+                execution_price = gamma_price
+                clob_fill: Decimal | None = None
+
+                ob_snap = ob_snapshots.get(token_id)
+                if ob_snap is not None:
+                    # Check available depth
+                    depth = available_depth(ob_snap, "BUY")
+                    if depth < Decimal("1"):
+                        logger.info(
+                            "trade_skipped_no_depth",
+                            city=signal.market.city.value,
+                            token_id=token_id[:20],
+                            depth=str(depth),
+                        )
+                        continue
+                    if trade_size > depth:
+                        logger.info(
+                            "trade_size_capped_by_depth",
+                            city=signal.market.city.value,
+                            original=str(trade_size),
+                            depth=str(depth),
+                        )
+                        trade_size = depth
+
+                    # Get real fill price from CLOB
+                    clob_fill = estimate_fill_price(ob_snap, "BUY", trade_size)
+                    if clob_fill is not None:
+                        execution_price = clob_fill
+                        delta = float(clob_fill - gamma_price)
+                        logger.info(
+                            "clob_price_vs_gamma",
+                            city=signal.market.city.value,
+                            gamma=str(gamma_price),
+                            clob_fill=str(clob_fill),
+                            spread=str(ob_snap.spread),
+                            delta=round(delta, 4),
+                        )
+
+                        # Revalidate edge with real CLOB price
+                        clob_edge = float(
+                            Decimal(str(signal.forecast_probability)) - clob_fill
+                        )
+                        if clob_edge <= 0:
+                            logger.info(
+                                "trade_skipped_no_clob_edge",
+                                city=signal.market.city.value,
+                                gamma_edge=round(signal.edge, 4),
+                                clob_fill=str(clob_fill),
+                                clob_edge=round(clob_edge, 4),
+                            )
+                            continue
+
                 # Build trade request for risk manager
                 trade_req = TradeRequest(
                     market_id=signal.market.condition_id,
-                    token_id=(
-                        signal.market.token_id_yes
-                        if signal.direction == "BUY_YES"
-                        else signal.market.token_id_no
-                    ),
+                    token_id=token_id,
                     side="BUY",
-                    price=Decimal(str(signal.market.market_price)),
+                    price=execution_price,
                     size=trade_size,
                     layer=0,  # Strategy C uses strategy field, not layer
                     market_category="weather",
@@ -213,14 +294,17 @@ class StrategyC:
                 if self._paper_engine:
                     trade_result = self._paper_engine.place_trade(
                         market_condition_id=signal.market.condition_id,
-                        token_id=trade_req.token_id,
+                        token_id=token_id,
                         side="BUY",
-                        market_price=Decimal(str(signal.market.market_price)),
+                        market_price=gamma_price,
                         model_prob=Decimal(str(signal.forecast_probability)),
                         layer=0,
                         market_category="weather",
                         strategy=STRATEGY_ID,
                         pre_computed_size=trade_size,
+                        volume_24h=Decimal(str(signal.market.volume_24h)),
+                        liquidity=Decimal(str(signal.market.liquidity)),
+                        clob_fill_price=clob_fill,
                     )
                     if trade_result:
                         self._risk.post_trade_update(
@@ -238,6 +322,7 @@ class StrategyC:
                             kelly_size=str(position.size_usdc),
                             volume_cap=str(volume_cap),
                             edge=round(signal.edge, 4),
+                            clob_fill=str(clob_fill) if clob_fill else "synthetic",
                         )
 
         self._last_scan = datetime.now(timezone.utc)
