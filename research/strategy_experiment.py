@@ -85,9 +85,22 @@ CITY_BIAS = {
     "ankara":       -0.78,
 }
 
-# Per-city quality gate overrides (empty = use global thresholds)
-# Example: {"nyc": {"min_edge": 0.08}, "buenos_aires": {"min_edge": 0.15}}
-CITY_OVERRIDES = {}
+# Per-city quality gate overrides — optimized via sweep_per_city_v2.py
+# Exclude 6 unprofitable/marginal cities, widen price range for top 6
+CITY_OVERRIDES = {
+    "dc":            {"min_edge": 0.99},
+    "toronto":       {"min_edge": 0.99},
+    "buenos_aires":  {"min_edge": 0.99},
+    "nyc":           {"min_edge": 0.99},
+    "atlanta":       {"min_edge": 0.99},
+    "wellington":    {"min_edge": 0.99},
+    "paris":         {"max_price": 0.50},
+    "seattle":       {"max_price": 0.50},
+    "london":        {"max_price": 0.50},
+    "lucknow":       {"max_price": 0.50},
+    "miami":         {"max_price": 0.50},
+    "tel_aviv":      {"max_price": 0.50},
+}
 
 # Probability distribution type
 # "normal" = Gaussian CDF

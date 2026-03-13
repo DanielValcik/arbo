@@ -81,6 +81,7 @@ WALK_FORWARD_WINDOWS = [
 
 INITIAL_CAPITAL = 1000.0
 SLIPPAGE_PCT = 0.005  # 0.5% slippage on fill
+GAS_COST_USD = 0.007  # Polygon gas per trade ($0.007)
 MAX_SIZING_CAPITAL = 5000.0  # Cap capital used for sizing at 5x initial (prevents unrealistic compounding)
 BASE_SEED = 42
 
@@ -379,14 +380,14 @@ def run_single_backtest(data, normals, test_start, test_end, seed):
             if size <= 0 or size > available:
                 continue
 
-            # Execute trade
+            # Execute trade (fill price + taker slippage + gas)
             fill_price = min(0.99, cand["market_price"] * (1.0 + SLIPPAGE_PCT))
             won = bucket_contains(cand["bucket"], cand["actual_high"])
 
             if won:
-                pnl = size * (1.0 / fill_price - 1.0)
+                pnl = size * (1.0 / fill_price - 1.0) - GAS_COST_USD
             else:
-                pnl = -size
+                pnl = -size - GAS_COST_USD
 
             capital += pnl
             daily_deployed += size
@@ -583,6 +584,51 @@ def main():
     results = walk_forward_evaluate(data, normals)
 
     t_end = time.time()
+
+    # 2b. Per-city stats (aggregate across all windows)
+    all_trades = []
+    for wm in results["windows"]:
+        # Re-run to collect trades (already cached data)
+        seed = BASE_SEED + (wm["window"] - 1) * 7919
+        test_start, test_end = WALK_FORWARD_WINDOWS[wm["window"] - 1]["test"]
+        trades_w, _ = run_single_backtest(data, normals, test_start, test_end, seed)
+        all_trades.extend(trades_w)
+
+    city_stats = {}
+    for t in all_trades:
+        if t.city not in city_stats:
+            city_stats[t.city] = {"trades": 0, "wins": 0, "pnl": 0.0, "size_total": 0.0}
+        cs = city_stats[t.city]
+        cs["trades"] += 1
+        cs["wins"] += 1 if t.won else 0
+        cs["pnl"] += t.pnl
+        cs["size_total"] += t.size
+
+    print("\n" + "=" * 78)
+    print("PER-CITY PERFORMANCE")
+    print("=" * 78)
+    print(f"  {'City':<16} {'Trades':>6} {'WinRate':>8} {'PnL':>10} {'ROI':>8} {'AvgEdge':>8}")
+    print("  " + "-" * 60)
+
+    # Compute avg edge per city
+    city_edges = {}
+    for t in all_trades:
+        if t.city not in city_edges:
+            city_edges[t.city] = []
+        city_edges[t.city].append(t.edge)
+
+    for city in sorted(city_stats.keys(), key=lambda c: -city_stats[c]["pnl"]):
+        cs = city_stats[city]
+        wr = cs["wins"] / cs["trades"] * 100 if cs["trades"] > 0 else 0
+        roi = cs["pnl"] / cs["size_total"] * 100 if cs["size_total"] > 0 else 0
+        avg_edge = sum(city_edges[city]) / len(city_edges[city]) if city_edges.get(city) else 0
+        marker = "  " if cs["pnl"] >= 0 else "!!"
+        print(f"{marker}{city:<16} {cs['trades']:>6} {wr:>7.1f}% ${cs['pnl']:>9.2f} {roi:>7.1f}% {avg_edge:>7.3f}")
+
+    print(f"\n  Total: {len(all_trades)} trades across {len(city_stats)} cities")
+    unprofitable = [c for c, s in city_stats.items() if s["pnl"] < 0]
+    if unprofitable:
+        print(f"  Unprofitable cities: {', '.join(unprofitable)}")
 
     # 3. Per-window results
     print("\n" + "=" * 78)

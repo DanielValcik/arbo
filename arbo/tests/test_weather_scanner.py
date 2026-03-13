@@ -260,14 +260,14 @@ class TestIsHighTemp:
 # ================================================================
 class TestEstimateProbability:
     def test_forecast_equals_bucket_center(self) -> None:
-        """When forecast is at bucket center, probability should be moderate."""
+        """When forecast is at bucket center, probability should be high."""
         forecast = DailyForecast(
             date=date(2026, 3, 15), temp_high_c=22.5, temp_low_c=10.0
         )
         bucket = TemperatureBucket(low_c=20.0, high_c=25.0, bucket_type="range")
         prob = estimate_bucket_probability(forecast, bucket, is_high=True)
-        # Centered in 5°C range with σ=2.5 → ~68% should be in bucket
-        assert 0.5 < prob < 0.9
+        # Centered in 5°C range with calibrated σ=1.22 (day-0 default) → high prob
+        assert 0.5 < prob < 0.99
 
     def test_forecast_well_above_bucket(self) -> None:
         """When forecast is well above bucket, probability should be very low."""
@@ -342,13 +342,14 @@ class TestScanWeatherMarket:
 
     def test_no_signal_when_fairly_priced(self) -> None:
         """Market priced correctly → no signal."""
-        # Forecast high = 24°C = 75.2°F, threshold = 75°F → ~50% probability
+        # NYC bias=+1.53°C. Forecast 22°C, corrected=23.53°C, threshold=23.9°C
+        # With σ=1.15, P(above 23.9) ≈ 0.38 → at price 0.38, edge ≈ 0 → no signal
         market = MockMarket(
             question="Will the high temperature in NYC be above 75°F on March 15?",
-            price_yes=Decimal("0.50"),
+            price_yes=Decimal("0.38"),
             volume_24h=Decimal("50000"),
         )
-        forecasts = {City.NYC: _make_forecast(City.NYC, high_c=fahrenheit_to_celsius(75))}
+        forecasts = {City.NYC: _make_forecast(City.NYC, high_c=22.0)}
 
         signal = scan_weather_market(market, forecasts, min_edge=0.10)
         assert signal is None

@@ -15,6 +15,7 @@ Polymarket weather markets use NegRisk events with titles like:
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -122,6 +123,69 @@ _MONTH_MAP: dict[str, int] = {
 # High vs low temperature indicator
 _HIGH_KEYWORDS = ["highest temperature", "high temperature", "high temp", "daily high"]
 _LOW_KEYWORDS = ["lowest temperature", "low temperature", "low temp", "daily low", "overnight low"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# METAR-CALIBRATED PROBABILITY MODEL
+# Sigma and bias calibrated from 60-day IEM METAR vs Open-Meteo archive.
+# Run: python3 research/calibrate_bias.py --days 60
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Default sigma by days_out (when no per-city override exists)
+_FORECAST_SIGMA: dict[int, float] = {
+    0: 1.22,
+    1: 3.0,
+    2: 3.0,
+    3: 3.5,
+    4: 4.0,
+    5: 4.5,
+    6: 5.0,
+}
+
+# Per-city sigma overrides — METAR-calibrated
+# Data source quality: NOAA (nyc, chicago) > Met Office (london) > Open-Meteo (rest)
+_CITY_SIGMA: dict[str, dict[int, float]] = {
+    "paris":         {0: 0.75},
+    "seattle":       {0: 0.91},
+    "london":        {0: 0.92, 1: 2.8},
+    "miami":         {0: 1.00},
+    "wellington":    {0: 1.07},
+    "nyc":           {0: 1.15},
+    "chicago":       {0: 1.15, 1: 3.0},
+    "dallas":        {0: 1.24},
+    "seoul":         {0: 1.32, 1: 2.5},
+    "atlanta":       {0: 1.32},
+    "sao_paulo":     {0: 1.36},
+    "toronto":       {0: 1.38},
+    "buenos_aires":  {0: 1.43, 1: 3.0},
+    "ankara":        {0: 1.44},
+}
+
+# Per-city bias corrections (°C) — measured forecast error vs METAR actual.
+# Positive = forecast reads LOW vs actual (add correction to forecast).
+# Negative = forecast reads HIGH (subtract).
+_CITY_BIAS: dict[str, float] = {
+    "buenos_aires": 2.58,
+    "nyc":          1.53,
+    "wellington":   1.43,
+    "atlanta":      1.30,
+    "sao_paulo":    1.24,
+    "toronto":      0.98,
+    "chicago":      0.92,
+    "seoul":        0.87,
+    "dallas":       0.73,
+    "miami":        0.56,
+    "seattle":      0.41,
+    "london":       0.24,
+    "paris":        0.16,
+    "ankara":       -0.78,
+}
+
+# Probability sharpening: raise raw prob to this power (>1 = more decisive)
+_PROB_SHARPENING = 1.05
+
+# Bayesian shrinkage: blend with uniform prior (reduces overconfidence)
+_UNIFORM_PRIOR = 0.125  # 1/8 buckets
+_SHRINKAGE_WEIGHT = 0.03  # 3% prior weight
 
 
 @dataclass
@@ -284,56 +348,80 @@ def is_high_temp_market(text: str) -> bool:
     return True
 
 
+def _get_sigma(days_out: int, city: str | None = None) -> float:
+    """Get forecast sigma for a given days_out and optional city.
+
+    Resolution order: per-city override → global days_out default → 5.0 fallback.
+    """
+    if city and city in _CITY_SIGMA:
+        city_sigmas = _CITY_SIGMA[city]
+        if days_out in city_sigmas:
+            return city_sigmas[days_out]
+        # Fallback to the highest available day key for this city
+        max_key = max(city_sigmas.keys())
+        if days_out > max_key:
+            return _FORECAST_SIGMA.get(days_out, 5.0)
+    return _FORECAST_SIGMA.get(days_out, 5.0)
+
+
+def _normal_cdf(x: float, mu: float = 0.0, sigma: float = 1.0) -> float:
+    """Normal CDF."""
+    if sigma <= 0:
+        return 1.0 if x >= mu else 0.0
+    return 0.5 * (1.0 + math.erf((x - mu) / (sigma * math.sqrt(2.0))))
+
+
 def estimate_bucket_probability(
     forecast: DailyForecast,
     bucket: TemperatureBucket,
     is_high: bool,
+    city: str | None = None,
+    days_out: int = 0,
 ) -> float:
     """Estimate probability of forecast temperature falling in bucket.
 
-    Uses a simple normal distribution approximation around the forecast value.
-    Standard deviation assumed to be ~2-3°C for daily forecasts.
+    Uses METAR-calibrated per-city sigma and bias corrections. Matches
+    the research probability model (strategy_experiment.py) exactly.
 
     Args:
         forecast: The daily forecast with high/low temperatures.
         bucket: The temperature bucket to evaluate.
         is_high: True if evaluating high temperature, False for low.
+        city: City value string (e.g. "chicago") for per-city sigma + bias.
+        days_out: Days until resolution (0 = today, 1 = tomorrow).
 
     Returns:
         Estimated probability (0-1) that actual temperature falls in bucket.
     """
-    import math
-
     forecast_temp = forecast.temp_high_c if is_high else forecast.temp_low_c
-    # Forecast uncertainty: ~2.5°C standard deviation for 1-day forecast
-    # Increases for further-out forecasts
-    sigma = 2.5
+
+    # Apply bias correction: corrected = forecast + bias
+    if city and city in _CITY_BIAS:
+        forecast_temp = forecast_temp + _CITY_BIAS[city]
+
+    sigma = _get_sigma(days_out, city)
+
+    cdf = lambda x: _normal_cdf(x, forecast_temp, sigma)
 
     if bucket.bucket_type == "above":
         threshold = bucket.low_c or 0
-        # P(X >= threshold) = 1 - Phi((threshold - mu) / sigma)
-        z = (threshold - forecast_temp) / sigma
-        return 1 - _normal_cdf(z)
-
+        raw = 1.0 - cdf(threshold)
     elif bucket.bucket_type == "below":
         threshold = bucket.high_c or 0
-        # P(X < threshold) = Phi((threshold - mu) / sigma)
-        z = (threshold - forecast_temp) / sigma
-        return _normal_cdf(z)
-
+        raw = cdf(threshold)
     else:  # range
         low = bucket.low_c if bucket.low_c is not None else forecast_temp - 20
         high = bucket.high_c if bucket.high_c is not None else forecast_temp + 20
-        z_low = (low - forecast_temp) / sigma
-        z_high = (high - forecast_temp) / sigma
-        return _normal_cdf(z_high) - _normal_cdf(z_low)
+        raw = cdf(high) - cdf(low)
 
+    # Bayesian shrinkage: blend with uniform prior (reduces overconfidence)
+    raw = raw * (1.0 - _SHRINKAGE_WEIGHT) + _UNIFORM_PRIOR * _SHRINKAGE_WEIGHT
 
-def _normal_cdf(z: float) -> float:
-    """Approximation of the standard normal CDF using math.erf."""
-    import math
+    # Probability sharpening: push probabilities toward extremes
+    if _PROB_SHARPENING != 1.0 and raw > 0:
+        raw = raw ** _PROB_SHARPENING
 
-    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+    return raw
 
 
 def scan_weather_market(
@@ -389,7 +477,11 @@ def scan_weather_market(
         return None
 
     is_high = is_high_temp_market(market.question)
-    forecast_prob = estimate_bucket_probability(daily_forecast, bucket, is_high)
+    days_out = max(0, (target_date - date.today()).days)
+    city_str = city.value
+    forecast_prob = estimate_bucket_probability(
+        daily_forecast, bucket, is_high, city=city_str, days_out=days_out,
+    )
 
     # Calculate edge
     edge = forecast_prob - price_yes

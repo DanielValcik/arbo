@@ -25,17 +25,17 @@ from arbo.strategies.strategy_c import StrategyC
 @dataclass
 class MockGammaMarket:
     condition_id: str = "0xweather123"
-    question: str = "Will the high temperature in NYC be above 75°F on March 15?"
+    question: str = "Will the high temperature in Chicago be above 75°F on March 15?"
     category: str = "weather"
-    price_yes: Decimal | None = Decimal("0.30")
-    price_no: Decimal | None = Decimal("0.70")
+    price_yes: Decimal | None = Decimal("0.38")
+    price_no: Decimal | None = Decimal("0.62")
     token_id_yes: str = "tok_yes_1"
     token_id_no: str = "tok_no_1"
     neg_risk: bool = False
     fee_enabled: bool = False
     volume_24h: Decimal = Decimal("50000")
     liquidity: Decimal = Decimal("25000")
-    slug: str = "weather-nyc"
+    slug: str = "weather-chicago"
 
 
 # Mock paper engine
@@ -49,7 +49,8 @@ class MockPaperEngine:
         return trade
 
 
-# Sample NOAA response
+# Sample NOAA response — 77°F high gives ~67% for "above 75°F"
+# Keeps edge within [0.08, 0.42] when market price is ~0.38
 NOAA_RESPONSE = {
     "properties": {
         "periods": [
@@ -59,7 +60,7 @@ NOAA_RESPONSE = {
                 "startTime": "2026-03-15T06:00:00-04:00",
                 "endTime": "2026-03-15T18:00:00-04:00",
                 "isDaytime": True,
-                "temperature": 82,
+                "temperature": 77,
                 "temperatureUnit": "F",
                 "shortForecast": "Sunny",
                 "probabilityOfPrecipitation": {"unitCode": "wmoUnit:percent", "value": 5},
@@ -150,13 +151,13 @@ class TestPollCycle:
         strategy: StrategyC,
         paper_engine: MockPaperEngine,
     ) -> None:
-        """Market at 0.30 but forecast says ~90% → should trade."""
+        """Market at 0.38 but forecast says ~67% → should trade (edge ~0.29)."""
         await strategy.init()
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in NYC be above 75°F on March 15?",
-                price_yes=Decimal("0.30"),
+                question="Will the high temperature in Chicago be above 75°F on March 15?",
+                price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
             ),
@@ -184,13 +185,13 @@ class TestPollCycle:
         """Fairly priced market → no trade."""
         await strategy.init()
 
-        # NOAA says 82°F high ≈ 27.8°C, threshold at 75°F ≈ 23.9°C
-        # So ~94% probability above 75°F
-        # If market is priced at 0.90, edge is ~4% → below 5% threshold
+        # NOAA says 77°F high ≈ 25°C, threshold at 75°F ≈ 23.9°C
+        # ~67% probability above 75°F
+        # If market is priced at 0.65, edge is ~2% → below 8% threshold
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in NYC be above 75°F on March 15?",
-                price_yes=Decimal("0.92"),
+                question="Will the high temperature in Chicago be above 75°F on March 15?",
+                price_yes=Decimal("0.65"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
             ),
@@ -242,8 +243,8 @@ class TestStrategyStats:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in NYC be above 75°F on March 15?",
-                price_yes=Decimal("0.30"),
+                question="Will the high temperature in Chicago be above 75°F on March 15?",
+                price_yes=Decimal("0.38"),
             ),
         ]
 
@@ -323,8 +324,8 @@ class TestE2EWithRealPaperEngine:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in NYC be above 75°F on March 15?",
-                price_yes=Decimal("0.30"),
+                question="Will the high temperature in Chicago be above 75°F on March 15?",
+                price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
             ),
@@ -377,8 +378,8 @@ class TestE2EWithRealPaperEngine:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in NYC be above 75°F on March 15?",
-                price_yes=Decimal("0.30"),
+                question="Will the high temperature in Chicago be above 75°F on March 15?",
+                price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
             ),
