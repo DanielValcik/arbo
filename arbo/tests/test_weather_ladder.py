@@ -23,8 +23,7 @@ from arbo.strategies.weather_scanner import (
     WeatherSignal,
 )
 
-# Use high capital so ultra-conservative sizing still produces positions > $1
-_TEST_CAPITAL = Decimal("100000")
+_TEST_CAPITAL = Decimal("1000")
 
 
 def _make_signal(
@@ -115,9 +114,9 @@ class TestCalculateKellySize:
         assert calculate_kelly_size(0.10, 0.0, _TEST_CAPITAL) == Decimal("0")
         assert calculate_kelly_size(0.10, 1.0, _TEST_CAPITAL) == Decimal("0")
 
-    def test_uses_strategy_c_kelly_by_default(self) -> None:
-        """Verify default kelly_fraction is Strategy C optimized (0.01)."""
-        assert KELLY_FRACTION == Decimal("0.01")
+    def test_uses_quarter_kelly_by_default(self) -> None:
+        """Verify default kelly_fraction is quarter-Kelly (0.25) per architecture."""
+        assert KELLY_FRACTION == Decimal("0.25")
 
 
 class TestBuildTemperatureLadder:
