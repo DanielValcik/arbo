@@ -23,6 +23,10 @@ logger = get_logger("paper_engine")
 # Polygon gas cost per transaction (~$0.007)
 POLYGON_GAS_COST_USD = Decimal("0.007")
 
+# Taker slippage on top of CLOB price (0.5 cent = half a tick on 0.01 markets)
+# Conservative estimate for small orders ($3-5) on weather markets with MIN_LIQUIDITY=200
+CLOB_TAKER_SLIPPAGE = Decimal("0.005")
+
 
 class TradeStatus(Enum):
     OPEN = "open"
@@ -254,8 +258,13 @@ class PaperTradingEngine:
             return None
 
         # Apply slippage — use real CLOB fill price when available
+        # Even with CLOB prices, taker orders fill slightly worse than displayed
         if clob_fill_price is not None:
-            fill_price = min(max(clob_fill_price, Decimal("0.001")), Decimal("0.999"))
+            if side == "BUY":
+                fill_price = clob_fill_price + CLOB_TAKER_SLIPPAGE
+            else:
+                fill_price = clob_fill_price - CLOB_TAKER_SLIPPAGE
+            fill_price = min(max(fill_price, Decimal("0.001")), Decimal("0.999"))
         elif side == "BUY":
             fill_price = market_price * (Decimal("1") + self._slippage_pct)
         else:
