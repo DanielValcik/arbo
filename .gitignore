@@ -69,3 +69,18 @@ data/
 
 # Scripts cache
 scripts/__pycache__/
+
+# Autoresearch runtime artifacts (not committed — agent manages these)
+research_a/results_a.tsv
+research_a/run.log
+research_a/experiment_a.pid
+research_a/experiment_a_log.txt
+research_a/*.baseline
+research_b/results_b*.tsv
+research_b/run.log
+research_b/experiment_b*.pid
+research_b/experiment_b*.txt
+research/results.tsv
+research/run.log
+research/experiment.pid
+research/experiment_log.txt
