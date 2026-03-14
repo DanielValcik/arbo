@@ -178,6 +178,13 @@
             <select id="sweepSelect" class="sweep-select" onchange="loadSweep(this.value)">
                 <option value="">Nacitam...</option>
             </select>
+            <div style="display:flex; align-items:center; gap:4px; border-left:1px solid var(--border); padding-left:12px;">
+                <label for="capitalInput" style="font-size:11px;color:var(--text-dim);white-space:nowrap">Kapital:</label>
+                <input type="number" id="capitalInput" value="1000" min="100" step="100"
+                       class="sweep-select" style="width:90px;text-align:right"
+                       onchange="updateCapital()" oninput="updateCapital()">
+                <span style="font-size:11px;color:var(--text-dim)">$</span>
+            </div>
             <span id="sweepMeta" class="header-sub"></span>
         </div>
     </div>
@@ -263,10 +270,9 @@
 
     <!-- Comparison Bar -->
     <div class="compare-bar" id="compareBar">
-        <div class="compare-info"><span id="compareCount">0</span> vybrano pro srovnani</div>
+        <div class="compare-info"><span id="compareCount">0</span> vybrano — grafy ukazuji vybrane experimenty</div>
         <div>
-            <button class="compare-btn" onclick="clearCompare()">Zrusit</button>
-            <button class="compare-btn" onclick="applyCompare()" style="margin-left:8px;">Porovnat</button>
+            <button class="compare-btn" onclick="clearCompare()">Zrusit vyber</button>
         </div>
     </div>
 
@@ -276,9 +282,29 @@ let sweepData = null;
 let allResults = [];
 let topResults = [];
 let selectedIds = new Set();
-let compareMode = false;
 let charts = {};
 const COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#f85149','#39d2c0','#d29922','#e6edf3'];
+
+// Capital scaling
+const BASE_CAPITAL = 1000;
+let capitalMultiplier = 1;
+
+function scalePnl(v) {
+    if (v === undefined || v === null) return v;
+    return v * capitalMultiplier;
+}
+function updateCapital() {
+    const v = parseFloat(document.getElementById('capitalInput').value) || BASE_CAPITAL;
+    capitalMultiplier = v / BASE_CAPITAL;
+    renderOverview();
+    renderTable();
+    renderAllCharts();
+    // Re-render detail if open
+    const panel = document.getElementById('detailPanel');
+    if (!panel.classList.contains('hidden') && panel._lastResult) {
+        showDetail(panel._lastResult);
+    }
+}
 
 // ── Load ──
 async function init() {
@@ -365,14 +391,14 @@ function renderTable() {
             <td>${i + 1}</td>
             <td style="color:var(--blue);font-weight:600">${r.experiment_id}</td>
             <td style="font-weight:700">${fmt(r.score)}</td>
-            <td class="${pnlClass}">$${fmt(r.total_pnl)}</td>
+            <td class="${pnlClass}">$${fmt(scalePnl(r.total_pnl))}</td>
             <td class="${pnlClass}">${fmt(r.roi_pct)}%</td>
             <td>${r.trades}</td>
             <td>${fmt(r.win_rate)}%</td>
             <td>${fmt(r.max_drawdown_pct)}%</td>
             <td>${fmt(r.sharpe)}</td>
             <td>${fmt(r.capital_utilization)}%</td>
-            <td>$${fmt(r.avg_pnl_per_hour)}</td>
+            <td>$${fmt(scalePnl(r.avg_pnl_per_hour))}</td>
             <td>${r.total_exits || 0}</td>
             <td>${r.exit_saves || 0}/${r.exit_regrets || 0}</td>
         `;
@@ -405,6 +431,7 @@ function showDetail(r) {
     const content = document.getElementById('detailContent');
     panel.classList.remove('hidden');
 
+    panel._lastResult = r;  // Store for re-render on capital change
     title.textContent = `${r.experiment_id} — Score ${fmt(r.score)}`;
 
     const params = r.params || {};
@@ -424,13 +451,13 @@ function showDetail(r) {
     let metricsHtml = `
         <div>
             <div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">METRIKY</div>
-            <div>PnL: <b class="${r.total_pnl > 0 ? 'positive' : 'negative'}">$${fmt(r.total_pnl)}</b></div>
+            <div>PnL: <b class="${r.total_pnl > 0 ? 'positive' : 'negative'}">$${fmt(scalePnl(r.total_pnl))}</b></div>
             <div>ROI: <b>${fmt(r.roi_pct)}%</b></div>
             <div>Trades: <b>${r.trades}</b> (WR ${fmt(r.win_rate)}%)</div>
             <div>Sharpe: <b>${fmt(r.sharpe)}</b></div>
             <div>Max DD: <b>${fmt(r.max_drawdown_pct)}%</b></div>
             <div>Utilization: <b>${fmt(r.capital_utilization)}%</b></div>
-            <div>PnL/hour: <b>$${fmt(r.avg_pnl_per_hour)}</b></div>
+            <div>PnL/hour: <b>$${fmt(scalePnl(r.avg_pnl_per_hour))}</b></div>
             <div>Turnover: <b>${fmt(r.turnover_rate)}</b></div>
             <div>Exits: <b>${r.total_exits || 0}</b> (saves ${r.exit_saves || 0}, regrets ${r.exit_regrets || 0})</div>
         </div>
@@ -442,10 +469,10 @@ function showDetail(r) {
         metricsHtml += `
         <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">
             <div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">OOS VALIDACE (po ${r.score_train ? 'train' : '2026-01-31'})</div>
-            <div>OOS PnL: <b class="${oosClass}">$${fmt(r.oos_pnl)}</b></div>
+            <div>OOS PnL: <b class="${oosClass}">$${fmt(scalePnl(r.oos_pnl))}</b></div>
             <div>OOS Trades: <b>${r.oos_trades || 0}</b> (WR ${fmt(r.oos_win_rate || 0)}%)</div>
             <div>OOS ROI: <b>${fmt(r.oos_roi_pct || 0)}%</b></div>
-            ${r.wf_oos_pnl !== undefined ? `<div>Walk-Forward PnL: <b>$${fmt(r.wf_oos_pnl)}</b></div>` : ''}
+            ${r.wf_oos_pnl !== undefined ? `<div>Walk-Forward PnL: <b>$${fmt(scalePnl(r.wf_oos_pnl))}</b></div>` : ''}
             ${r.score_train ? `<div>Score (train only): <b>${fmt(r.score_train)}</b></div>` : ''}
         </div>`;
     }
@@ -456,7 +483,7 @@ function showDetail(r) {
         cityHtml = '<div><div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">PER-CITY</div>';
         cities.forEach(([city, cr]) => {
             const cls = cr.pnl > 0 ? 'positive' : 'negative';
-            cityHtml += `<div>${city}: <span class="${cls}">$${fmt(cr.pnl)}</span> (${cr.trades}t, ${fmt(cr.win_rate)}% WR)</div>`;
+            cityHtml += `<div>${city}: <span class="${cls}">$${fmt(scalePnl(cr.pnl))}</span> (${cr.trades}t, ${fmt(cr.win_rate)}% WR)</div>`;
         });
         cityHtml += '</div>';
     }
@@ -468,23 +495,19 @@ function showDetail(r) {
     `;
 }
 
-// ── Compare ──
+// ── Compare / Selection ──
 function toggleCompare(id, checked) {
     if (checked) selectedIds.add(id); else selectedIds.delete(id);
     const bar = document.getElementById('compareBar');
     document.getElementById('compareCount').textContent = selectedIds.size;
-    bar.classList.toggle('visible', selectedIds.size >= 2);
-    renderTable();
-}
-function clearCompare() {
-    selectedIds.clear();
-    compareMode = false;
-    document.getElementById('compareBar').classList.remove('visible');
+    bar.classList.toggle('visible', selectedIds.size >= 1);
     renderTable();
     renderAllCharts();
 }
-function applyCompare() {
-    compareMode = true;
+function clearCompare() {
+    selectedIds.clear();
+    document.getElementById('compareBar').classList.remove('visible');
+    renderTable();
     renderAllCharts();
 }
 
@@ -510,7 +533,7 @@ document.getElementById('chartTabs').addEventListener('click', e => {
 });
 
 function getChartData() {
-    if (compareMode && selectedIds.size >= 2) {
+    if (selectedIds.size > 0) {
         return topResults.filter(r => selectedIds.has(r.experiment_id));
     }
     return topResults.slice(0, 5);
@@ -523,7 +546,7 @@ function renderEquityChart() {
 
     const datasets = data.map((r, i) => ({
         label: r.experiment_id,
-        data: r.equity_curve.map(p => ({x: new Date(p[0] * 1000), y: p[1]})),
+        data: r.equity_curve.map(p => ({x: new Date(p[0] * 1000), y: scalePnl(p[1])})),
         borderColor: COLORS[i % COLORS.length],
         borderWidth: 1.5,
         pointRadius: 0,
@@ -598,7 +621,7 @@ function renderCityChart() {
 
     const datasets = data.map((r, i) => ({
         label: r.experiment_id,
-        data: cities.map(c => (r.city_results[c] || {}).pnl || 0),
+        data: cities.map(c => scalePnl((r.city_results[c] || {}).pnl || 0)),
         backgroundColor: COLORS[i % COLORS.length] + '99',
         borderColor: COLORS[i % COLORS.length],
         borderWidth: 1,
@@ -698,7 +721,7 @@ function renderCapitalChart() {
 function renderCapitalSingle(r) {
     if (!r.equity_curve) return;
     const labels = r.equity_curve.map(p => new Date(p[0] * 1000));
-    const values = r.equity_curve.map(p => p[1]);
+    const values = r.equity_curve.map(p => scalePnl(p[1]));
 
     charts.capital = new Chart(document.getElementById('chartCapital'), {
         type: 'line',
