@@ -165,6 +165,7 @@ class AutoResearch:
         self.keeps = 0
         self.discards = 0
         self.sim = None
+        self.sim_oos = None
         self.stop = False
         self.stagnation = 0
         self._tried: set[int] = set()
@@ -181,7 +182,9 @@ class AutoResearch:
         sim_all = preload_data(db, events, forecasts)
         self.sim_all = sim_all
         self.sim = sim_all.filter_events(max_date=TRAIN_END)
+        self.sim_oos = sim_all.filter_events(min_date=TRAIN_END)
         log(f"  Train events: {len(self.sim.events)}")
+        log(f"  OOS events: {len(self.sim_oos.events)}")
         log(f"  All events: {len(self.sim_all.events)}")
         log(f"  Capital: ${INITIAL_CAPITAL}")
 
@@ -209,10 +212,10 @@ class AutoResearch:
             self.sim, params, entry_hours=entry_hours,
             experiment_id=f"AR-{self.n:04d}",
         )
-        experiment_score(result)
+        train_score = experiment_score(result)
 
         r = {
-            "id": f"AR-{self.n:04d}", "score": result.score,
+            "id": f"AR-{self.n:04d}", "score": train_score,
             "trades": result.trades, "win_rate": result.win_rate,
             "pnl": result.total_pnl, "roi_pct": result.roi_pct,
             "dd": result.max_drawdown_pct, "sharpe": result.sharpe,
@@ -224,16 +227,33 @@ class AutoResearch:
             "city_results": result.city_results,
         }
 
-        improved = r["score"] > self.best_score
+        # OOS-aware scoring: run OOS validation on promising candidates
+        # (train score within 3 pts of best, or beats best)
+        oos_score = train_score
+        if self.sim_oos is not None and train_score >= self.best_score - 3:
+            oos_result = simulate_portfolio(
+                self.sim_oos, params, entry_hours=entry_hours,
+                experiment_id=f"{r['id']}_oos",
+            )
+            r["oos_pnl"] = round(oos_result.total_pnl, 2)
+            r["oos_trades"] = oos_result.trades
+
+            # Re-score with OOS data included
+            result.oos_pnl = oos_result.total_pnl
+            oos_score = experiment_score(result)
+            r["score"] = oos_score  # Use OOS-inclusive score as primary
+
+        improved = oos_score > self.best_score
         if improved:
-            delta = r["score"] - self.best_score
+            delta = oos_score - self.best_score
             r["status"] = "keep"
-            self.best_score = r["score"]
+            self.best_score = oos_score
             self.best_params = clone(params)
             self.best_result = r
             self.keeps += 1
             self.stagnation = 0
-            marker = f"★ KEEP (+{delta:.1f})"
+            oos_tag = f" oos=${r.get('oos_pnl', '?')}" if "oos_pnl" in r else ""
+            marker = f"★ KEEP (+{delta:.1f}{oos_tag})"
         else:
             r["status"] = "discard"
             self.discards += 1
