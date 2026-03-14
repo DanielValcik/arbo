@@ -705,6 +705,11 @@ def simulate_portfolio(
         available = cash - total_deployed  # Free cash for new trades
         total_capital = cash  # For MAX_POSITION_PCT calc
 
+        # Per-city deployed capital (for exposure limits)
+        city_deployed: dict[str, float] = {}
+        for p in deployed.values():
+            city_deployed[p.city] = city_deployed.get(p.city, 0) + p.size
+
         for ev in entry_index.get(hour_ts, []):
             if available < MIN_TRADE_SIZE:
                 break
@@ -715,6 +720,16 @@ def simulate_portfolio(
 
             # Re-entry cooldown check
             if ev.city in cooldowns and hour_ts < cooldowns[ev.city]:
+                continue
+
+            # Per-city exposure limit
+            city_ov_entry = params.get("city_overrides", {}).get(ev.city, {})
+            city_max_exp = city_ov_entry.get(
+                "max_exposure",
+                params.get("city_max_exposure", 1.0),
+            )
+            city_budget = total_capital * city_max_exp - city_deployed.get(ev.city, 0)
+            if city_budget < MIN_TRADE_SIZE:
                 continue
 
             forecast_temp = sim_data.forecasts.get(ev.city, {}).get(
@@ -753,8 +768,9 @@ def simulate_portfolio(
                 ):
                     continue
 
+                effective_available = min(available, city_budget)
                 size = compute_size(
-                    edge, price, available, total_capital, params,
+                    edge, price, effective_available, total_capital, params,
                     city=ev.city,
                 )
                 if size < MIN_TRADE_SIZE or available < size:
@@ -781,6 +797,8 @@ def simulate_portfolio(
                 cash -= size
                 available -= size
                 total_deployed += size
+                city_deployed[ev.city] = city_deployed.get(ev.city, 0) + size
+                city_budget -= size
 
         # ── 4. LOG STATE ──
         total_deployed = sum(p.size for p in deployed.values())

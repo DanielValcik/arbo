@@ -62,6 +62,7 @@ GLOBAL_RANGES = {
     "prob_exit_floor":      (0.0, 0.50),
     "reentry_cooldown_h":   (1, 12),
     "stop_loss_pct":        (0.10, 1.0),
+    "city_max_exposure":    (0.03, 1.0),
 }
 
 # Per-city override ranges
@@ -73,6 +74,7 @@ CITY_OVERRIDE_RANGES = {
     "prob_sharpening": (0.50, 1.40),
     "shrinkage":       (0.0, 0.20),
     "kelly_raw_cap":   (0.05, 0.60),
+    "max_exposure":    (0.03, 1.0),
 }
 
 INT_PARAMS = {"min_volume", "profit_take_min_hours", "reentry_cooldown_h"}
@@ -88,6 +90,7 @@ GLOBAL_GRID = {
     "prob_exit_floor": [0.0, 0.10, 0.20, 0.25, 0.30, 0.40],
     "profit_take_threshold": [0.50, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0],
     "min_price":       [0.03, 0.05, 0.08, 0.10, 0.15, 0.20],
+    "city_max_exposure": [0.05, 0.10, 0.15, 0.20, 0.30, 0.50, 1.0],
 }
 
 CITY_GRID = {
@@ -98,6 +101,7 @@ CITY_GRID = {
     "prob_sharpening": [0.70, 0.80, 0.85, 0.90, 0.95, 1.0, 1.10, 1.20],
     "shrinkage":       [0.0, 0.01, 0.02, 0.03, 0.05, 0.10],
     "kelly_raw_cap":   [0.10, 0.15, 0.20, 0.30, 0.40, 0.50],
+    "max_exposure":    [0.05, 0.10, 0.15, 0.20, 0.30, 0.50, 1.0],
 }
 
 # ── Baseline ──
@@ -488,12 +492,91 @@ class AutoResearch:
                                 p, f"{city}: me={me} mp={mp} kc={kc} ps={ps}")
 
     # ══════════════════════════════════════════════════════════════════════
-    # PHASE 4: Autonomous loop — random strategies, never stops
+    # PHASE 4: Capital allocation — per-city exposure limits
+    # ══════════════════════════════════════════════════════════════════════
+
+    def phase_capital_allocation(self):
+        log("\n" + "=" * 70)
+        log("PHASE 4: Capital Allocation (per-city max_exposure)")
+        log("=" * 70)
+
+        # Rank cities by solo PnL
+        ranked = sorted(self.city_solo.items(),
+                        key=lambda x: -x[1].get("pnl", 0))
+        active = [c for c, r in ranked if r.get("trades", 0) >= 3]
+
+        if not active:
+            log("  No active cities, skipping")
+            return
+
+        # 4a. Uniform global exposure limit sweep
+        log("\n── Global city_max_exposure sweep ──")
+        for exp in [0.05, 0.08, 0.10, 0.15, 0.20, 0.30, 0.50, 1.0]:
+            if not self.ok():
+                return
+            p = clone(self.best_params)
+            p["city_max_exposure"] = exp
+            self.run_one(p, f"global max_exp={exp}")
+
+        # 4b. Tiered allocation: top cities get more, bottom get less
+        tiers = [
+            ("top-heavy", {0: 0.40, 1: 0.30, 2: 0.20}),
+            ("balanced", {0: 0.25, 1: 0.20, 2: 0.15}),
+            ("concentrated", {0: 0.50, 1: 0.25, 2: 0.10}),
+            ("spread", {0: 0.15, 1: 0.15, 2: 0.15}),
+        ]
+        for name, tier_map in tiers:
+            if not self.ok():
+                return
+            p = clone(self.best_params)
+            for i, (city, _) in enumerate(ranked):
+                if city in p.get("excluded_cities", set()):
+                    continue
+                exp = tier_map.get(i, 0.10)  # Default 10% for unlisted
+                p.setdefault("city_overrides", {})[city] = {
+                    **p.get("city_overrides", {}).get(city, {}),
+                    "max_exposure": exp,
+                }
+            self.run_one(p, f"tier: {name}")
+
+        # 4c. Per-city exposure sweep based on solo performance
+        log("\n── Per-city exposure optimization ──")
+        for city in active[:10]:  # Top 10 cities
+            if not self.ok():
+                return
+            for exp in [0.05, 0.10, 0.15, 0.20, 0.30, 0.50]:
+                if not self.ok():
+                    return
+                p = clone(self.best_params)
+                existing = p.get("city_overrides", {}).get(city, {})
+                p.setdefault("city_overrides", {})[city] = {
+                    **existing, "max_exposure": exp,
+                }
+                self.run_one(p, f"{city}: max_exp={exp}")
+
+        # 4d. Exposure × kelly joint optimization for top cities
+        log("\n── Exposure × Kelly per city ──")
+        for city in active[:6]:
+            if not self.ok():
+                return
+            for exp in [0.10, 0.20, 0.30, 0.50]:
+                for kc in [0.10, 0.20, 0.30, 0.40]:
+                    if not self.ok():
+                        return
+                    p = clone(self.best_params)
+                    existing = p.get("city_overrides", {}).get(city, {})
+                    p.setdefault("city_overrides", {})[city] = {
+                        **existing, "max_exposure": exp, "kelly_raw_cap": kc,
+                    }
+                    self.run_one(p, f"{city}: exp={exp} kc={kc}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PHASE 5: Autonomous loop — random strategies, never stops
     # ══════════════════════════════════════════════════════════════════════
 
     def phase_autonomous_loop(self):
         log("\n" + "=" * 70)
-        log("PHASE 4: Autonomous Loop (random strategies)")
+        log("PHASE 5: Autonomous Loop (random strategies)")
         log("=" * 70)
 
         strategies = [
@@ -663,7 +746,7 @@ class AutoResearch:
         log(f"Data: 571K price points, 20 cities, ${INITIAL_CAPITAL} capital")
         log(f"Goals: Profitability + Capital Turnover (EQUAL weight)")
         log(f"Per-city overrides: min_edge, max_price, min_price, min_volume,")
-        log(f"                    prob_sharpening, shrinkage, kelly_raw_cap")
+        log(f"                    prob_sharpening, shrinkage, kelly_raw_cap, max_exposure")
         log(f"Max experiments: {self.max_experiments or 'unlimited (Ctrl+C)'}")
         log("=" * 70)
 
@@ -689,7 +772,11 @@ class AutoResearch:
         self.phase_deep_city_tuning()
         log(f"\n  After Phase 3: best={self.best_score:.1f} ({self.n} experiments)")
 
-        # Phase 4: Autonomous loop
+        # Phase 4: Capital allocation per city
+        self.phase_capital_allocation()
+        log(f"\n  After Phase 4: best={self.best_score:.1f} ({self.n} experiments)")
+
+        # Phase 5: Autonomous loop
         self.phase_autonomous_loop()
 
         elapsed = time.time() - t_start
