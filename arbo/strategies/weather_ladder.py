@@ -18,7 +18,7 @@ logger = get_logger("weather_ladder")
 # ── Strategy C sizing ──
 # Quarter-Kelly per architecture (risk_manager.py). DO NOT CHANGE WITHOUT CEO APPROVAL.
 KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly sizing
-_KELLY_RAW_CAP = 0.40  # Cap raw kelly to reduce variance from high-edge trades
+_KELLY_RAW_CAP = 0.15  # AR-0134: conservative cap to reduce variance
 
 # Maximum concurrent ladder positions per city per day
 MAX_LADDER_POSITIONS = 3
