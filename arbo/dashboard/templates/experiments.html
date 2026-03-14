@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARBO — Experiments</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+            --orange: #f0883e;
+            --cyan: #39d2c0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        a { color: var(--blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 { font-size: 18px; letter-spacing: 2px; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header-sub { font-size: 11px; color: var(--text-dim); }
+
+        /* Layout */
+        .container { padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+
+        /* Cards */
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px;
+        }
+        .card-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
+        .card-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+        .card-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+        .positive { color: var(--green); }
+        .negative { color: var(--red); }
+
+        /* Table */
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 16px;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left; padding: 8px 10px;
+            font-size: 10px; text-transform: uppercase;
+            color: var(--text-dim); font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer; user-select: none;
+            white-space: nowrap;
+        }
+        th:hover { color: var(--blue); }
+        th.sorted-asc::after { content: ' ▲'; }
+        th.sorted-desc::after { content: ' ▼'; }
+        td {
+            padding: 6px 10px; border-bottom: 1px solid var(--border);
+            font-size: 12px; white-space: nowrap;
+        }
+        tr:hover { background: rgba(88, 166, 255, 0.05); }
+        tr.selected { background: rgba(88, 166, 255, 0.12); }
+        .compare-cb { width: 14px; height: 14px; cursor: pointer; accent-color: var(--blue); }
+
+        /* Tabs */
+        .tabs {
+            display: flex; gap: 2px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px 6px 0 0;
+            padding: 4px 4px 0;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 8px 16px; cursor: pointer;
+            font-size: 11px; font-weight: 600;
+            color: var(--text-dim);
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--blue); background: var(--bg); border-bottom: 2px solid var(--blue); }
+        .chart-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            padding: 16px;
+            min-height: 350px;
+            margin-bottom: 16px;
+        }
+        .chart-panel canvas { max-height: 400px; }
+        .hidden { display: none; }
+
+        /* Detail panel */
+        .detail-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .detail-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--blue); }
+        .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+        .param-list { font-size: 11px; }
+        .param-list dt { color: var(--text-dim); display: inline; }
+        .param-list dd { display: inline; margin-left: 4px; font-weight: 600; }
+        .param-list div { margin-bottom: 3px; }
+
+        /* Comparison bar */
+        .compare-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--surface);
+            border-top: 2px solid var(--blue);
+            padding: 10px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.2s;
+        }
+        .compare-bar.visible { transform: translateY(0); }
+        .compare-info { font-size: 12px; }
+        .compare-btn {
+            background: var(--blue); color: #000;
+            border: none; border-radius: 4px;
+            padding: 6px 16px; font-weight: 700;
+            font-family: inherit; cursor: pointer;
+            font-size: 12px;
+        }
+        .compare-btn:hover { opacity: 0.9; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 40px; color: var(--text-dim); }
+
+        /* Sweep selector */
+        .sweep-select {
+            background: var(--bg); color: var(--text);
+            border: 1px solid var(--border); border-radius: 4px;
+            padding: 4px 8px; font-family: inherit; font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>EXPERIMENTS</h1>
+            <a href="/" class="header-sub">&#8592; Dashboard</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <select id="sweepSelect" class="sweep-select" onchange="loadSweep(this.value)">
+                <option value="">Nacitam...</option>
+            </select>
+            <span id="sweepMeta" class="header-sub"></span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Overview Cards -->
+        <div class="cards" id="overviewCards">
+            <div class="card"><div class="card-label">Experimenty</div><div class="card-value" id="cardTrials">—</div></div>
+            <div class="card"><div class="card-label">Best Score</div><div class="card-value" id="cardBestScore">—</div></div>
+            <div class="card"><div class="card-label">Best ROI</div><div class="card-value" id="cardBestRoi">—</div><div class="card-sub" id="cardBestRoiId"></div></div>
+            <div class="card"><div class="card-label">Best Sharpe</div><div class="card-value" id="cardBestSharpe">—</div></div>
+            <div class="card"><div class="card-label">Best Utilization</div><div class="card-value" id="cardBestUtil">—</div></div>
+            <div class="card"><div class="card-label">Training Period</div><div class="card-value" id="cardPeriod">—</div></div>
+        </div>
+
+        <!-- Top Experiments Table -->
+        <div class="table-wrap">
+            <table id="topTable">
+                <thead>
+                    <tr>
+                        <th style="width:30px"></th>
+                        <th data-sort="rank">#</th>
+                        <th data-sort="experiment_id">ID</th>
+                        <th data-sort="score">Score</th>
+                        <th data-sort="total_pnl">PnL</th>
+                        <th data-sort="roi_pct">ROI%</th>
+                        <th data-sort="trades">Trades</th>
+                        <th data-sort="win_rate">WR%</th>
+                        <th data-sort="max_drawdown_pct">DD%</th>
+                        <th data-sort="sharpe">Sharpe</th>
+                        <th data-sort="capital_utilization">Util%</th>
+                        <th data-sort="avg_pnl_per_hour">$/h</th>
+                        <th data-sort="total_exits">Exits</th>
+                        <th data-sort="exit_saves">Saves</th>
+                    </tr>
+                </thead>
+                <tbody id="topTableBody">
+                    <tr><td colspan="14" class="loading">Nacitam data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Charts -->
+        <div class="tabs" id="chartTabs">
+            <div class="tab active" data-tab="equity">Equity Curves</div>
+            <div class="tab" data-tab="scores">Score Distribution</div>
+            <div class="tab" data-tab="cities">City Heatmap</div>
+            <div class="tab" data-tab="params">Parameter Sensitivity</div>
+            <div class="tab" data-tab="timing">Entry Timing</div>
+            <div class="tab" data-tab="capital">Capital Deployment</div>
+            <div class="tab" data-tab="exits">Exit Analysis</div>
+        </div>
+        <div class="chart-panel">
+            <div id="panel-equity"><canvas id="chartEquity"></canvas></div>
+            <div id="panel-scores" class="hidden"><canvas id="chartScores"></canvas></div>
+            <div id="panel-cities" class="hidden"><canvas id="chartCities"></canvas></div>
+            <div id="panel-params" class="hidden">
+                <div style="margin-bottom:8px;">
+                    <select id="paramSelect" class="sweep-select" onchange="renderParamChart()">
+                        <option value="min_edge">min_edge</option>
+                        <option value="max_price">max_price</option>
+                        <option value="min_price">min_price</option>
+                        <option value="prob_sharpening">prob_sharpening</option>
+                        <option value="shrinkage">shrinkage</option>
+                        <option value="kelly_raw_cap">kelly_raw_cap</option>
+                        <option value="min_hold_edge">min_hold_edge</option>
+                        <option value="min_volume">min_volume</option>
+                    </select>
+                </div>
+                <canvas id="chartParams"></canvas>
+            </div>
+            <div id="panel-timing" class="hidden"><canvas id="chartTiming"></canvas></div>
+            <div id="panel-capital" class="hidden"><canvas id="chartCapital"></canvas></div>
+            <div id="panel-exits" class="hidden"><canvas id="chartExits"></canvas></div>
+        </div>
+
+        <!-- Experiment Detail Panel -->
+        <div class="detail-panel hidden" id="detailPanel">
+            <div class="detail-title" id="detailTitle">Experiment Detail</div>
+            <div class="detail-grid" id="detailContent"></div>
+        </div>
+    </div>
+
+    <!-- Comparison Bar -->
+    <div class="compare-bar" id="compareBar">
+        <div class="compare-info"><span id="compareCount">0</span> vybrano pro srovnani</div>
+        <div>
+            <button class="compare-btn" onclick="clearCompare()">Zrusit</button>
+            <button class="compare-btn" onclick="applyCompare()" style="margin-left:8px;">Porovnat</button>
+        </div>
+    </div>
+
+<script>
+// ── State ──
+let sweepData = null;
+let allResults = [];
+let topResults = [];
+let selectedIds = new Set();
+let compareMode = false;
+let charts = {};
+const COLORS = ['#58a6ff','#3fb950','#f0883e','#bc8cff','#f85149','#39d2c0','#d29922','#e6edf3'];
+
+// ── Load ──
+async function init() {
+    // Load sweep list
+    const sweepsResp = await fetch('/api/experiments/sweeps');
+    const sweeps = await sweepsResp.json();
+    const sel = document.getElementById('sweepSelect');
+    sel.innerHTML = '';
+    if (sweeps.sweeps && sweeps.sweeps.length > 0) {
+        sweeps.sweeps.forEach((s, i) => {
+            const opt = document.createElement('option');
+            opt.value = s.sweep_id;
+            opt.textContent = `${s.sweep_id} (${s.total_trials} trials${s.quick_mode ? ', quick' : ''})`;
+            sel.appendChild(opt);
+        });
+        loadSweep(sweeps.sweeps[0].sweep_id);
+    } else {
+        sel.innerHTML = '<option>Zadne sweep vysledky</option>';
+    }
+}
+
+async function loadSweep(sweepId) {
+    const resp = await fetch(`/api/experiments/sweep/${sweepId}`);
+    sweepData = await resp.json();
+    if (sweepData.error) {
+        document.getElementById('topTableBody').innerHTML =
+            `<tr><td colspan="14" class="loading">${sweepData.error}</td></tr>`;
+        return;
+    }
+    topResults = sweepData.top_results || [];
+    allResults = sweepData.all_results || [];
+
+    renderOverview();
+    renderTable();
+    renderAllCharts();
+
+    const meta = sweepData.meta || {};
+    document.getElementById('sweepMeta').textContent =
+        `${meta.total_trials || '?'} trials | ${meta.phases || ''}`;
+}
+
+// ── Overview Cards ──
+function renderOverview() {
+    const meta = sweepData.meta || {};
+    const all = allResults;
+    document.getElementById('cardTrials').textContent = meta.total_trials || all.length;
+    if (all.length === 0) return;
+
+    // Filter to viable experiments (score >= 50) for card stats to avoid outliers
+    const viable = all.filter(r => r.score >= 50);
+    const pool = viable.length > 0 ? viable : all;
+    const best = pool.reduce((a, b) => a.score > b.score ? a : b);
+    const bestRoi = pool.reduce((a, b) => (a.roi_pct || 0) > (b.roi_pct || 0) ? a : b);
+    const bestSharpe = pool.reduce((a, b) => (a.sharpe || 0) > (b.sharpe || 0) ? a : b);
+    const bestUtil = pool.reduce((a, b) => (a.capital_utilization || 0) > (b.capital_utilization || 0) ? a : b);
+
+    document.getElementById('cardBestScore').textContent = fmt(best.score);
+    document.getElementById('cardBestRoi').textContent = fmt(bestRoi.roi_pct) + '%';
+    document.getElementById('cardBestRoi').className = 'card-value ' + (bestRoi.roi_pct > 0 ? 'positive' : 'negative');
+    document.getElementById('cardBestRoiId').textContent = bestRoi.experiment_id;
+    document.getElementById('cardBestSharpe').textContent = fmt(bestSharpe.sharpe);
+    document.getElementById('cardBestUtil').textContent = fmt(bestUtil.capital_utilization) + '%';
+    document.getElementById('cardPeriod').textContent =
+        `≤ ${meta.train_end || '?'}`;
+    document.getElementById('cardPeriod').style.fontSize = '14px';
+}
+
+// ── Table ──
+function renderTable() {
+    const tbody = document.getElementById('topTableBody');
+    const data = topResults.length > 0 ? topResults : allResults.slice(0, 20);
+    tbody.innerHTML = '';
+
+    data.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.className = selectedIds.has(r.experiment_id) ? 'selected' : '';
+        tr.onclick = (e) => { if (e.target.type !== 'checkbox') showDetail(r); };
+
+        const pnlClass = (r.total_pnl || 0) > 0 ? 'positive' : 'negative';
+        tr.innerHTML = `
+            <td><input type="checkbox" class="compare-cb"
+                 ${selectedIds.has(r.experiment_id) ? 'checked' : ''}
+                 onchange="toggleCompare('${r.experiment_id}', this.checked)"></td>
+            <td>${i + 1}</td>
+            <td style="color:var(--blue);font-weight:600">${r.experiment_id}</td>
+            <td style="font-weight:700">${fmt(r.score)}</td>
+            <td class="${pnlClass}">$${fmt(r.total_pnl)}</td>
+            <td class="${pnlClass}">${fmt(r.roi_pct)}%</td>
+            <td>${r.trades}</td>
+            <td>${fmt(r.win_rate)}%</td>
+            <td>${fmt(r.max_drawdown_pct)}%</td>
+            <td>${fmt(r.sharpe)}</td>
+            <td>${fmt(r.capital_utilization)}%</td>
+            <td>$${fmt(r.avg_pnl_per_hour)}</td>
+            <td>${r.total_exits || 0}</td>
+            <td>${r.exit_saves || 0}/${r.exit_regrets || 0}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+let sortCol = 'score', sortDir = 'desc';
+document.querySelectorAll('#topTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.sort;
+        if (sortCol === col) sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+        else { sortCol = col; sortDir = 'desc'; }
+        document.querySelectorAll('#topTable th').forEach(t => t.className = '');
+        th.className = 'sorted-' + sortDir;
+
+        const data = topResults.length > 0 ? topResults : allResults.slice(0, 50);
+        data.sort((a, b) => {
+            const va = a[col] || 0, vb = b[col] || 0;
+            return sortDir === 'desc' ? vb - va : va - vb;
+        });
+        renderTable();
+    });
+});
+
+// ── Detail Panel ──
+function showDetail(r) {
+    const panel = document.getElementById('detailPanel');
+    const title = document.getElementById('detailTitle');
+    const content = document.getElementById('detailContent');
+    panel.classList.remove('hidden');
+
+    title.textContent = `${r.experiment_id} — Score ${fmt(r.score)}`;
+
+    const params = r.params || {};
+    let paramsHtml = '<div class="param-list">';
+    const paramKeys = ['min_edge','max_edge','max_price','min_price','min_prob','min_volume',
+        'kelly_raw_cap','prob_sharpening','shrinkage','exit_enabled','min_hold_edge',
+        'profit_take_enabled','profit_take_threshold','profit_take_min_hours',
+        'reentry_enabled','reentry_cooldown_h','excluded_cities'];
+    paramKeys.forEach(k => {
+        let v = params[k];
+        if (v === undefined) return;
+        if (Array.isArray(v)) v = v.join(', ') || 'none';
+        paramsHtml += `<div><dt>${k}:</dt><dd>${v}</dd></div>`;
+    });
+    paramsHtml += '</div>';
+
+    let metricsHtml = `
+        <div>
+            <div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">METRIKY</div>
+            <div>PnL: <b class="${r.total_pnl > 0 ? 'positive' : 'negative'}">$${fmt(r.total_pnl)}</b></div>
+            <div>ROI: <b>${fmt(r.roi_pct)}%</b></div>
+            <div>Trades: <b>${r.trades}</b> (WR ${fmt(r.win_rate)}%)</div>
+            <div>Sharpe: <b>${fmt(r.sharpe)}</b></div>
+            <div>Max DD: <b>${fmt(r.max_drawdown_pct)}%</b></div>
+            <div>Utilization: <b>${fmt(r.capital_utilization)}%</b></div>
+            <div>PnL/hour: <b>$${fmt(r.avg_pnl_per_hour)}</b></div>
+            <div>Turnover: <b>${fmt(r.turnover_rate)}</b></div>
+            <div>Exits: <b>${r.total_exits || 0}</b> (saves ${r.exit_saves || 0}, regrets ${r.exit_regrets || 0})</div>
+        </div>
+    `;
+
+    // OOS validation section
+    if (r.oos_pnl !== undefined && r.oos_pnl !== null) {
+        const oosClass = r.oos_pnl > 0 ? 'positive' : 'negative';
+        metricsHtml += `
+        <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">
+            <div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">OOS VALIDACE (po ${r.score_train ? 'train' : '2026-01-31'})</div>
+            <div>OOS PnL: <b class="${oosClass}">$${fmt(r.oos_pnl)}</b></div>
+            <div>OOS Trades: <b>${r.oos_trades || 0}</b> (WR ${fmt(r.oos_win_rate || 0)}%)</div>
+            <div>OOS ROI: <b>${fmt(r.oos_roi_pct || 0)}%</b></div>
+            ${r.wf_oos_pnl !== undefined ? `<div>Walk-Forward PnL: <b>$${fmt(r.wf_oos_pnl)}</b></div>` : ''}
+            ${r.score_train ? `<div>Score (train only): <b>${fmt(r.score_train)}</b></div>` : ''}
+        </div>`;
+    }
+
+    let cityHtml = '';
+    if (r.city_results) {
+        const cities = Object.entries(r.city_results).sort((a,b) => (b[1].pnl||0) - (a[1].pnl||0));
+        cityHtml = '<div><div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">PER-CITY</div>';
+        cities.forEach(([city, cr]) => {
+            const cls = cr.pnl > 0 ? 'positive' : 'negative';
+            cityHtml += `<div>${city}: <span class="${cls}">$${fmt(cr.pnl)}</span> (${cr.trades}t, ${fmt(cr.win_rate)}% WR)</div>`;
+        });
+        cityHtml += '</div>';
+    }
+
+    content.innerHTML = `
+        <div><div style="font-weight:600;margin-bottom:6px;color:var(--text-dim)">PARAMETRY</div>${paramsHtml}</div>
+        ${metricsHtml}
+        ${cityHtml}
+    `;
+}
+
+// ── Compare ──
+function toggleCompare(id, checked) {
+    if (checked) selectedIds.add(id); else selectedIds.delete(id);
+    const bar = document.getElementById('compareBar');
+    document.getElementById('compareCount').textContent = selectedIds.size;
+    bar.classList.toggle('visible', selectedIds.size >= 2);
+    renderTable();
+}
+function clearCompare() {
+    selectedIds.clear();
+    compareMode = false;
+    document.getElementById('compareBar').classList.remove('visible');
+    renderTable();
+    renderAllCharts();
+}
+function applyCompare() {
+    compareMode = true;
+    renderAllCharts();
+}
+
+// ── Charts ──
+function renderAllCharts() {
+    renderEquityChart();
+    renderScoreChart();
+    renderCityChart();
+    renderParamChart();
+    renderTimingChart();
+    renderCapitalChart();
+    renderExitChart();
+}
+
+// Tab switching
+document.getElementById('chartTabs').addEventListener('click', e => {
+    if (!e.target.classList.contains('tab')) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    const tabId = e.target.dataset.tab;
+    document.querySelectorAll('.chart-panel > div').forEach(p => p.classList.add('hidden'));
+    document.getElementById('panel-' + tabId).classList.remove('hidden');
+});
+
+function getChartData() {
+    if (compareMode && selectedIds.size >= 2) {
+        return topResults.filter(r => selectedIds.has(r.experiment_id));
+    }
+    return topResults.slice(0, 5);
+}
+
+function renderEquityChart() {
+    if (charts.equity) charts.equity.destroy();
+    const data = getChartData().filter(r => r.equity_curve && r.equity_curve.length > 0);
+    if (data.length === 0) { charts.equity = null; return; }
+
+    const datasets = data.map((r, i) => ({
+        label: r.experiment_id,
+        data: r.equity_curve.map(p => ({x: new Date(p[0] * 1000), y: p[1]})),
+        borderColor: COLORS[i % COLORS.length],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.1,
+        fill: false,
+    }));
+
+    charts.equity = new Chart(document.getElementById('chartEquity'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e', font: {family: 'monospace', size: 11} } } },
+            scales: {
+                x: { type: 'time', time: { unit: 'month' },
+                     ticks: { color: '#8b949e', font: {size: 10} },
+                     grid: { color: '#21262d' } },
+                y: { title: { display: true, text: 'Kapital ($)', color: '#8b949e' },
+                     ticks: { color: '#8b949e', font: {size: 10} },
+                     grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderScoreChart() {
+    if (charts.scores) charts.scores.destroy();
+    const scores = allResults.map(r => r.score).filter(s => s > 0);
+    if (scores.length === 0) { charts.scores = null; return; }
+
+    // Build histogram bins
+    const maxScore = Math.max(...scores);
+    const binSize = Math.max(1, Math.ceil(maxScore / 30));
+    const bins = {};
+    scores.forEach(s => {
+        const bin = Math.floor(s / binSize) * binSize;
+        bins[bin] = (bins[bin] || 0) + 1;
+    });
+    const labels = Object.keys(bins).map(Number).sort((a,b) => a-b);
+    const counts = labels.map(l => bins[l]);
+
+    charts.scores = new Chart(document.getElementById('chartScores'), {
+        type: 'bar',
+        data: {
+            labels: labels.map(l => l.toFixed(0)),
+            datasets: [{ label: 'Experimenty', data: counts,
+                         backgroundColor: 'rgba(88,166,255,0.5)',
+                         borderColor: '#58a6ff', borderWidth: 1 }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { title: { display: true, text: 'Composite Score', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { title: { display: true, text: 'Pocet', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderCityChart() {
+    if (charts.cities) charts.cities.destroy();
+    const data = getChartData().filter(r => r.city_results);
+    if (data.length === 0) { charts.cities = null; return; }
+
+    // Collect all cities
+    const citySet = new Set();
+    data.forEach(r => Object.keys(r.city_results).forEach(c => citySet.add(c)));
+    const cities = [...citySet].sort();
+
+    const datasets = data.map((r, i) => ({
+        label: r.experiment_id,
+        data: cities.map(c => (r.city_results[c] || {}).pnl || 0),
+        backgroundColor: COLORS[i % COLORS.length] + '99',
+        borderColor: COLORS[i % COLORS.length],
+        borderWidth: 1,
+    }));
+
+    charts.cities = new Chart(document.getElementById('chartCities'), {
+        type: 'bar',
+        data: { labels: cities, datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e', font: {family: 'monospace', size: 11} } } },
+            scales: {
+                x: { ticks: { color: '#8b949e', font: {size: 10} }, grid: { color: '#21262d' } },
+                y: { title: { display: true, text: 'PnL ($)', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderParamChart() {
+    if (charts.params) charts.params.destroy();
+    const paramKey = document.getElementById('paramSelect').value;
+    const points = allResults
+        .filter(r => r.params && r.params[paramKey] !== undefined && r.score > 0)
+        .map(r => ({ x: r.params[paramKey], y: r.score }));
+    if (points.length === 0) { charts.params = null; return; }
+
+    charts.params = new Chart(document.getElementById('chartParams'), {
+        type: 'scatter',
+        data: {
+            datasets: [{ label: paramKey, data: points,
+                         backgroundColor: 'rgba(88,166,255,0.4)',
+                         borderColor: '#58a6ff', pointRadius: 3 }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { title: { display: true, text: paramKey, color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { title: { display: true, text: 'Score', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderTimingChart() {
+    if (charts.timing) charts.timing.destroy();
+    const mt = sweepData.multi_timing || [];
+    if (mt.length === 0) { charts.timing = null; return; }
+
+    const top5 = mt.slice(0, 5);
+    const timings = ['6h', '12h', '24h', '36h', '48h'];
+
+    const datasets = top5.map((r, i) => ({
+        label: r.experiment_id,
+        data: timings.map(t => (r.per_timing && r.per_timing[t]) ? r.per_timing[t].score : 0),
+        backgroundColor: COLORS[i % COLORS.length] + '99',
+        borderColor: COLORS[i % COLORS.length],
+        borderWidth: 1,
+    }));
+
+    charts.timing = new Chart(document.getElementById('chartTiming'), {
+        type: 'bar',
+        data: { labels: timings, datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e', font: {family: 'monospace', size: 11} } } },
+            scales: {
+                x: { title: { display: true, text: 'Entry Timing', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { title: { display: true, text: 'Score', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderCapitalChart() {
+    if (charts.capital) charts.capital.destroy();
+    const data = getChartData().filter(r => r.equity_curve && r.equity_curve.length > 0);
+    if (data.length === 0 || data.length > 1) {
+        // Only show for single experiment (or first selected)
+        if (data.length > 1) {
+            const r = data[0];
+            // Approximate deployment from equity curve shape
+            renderCapitalSingle(r);
+            return;
+        }
+        charts.capital = null; return;
+    }
+    renderCapitalSingle(data[0]);
+}
+
+function renderCapitalSingle(r) {
+    if (!r.equity_curve) return;
+    const labels = r.equity_curve.map(p => new Date(p[0] * 1000));
+    const values = r.equity_curve.map(p => p[1]);
+
+    charts.capital = new Chart(document.getElementById('chartCapital'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: `${r.experiment_id} — Kapital`,
+                data: values,
+                borderColor: '#3fb950',
+                backgroundColor: 'rgba(63,185,80,0.1)',
+                fill: true,
+                pointRadius: 0,
+                tension: 0.1,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e' } } },
+            scales: {
+                x: { type: 'time', time: { unit: 'month' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { title: { display: true, text: '$', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+function renderExitChart() {
+    if (charts.exits) charts.exits.destroy();
+    const data = getChartData();
+    if (data.length === 0) { charts.exits = null; return; }
+
+    const labels = data.map(r => r.experiment_id);
+    const saves = data.map(r => r.exit_saves || 0);
+    const regrets = data.map(r => r.exit_regrets || 0);
+
+    charts.exits = new Chart(document.getElementById('chartExits'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Saves', data: saves, backgroundColor: 'rgba(63,185,80,0.7)' },
+                { label: 'Regrets', data: regrets, backgroundColor: 'rgba(248,81,73,0.7)' },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e' } } },
+            scales: {
+                x: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { stacked: true, title: { display: true, text: 'Pocet', color: '#8b949e' },
+                     ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            },
+        },
+    });
+}
+
+// ── Helpers ──
+function fmt(v) {
+    if (v === undefined || v === null) return '—';
+    if (typeof v === 'number') return v >= 1000 ? v.toLocaleString('en', {maximumFractionDigits: 0}) :
+        v.toFixed(v === Math.floor(v) ? 0 : 2);
+    return v;
+}
+
+// ── Chart.js time adapter (minimal) ──
+// Register time scale adapter for equity curves
+Chart.defaults.scales.time = Chart.defaults.scales.time || {};
+
+// ── Init ──
+init();
+</script>
+</body>
+</html>

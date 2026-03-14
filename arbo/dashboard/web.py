@@ -1182,6 +1182,268 @@ def _format_uptime(seconds: int) -> str:
     return " ".join(parts)
 
 
+# ---------------------------------------------------------------------------
+# Experiments Dashboard
+# ---------------------------------------------------------------------------
+
+_EXPERIMENTS_DIR = Path(__file__).parent.parent.parent / "research" / "data" / "experiments"
+
+
+def _load_latest_sweep() -> dict[str, Any] | None:
+    """Load the most recent sweep or autoresearch results JSON."""
+    if not _EXPERIMENTS_DIR.exists():
+        return None
+
+    # Try autoresearch first (newer), then sweep
+    ar_file = _EXPERIMENTS_DIR / "autoresearch_latest.json"
+    if ar_file.exists():
+        try:
+            return _convert_autoresearch(ar_file)
+        except Exception:
+            pass
+
+    sweep_files = sorted(_EXPERIMENTS_DIR.glob("sweep_*.json"), reverse=True)
+    if not sweep_files:
+        return None
+    try:
+        import json as _json
+        with open(sweep_files[0]) as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
+def _convert_autoresearch(path: Path) -> dict[str, Any]:
+    """Convert autoresearch JSON to sweep-compatible format for the dashboard."""
+    import json as _json
+    with open(path) as f:
+        ar = _json.load(f)
+
+    meta = ar.get("meta", {})
+
+    # Convert history to all_results format (compact — no params/city_results)
+    all_results = []
+    for h in ar.get("history", []):
+        all_results.append({
+            "experiment_id": h.get("id", ""),
+            "score": h.get("score", 0),
+            "trades": h.get("trades", 0),
+            "win_rate": h.get("win_rate", 0),
+            "total_pnl": h.get("pnl", 0),
+            "roi_pct": h.get("roi_pct", 0),
+            "max_drawdown_pct": h.get("dd", 0),
+            "sharpe": h.get("sharpe", 0),
+            "capital_utilization": h.get("util", 0),
+            "avg_pnl_per_hour": h.get("pph", 0),
+            "total_exits": h.get("exits", 0),
+            "exit_saves": h.get("saves", 0),
+            "exit_regrets": h.get("regrets", 0),
+            "status": h.get("status", ""),
+            "description": h.get("description", ""),
+        })
+
+    # Top results from enriched data (includes params, city_results, equity_curve, OOS)
+    top_enriched = ar.get("top_enriched", [])
+    if top_enriched:
+        top_results = []
+        for h in top_enriched:
+            top_results.append({
+                "experiment_id": h.get("id", ""),
+                "score": h.get("score_with_oos", h.get("score", 0)),
+                "score_train": h.get("score", 0),
+                "trades": h.get("trades", 0),
+                "win_rate": h.get("win_rate", 0),
+                "total_pnl": h.get("pnl", 0),
+                "roi_pct": h.get("roi_pct", 0),
+                "max_drawdown_pct": h.get("dd", 0),
+                "sharpe": h.get("sharpe", 0),
+                "capital_utilization": h.get("util", 0),
+                "avg_pnl_per_hour": h.get("pph", 0),
+                "total_exits": h.get("exits", 0),
+                "exit_saves": h.get("saves", 0),
+                "exit_regrets": h.get("regrets", 0),
+                "status": h.get("status", ""),
+                "description": h.get("description", ""),
+                "params": h.get("params"),
+                "city_results": h.get("city_results"),
+                "equity_curve": h.get("equity_curve"),
+                "oos_pnl": h.get("oos_pnl"),
+                "oos_trades": h.get("oos_trades"),
+                "oos_win_rate": h.get("oos_win_rate"),
+                "oos_roi_pct": h.get("oos_roi_pct"),
+                "wf_oos_pnl": h.get("wf_oos_pnl"),
+                "wf_score": h.get("wf_score"),
+            })
+    else:
+        # Fallback: derive from all_results (no enrichment)
+        sorted_results = sorted(all_results, key=lambda r: -r["score"])
+        seen_scores: set[float] = set()
+        top_results = []
+        for r in sorted_results:
+            key = round(r["score"], 1)
+            if key not in seen_scores:
+                seen_scores.add(key)
+                top_results.append(r)
+            if len(top_results) >= 20:
+                break
+
+    return {
+        "meta": {
+            "sweep_id": "autoresearch",
+            "timestamp": meta.get("timestamp", ""),
+            "total_trials": meta.get("total_experiments", len(all_results)),
+            "phases": f"keeps={meta.get('keeps', 0)}, discards={meta.get('discards', 0)}",
+            "quick_mode": False,
+        },
+        "top_results": top_results,
+        "all_results": all_results,
+        "best_params": ar.get("best_params"),
+        "city_solo": ar.get("city_solo"),
+    }
+
+
+@app.get("/experiments", response_class=HTMLResponse)
+async def experiments_page(
+    request: Request, _user: str = Depends(_verify_credentials)
+) -> HTMLResponse:
+    """Serve the experiments dashboard page."""
+    return templates.TemplateResponse("experiments.html", {"request": request})
+
+
+@app.get("/api/experiments/results")
+async def api_experiments_results(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Return latest sweep results for the experiments dashboard."""
+    data = _load_latest_sweep()
+    if data is None:
+        return {"error": "No sweep results found. Run: python3 research/sweep_final.py"}
+    return data
+
+
+@app.get("/api/experiments/sweeps")
+async def api_experiments_sweeps(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """List all available sweep result files."""
+    if not _EXPERIMENTS_DIR.exists():
+        return {"sweeps": []}
+
+    sweeps = []
+
+    # Autoresearch (show first)
+    ar_file = _EXPERIMENTS_DIR / "autoresearch_latest.json"
+    if ar_file.exists():
+        try:
+            import json as _json
+            with open(ar_file) as fh:
+                meta = _json.load(fh).get("meta", {})
+            sweeps.append({
+                "filename": ar_file.name,
+                "sweep_id": "autoresearch",
+                "timestamp": meta.get("timestamp", ""),
+                "total_trials": meta.get("total_experiments", 0),
+                "quick_mode": False,
+            })
+        except Exception:
+            sweeps.append({"filename": ar_file.name, "sweep_id": "autoresearch"})
+
+    # Sweep files
+    sweep_files = sorted(_EXPERIMENTS_DIR.glob("sweep_*.json"), reverse=True)
+    for f in sweep_files:
+        try:
+            import json as _json
+            with open(f) as fh:
+                meta = _json.load(fh).get("meta", {})
+            sweeps.append({
+                "filename": f.name,
+                "sweep_id": meta.get("sweep_id", f.stem),
+                "timestamp": meta.get("timestamp", ""),
+                "total_trials": meta.get("total_trials", 0),
+                "quick_mode": meta.get("quick_mode", False),
+            })
+        except Exception:
+            sweeps.append({"filename": f.name, "sweep_id": f.stem})
+    return {"sweeps": sweeps}
+
+
+@app.get("/api/experiments/sweep/{sweep_id}")
+async def api_experiments_sweep_by_id(
+    sweep_id: str, _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Load a specific sweep by ID."""
+    if not _EXPERIMENTS_DIR.exists():
+        return {"error": "No experiments directory"}
+
+    # Autoresearch
+    if sweep_id == "autoresearch":
+        ar_file = _EXPERIMENTS_DIR / "autoresearch_latest.json"
+        if ar_file.exists():
+            try:
+                return _convert_autoresearch(ar_file)
+            except Exception as e:
+                return {"error": f"Failed to load autoresearch: {e}"}
+        return {"error": "Autoresearch results not found"}
+
+    # Sweep files
+    for f in _EXPERIMENTS_DIR.glob("sweep_*.json"):
+        if sweep_id in f.stem:
+            try:
+                import json as _json
+                with open(f) as fh:
+                    return _json.load(fh)
+            except Exception:
+                return {"error": f"Failed to load {f.name}"}
+    return {"error": f"Sweep {sweep_id} not found"}
+
+
+@app.get("/api/paper-trades")
+async def api_paper_trades(
+    strategy: str = "C",
+    status: str = "won,lost",
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Export paper trades for experiment validation."""
+    orch = state.orchestrator
+    if orch is None:
+        return {"error": "Orchestrator not available"}
+
+    statuses = [s.strip() for s in status.split(",")]
+
+    try:
+        async with orch._db_engine.begin() as conn:
+            rows = await conn.execute(
+                sa.text(
+                    "SELECT id, market_condition_id, token_id, side, price, "
+                    "size, edge_at_exec, confluence_score, kelly_fraction, "
+                    "status, actual_pnl, fee_paid, placed_at, resolved_at, "
+                    "strategy, notes "
+                    "FROM paper_trades "
+                    "WHERE strategy = :strategy AND status = ANY(:statuses) "
+                    "ORDER BY placed_at"
+                ),
+                {"strategy": strategy, "statuses": statuses},
+            )
+            trades = []
+            for row in rows:
+                trades.append({
+                    "id": row.id,
+                    "token_id": row.token_id,
+                    "side": row.side,
+                    "price": float(row.price) if row.price else None,
+                    "size": float(row.size) if row.size else None,
+                    "edge": float(row.edge_at_exec) if row.edge_at_exec else None,
+                    "status": row.status,
+                    "pnl": float(row.actual_pnl) if row.actual_pnl else None,
+                    "placed_at": row.placed_at.isoformat() if row.placed_at else None,
+                    "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
+                    "strategy": row.strategy,
+                })
+            return {"trades": trades, "count": len(trades)}
+    except Exception as e:
+        return {"error": str(e), "trades": [], "count": 0}
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Factory function for RDH orchestrator integration.
 
