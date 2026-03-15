@@ -24,6 +24,8 @@ _KELLY_RAW_CAP = 0.15  # AR-0134: conservative cap to reduce variance
 MAX_LADDER_POSITIONS = 3
 # Minimum edge to include a bucket in the ladder
 MIN_LADDER_EDGE = 0.03
+# Minimum position size — below this, trade not worth gas + slippage
+MIN_POSITION_SIZE = Decimal("10")
 
 
 @dataclass
@@ -153,7 +155,10 @@ def build_temperature_ladder(
             max_position_size=max_position_size,
         )
 
-        if size < Decimal("1"):  # Minimum $1 position
+        # Enforce minimum position size
+        if size < MIN_POSITION_SIZE:
+            size = MIN_POSITION_SIZE
+        if size > remaining_capital:
             continue
 
         position = LadderPosition(
@@ -210,23 +215,34 @@ def build_ladders_by_city(
         key = (signal.market.city.value, str(signal.market.target_date))
         groups.setdefault(key, []).append(signal)
 
-    # Build ladders, distributing capital proportionally
+    # Build ladders — size from total capital (matching backtest behavior)
+    # Each position is capped by max_position_size (5% of total) and Kelly,
+    # but we don't pre-divide capital by groups (that caused 10x undersizing).
     ladders = []
     num_groups = len(groups)
     if num_groups == 0:
         return []
 
-    per_group_capital = available_capital / num_groups
+    remaining_capital = available_capital
+    # Sort groups by best edge descending — prioritize highest edge cities
+    sorted_groups = sorted(
+        groups.items(),
+        key=lambda g: max(s.edge for s in g[1]),
+        reverse=True,
+    )
 
-    for (city, date_str), group_signals in groups.items():
+    for (city, date_str), group_signals in sorted_groups:
+        if remaining_capital < MIN_POSITION_SIZE:
+            break
         ladder = build_temperature_ladder(
             signals=group_signals,
-            available_capital=per_group_capital,
+            available_capital=remaining_capital,
             max_positions=max_positions_per_city,
             max_position_size=max_position_size,
         )
         if ladder:
             ladders.append(ladder)
+            remaining_capital -= ladder.total_size_usdc
 
     logger.info(
         "ladders_built",
