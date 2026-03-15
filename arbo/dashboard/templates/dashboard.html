@@ -209,8 +209,8 @@
             padding: 1px 0;
         }
         .strategy-stat span:last-child { color: var(--text); }
-        .strategy-stat span.pnl-positive { color: var(--green) !important; }
-        .strategy-stat span.pnl-negative { color: var(--red) !important; }
+        .strategy-stat span.positive { color: var(--green) !important; }
+        .strategy-stat span.negative { color: var(--red) !important; }
         .task-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -516,15 +516,16 @@
 
         <!-- Price Drift (latency re-check) -->
         <div class="card grid-full">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                <div class="card-title" style="margin-bottom:0">Price Drift (Latency Re-check)</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <div class="card-title" style="margin-bottom:0">Cenovy posun pri obchodovani</div>
                 <span id="driftVolSkipped" style="font-size:10px;color:var(--text-dim)"></span>
             </div>
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.4">Meri jak moc se cena zmeni behem 2s zpozdeni mezi rozhodnutim a odeslanim objednavky. Nizke hodnoty = stabilni trhy.</div>
             <div class="metrics" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 12px;">
-                <div class="metric"><div class="metric-value" id="driftSamples">--</div><div class="metric-label">Samples</div></div>
-                <div class="metric"><div class="metric-value" id="driftAvg">--</div><div class="metric-label">Avg Drift</div></div>
-                <div class="metric"><div class="metric-value" id="driftAvgAbs">--</div><div class="metric-label">Avg |Drift|</div></div>
-                <div class="metric"><div class="metric-value" id="driftMax">--</div><div class="metric-label">Max |Drift|</div></div>
+                <div class="metric"><div class="metric-value" id="driftSamples">--</div><div class="metric-label">Mereni</div></div>
+                <div class="metric"><div class="metric-value" id="driftAvg">--</div><div class="metric-label">Prumerny posun</div></div>
+                <div class="metric"><div class="metric-value" id="driftAvgAbs">--</div><div class="metric-label">Prumerna zmena</div></div>
+                <div class="metric"><div class="metric-value" id="driftMax">--</div><div class="metric-label">Nejvetsi zmena</div></div>
             </div>
             <div class="chart-container" style="height:180px">
                 <canvas id="driftChart"></canvas>
@@ -1544,12 +1545,18 @@
         document.getElementById('driftMax').textContent = ((data.max_abs_drift || 0) * 100).toFixed(2) + '¢';
         const skipped = data.skipped_volatility || 0;
         document.getElementById('driftVolSkipped').textContent = skipped > 0
-            ? skipped + ' trade' + (skipped > 1 ? 's' : '') + ' skipped (volatility guard)'
+            ? skipped + ' obchod' + (skipped > 1 ? 'u' : '') + ' preskoceno (prilis volatilni)'
             : '';
 
         const recent = data.recent || [];
         if (recent.length > 0) {
-            const labels = recent.map((r, i) => r.city || ('#' + (i + 1)));
+            // Deduplicate labels: "nyc", "nyc #2", "nyc #3"
+            const cityCounts = {};
+            const labels = recent.map(r => {
+                const city = r.city || '?';
+                cityCounts[city] = (cityCounts[city] || 0) + 1;
+                return cityCounts[city] > 1 ? city + ' #' + cityCounts[city] : city;
+            });
             const deltas = recent.map(r => +(r.delta * 100).toFixed(2));
             const colors = deltas.map(d => d >= 0 ? 'rgba(63,185,80,0.7)' : 'rgba(248,81,73,0.7)');
             if (driftChart) {
@@ -1578,7 +1585,7 @@
                                  grid: { display: false } },
                             y: { ticks: { color: '#8b949e', callback: v => v + '¢' },
                                  grid: { color: '#30363d' },
-                                 title: { display: true, text: 'P2 − P1 (cents)', color: '#8b949e', font: { size: 10 } } }
+                                 title: { display: true, text: 'Cenovy posun (centy)', color: '#8b949e', font: { size: 10 } } }
                         }
                     }
                 });
