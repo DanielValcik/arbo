@@ -329,6 +329,7 @@ class WeatherForecastRecord(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("city", "forecast_date", "source", name="uq_weather_city_date_source"),
         Index("idx_weather_city_date", "city", "forecast_date"),
         Index("idx_weather_source", "source"),
     )

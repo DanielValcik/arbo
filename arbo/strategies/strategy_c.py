@@ -137,6 +137,13 @@ class StrategyC:
 
         self._forecasts = forecasts
         logger.info("forecasts_fetched", cities=len(forecasts))
+
+        # Persist forecasts to DB for future backtesting
+        try:
+            await self._save_forecasts_to_db(forecasts)
+        except Exception as e:
+            logger.debug("forecast_persist_error", error=str(e))
+
         return forecasts
 
     async def poll_cycle(self, markets: list[Any]) -> list[WeatherSignal]:
@@ -515,8 +522,59 @@ class StrategyC:
         }
 
     # ------------------------------------------------------------------
-    # Data collection: scan logs, volume snapshots, forecasts
+    # Data collection: forecasts, scan logs, volume snapshots
     # ------------------------------------------------------------------
+
+    async def _save_forecasts_to_db(
+        self, forecasts: dict[City, WeatherForecast]
+    ) -> None:
+        """Persist weather forecasts to DB for future backtesting.
+
+        Saves each daily forecast as a row in weather_forecasts table.
+        Uses upsert (city + forecast_date + source) to avoid duplicates
+        when the same forecast is fetched multiple times.
+        """
+        try:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            from arbo.utils.db import WeatherForecastRecord, get_session_factory
+
+            factory = get_session_factory()
+            now = datetime.now(timezone.utc)
+            rows_saved = 0
+
+            async with factory() as session:
+                for city, forecast in forecasts.items():
+                    source = forecast.source.value if hasattr(forecast.source, "value") else str(forecast.source)
+                    for daily in forecast.daily_forecasts:
+                        stmt = pg_insert(WeatherForecastRecord).values(
+                            city=city.value,
+                            forecast_date=daily.date,
+                            source=source,
+                            temp_high_c=daily.temp_high_c,
+                            temp_low_c=daily.temp_low_c,
+                            condition=daily.condition or "",
+                            precip_probability=daily.precip_probability,
+                            fetched_at=now,
+                        )
+                        # On conflict: update with latest forecast values
+                        stmt = stmt.on_conflict_do_update(
+                            index_elements=["city", "forecast_date", "source"],
+                            set_={
+                                "temp_high_c": stmt.excluded.temp_high_c,
+                                "temp_low_c": stmt.excluded.temp_low_c,
+                                "condition": stmt.excluded.condition,
+                                "precip_probability": stmt.excluded.precip_probability,
+                                "fetched_at": stmt.excluded.fetched_at,
+                            },
+                        )
+                        await session.execute(stmt)
+                        rows_saved += 1
+                await session.commit()
+
+            logger.info("forecasts_persisted", rows=rows_saved, cities=len(forecasts))
+        except Exception as e:
+            logger.debug("forecasts_persist_error", error=str(e))
 
     async def save_scan_log(
         self,
