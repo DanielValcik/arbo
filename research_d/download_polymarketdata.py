@@ -53,16 +53,21 @@ PROGRESS_PATH = DATA_DIR / "pmd_progress.json"
 
 API_BASE = "https://api.polymarketdata.co/v1"
 
-# Tags for sports discovery
+# Tags for sports discovery — comprehensive list of leagues
 SPORT_TAGS = {
-    "nba": ["nba"],
-    "epl": ["epl", "premier-league"],
-    "nfl": ["nfl"],
+    "nba": ["nba", "nba-all-star"],
+    "epl": ["epl", "premier-league", "english-premier-league"],
+    "nfl": ["nfl", "nfl-playoffs"],
+    "la_liga": ["la-liga"],
+    "serie_a": ["serie-a"],
+    "ucl": ["champions-league", "ucl"],
     "soccer": ["soccer", "football"],
     "ufc": ["ufc", "mma"],
-    "ncaab": ["ncaab", "march-madness"],
-    "mlb": ["mlb"],
+    "ncaab": ["ncaab", "march-madness", "ncaa-basketball", "college-basketball"],
+    "mlb": ["mlb", "mlb-playoffs"],
     "nhl": ["nhl"],
+    "f1": ["f1", "formula-1", "motorsports"],
+    "boxing": ["boxing"],
 }
 
 

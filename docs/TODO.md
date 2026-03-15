@@ -384,12 +384,16 @@
 - [x] 8,586 Goldsky NBA trade-based prices (hourly VWAP, 2024 playoffs)
 
 **PolymarketData.co — PRIMARY DATA SOURCE (key in .env):**
-- [~] Free tier test: discover sports markets + download sample prices
-- [ ] Validate data quality (resolution, coverage, sports breakdown)
-- [ ] Upgrade to Ultra ($360/mo, 1 month) for unlimited minutely history
-- [ ] Download ALL sports: NBA (2024-2026), EPL, NFL, UFC, March Madness
-- [ ] Target: ~3,400+ games with 1-minute prices → most robust backtest possible
-- [ ] Storno Ultra after full download (keep data forever in SQLite)
+- [x] Free tier test: 7,100 pts/market, 5,900 NBA markets discovered ✓
+- [x] Data quality validated: clean JSON, correct timestamps, both tokens ✓
+- [~] Upgrade to Ultra ($360/mo) — CEO going to upgrade NOW
+- [ ] Download ALL game-level markets (~4,400) across 10 sports/leagues:
+    - NBA (~1,200 markets), EPL (~600), NFL (~500), La Liga (~300)
+    - Serie A (~250), UCL (~150), UFC/MMA (~200), March Madness (~500)
+    - MLB (~400), NHL (~300)
+- [ ] Estimated: ~40M price points, ~3.8 GB SQLite, ~1.7 hours download
+- [ ] After download: storno Ultra (keep data forever in SQLite)
+- [ ] Run: `PYTHONPATH=. python3 research_d/download_polymarketdata.py --sport all --resolution 1m --max-history-days 9999 --resume`
 
 **Deprecated sources (replaced by PolymarketData.co):**
 - [-] pmxt archive — token_id matching issues, 628MB/file, only 22 days
