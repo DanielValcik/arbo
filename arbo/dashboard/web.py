@@ -1628,40 +1628,59 @@ async def api_city_volumes(_user: str = Depends(_verify_credentials)) -> dict[st
 async def api_city_performance(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Per-city Strategy C performance from resolved trades."""
     try:
-        from arbo.utils.db import PaperTrade, get_session_factory
+        from arbo.utils.db import Market, PaperTrade, get_session_factory
 
         factory = get_session_factory()
         async with factory() as session:
-            # Use trade_details->>'city' for trades that have it,
-            # fallback to weather_scan_log for older trades
+            # Get resolved C trades with market question for city parsing
             result = await session.execute(
                 sa.select(
-                    sa.func.coalesce(
-                        PaperTrade.trade_details["city"].astext, sa.literal("unknown")
-                    ).label("city"),
-                    sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
-                    sa.func.sum(sa.case((PaperTrade.status == "lost", 1), else_=0)),
-                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
-                    sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
+                    PaperTrade.trade_details["city"].astext,
+                    Market.question,
+                    PaperTrade.status,
+                    PaperTrade.actual_pnl,
+                    PaperTrade.edge_at_exec,
                 )
+                .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
                 .where(PaperTrade.strategy == "C")
                 .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
-                .group_by(sa.text("1"))
-                .order_by(sa.text("5"))  # order by P&L desc
             )
-            cities = []
+
+            # Parse city from trade_details or market question
+            from arbo.strategies.weather_scanner import parse_city
+
+            city_stats: dict[str, dict] = {}
             for row in result.all():
-                resolved = (row[2] or 0) + (row[3] or 0)
+                city_name = row[0]  # from trade_details JSONB
+                if not city_name:
+                    # Fallback: parse from market question
+                    question = row[1] or ""
+                    city_obj = parse_city(question)
+                    city_name = city_obj.value if city_obj else "unknown"
+
+                if city_name not in city_stats:
+                    city_stats[city_name] = {"wins": 0, "losses": 0, "pnl": 0.0, "edges": []}
+                cs = city_stats[city_name]
+                if row[2] == "won":
+                    cs["wins"] += 1
+                else:
+                    cs["losses"] += 1
+                cs["pnl"] += float(row[3] or 0)
+                if row[4] is not None:
+                    cs["edges"].append(float(row[4]))
+
+            cities = []
+            for city_name, cs in sorted(city_stats.items(), key=lambda x: x[1]["pnl"], reverse=True):
+                resolved = cs["wins"] + cs["losses"]
                 cities.append({
-                    "city": row[0],
+                    "city": city_name,
                     "resolved": resolved,
-                    "wins": row[2] or 0,
-                    "losses": row[3] or 0,
-                    "wr": round((row[2] or 0) / resolved, 4) if resolved > 0 else None,
-                    "pnl": _dec(row[4]),
-                    "avg_edge": round(float(row[5] or 0), 4),
+                    "wins": cs["wins"],
+                    "losses": cs["losses"],
+                    "wr": round(cs["wins"] / resolved, 4) if resolved > 0 else None,
+                    "pnl": round(cs["pnl"], 2),
+                    "avg_edge": round(sum(cs["edges"]) / len(cs["edges"]), 4) if cs["edges"] else 0,
                 })
             return {"cities": cities}
     except Exception as e:
