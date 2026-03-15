@@ -19,7 +19,7 @@ import os
 import signal
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -742,6 +742,12 @@ class RDHOrchestrator:
             )
         self._internal_tasks.append(
             asyncio.create_task(self._health_check_scheduler(), name="health_check")
+        )
+        self._internal_tasks.append(
+            asyncio.create_task(self._morning_briefing_scheduler(), name="morning_briefing")
+        )
+        self._internal_tasks.append(
+            asyncio.create_task(self._anomaly_check_scheduler(), name="anomaly_check")
         )
         if self._web_dashboard is not None:
             self._internal_tasks.append(
@@ -1712,6 +1718,189 @@ class RDHOrchestrator:
 
         except Exception as e:
             logger.warning("divergence_calc_error", error=str(e))
+
+    # ------------------------------------------------------------------
+    # Morning briefing + anomaly detection
+    # ------------------------------------------------------------------
+
+    async def _morning_briefing_scheduler(self) -> None:
+        """Send morning briefing to Slack at 08:00 UTC."""
+        while not self._shutdown_event.is_set():
+            now = datetime.now(UTC)
+            if now.hour == 8 and now.minute == 0:
+                try:
+                    await self._send_morning_briefing()
+                except Exception as e:
+                    logger.error("morning_briefing_error", error=str(e))
+                await asyncio.sleep(3600)  # Don't send again for 1 hour
+            else:
+                await asyncio.sleep(55)
+
+    async def _send_morning_briefing(self) -> None:
+        """Generate and send concise morning briefing via Slack."""
+        if self._slack_bot is None or self._paper_engine is None:
+            return
+
+        from sqlalchemy import text
+
+        from arbo.utils.db import get_session_factory
+
+        factory = get_session_factory()
+        now = datetime.now(UTC)
+        yesterday_start = (now - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        yesterday_end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        async with factory() as session:
+            # Yesterday's resolved trades per strategy
+            result = await session.execute(
+                text(
+                    "SELECT strategy, count(*), "
+                    "sum(case when status='won' then 1 else 0 end), "
+                    "coalesce(sum(actual_pnl), 0) "
+                    "FROM paper_trades "
+                    "WHERE resolved_at >= :start AND resolved_at < :end "
+                    "AND status IN ('won','lost') "
+                    "GROUP BY strategy ORDER BY strategy"
+                ),
+                {"start": yesterday_start, "end": yesterday_end},
+            )
+            strat_rows = result.all()
+
+            # Notable trades (top 3 by absolute P&L)
+            result = await session.execute(
+                text(
+                    "SELECT id, strategy, actual_pnl, trade_details->>'city' as city "
+                    "FROM paper_trades "
+                    "WHERE resolved_at >= :start AND resolved_at < :end "
+                    "AND status IN ('won','lost') "
+                    "ORDER BY abs(actual_pnl) DESC LIMIT 3"
+                ),
+                {"start": yesterday_start, "end": yesterday_end},
+            )
+            notable = result.all()
+
+            # Open positions count
+            result = await session.execute(
+                text("SELECT count(*), coalesce(sum(size), 0) FROM paper_positions")
+            )
+            open_row = result.one()
+            open_count = open_row[0]
+            open_deployed = float(open_row[1])
+
+            # Total P&L
+            result = await session.execute(
+                text(
+                    "SELECT coalesce(sum(actual_pnl), 0) FROM paper_trades "
+                    "WHERE status IN ('won','lost')"
+                )
+            )
+            total_pnl = float(result.scalar())
+
+        # Format message
+        total_yesterday = sum(float(r[3]) for r in strat_rows)
+        total_resolved = sum(r[1] for r in strat_rows)
+        total_wins = sum(r[2] for r in strat_rows)
+
+        lines = [f"*Ranni prehled — {now.strftime('%d.%m.%Y')}*"]
+        lines.append("")
+
+        if total_resolved > 0:
+            lines.append(
+                f"*Vcera:* {total_resolved} trades ({total_wins}W/"
+                f"{total_resolved - total_wins}L), "
+                f"P&L {'+'if total_yesterday >= 0 else ''}${total_yesterday:.2f}"
+            )
+            for r in strat_rows:
+                sid, cnt, wins, pnl = r[0], r[1], r[2], float(r[3])
+                lines.append(
+                    f"  • {sid}: {cnt} trades ({wins}W), "
+                    f"{'+'if pnl >= 0 else ''}${pnl:.2f}"
+                )
+        else:
+            lines.append("*Vcera:* zadne resolved trades")
+
+        if notable:
+            lines.append("")
+            lines.append("*Zajimave:*")
+            for n in notable:
+                pnl = float(n[2])
+                emoji = (
+                    ":chart_with_upwards_trend:"
+                    if pnl > 0
+                    else ":chart_with_downwards_trend:"
+                )
+                city = n[3] or ""
+                lines.append(
+                    f"  {emoji} #{n[0]} ({n[1]}) "
+                    f"{'+'if pnl >= 0 else ''}${pnl:.2f}"
+                    + (f" ({city})" if city else "")
+                )
+
+        lines.append("")
+        lines.append(f"*Otevreno:* {open_count} pozic (${open_deployed:.0f} deployed)")
+        lines.append(f"*Celkovy P&L:* {'+'if total_pnl >= 0 else ''}${total_pnl:.2f}")
+
+        await self._slack_bot.send_message("\n".join(lines))
+        logger.info("morning_briefing_sent")
+
+    async def _anomaly_check_scheduler(self) -> None:
+        """Check for anomalies every 2 hours and alert via Slack."""
+        await asyncio.sleep(7200)  # First check after 2 hours
+        while not self._shutdown_event.is_set():
+            try:
+                await self._check_anomalies()
+            except Exception as e:
+                logger.error("anomaly_check_error", error=str(e))
+            await asyncio.sleep(7200)
+
+    async def _check_anomalies(self) -> None:
+        """Run anomaly checks and send Slack alerts if needed."""
+        if self._slack_bot is None:
+            return
+
+        from sqlalchemy import text
+
+        from arbo.utils.db import get_session_factory
+
+        alerts: list[str] = []
+        factory = get_session_factory()
+        now = datetime.now(UTC)
+
+        async with factory() as session:
+            # 1. No trades in 24 hours
+            result = await session.execute(
+                text("SELECT count(*) FROM paper_trades WHERE placed_at > :since"),
+                {"since": now - timedelta(hours=24)},
+            )
+            if result.scalar() == 0:
+                alerts.append(":warning: Zadne obchody za poslednich 24 hodin")
+
+            # 2. Daily loss > $50
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            result = await session.execute(
+                text(
+                    "SELECT coalesce(sum(actual_pnl), 0) FROM paper_trades "
+                    "WHERE resolved_at >= :start AND status IN ('won','lost')"
+                ),
+                {"start": today_start},
+            )
+            daily_pnl = float(result.scalar())
+            if daily_pnl < -50:
+                alerts.append(
+                    f":red_circle: Dnesni ztrata ${abs(daily_pnl):.2f} prekrocila $50 limit"
+                )
+
+        # 3. Tasks health
+        stopped = [name for name, ts in self._tasks.items() if ts.task and ts.task.done()]
+        if stopped:
+            alerts.append(f":red_circle: Strategie zastaveny: {', '.join(stopped)}")
+
+        if alerts:
+            msg = "*Anomalie detekovana:*\n" + "\n".join(alerts)
+            await self._slack_bot.send_message(msg)
+            logger.warning("anomaly_alerts_sent", count=len(alerts))
 
     # ------------------------------------------------------------------
     # Properties (for dashboard/Slack integration)

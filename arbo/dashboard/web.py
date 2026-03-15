@@ -1624,6 +1624,362 @@ async def api_city_volumes(_user: str = Depends(_verify_credentials)) -> dict[st
         return {"cities": [], "error": str(e)}
 
 
+@app.get("/api/city-performance")
+async def api_city_performance(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Per-city Strategy C performance from resolved trades."""
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            # Use trade_details->>'city' for trades that have it,
+            # fallback to weather_scan_log for older trades
+            result = await session.execute(
+                sa.select(
+                    sa.func.coalesce(
+                        PaperTrade.trade_details["city"].astext, sa.literal("unknown")
+                    ).label("city"),
+                    sa.func.count(PaperTrade.id),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "lost", 1), else_=0)),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
+                )
+                .where(PaperTrade.strategy == "C")
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+                .group_by(sa.text("1"))
+                .order_by(sa.text("5"))  # order by P&L desc
+            )
+            cities = []
+            for row in result.all():
+                resolved = (row[2] or 0) + (row[3] or 0)
+                cities.append({
+                    "city": row[0],
+                    "resolved": resolved,
+                    "wins": row[2] or 0,
+                    "losses": row[3] or 0,
+                    "wr": round((row[2] or 0) / resolved, 4) if resolved > 0 else None,
+                    "pnl": _dec(row[4]),
+                    "avg_edge": round(float(row[5] or 0), 4),
+                })
+            return {"cities": cities}
+    except Exception as e:
+        return {"cities": [], "error": str(e)}
+
+
+@app.get("/api/forecast-accuracy")
+async def api_forecast_accuracy(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Forecast accuracy: predicted vs actual METAR temperatures per city."""
+    try:
+        from arbo.utils.db import WeatherForecastRecord, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    WeatherForecastRecord.city,
+                    WeatherForecastRecord.source,
+                    sa.func.count(WeatherForecastRecord.id),
+                    sa.func.avg(
+                        sa.func.abs(
+                            WeatherForecastRecord.temp_high_c
+                            - WeatherForecastRecord.actual_temp_high_c
+                        )
+                    ).label("mae_high"),
+                    sa.func.avg(
+                        WeatherForecastRecord.temp_high_c
+                        - WeatherForecastRecord.actual_temp_high_c
+                    ).label("bias_high"),
+                    sa.func.avg(
+                        sa.func.abs(
+                            WeatherForecastRecord.temp_low_c
+                            - WeatherForecastRecord.actual_temp_low_c
+                        )
+                    ).label("mae_low"),
+                )
+                .where(WeatherForecastRecord.actual_temp_high_c.isnot(None))
+                .group_by(WeatherForecastRecord.city, WeatherForecastRecord.source)
+                .order_by(WeatherForecastRecord.city)
+            )
+            rows = []
+            for row in result.all():
+                rows.append({
+                    "city": row[0],
+                    "source": row[1],
+                    "samples": row[2],
+                    "mae_high": round(float(row[3] or 0), 2),
+                    "bias_high": round(float(row[4] or 0), 2),
+                    "mae_low": round(float(row[5] or 0), 2),
+                })
+            total_samples = sum(r["samples"] for r in rows)
+            return {"accuracy": rows, "total_samples": total_samples, "has_data": total_samples > 0}
+    except Exception as e:
+        return {"accuracy": [], "total_samples": 0, "has_data": False, "error": str(e)}
+
+
+@app.get("/api/go-live-readiness")
+async def api_go_live_readiness(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Go-live readiness checklist with clear READY/NOT READY verdict."""
+    try:
+        from arbo.core.health_check import get_expected_vs_reality
+
+        evr = await get_expected_vs_reality()
+        actual = evr.get("actual", {})
+        baseline = evr.get("baseline", {})
+
+        days = actual.get("days_active", 0)
+        resolved = actual.get("total_resolved", 0)
+        wr = actual.get("win_rate")
+        pnl = actual.get("resolved_pnl", 0)
+
+        # Thresholds
+        MIN_DAYS = 28  # 4 weeks
+        MIN_RESOLVED = 50
+        WR_LOW = baseline.get("oos_wr", 0.38) - 0.15  # 23%
+        WR_HIGH = baseline.get("oos_wr", 0.38) + 0.15  # 53%
+
+        checks = [
+            {
+                "name": "Paper trading doba",
+                "required": f"{MIN_DAYS} dni",
+                "actual": f"{days:.0f} dni",
+                "passed": days >= MIN_DAYS,
+                "progress": min(days / MIN_DAYS * 100, 100),
+            },
+            {
+                "name": "Resolved trades",
+                "required": f"{MIN_RESOLVED}+",
+                "actual": str(resolved),
+                "passed": resolved >= MIN_RESOLVED,
+                "progress": min(resolved / MIN_RESOLVED * 100, 100),
+            },
+            {
+                "name": "Win Rate",
+                "required": f"{WR_LOW:.0%} - {WR_HIGH:.0%}",
+                "actual": f"{wr:.1%}" if wr is not None else "—",
+                "passed": wr is not None and WR_LOW <= wr <= WR_HIGH,
+                "progress": 100 if (wr is not None and WR_LOW <= wr <= WR_HIGH) else 0,
+            },
+            {
+                "name": "Kladny P&L",
+                "required": "> $0",
+                "actual": f"${pnl:.2f}",
+                "passed": pnl > 0,
+                "progress": 100 if pnl > 0 else 0,
+            },
+        ]
+
+        all_passed = all(c["passed"] for c in checks)
+        verdict = "READY" if all_passed else "NOT READY"
+        return {"verdict": verdict, "checks": checks, "days_remaining": max(MIN_DAYS - days, 0)}
+    except Exception as e:
+        return {"verdict": "ERROR", "checks": [], "error": str(e)}
+
+
+@app.get("/api/pnl-projection")
+async def api_pnl_projection(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """P&L projection based on daily realized performance."""
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+
+        import math
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
+                    sa.func.sum(PaperTrade.actual_pnl),
+                )
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+                .group_by(sa.text("1"))
+                .order_by(sa.text("1"))
+            )
+            daily_values = [float(row[1] or 0) for row in result.all()]
+
+        n = len(daily_values)
+        if n < 3:
+            return {
+                "has_data": False,
+                "reason": f"Potreba alespon 3 dny s resolved trades (aktualne {n})",
+            }
+
+        avg = sum(daily_values) / n
+        variance = sum((x - avg) ** 2 for x in daily_values) / max(n - 1, 1)
+        std = math.sqrt(variance)
+
+        monthly = round(avg * 30, 2)
+        yearly = round(avg * 365, 2)
+        ci_monthly = round(1.96 * std * math.sqrt(30), 2)
+        ci_yearly = round(1.96 * std * math.sqrt(365), 2)
+
+        return {
+            "has_data": True,
+            "days_sampled": n,
+            "avg_daily_pnl": round(avg, 2),
+            "std_daily_pnl": round(std, 2),
+            "monthly": {
+                "projected": monthly,
+                "ci_low": round(monthly - ci_monthly, 2),
+                "ci_high": round(monthly + ci_monthly, 2),
+            },
+            "yearly": {
+                "projected": yearly,
+                "ci_low": round(yearly - ci_yearly, 2),
+                "ci_high": round(yearly + ci_yearly, 2),
+            },
+        }
+    except Exception as e:
+        return {"has_data": False, "error": str(e)}
+
+
+@app.get("/api/strategy-pnl-series")
+async def api_strategy_pnl_series(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Cumulative P&L series per strategy for comparison chart."""
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    PaperTrade.strategy,
+                    sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
+                    sa.func.sum(PaperTrade.actual_pnl),
+                )
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.resolved_at.isnot(None))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+                .group_by(PaperTrade.strategy, sa.text("2"))
+                .order_by(sa.text("2"))
+            )
+            # Collect all dates and per-strategy daily P&L
+            all_dates: set[str] = set()
+            strat_daily: dict[str, dict[str, float]] = {}
+            for row in result.all():
+                strat = row[0] or "?"
+                day = row[1].strftime("%Y-%m-%d") if row[1] else None
+                if not day:
+                    continue
+                all_dates.add(day)
+                if strat not in strat_daily:
+                    strat_daily[strat] = {}
+                strat_daily[strat][day] = float(row[2] or 0)
+
+            labels = sorted(all_dates)
+            series: dict[str, list[float]] = {}
+            for strat in ["A", "B", "C"]:
+                cum = 0.0
+                values: list[float] = []
+                for day in labels:
+                    cum += strat_daily.get(strat, {}).get(day, 0)
+                    values.append(round(cum, 2))
+                series[strat] = values
+
+            return {"labels": [d[5:] for d in labels], "series": series}  # MM-DD format
+    except Exception as e:
+        return {"labels": [], "series": {}, "error": str(e)}
+
+
+@app.get("/api/export/trades")
+async def api_export_trades(
+    strategy: str = "",
+    _user: str = Depends(_verify_credentials),
+) -> Any:
+    """Export paper trades as CSV."""
+    import csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from arbo.utils.db import PaperTrade, get_session_factory
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            q = sa.select(PaperTrade).order_by(PaperTrade.placed_at)
+            if strategy:
+                q = q.where(PaperTrade.strategy == strategy)
+            result = await session.execute(q)
+            trades = result.scalars().all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "strategy", "market_condition_id", "side", "price", "size",
+            "edge", "status", "actual_pnl", "fee_paid", "placed_at", "resolved_at",
+            "city", "forecast_prob", "forecast_temp_c",
+        ])
+        for t in trades:
+            td = t.trade_details or {}
+            writer.writerow([
+                t.id, t.strategy, t.market_condition_id, t.side,
+                float(t.price) if t.price else "", float(t.size) if t.size else "",
+                float(t.edge_at_exec) if t.edge_at_exec else "",
+                t.status, float(t.actual_pnl) if t.actual_pnl else "",
+                float(t.fee_paid) if t.fee_paid else "",
+                t.placed_at.isoformat() if t.placed_at else "",
+                t.resolved_at.isoformat() if t.resolved_at else "",
+                td.get("city", ""), td.get("forecast_prob", ""), td.get("forecast_temp_c", ""),
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=arbo_trades.csv"},
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/export/scan-log")
+async def api_export_scan_log(_user: str = Depends(_verify_credentials)) -> Any:
+    """Export weather scan log as CSV."""
+    import csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from arbo.utils.db import WeatherScanLog, get_session_factory
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(WeatherScanLog).order_by(WeatherScanLog.scan_at)
+            )
+            rows = result.scalars().all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "scan_at", "city", "target_date", "question",
+            "forecast_temp_c", "forecast_prob", "market_price", "edge",
+            "direction", "volume_24h", "liquidity",
+            "quality_gate_passed", "quality_gate_reason", "traded", "trade_size",
+        ])
+        for r in rows:
+            writer.writerow([
+                r.id, r.scan_at.isoformat() if r.scan_at else "",
+                r.city, r.target_date.isoformat() if r.target_date else "",
+                r.question[:100], r.forecast_temp_c, r.forecast_prob, r.market_price,
+                r.edge, r.direction, r.volume_24h, r.liquidity,
+                r.quality_gate_passed, r.quality_gate_reason or "", r.traded, r.trade_size or "",
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=arbo_scan_log.csv"},
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def create_app(orchestrator: Any) -> FastAPI:
     """Factory function for RDH orchestrator integration.
 

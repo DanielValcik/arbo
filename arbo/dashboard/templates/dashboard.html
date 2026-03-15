@@ -382,11 +382,33 @@
         .alert-kalman_divergence { background: var(--orange); color: #000; }
         .alert-data_stale { background: var(--yellow); color: #000; }
         .alert-error { background: var(--red); color: #fff; }
+        .evr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .go-live-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 2px; }
+        .go-live-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .export-btn {
+            display: inline-block; padding: 3px 10px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; color: var(--text-dim);
+            border: 1px solid var(--border); text-decoration: none; cursor: pointer;
+        }
+        .export-btn:hover { color: var(--text); border-color: var(--text-dim); }
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
             .strategy-grid { grid-template-columns: 1fr; }
             .task-grid { grid-template-columns: repeat(2, 1fr); }
             .pair-grid { grid-template-columns: 1fr 1fr; }
+            .evr-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .header { flex-direction: column; gap: 8px; padding: 8px 12px; }
+            .grid { padding: 8px 10px; gap: 8px; }
+            .metric-value { font-size: 18px; }
+            .card { padding: 10px; }
+            .tab-btn { padding: 8px 14px; font-size: 11px; }
+            .filter-bar { flex-wrap: wrap; }
+            .avg-daily-strip { flex-wrap: wrap; }
+            .metrics { grid-template-columns: repeat(2, 1fr) !important; }
+            .strategy-grid { grid-template-columns: 1fr; }
+            .task-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -453,6 +475,14 @@
             </div>
             <div class="chart-container">
                 <canvas id="dailyPnlChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Strategy Comparison Chart -->
+        <div class="card grid-full">
+            <div class="card-title">Porovnani strategii — kumulativni P&L</div>
+            <div class="chart-container" style="height:200px">
+                <canvas id="stratCompChart"></canvas>
             </div>
         </div>
 
@@ -545,7 +575,7 @@
         <div class="card grid-full">
             <div class="card-title">Expected vs Reality — Strategy C (AR-0134)</div>
             <div id="evrTooEarly" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px"></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="evr-grid">
                 <div>
                     <table style="width:100%">
                         <thead><tr><th>Metrika</th><th>Ocekavani</th><th>Realita</th><th></th></tr></thead>
@@ -567,6 +597,71 @@
         <div class="card grid-full" id="modelDescCard" style="display:none">
             <div class="card-title">Model AR-0134 — Popis</div>
             <div id="modelDescContent" style="font-size:11px;line-height:1.7;color:var(--text-dim)"></div>
+        </div>
+
+        <!-- Go-Live Readiness -->
+        <div class="card">
+            <div class="card-title">Pripravenost na live trading</div>
+            <div id="goLiveVerdict" style="text-align:center;padding:8px;margin-bottom:8px;border-radius:4px;font-weight:700;font-size:14px"></div>
+            <div id="goLiveChecks" style="font-size:11px">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- P&L Projection -->
+        <div class="card">
+            <div class="card-title">Projekce P&L</div>
+            <div id="projectionContent" style="font-size:11px">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Per-City Performance -->
+        <div class="card grid-full">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="card-title" style="margin-bottom:0">Vykonnost per mesto (Strategy C)</div>
+            </div>
+            <div id="cityPerfNoData" style="display:none;font-size:11px;color:var(--text-dim)">Zatim zadne resolved trades s city daty</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mesto</th>
+                            <th>Resolved</th>
+                            <th>W/L</th>
+                            <th>Win Rate</th>
+                            <th>P&L</th>
+                            <th>Prumerny Edge</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cityPerfBody">
+                        <tr><td colspan="6" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Forecast Accuracy -->
+        <div class="card grid-full">
+            <div class="card-title">Presnost predpovedi vs METAR</div>
+            <div id="forecastAccNoData" style="display:none;font-size:11px;color:var(--text-dim);padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px">Zatim zadna data — forecast accuracy se naplni az po resolucich s METAR daty</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mesto</th>
+                            <th>Zdroj</th>
+                            <th>Vzorku</th>
+                            <th>Chyba High (°C)</th>
+                            <th>Bias High (°C)</th>
+                            <th>Chyba Low (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecastAccBody">
+                        <tr><td colspan="6" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- City Volume Monitor -->
@@ -666,7 +761,13 @@
 
         <!-- Trade Log -->
         <div class="card grid-full">
-            <div class="card-title">Trade Log (Last 50)</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="card-title" style="margin-bottom:0">Trade Log (Last 50)</div>
+                <div style="display:flex;gap:6px">
+                    <a class="export-btn" href="/api/export/trades" target="_blank">CSV Trades</a>
+                    <a class="export-btn" href="/api/export/scan-log" target="_blank">CSV Scan Log</a>
+                </div>
+            </div>
             <div style="overflow-x:auto">
                 <table>
                     <thead>
@@ -1773,6 +1874,138 @@
         }).join('');
     }
 
+    // ===== Strategy Comparison Chart =====
+    let stratCompChart = null;
+    async function updateStratComparison() {
+        const data = await fetchJSON('/api/strategy-pnl-series');
+        if (!data || !data.labels || data.labels.length === 0) return;
+        const labels = data.labels;
+        const series = data.series || {};
+        const datasets = [
+            {label: 'A Theta', data: series.A || [], borderColor: '#f0883e', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
+            {label: 'B Reflexivity', data: series.B || [], borderColor: '#bc8cff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
+            {label: 'C Weather', data: series.C || [], borderColor: '#58a6ff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
+        ];
+        if (stratCompChart) {
+            stratCompChart.data.labels = labels;
+            datasets.forEach((ds, i) => { stratCompChart.data.datasets[i].data = ds.data; });
+            stratCompChart.update('none');
+        } else {
+            stratCompChart = new Chart(document.getElementById('stratCompChart'), {
+                type: 'line', data: {labels, datasets},
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: {legend: {labels: {color: '#8b949e', font: {size: 10}}}},
+                    scales: {
+                        x: {ticks: {color: '#8b949e', font: {size: 9}}, grid: {display: false}},
+                        y: {ticks: {color: '#8b949e', callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0)}, grid: {color: 'rgba(48,54,61,0.3)'}},
+                    }
+                }
+            });
+        }
+    }
+
+    // ===== Go-Live Readiness =====
+    async function updateGoLive() {
+        const data = await fetchJSON('/api/go-live-readiness');
+        if (!data) return;
+        const verdict = document.getElementById('goLiveVerdict');
+        if (data.verdict === 'READY') {
+            verdict.textContent = '✓ READY';
+            verdict.style.background = 'rgba(63,185,80,0.15)';
+            verdict.style.color = 'var(--green)';
+        } else {
+            const daysLeft = Math.ceil(data.days_remaining || 0);
+            verdict.textContent = 'NOT READY' + (daysLeft > 0 ? ' — jeste ' + daysLeft + ' dni' : '');
+            verdict.style.background = 'rgba(248,81,73,0.1)';
+            verdict.style.color = 'var(--red)';
+        }
+        const checks = data.checks || [];
+        document.getElementById('goLiveChecks').innerHTML = checks.map(c => {
+            const icon = c.passed ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>';
+            const fillColor = c.passed ? 'var(--green)' : 'var(--yellow)';
+            return `<div style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>${icon} ${c.name}</span>
+                    <span style="color:var(--text-dim)">${c.actual} / ${c.required}</span>
+                </div>
+                <div class="go-live-bar"><div class="go-live-fill" style="width:${c.progress}%;background:${fillColor}"></div></div>
+            </div>`;
+        }).join('');
+    }
+
+    // ===== P&L Projection =====
+    async function updateProjection() {
+        const data = await fetchJSON('/api/pnl-projection');
+        if (!data) return;
+        const el = document.getElementById('projectionContent');
+        if (!data.has_data) {
+            el.innerHTML = `<div style="color:var(--text-dim)">${data.reason || 'Nedostatek dat'}</div>`;
+            return;
+        }
+        const m = data.monthly;
+        const y = data.yearly;
+        const mColor = m.projected >= 0 ? 'var(--green)' : 'var(--red)';
+        const yColor = y.projected >= 0 ? 'var(--green)' : 'var(--red)';
+        el.innerHTML = `
+            <div style="margin-bottom:8px;color:var(--text-dim)">Na zaklade ${data.days_sampled} dni dat (prumer $${data.avg_daily_pnl}/den)</div>
+            <div class="strategy-stat"><span>Mesicni</span><span style="color:${mColor};font-weight:700">${m.projected >= 0 ? '+' : ''}$${m.projected}</span></div>
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;padding-left:8px">95% interval: $${m.ci_low} az $${m.ci_high}</div>
+            <div class="strategy-stat"><span>Rocni</span><span style="color:${yColor};font-weight:700">${y.projected >= 0 ? '+' : ''}$${y.projected}</span></div>
+            <div style="font-size:10px;color:var(--text-dim);padding-left:8px">95% interval: $${y.ci_low} az $${y.ci_high}</div>
+        `;
+    }
+
+    // ===== Per-City Performance =====
+    async function updateCityPerformance() {
+        const data = await fetchJSON('/api/city-performance');
+        if (!data) return;
+        const tbody = document.getElementById('cityPerfBody');
+        const noData = document.getElementById('cityPerfNoData');
+        if (!data.cities || data.cities.length === 0) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            return;
+        }
+        noData.style.display = 'none';
+        tbody.innerHTML = data.cities.map(c => {
+            const pnlColor = (c.pnl || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+            return `<tr>
+                <td style="font-weight:600">${c.city}</td>
+                <td>${c.resolved}</td>
+                <td>${c.wins}W / ${c.losses}L</td>
+                <td>${c.wr !== null ? (c.wr * 100).toFixed(0) + '%' : '—'}</td>
+                <td style="color:${pnlColor};font-weight:700">${c.pnl >= 0 ? '+' : ''}$${(c.pnl || 0).toFixed(2)}</td>
+                <td>${(c.avg_edge * 100).toFixed(1)}%</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ===== Forecast Accuracy =====
+    async function updateForecastAccuracy() {
+        const data = await fetchJSON('/api/forecast-accuracy');
+        if (!data) return;
+        const tbody = document.getElementById('forecastAccBody');
+        const noData = document.getElementById('forecastAccNoData');
+        if (!data.has_data) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            return;
+        }
+        noData.style.display = 'none';
+        tbody.innerHTML = (data.accuracy || []).map(r => {
+            const biasColor = Math.abs(r.bias_high) > 2 ? 'var(--red)' : Math.abs(r.bias_high) > 1 ? 'var(--yellow)' : 'var(--green)';
+            return `<tr>
+                <td style="font-weight:600">${r.city}</td>
+                <td>${r.source}</td>
+                <td>${r.samples}</td>
+                <td>${r.mae_high.toFixed(1)}°C</td>
+                <td style="color:${biasColor}">${r.bias_high >= 0 ? '+' : ''}${r.bias_high.toFixed(1)}°C</td>
+                <td>${r.mae_low.toFixed(1)}°C</td>
+            </tr>`;
+        }).join('');
+    }
+
     async function fetchAll() {
         await Promise.allSettled([
             updatePortfolio(),
@@ -1789,6 +2022,11 @@
             updateHealthChecks(),
             updateExpectedVsReality(),
             updateCityVolumes(),
+            updateStratComparison(),
+            updateGoLive(),
+            updateProjection(),
+            updateCityPerformance(),
+            updateForecastAccuracy(),
         ]);
         document.getElementById('lastRefresh').textContent =
             new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
