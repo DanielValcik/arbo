@@ -376,15 +376,24 @@
 - [x] 42 tests, all passing (`test_core.py`)
 
 ### Data Collection Status (2026-03-15)
-- [x] 4,650 games (3,599 NBA + 1,051 EPL) with full scores
+- [x] 7,825 games (5,124 NBA + 1,168 EPL + 237 NFL + others) with scores
 - [x] 9,260 Elo/Glicko-2 ratings (NBA Brier=0.216, EPL Brier=0.159)
-- [x] 10,065 Polymarket sports markets discovered
-- [~] Goldsky NBA trades downloading (5,683 prices so far)
-- [~] CLOB NBA minute-level prices downloading
-- [x] 13 Pinnacle odds (current games; grows daily)
+- [x] 10,065+ Polymarket sports markets discovered
+- [x] 3,164 Pinnacle odds (1,940 EPL football-data.co.uk + 1,211 NBA Odds API historical)
+- [x] 8,586+ Goldsky NBA trade-based prices (hourly VWAP, 2024 playoffs)
+- [~] Goldsky EPL trades — downloading (parallel)
+- [~] CLOB NBA+EPL minute-level prices — downloading (parallel)
+- [~] pmxt archive (Feb 21 - Mar 15, 2026) — downloading (sub-sec orderbook data)
 - [ ] Set up cron/scheduled job to download Pinnacle odds daily
-- [ ] Download EPL Goldsky trades
-- [ ] Download CLOB EPL minute-level prices
+- [ ] Consider PolymarketData.co paid API for deep historical minutely data
+- [ ] Consider running data pipeline on VPS (faster downloads from eu-west-2)
+
+### First Backtest Result: CONCEPT VALIDATED
+- 41 NBA playoff trades, +$366.84 (+36.7% ROI), 82.9% WR
+- **Green Book Rate: 73.2%** — this IS the edge
+- Green booked trades: +$18.34 avg, held-to-resolution: -$16.66 avg
+- Sharpe 4.51, Max DD 14.4%, Profit Factor 2.20
+- Need 150+ trades for robust sweep → downloading more data now
 
 ### Sprint D-1: Backtest Engine — SMALL REALISTIC BACKTEST (NEXT)
 > Fáze 1: Malý backtest na NBA + EPL (data co máme).
