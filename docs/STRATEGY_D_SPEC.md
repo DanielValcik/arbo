@@ -944,9 +944,30 @@ composite score on the sports backtest dataset.
 
 ---
 
-## 10. Implementation Plan
+## 10. Implementation Plan — Phased Approach
 
-### Sprint D-0: Data Infrastructure (Week 1-2)
+### Validation Philosophy
+
+The implementation follows a **prove-then-scale** methodology:
+
+**Phase 1 — Small Realistic Backtest (Sprint D-0 + D-1):**
+- NBA + EPL only (best data coverage: 3,164 Pinnacle odds, 8K+ prices)
+- Prove that green book + overreaction fade have positive EV on real data
+- Same lesson as Strategy C: synthetic backtest showed 98% WR, reality was 43%
+- If Phase 1 is negative → stop, don't waste months building infrastructure
+
+**Phase 2 — Expansion (if Phase 1 positive):**
+- Add NFL (237 games already), UCL, La Liga, Serie A (football-data.co.uk free Pinnacle)
+- Add UFC/MMA (highest volatility = best for D2 overreaction fade)
+- March Madness (2,600+ events, massive Polymarket volume)
+- More NBA/EPL seasons (2022-23 and earlier)
+- Re-run backtest with expanded dataset, per-sport parameter tuning
+
+**Phase 3 — Autoresearch + Production (if Phase 2 confirms edge):**
+- Autoresearch optimization (500+ experiments overnight)
+- Production integration, paper trading, live deployment
+
+### Sprint D-0: Data Infrastructure (Week 1-2) — COMPLETE
 
 | Task | Description | Dependencies |
 |------|-------------|-------------|

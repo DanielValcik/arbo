@@ -386,7 +386,10 @@
 - [ ] Download EPL Goldsky trades
 - [ ] Download CLOB EPL minute-level prices
 
-### Sprint D-1: Backtest Engine (NEXT)
+### Sprint D-1: Backtest Engine — SMALL REALISTIC BACKTEST (NEXT)
+> Fáze 1: Malý backtest na NBA + EPL (data co máme).
+> Cíl: ověřit jestli green book + overreaction fade fungují na reálných datech.
+> Pokud pozitivní → Fáze 2 (rozšíření na NFL, UCL, UFC, March Madness, více sezón).
 - [ ] D-101: Probability model (Elo 40% + Pinnacle 60% ensemble)
 - [ ] D-102: D1 quality gate (min_edge, competitive_threshold, etc.)
 - [ ] D-103: D1 green book simulator (walk minute-level price trajectories)
@@ -394,6 +397,15 @@
 - [ ] D-105: D2 fade simulator
 - [ ] D-106: Composite score (pnl × sharpe × turnover × dd × green_book)
 - [ ] D-107: Walk-forward validation (4+ folds per sport/season)
+
+### Fáze 2: Rozšíření (pokud Fáze 1 pozitivní)
+- [ ] NFL odds + prices (237 games already, add Pinnacle via Odds API)
+- [ ] UCL / La Liga / Serie A (football-data.co.uk CSV — free Pinnacle odds)
+- [ ] UFC/MMA (high volatility = best for D2 overreaction fade)
+- [ ] March Madness (2,600+ events on Polymarket, huge volume)
+- [ ] Více sezón NBA/EPL (2022-23 a starší)
+- [ ] Re-run backtest with expanded dataset
+- [ ] Per-sport parameter tuning
 
 ### Sprint D-2: Autoresearch Optimization
 - [ ] D-201: Autoresearch prepare.py (immutable eval harness)
