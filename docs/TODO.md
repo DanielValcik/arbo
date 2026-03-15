@@ -376,17 +376,30 @@
 - [x] 42 tests, all passing (`test_core.py`)
 
 ### Data Collection Status (2026-03-15)
-- [x] 7,825 games (5,124 NBA + 1,168 EPL + 237 NFL + others) with scores
+**Existing data:**
+- [x] 7,825+ games (5,124 NBA + 1,168 EPL + 237 NFL + others) with scores
 - [x] 9,260 Elo/Glicko-2 ratings (NBA Brier=0.216, EPL Brier=0.159)
 - [x] 10,065+ Polymarket sports markets discovered
 - [x] 3,164 Pinnacle odds (1,940 EPL football-data.co.uk + 1,211 NBA Odds API historical)
-- [x] 8,586+ Goldsky NBA trade-based prices (hourly VWAP, 2024 playoffs)
-- [~] Goldsky EPL trades — downloading (parallel)
-- [~] CLOB NBA+EPL minute-level prices — downloading (parallel)
-- [~] pmxt archive (Feb 21 - Mar 15, 2026) — downloading (sub-sec orderbook data)
+- [x] 8,586 Goldsky NBA trade-based prices (hourly VWAP, 2024 playoffs)
+
+**PolymarketData.co — PRIMARY DATA SOURCE (key in .env):**
+- [~] Free tier test: discover sports markets + download sample prices
+- [ ] Validate data quality (resolution, coverage, sports breakdown)
+- [ ] Upgrade to Ultra ($360/mo, 1 month) for unlimited minutely history
+- [ ] Download ALL sports: NBA (2024-2026), EPL, NFL, UFC, March Madness
+- [ ] Target: ~3,400+ games with 1-minute prices → most robust backtest possible
+- [ ] Storno Ultra after full download (keep data forever in SQLite)
+
+**Deprecated sources (replaced by PolymarketData.co):**
+- [-] pmxt archive — token_id matching issues, 628MB/file, only 22 days
+- [-] Goldsky — slow (12h/liga), most tokens have 0 trades
+- [-] CLOB /prices-history — only 30-day window, few resolved markets
+
+**Still useful:**
+- [x] football-data.co.uk — EPL Pinnacle odds (free, 3 seasons) ✓
+- [x] The Odds API historical — NBA Pinnacle odds (200 credits used) ✓
 - [ ] Set up cron/scheduled job to download Pinnacle odds daily
-- [ ] Consider PolymarketData.co paid API for deep historical minutely data
-- [ ] Consider running data pipeline on VPS (faster downloads from eu-west-2)
 
 ### First Backtest Result: CONCEPT VALIDATED
 - 41 NBA playoff trades, +$366.84 (+36.7% ROI), 82.9% WR
@@ -395,17 +408,20 @@
 - Sharpe 4.51, Max DD 14.4%, Profit Factor 2.20
 - Need 150+ trades for robust sweep → downloading more data now
 
-### Sprint D-1: Backtest Engine — SMALL REALISTIC BACKTEST (NEXT)
-> Fáze 1: Malý backtest na NBA + EPL (data co máme).
-> Cíl: ověřit jestli green book + overreaction fade fungují na reálných datech.
-> Pokud pozitivní → Fáze 2 (rozšíření na NFL, UCL, UFC, March Madness, více sezón).
-- [ ] D-101: Probability model (Elo 40% + Pinnacle 60% ensemble)
-- [ ] D-102: D1 quality gate (min_edge, competitive_threshold, etc.)
-- [ ] D-103: D1 green book simulator (walk minute-level price trajectories)
+### Sprint D-1: Backtest Engine — REALISTIC BACKTEST
+> Fáze 1 complete: 41 NBA trades → +36.7% ROI, green book validated (73% GB rate).
+> Fáze 2 (current): PolymarketData.co → 3,400+ games minutely → robust sweep + WF.
+>
+> FLOW: Data (PolymarketData Ultra) → Backtest → Sweep → Walk-forward → Autoresearch
+- [x] D-101: Probability model (Elo 40% + Pinnacle 60% ensemble) ✓ in backtest_sports.py
+- [x] D-102: D1 quality gate (min_edge, competitive_threshold) ✓ in backtest_sports.py
+- [x] D-103: D1 green book simulator ✓ VALIDATED (+36.7% ROI, 73% GB rate)
+- [ ] D-103b: Re-run green book on full PolymarketData dataset (3,400+ games)
 - [ ] D-104: D2 overreaction detector (OU process calibration per sport)
 - [ ] D-105: D2 fade simulator
 - [ ] D-106: Composite score (pnl × sharpe × turnover × dd × green_book)
-- [ ] D-107: Walk-forward validation (4+ folds per sport/season)
+- [ ] D-107: Walk-forward validation (train 2024-25, test 2025-26)
+- [ ] D-108: Parameter sensitivity analysis (how fragile are results?)
 
 ### Fáze 2: Rozšíření (pokud Fáze 1 pozitivní)
 - [ ] NFL odds + prices (237 games already, add Pinnacle via Odds API)

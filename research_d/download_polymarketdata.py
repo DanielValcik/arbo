@@ -608,16 +608,16 @@ def main() -> None:
 
     usage = client.usage()
     if usage:
-        plan = usage.get("plan", {})
-        log(f"Plan: {plan.get('name', '?')}")
-        log(f"  Resolution: {plan.get('granularity_allowed', '?')}")
-        log(f"  History: {plan.get('max_history_days', '?')} days")
-        log(f"  RPM: {plan.get('requests_per_minute', '?')}")
+        plan_name = usage.get("plan", "?")
         limits = usage.get("limits", {})
+        log(f"Plan: {plan_name}")
+        log(f"  Resolution: {limits.get('granularity_allowed', '?')}")
+        log(f"  History: {limits.get('max_history_days', '?')} days")
+        rpm = limits.get("requests_per_minute", 10)
+        log(f"  RPM: {rpm}")
         log(f"  Requests remaining: {limits.get('requests_remaining', '?')}")
 
         # Adjust rate limit based on plan
-        rpm = plan.get("requests_per_minute", 10)
         if isinstance(rpm, (int, float)) and rpm > 0:
             client.min_interval = 60.0 / rpm
 
