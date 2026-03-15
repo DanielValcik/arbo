@@ -395,7 +395,15 @@
     - Full dataset: moneyline, spreads, O/U, player props, futures, alt lines
 - [ ] Estimated: ~288M price points, ~27 GB SQLite, ~12 hours download
 - [ ] After download: storno Ultra (keep data forever in SQLite)
-- [ ] Run: `PYTHONPATH=. python3 research_d/download_polymarketdata.py --sport all --resolution 1m --max-history-days 9999 --resume`
+- [~] Pass 1 RUNNING on VPS: 142K markets × 10-min full lifecycle
+    - Screen: `ssh arbo` → `screen -r pmd_pass1`
+    - Log: `ssh arbo "tail -5 /opt/arbo/research_d/data/pmd_pass1.log"`
+    - Disk: `ssh arbo "df -h / && du -sh /opt/arbo/research_d/data/"`
+    - ETA: ~8-9 days (started 2026-03-15 21:07 UTC)
+- [ ] Pass 2 AFTER Pass 1: moneyline+spread × 1-min game window 48h
+    - `--resolution 1m --game-window-hours 48 --market-type moneyline`
+    - Then: `--market-type spread`
+- [ ] After both passes: SCP SQLite to local, run backtest
 
 **Deprecated sources (replaced by PolymarketData.co):**
 - [-] pmxt archive — token_id matching issues, 628MB/file, only 22 days
