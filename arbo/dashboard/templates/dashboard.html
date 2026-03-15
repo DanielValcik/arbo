@@ -195,6 +195,13 @@
         .strat-a { background: var(--orange); color: #000; }
         .strat-b { background: var(--purple); color: #000; }
         .strat-c { background: var(--blue); color: #000; }
+        .strategy-short {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin: 4px 0 6px;
+            line-height: 1.4;
+            min-height: 28px;
+        }
         .strategy-stat {
             display: flex;
             justify-content: space-between;
@@ -202,6 +209,8 @@
             padding: 1px 0;
         }
         .strategy-stat span:last-child { color: var(--text); }
+        .strategy-stat span.pnl-positive { color: var(--green) !important; }
+        .strategy-stat span.pnl-negative { color: var(--red) !important; }
         .task-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -1222,7 +1231,7 @@
                             <span>${stratBadge(s.id)} <span class="strategy-name">${s.name}</span></span>
                             ${haltedHtml}
                         </div>
-                        <div style="font-size:10px;color:var(--text-dim);margin:4px 0 6px;line-height:1.4">${short}</div>
+                        <div class="strategy-short">${short}</div>
                         <div class="strategy-stat"><span>Allocated</span><span>$${(s.allocated || 0).toFixed(0)}</span></div>
                         <div class="strategy-stat"><span>Deployed</span><span>$${(s.deployed || 0).toFixed(2)}</span></div>
                         <div class="strategy-stat"><span>Available</span><span>$${(s.available || 0).toFixed(2)}</span></div>
