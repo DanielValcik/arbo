@@ -314,6 +314,7 @@ def download_market_prices(
     resolution: str = "10m",
     start_date: str | None = None,
     end_date: str | None = None,
+    max_history_days: int = 25,
 ) -> int:
     """Download complete price history for one market.
 
@@ -345,16 +346,21 @@ def download_market_prices(
         start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").replace(
             tzinfo=timezone.utc).timestamp())
     else:
-        # Use market start_date or default 18 months back
+        # Use market start_date, capped by plan limits
         m_start = market.get("start_date") or market.get("created_at")
         if m_start:
             try:
                 start_ts = int(datetime.fromisoformat(
                     str(m_start).replace("Z", "+00:00")).timestamp())
             except (ValueError, TypeError):
-                start_ts = int((datetime.now(timezone.utc) - timedelta(days=540)).timestamp())
+                start_ts = int((datetime.now(timezone.utc) - timedelta(days=25)).timestamp())
         else:
-            start_ts = int((datetime.now(timezone.utc) - timedelta(days=540)).timestamp())
+            # Default: 25 days back (safe for Free tier's 30-day limit)
+            start_ts = int((datetime.now(timezone.utc) - timedelta(days=25)).timestamp())
+
+        # Cap by plan limit (Free=25 days, Ultra=unlimited via --max-history-days)
+        min_allowed = int((datetime.now(timezone.utc) - timedelta(days=max_history_days)).timestamp())
+        start_ts = max(start_ts, min_allowed)
 
     if end_date:
         end_ts = int(datetime.strptime(end_date, "%Y-%m-%d").replace(
@@ -570,6 +576,10 @@ def main() -> None:
         help="Max markets to process (0=unlimited).",
     )
     parser.add_argument(
+        "--max-history-days", type=int, default=25,
+        help="Max days of history to fetch (default: 25, safe for Free tier).",
+    )
+    parser.add_argument(
         "--resume", action="store_true",
         help="Skip already-downloaded markets.",
     )
@@ -697,6 +707,7 @@ def main() -> None:
             resolution=args.resolution,
             start_date=args.start_date,
             end_date=args.end_date,
+            max_history_days=args.max_history_days,
         )
 
         if n > 0:
