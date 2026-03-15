@@ -390,17 +390,41 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
     corrected_total_value = (initial or 0.0) + total_pnl
     roi_pct = (total_pnl / initial * 100) if initial else 0.0
 
-    # Monthly P&L from resolved trades this calendar month
+    # Per-strategy daily + monthly P&L from resolved trades
     monthly_pnl = 0.0
+    realized_daily_pnl = 0.0
     try:
         from arbo.utils.db import PaperTrade, get_session_factory as _gsf
 
         factory = _gsf()
         async with factory() as session:
-            month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            now_utc = datetime.now(UTC)
+            today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            # Per-strategy daily + monthly in one query
             result = await session.execute(
-                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0))
-                .where(PaperTrade.resolved_at >= month_start)
+                sa.select(
+                    PaperTrade.strategy,
+                    sa.func.coalesce(
+                        sa.func.sum(
+                            sa.case(
+                                (PaperTrade.resolved_at >= today_start, PaperTrade.actual_pnl),
+                                else_=sa.literal(0),
+                            )
+                        ),
+                        0,
+                    ).label("daily"),
+                    sa.func.coalesce(
+                        sa.func.sum(
+                            sa.case(
+                                (PaperTrade.resolved_at >= month_start, PaperTrade.actual_pnl),
+                                else_=sa.literal(0),
+                            )
+                        ),
+                        0,
+                    ).label("monthly"),
+                )
                 .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(
                     sa.or_(
@@ -408,33 +432,30 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         PaperTrade.notes != "pre-validation",
                     )
                 )
+                .group_by(PaperTrade.strategy)
             )
-            monthly_pnl = _dec(result.scalar()) or 0.0
-    except Exception as e:
-        logger.warning("monthly_pnl_query_error", error=str(e))
+            for row in result.all():
+                sid = row[0] or ""
+                s_daily = _dec(row[1]) or 0.0
+                s_monthly = _dec(row[2]) or 0.0
+                realized_daily_pnl += s_daily
+                monthly_pnl += s_monthly
+                if sid in strategy_pnl:
+                    strategy_pnl[sid]["daily_pnl"] = round(s_daily, 2)
+                    strategy_pnl[sid]["monthly_pnl"] = round(s_monthly, 2)
 
-    # Daily P&L from resolved trades today
-    realized_daily_pnl = 0.0
-    try:
-        from arbo.utils.db import PaperTrade, get_session_factory as _gsf2
-
-        factory = _gsf2()
-        async with factory() as session:
-            today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-            result = await session.execute(
-                sa.select(sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0))
-                .where(PaperTrade.resolved_at >= today_start)
-                .where(PaperTrade.status.in_(["won", "lost"]))
-                .where(
-                    sa.or_(
-                        PaperTrade.notes.is_(None),
-                        PaperTrade.notes != "pre-validation",
-                    )
+            # Ensure all strategies have daily/monthly keys
+            for sid in strategy_pnl:
+                strategy_pnl[sid].setdefault("daily_pnl", 0.0)
+                strategy_pnl[sid].setdefault("monthly_pnl", 0.0)
+                # ROI per strategy
+                alloc = strategy_pnl[sid].get("allocated", 0) or 1
+                strategy_pnl[sid]["roi_pct"] = round(
+                    (strategy_pnl[sid].get("total_pnl", 0) or 0) / alloc * 100, 2
                 )
-            )
-            realized_daily_pnl = _dec(result.scalar()) or 0.0
+
     except Exception as e:
-        logger.warning("daily_pnl_query_error", error=str(e))
+        logger.warning("strategy_pnl_query_error", error=str(e))
 
     return {
         "balance": round(corrected_total_value, 2),

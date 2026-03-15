@@ -1189,10 +1189,14 @@
     };
 
     async function updateStrategies() {
-        const [stratData, taskData] = await Promise.all([
+        const [stratData, taskData, portData] = await Promise.all([
             fetchJSON('/api/strategies'),
             fetchJSON('/api/layers'),
+            fetchJSON('/api/portfolio'),
         ]);
+
+        // Per-strategy detailed P&L from portfolio endpoint
+        const spnl = (portData && portData.strategy_pnl) || {};
 
         // Strategy cards
         const stratGrid = document.getElementById('strategyGrid');
@@ -1202,11 +1206,16 @@
             stratGrid.innerHTML = stratData.strategies.map(s => {
                 const haltedHtml = s.is_halted ? '<span class="halted-badge">HALTED</span>' : '';
                 const cardClass = s.is_halted ? 'strategy-card halted' : 'strategy-card';
-                const pnlCls = pnlClass(s.total_pnl);
-                const weekPnlCls = pnlClass(s.weekly_pnl);
                 const short = STRATEGY_SHORT[s.id] || '';
                 const detail = STRATEGY_DETAIL[s.id] || '';
                 const cardId = 'stratDetail_' + s.id;
+                // Merge per-strategy P&L details
+                const sp = spnl[s.id] || {};
+                const dailyPnl = sp.daily_pnl || 0;
+                const weeklyPnl = s.weekly_pnl || 0;
+                const monthlyPnl = sp.monthly_pnl || 0;
+                const totalPnl = s.total_pnl || 0;
+                const roi = sp.roi_pct || 0;
                 return `
                     <div class="${cardClass}" style="cursor:pointer" onclick="document.getElementById('${cardId}').classList.toggle('detail-visible')">
                         <div class="strategy-header">
@@ -1218,8 +1227,13 @@
                         <div class="strategy-stat"><span>Deployed</span><span>$${(s.deployed || 0).toFixed(2)}</span></div>
                         <div class="strategy-stat"><span>Available</span><span>$${(s.available || 0).toFixed(2)}</span></div>
                         <div class="strategy-stat"><span>Positions</span><span>${s.positions || 0}</span></div>
-                        <div class="strategy-stat"><span>Weekly P&L</span><span class="${weekPnlCls}">${fmtPnl(s.weekly_pnl)}</span></div>
-                        <div class="strategy-stat"><span>Total P&L</span><span class="${pnlCls}">${fmtPnl(s.total_pnl)}</span></div>
+                        <div style="border-top:1px solid var(--border);margin:6px 0 4px;padding-top:4px">
+                            <div class="strategy-stat"><span>Daily P&L</span><span class="${pnlClass(dailyPnl)}">${fmtPnl(dailyPnl)}</span></div>
+                            <div class="strategy-stat"><span>Weekly P&L</span><span class="${pnlClass(weeklyPnl)}">${fmtPnl(weeklyPnl)}</span></div>
+                            <div class="strategy-stat"><span>Monthly P&L</span><span class="${pnlClass(monthlyPnl)}">${fmtPnl(monthlyPnl)}</span></div>
+                            <div class="strategy-stat"><span>Total P&L</span><span class="${pnlClass(totalPnl)}" style="font-weight:700">${fmtPnl(totalPnl)}</span></div>
+                            <div class="strategy-stat"><span>ROI</span><span class="${pnlClass(roi)}" style="font-weight:700">${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%</span></div>
+                        </div>
                         <div id="${cardId}" class="strategy-detail">${detail}</div>
                     </div>`;
             }).join('');
