@@ -596,10 +596,11 @@
                             <th>Current</th>
                             <th>Unrealized P&L</th>
                             <th>Opened</th>
+                            <th>Rozhodnuti</th>
                         </tr>
                     </thead>
                     <tbody id="positionsBody">
-                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                        <tr><td colspan="9" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1325,15 +1326,30 @@
         }
     }
 
+    function fmtCountdown(endDateStr) {
+        if (!endDateStr) return '—';
+        const end = new Date(endDateStr);
+        const now = new Date();
+        const diffMs = end - now;
+        if (diffMs <= 0) return '<span style="color:var(--yellow)">ceka</span>';
+        const h = Math.floor(diffMs / 3600000);
+        const m = Math.floor((diffMs % 3600000) / 60000);
+        if (h >= 48) return Math.floor(h / 24) + 'd';
+        if (h >= 1) return h + 'h ' + m + 'm';
+        return m + 'm';
+    }
+
     function renderPositions() {
         const tbody = document.getElementById('positionsBody');
         const filtered = latestPositions.filter(p => matchesFilter(p));
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim);text-align:center">No open positions</td></tr>';
             return;
         }
-        tbody.innerHTML = filtered.map(p => `
-            <tr>
+        tbody.innerHTML = filtered.map(p => {
+            const cd = fmtCountdown(p.end_date);
+            const cdColor = !p.end_date ? 'var(--text-dim)' : (new Date(p.end_date) - new Date() < 3600000) ? 'var(--yellow)' : 'var(--text-dim)';
+            return `<tr>
                 <td title="${p.market}">${truncate(p.market, 35)}</td>
                 <td>${stratBadge(p.strategy || layerToStrategy(p.layer))}</td>
                 <td>${p.side}</td>
@@ -1342,8 +1358,9 @@
                 <td>${p.current_price !== null ? p.current_price.toFixed(4) : '--'}</td>
                 <td class="${pnlClass(p.unrealized_pnl)}">${fmtPnl(p.unrealized_pnl)}</td>
                 <td>${fmtTime(p.opened_at)}</td>
-            </tr>
-        `).join('');
+                <td style="color:${cdColor};font-weight:600">${cd}</td>
+            </tr>`;
+        }).join('');
     }
 
     async function updatePositions() {

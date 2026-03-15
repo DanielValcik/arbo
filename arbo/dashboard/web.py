@@ -465,14 +465,18 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                sa.select(PaperPosition, Market.question, Market.category)
+                sa.select(
+                    PaperPosition, Market.question, Market.category, Market.end_date
+                )
                 .outerjoin(Market, PaperPosition.market_condition_id == Market.condition_id)
                 .order_by(PaperPosition.opened_at.desc())
             )
+            now = datetime.now(UTC)
             for row in result.all():
                 pos = row[0]
                 question = row[1] or pos.market_condition_id[:20]
                 category = (row[2] or "other").capitalize()
+                end_date = row[3]
                 if category == "Other":
                     category = _infer_category(question)
                 positions.append(
@@ -489,6 +493,7 @@ async def api_positions(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         "strategy": getattr(pos, "strategy", "") or "",
                         "category": category,
                         "opened_at": pos.opened_at.isoformat() if pos.opened_at else None,
+                        "end_date": end_date.isoformat() if end_date else None,
                     }
                 )
     except Exception as e:
