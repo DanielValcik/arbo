@@ -78,17 +78,19 @@ GAMMA_DELAY = 0.2
 
 # Sport detection tags on Polymarket
 SPORT_TAGS = {
-    "nba": ["nba", "basketball"],
-    "epl": ["epl", "premier-league", "premier league"],
-    "nfl": ["nfl", "american-football", "americanfootball"],
-    "soccer": ["soccer", "football", "ucl", "champions-league",
-               "la-liga", "serie-a", "mls"],
-    "ufc": ["ufc", "mma", "boxing"],
-    "mlb": ["mlb", "baseball"],
-    "nhl": ["nhl", "hockey"],
-    "ncaab": ["ncaab", "march-madness", "college-basketball"],
-    "sports": ["sports"],
+    "nba": ["nba"],
+    "epl": ["epl"],
+    "nfl": ["nfl"],
+    "soccer": ["soccer"],
+    "ufc": ["ufc", "mma"],
+    "mlb": ["mlb"],
+    "nhl": ["nhl"],
+    "ncaab": ["ncaab"],
 }
+
+# Maximum events per tag to prevent runaway pagination
+# (Gamma API has millions of events; we only need resolved sports)
+MAX_EVENTS_PER_TAG = 5000
 
 
 # ── Logging ──────────────────────────────────────────────────────────
@@ -318,10 +320,11 @@ def discover_sports_events(sport_filter: str | None = None) -> list[dict]:
 
     log("Discovering sports events from Gamma API...")
 
-    tags_to_query = ["sports"]
     if sport_filter and sport_filter in SPORT_TAGS:
         tags_to_query = SPORT_TAGS[sport_filter]
     else:
+        # For "all", only query targeted sport tags (not "sports" which is too broad)
+        tags_to_query = []
         for tag_list in SPORT_TAGS.values():
             tags_to_query.extend(tag_list)
         tags_to_query = list(set(tags_to_query))
@@ -352,6 +355,11 @@ def discover_sports_events(sport_filter: str | None = None) -> list[dict]:
             if len(data) < 100:
                 break
             offset += 100
+
+            # Safety: don't paginate endlessly on broad tags
+            if offset >= MAX_EVENTS_PER_TAG:
+                log(f"  Tag '{tag}': hit max {MAX_EVENTS_PER_TAG} events, moving on")
+                break
 
     events_list = list(all_events.values())
 
