@@ -122,6 +122,7 @@ class PaperTrade(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     strategy: Mapped[str | None] = mapped_column(String(8), nullable=True)  # RDH: "A", "B", "C"
+    trade_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # type: ignore[type-arg]
 
     __table_args__ = (
         Index("idx_paper_trades_status", "status", placed_at.desc()),
@@ -457,6 +458,74 @@ class StrategyAllocation(Base):
     is_halted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ================================================================
+# HEALTH_CHECKS: Automated 12h health check results
+# ================================================================
+class HealthCheck(Base):
+    __tablename__ = "health_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    check_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    verdict: Mapped[str] = mapped_column(String(24), nullable=False)  # ok, needs_attention, bug_detected
+    window_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
+    expected: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ================================================================
+# CITY_VOLUME_DAILY: Daily volume snapshots per weather city
+# ================================================================
+class CityVolumeDaily(Base):
+    __tablename__ = "city_volume_daily"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    city: Mapped[str] = mapped_column(String(32), nullable=False)
+    date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    volume_24h: Mapped[Decimal] = mapped_column(Numeric(16, 2), nullable=False)
+    liquidity: Mapped[Decimal | None] = mapped_column(Numeric(16, 2), nullable=True)
+    num_markets: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    avg_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("city", "date", name="uq_city_volume_daily"),
+        Index("idx_city_volume_city_date", "city", "date"),
+    )
+
+
+# ================================================================
+# WEATHER_SCAN_LOG: Every scanned opportunity (traded + rejected)
+# ================================================================
+class WeatherScanLog(Base):
+    __tablename__ = "weather_scan_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    scan_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    city: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    condition_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    forecast_temp_c: Mapped[float] = mapped_column(Float, nullable=False)
+    forecast_prob: Mapped[float] = mapped_column(Float, nullable=False)
+    market_price: Mapped[float] = mapped_column(Float, nullable=False)
+    edge: Mapped[float] = mapped_column(Float, nullable=False)
+    direction: Mapped[str] = mapped_column(String(8), nullable=False)
+    volume_24h: Mapped[float] = mapped_column(Float, nullable=False)
+    liquidity: Mapped[float] = mapped_column(Float, nullable=False)
+    quality_gate_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    quality_gate_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    traded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    trade_size: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("idx_scan_log_city_date", "city", scan_at.desc()),
+        Index("idx_scan_log_traded", "traded"),
     )
 
 

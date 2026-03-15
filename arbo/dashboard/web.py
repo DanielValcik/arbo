@@ -911,6 +911,25 @@ async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str,
                     "is_halted": False,
                 }
             )
+        # Add model metadata for Strategy C
+        if sid == "C":
+            entry["model"] = {
+                "name": "AR-0134",
+                "score": 170.1,
+                "train_trades": 273,
+                "train_wr": 43.6,
+                "oos_pnl": 297,
+                "oos_wr": 38.2,
+                "walkforward_pnl": 2218,
+                "max_drawdown_pct": 13.0,
+                "cities_active": 18,
+                "expected_daily_trades": "2-3",
+                "min_edge": 0.10,
+                "kelly_fraction": 0.25,
+                "prob_sharpening": 0.90,
+                "excluded_cities": ["Chicago", "Seoul"],
+            }
+
         strategies.append(entry)
 
     return {"strategies": strategies}
@@ -1442,6 +1461,141 @@ async def api_paper_trades(
             return {"trades": trades, "count": len(trades)}
     except Exception as e:
         return {"error": str(e), "trades": [], "count": 0}
+
+
+# ---------------------------------------------------------------------------
+# Health Check, Expected vs Reality, Seasonality, City Volumes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/health-checks")
+async def api_health_checks(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Last 14 health check results for timeline display."""
+    try:
+        from arbo.utils.db import HealthCheck, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    HealthCheck.id,
+                    HealthCheck.check_at,
+                    HealthCheck.verdict,
+                    HealthCheck.window_hours,
+                    HealthCheck.metrics,
+                    HealthCheck.notes,
+                )
+                .order_by(HealthCheck.check_at.desc())
+                .limit(14)
+            )
+            checks = []
+            for row in result.all():
+                checks.append({
+                    "id": row[0],
+                    "check_at": row[1].isoformat() if row[1] else None,
+                    "verdict": row[2],
+                    "window_hours": row[3],
+                    "metrics": row[4],
+                    "notes": row[5],
+                })
+            return {"checks": list(reversed(checks))}
+    except Exception as e:
+        return {"checks": [], "error": str(e)}
+
+
+@app.get("/api/expected-vs-reality")
+async def api_expected_vs_reality(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Compare backtest expectations to actual paper trading performance."""
+    try:
+        from arbo.core.health_check import get_expected_vs_reality
+
+        return await get_expected_vs_reality()
+    except Exception as e:
+        return {"error": str(e), "too_early": True, "comparison": [], "actual": {}}
+
+
+@app.get("/api/seasonality")
+async def api_seasonality(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Seasonality analysis for Strategy C."""
+    try:
+        from arbo.core.health_check import get_seasonality_analysis
+
+        return await get_seasonality_analysis()
+    except Exception as e:
+        return {"error": str(e), "monthly_actual": []}
+
+
+@app.get("/api/city-volumes")
+async def api_city_volumes(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Per-city volume stats: current, 7d average, max position size."""
+    try:
+        from arbo.utils.db import CityVolumeDaily, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            # Last 7 days of volume data per city
+            seven_days_ago = datetime.now(UTC) - timedelta(days=7)
+            result = await session.execute(
+                sa.select(
+                    CityVolumeDaily.city,
+                    CityVolumeDaily.date,
+                    CityVolumeDaily.volume_24h,
+                    CityVolumeDaily.liquidity,
+                    CityVolumeDaily.num_markets,
+                    CityVolumeDaily.avg_price,
+                )
+                .where(CityVolumeDaily.date >= seven_days_ago.date())
+                .order_by(CityVolumeDaily.city, CityVolumeDaily.date)
+            )
+
+            from collections import defaultdict
+
+            city_data: dict[str, list[dict]] = defaultdict(list)
+            for row in result.all():
+                city_data[row[0]].append({
+                    "date": row[1].isoformat() if row[1] else None,
+                    "volume_24h": _dec(row[2]),
+                    "liquidity": _dec(row[3]),
+                    "num_markets": row[4],
+                    "avg_price": row[5],
+                })
+
+            # Compute summary per city
+            cities: list[dict] = []
+            for city_name, days in sorted(city_data.items()):
+                volumes = [d["volume_24h"] for d in days if d["volume_24h"]]
+                avg_vol = sum(volumes) / len(volumes) if volumes else 0
+                latest = days[-1] if days else {}
+                today_vol = latest.get("volume_24h", 0) or 0
+
+                # Max position = 5% of avg 24h volume
+                max_position = round(avg_vol * 0.05, 2) if avg_vol > 0 else 0
+
+                # Trend: compare today vs 7d average
+                trend = "stable"
+                if avg_vol > 0 and today_vol > 0:
+                    ratio = today_vol / avg_vol
+                    if ratio > 1.3:
+                        trend = "up"
+                    elif ratio < 0.7:
+                        trend = "down"
+
+                cities.append({
+                    "city": city_name,
+                    "today_volume": round(today_vol, 2),
+                    "avg_7d_volume": round(avg_vol, 2),
+                    "today_liquidity": latest.get("liquidity", 0),
+                    "num_markets": latest.get("num_markets", 0),
+                    "max_position": max_position,
+                    "trend": trend,
+                    "days": days,
+                })
+
+            return {"cities": cities}
+    except Exception as e:
+        return {"cities": [], "error": str(e)}
 
 
 def create_app(orchestrator: Any) -> FastAPI:

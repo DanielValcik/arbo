@@ -120,8 +120,9 @@ MIN_LIQUIDITY = 200.0      # Minimum liquidity ($)
 CONVICTION_RATIO = 0.0      # forecast_prob / market_price must exceed this
 MIN_FORECAST_PROB = 0.62    # Minimum absolute probability to trade
 
-# ── Position Sizing ──
-KELLY_FRACTION = 0.01       # Ultra Conservative Kelly
+# ── Position Sizing (FIXED — matches production risk_manager.py) ──
+# DO NOT TUNE these — they are architectural constants requiring CEO approval.
+KELLY_FRACTION = 0.25       # Quarter-Kelly (per risk_manager.py)
 MAX_POSITION_PCT = 0.05     # Max 5% of capital per trade
 MAX_TOTAL_EXPOSURE_PCT = 0.80  # Max 80% capital deployed at once
 
@@ -286,8 +287,8 @@ def position_size(edge, market_price, available_capital, total_capital,
     # Cap kelly_raw to reduce variance from high-edge trades
     kelly_raw = min(kelly_raw, 0.40)
 
-    # Fixed 0.35x scaling, equal weight all cities
-    kelly_adjusted = kelly_raw * KELLY_FRACTION * 0.35
+    # Quarter-Kelly sizing (matches production weather_ladder.py)
+    kelly_adjusted = kelly_raw * KELLY_FRACTION
     size = available_capital * kelly_adjusted
 
     # Cap at max position size

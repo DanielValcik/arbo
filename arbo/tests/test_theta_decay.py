@@ -1,12 +1,12 @@
 """Tests for Strategy A: Theta Decay — Sell Optimism Premium on Longshots.
 
 Tests verify:
-1. Market filtering: longshot YES < $0.15, volume, category, resolution window
+1. Market filtering: longshot YES < $0.092, volume, category, resolution window (2-21 days)
 2. Peak optimism entry: 3σ spike → buy NO
-3. Position sizing: quarter-Kelly, $20-50 clamp
-4. Exit management: partial exit at +50%, stop loss at -30%
+3. Position sizing: Kelly fraction 0.032, %-based clamp (2-5% of allocation)
+4. Exit management: partial exit at +50%, stop loss at -20%
 5. Resolution handling
-6. Max concurrent positions limit
+6. Max concurrent positions limit (25)
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ class MockMarket:
     condition_id: str = "0xlongshot1"
     question: str = "Will X happen?"
     category: str = "politics"
-    price_yes: Decimal | None = Decimal("0.10")
-    price_no: Decimal | None = Decimal("0.90")
+    price_yes: Decimal | None = Decimal("0.08")
+    price_no: Decimal | None = Decimal("0.92")
     token_id_yes: str = "tok_yes_1"
     token_id_no: str = "tok_no_1"
     fee_enabled: bool = False
@@ -50,7 +50,7 @@ class MockMarket:
 
     def __post_init__(self) -> None:
         if not self.end_date:
-            # Default: 10 days from now (within 3-30 day window)
+            # Default: 10 days from now (within 2-21 day window)
             future = datetime.now(UTC) + timedelta(days=10)
             self.end_date = future.isoformat()
 
@@ -130,16 +130,16 @@ class TestMarketFiltering:
     """Filter markets for theta decay candidates."""
 
     async def test_accepts_longshot_yes(self, strategy: ThetaDecay) -> None:
-        """YES < $0.15 is accepted."""
+        """YES < $0.092 is accepted."""
         await strategy.init()
-        candidates = strategy._filter_candidates([MockMarket(price_yes=Decimal("0.10"))])
+        candidates = strategy._filter_candidates([MockMarket(price_yes=Decimal("0.08"))])
         assert len(candidates) == 1
         await strategy.close()
 
     async def test_rejects_non_longshot(self, strategy: ThetaDecay) -> None:
-        """YES >= $0.15 is rejected."""
+        """YES >= $0.092 is rejected."""
         await strategy.init()
-        candidates = strategy._filter_candidates([MockMarket(price_yes=Decimal("0.20"))])
+        candidates = strategy._filter_candidates([MockMarket(price_yes=Decimal("0.10"))])
         assert len(candidates) == 0
         await strategy.close()
 
@@ -182,7 +182,7 @@ class TestMarketFiltering:
         await strategy.close()
 
     async def test_rejects_too_late_resolution(self, strategy: ThetaDecay) -> None:
-        """Market resolving in > 30 days is rejected."""
+        """Market resolving in > 21 days is rejected."""
         await strategy.init()
         far = (datetime.now(UTC) + timedelta(days=60)).isoformat()
         candidates = strategy._filter_candidates([MockMarket(end_date=far)])
@@ -190,7 +190,7 @@ class TestMarketFiltering:
         await strategy.close()
 
     async def test_accepts_valid_resolution_window(self, strategy: ThetaDecay) -> None:
-        """Market resolving in 3-30 days is accepted."""
+        """Market resolving in 2-21 days is accepted."""
         await strategy.init()
         good = (datetime.now(UTC) + timedelta(days=15)).isoformat()
         candidates = strategy._filter_candidates([MockMarket(end_date=good)])
@@ -226,8 +226,8 @@ class TestPeakOptimismEntry:
 
         mkt = MockMarket(
             condition_id="cond_longshot",
-            price_yes=Decimal("0.10"),
-            price_no=Decimal("0.90"),
+            price_yes=Decimal("0.08"),
+            price_no=Decimal("0.92"),
         )
 
         # First poll: register market with flow tracker
@@ -291,36 +291,42 @@ class TestPeakOptimismEntry:
 
 
 class TestPositionSizing:
-    """Quarter-Kelly sizing clamped to $20-50."""
+    """%-based Kelly sizing clamped to 2-5% of total allocation."""
 
     async def test_size_clamped_minimum(self, strategy: ThetaDecay) -> None:
-        """Size below $20 is clamped up to $20."""
-        # Small edge → tiny Kelly → clamp to $20 min
+        """Size below 2% of total is clamped up to min."""
+        # Small edge → tiny Kelly → clamp to pos_pct_min * total
+        # total=400, pos_pct_min=0.02 → min $8
         size = strategy._compute_size(
             price_no=Decimal("0.90"),
             edge=Decimal("0.04"),
             available=Decimal("400"),
+            total=Decimal("400"),
         )
-        assert size >= Decimal("20")
+        assert size >= Decimal("8")  # 2% of $400
 
     async def test_size_clamped_maximum(self, strategy: ThetaDecay) -> None:
-        """Size above $50 is clamped down to $50."""
-        # Large edge → big Kelly → clamp to $50 max
+        """Size above 5% of total is clamped down to max."""
+        # Large edge → big Kelly → clamp to pos_pct_max * total
+        # total=400, pos_pct_max=0.05 → max $20
         size = strategy._compute_size(
             price_no=Decimal("0.90"),
             edge=Decimal("0.50"),
             available=Decimal("400"),
+            total=Decimal("400"),
         )
-        assert size <= Decimal("50")
+        assert size <= Decimal("20")  # 5% of $400
 
     async def test_size_within_range(self, strategy: ThetaDecay) -> None:
-        """Normal edge produces size in $20-50 range."""
+        """Normal edge produces size in %-based range."""
+        # total=400, min=2%=$8, max=5%=$20
         size = strategy._compute_size(
             price_no=Decimal("0.90"),
             edge=Decimal("0.10"),
             available=Decimal("400"),
+            total=Decimal("400"),
         )
-        assert Decimal("20") <= size <= Decimal("50")
+        assert Decimal("8") <= size <= Decimal("20")
 
     async def test_size_respects_max_position_pct(
         self, risk: RiskManager, flow_tracker: MarketFlowTracker
@@ -332,6 +338,7 @@ class TestPositionSizing:
             price_no=Decimal("0.90"),
             edge=Decimal("0.30"),
             available=Decimal("400"),
+            total=Decimal("400"),
         )
         assert size <= Decimal("100")  # 5% of $2000
 
@@ -438,7 +445,7 @@ class TestResolution:
 
 
 class TestConcurrentLimit:
-    """Max 10 concurrent positions."""
+    """Max 25 concurrent positions (autoresearch: 10→25)."""
 
     async def test_max_concurrent_positions(
         self,
@@ -446,18 +453,18 @@ class TestConcurrentLimit:
         flow_tracker: MarketFlowTracker,
         paper_engine: MockPaperEngine,
     ) -> None:
-        """Cannot exceed max concurrent positions."""
+        """Cannot exceed max concurrent positions (25)."""
         await strategy.init()
 
-        # Fill up with 10 positions
-        for i in range(10):
+        # Fill up with 25 positions
+        for i in range(25):
             cond_id = f"cond_{i}"
             strategy._active_positions[cond_id] = _make_position(cond_id)
 
-        # Try to trade on an 11th market
-        mkt = MockMarket(condition_id="cond_11")
+        # Try to trade on a 26th market
+        mkt = MockMarket(condition_id="cond_26")
         await strategy.poll_cycle([mkt])
-        _inject_3sigma_spike(flow_tracker, "cond_11")
+        _inject_3sigma_spike(flow_tracker, "cond_26")
         traded = await strategy.poll_cycle([mkt])
 
         assert len(traded) == 0  # Hit limit

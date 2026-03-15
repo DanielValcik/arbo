@@ -35,8 +35,8 @@ class MockGammaMarket:
     condition_id: str = "cond_e2e_longshot"
     question: str = "Will underdog win?"
     category: str = "politics"
-    price_yes: Decimal | None = Decimal("0.10")
-    price_no: Decimal | None = Decimal("0.90")
+    price_yes: Decimal | None = Decimal("0.08")
+    price_no: Decimal | None = Decimal("0.92")
     token_id_yes: str = "tok_yes_e2e"
     token_id_no: str = "tok_no_e2e"
     fee_enabled: bool = False

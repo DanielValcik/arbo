@@ -98,6 +98,7 @@ class RDHOrchestrator:
         self._orderbook_provider: Any = None
         self._iem_client: Any = None
         self._weather_resolver: Any = None
+        self._shadow_exit_tracker: Any = None
 
         # Infrastructure
         self._report_generator: Any = None
@@ -417,6 +418,13 @@ class RDHOrchestrator:
             orderbook_provider=self._orderbook_provider,
         )
         await s.init()
+
+        # Shadow exit tracker for A/B testing exit logic
+        from arbo.strategies.shadow_exit_tracker import ShadowExitTracker
+
+        self._shadow_exit_tracker = ShadowExitTracker(min_hold_edge=0.15)
+        logger.info("shadow_exit_tracker_initialized", min_hold_edge=0.15)
+
         return s
 
     async def _init_report_generator(self) -> Any:
@@ -732,6 +740,9 @@ class RDHOrchestrator:
             self._internal_tasks.append(
                 asyncio.create_task(self._slack_bot.start(), name="slack_bot")
             )
+        self._internal_tasks.append(
+            asyncio.create_task(self._health_check_scheduler(), name="health_check")
+        )
         if self._web_dashboard is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._run_web_dashboard(), name="web_dashboard")
@@ -860,6 +871,51 @@ class RDHOrchestrator:
             await self._save_trades_to_db(trades)
             await self._save_signals_to_db(trades, strategy="C")
             await self._paper_engine.sync_positions_to_db()
+
+            # Register new trades with shadow exit tracker
+            if self._shadow_exit_tracker is not None:
+                for signal in trades:
+                    token_id = (
+                        signal.market.token_id_yes
+                        if signal.direction == "BUY_YES"
+                        else signal.market.token_id_no
+                    )
+                    self._shadow_exit_tracker.register_position(signal, token_id)
+
+        # Shadow exit check: evaluate all open C positions
+        if (
+            self._shadow_exit_tracker is not None
+            and self._paper_engine is not None
+            and self._strategy_c is not None
+        ):
+            # Get current CLOB prices for open positions
+            c_positions = [
+                p for p in self._paper_engine.open_positions
+                if getattr(p, "strategy", "") == "C"
+            ]
+            if c_positions and self._orderbook_provider is not None:
+                from arbo.connectors.orderbook_provider import OrderbookProvider
+
+                token_ids = [p.token_id for p in c_positions]
+                snapshots = await self._orderbook_provider.get_snapshots_batch(
+                    token_ids, neg_risk=True
+                )
+                current_prices: dict[str, Decimal] = {}
+                for tid, snap in snapshots.items():
+                    if snap is not None and snap.best_bid is not None:
+                        current_prices[tid] = snap.best_bid
+
+                shadow_exits = self._shadow_exit_tracker.check_exits(
+                    c_positions,
+                    current_prices,
+                    self._strategy_c._forecasts,
+                )
+                if shadow_exits:
+                    logger.info(
+                        "shadow_exits_triggered",
+                        count=len(shadow_exits),
+                        tokens=[e.token_id[:20] for e in shadow_exits],
+                    )
 
     def _get_current_prices(
         self, price_type: str = "yes"
@@ -1229,6 +1285,19 @@ class RDHOrchestrator:
                         self._strategy_b.handle_resolution(cid, pnl)
                     elif strategy == "C" and self._strategy_c is not None:
                         self._strategy_c.handle_resolution(cid, pnl)
+                        # Shadow exit A/B comparison
+                        if self._shadow_exit_tracker is not None:
+                            comparison = self._shadow_exit_tracker.resolve(
+                                pos.token_id, pnl
+                            )
+                            if comparison is not None:
+                                logger.info(
+                                    "shadow_exit_comparison",
+                                    city=comparison.city,
+                                    saved=comparison.saved,
+                                    actual_pnl=str(comparison.actual_pnl),
+                                    shadow_pnl=comparison.shadow_exit_pnl,
+                                )
 
                     await self._paper_engine.update_resolved_trades_in_db(pos.token_id)
 
@@ -1257,6 +1326,39 @@ class RDHOrchestrator:
 
             except Exception as e:
                 logger.error("resolution_check_error", error=str(e))
+
+    async def _health_check_scheduler(self) -> None:
+        """Run health check every 12 hours and persist results."""
+        interval = 12 * 3600  # 12 hours
+        # Initial delay: run first check after 1 hour of data
+        await asyncio.sleep(3600)
+        while not self._shutdown_event.is_set():
+            try:
+                from arbo.core.health_check import run_health_check, save_health_check
+
+                report = await run_health_check(window_hours=12)
+                await save_health_check(report)
+                logger.info(
+                    "health_check_complete",
+                    verdict=report.verdict,
+                    notes=report.notes[:3] if report.notes else [],
+                )
+
+                # Slack alert if not OK
+                if report.verdict != "ok" and self._slack_bot is not None:
+                    verdict_emoji = (
+                        ":warning:" if report.verdict == "needs_attention" else ":red_circle:"
+                    )
+                    msg = (
+                        f"{verdict_emoji} *Health Check: {report.verdict.upper()}*\n"
+                        + "\n".join(f"• {n}" for n in report.notes)
+                    )
+                    await self._slack_bot.send_message(msg, channel="review-queue")
+
+            except Exception as e:
+                logger.error("health_check_scheduler_error", error=str(e))
+
+            await asyncio.sleep(interval)
 
     async def _daily_report_scheduler(self) -> None:
         """Daily report at configured UTC hour and minute."""
