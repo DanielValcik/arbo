@@ -386,7 +386,31 @@ async def get_expected_vs_reality() -> dict:
             "open_deployed": round(open_deployed, 2),
         }
 
-        # Build comparison table — absolute totals first, rates only if 3+ days
+        # ROI calculations
+        capital = baseline["capital"]  # $1000
+        daily_roi_expected = baseline["oos_daily_pnl"] / capital * 100
+        weekly_roi_expected = baseline["oos_weekly_pnl"] / capital * 100
+        monthly_roi_expected = baseline["oos_daily_pnl"] * 30 / capital * 100
+
+        daily_roi_actual = resolved_pnl / max(full_days, 1) / capital * 100
+        weekly_roi_actual = resolved_pnl / max(days_active / 7, 1) / capital * 100 if days_active >= 7 else None
+        monthly_roi_actual = resolved_pnl / max(days_active / 30, 1) / capital * 100 if days_active >= 30 else None
+
+        def _pnl_str(val: float) -> str:
+            return f"{'+'if val >= 0 else ''}${val:.2f}"
+
+        def _roi_str(val: float) -> str:
+            return f"{'+'if val >= 0 else ''}{val:.2f}%"
+
+        def _pnl_status(actual_pnl: float, min_resolved: int = 10) -> str:
+            """Color-coded status for P&L metrics."""
+            if total_resolved < min_resolved:
+                return "too_early"
+            if actual_pnl >= 0:
+                return "ok"
+            return "warning"
+
+        # Build comparison table
         comparisons = [
             {
                 "metric": "Umisteno obchodu",
@@ -414,13 +438,9 @@ async def get_expected_vs_reality() -> dict:
             },
             {
                 "metric": "Realizovany P&L",
-                "expected": f"+${baseline['oos_daily_pnl'] * full_days:.2f} za {full_days}d",
-                "actual": f"{'+'if resolved_pnl >= 0 else ''}${resolved_pnl:.2f}",
-                "status": (
-                    "too_early" if total_resolved < MIN_COMPARISON_TRADES
-                    else "ok" if resolved_pnl >= 0
-                    else "warning"
-                ),
+                "expected": _pnl_str(baseline["oos_daily_pnl"] * full_days) + f" za {full_days}d",
+                "actual": _pnl_str(resolved_pnl),
+                "status": _pnl_status(resolved_pnl),
             },
             {
                 "metric": "Otevrene pozice",
@@ -430,28 +450,62 @@ async def get_expected_vs_reality() -> dict:
             },
         ]
 
-        # Per-day rates only after 3+ full days
-        if full_days >= 3:
-            daily_pnl_rate = resolved_pnl / full_days
-            daily_trade_rate = total_placed / full_days
-            comparisons.extend([
-                {
-                    "metric": "Obchody/den",
-                    "expected": f"{baseline['oos_daily_trades']:.1f}",
-                    "actual": f"{daily_trade_rate:.1f}",
-                    "status": "ok" if 0.5 < daily_trade_rate < 10 else "warning",
-                },
-                {
-                    "metric": "P&L/den",
-                    "expected": f"+${baseline['oos_daily_pnl']:.2f}",
-                    "actual": f"{'+'if daily_pnl_rate >= 0 else ''}${daily_pnl_rate:.2f}",
-                    "status": (
-                        "too_early" if total_resolved < MIN_COMPARISON_TRADES
-                        else "ok" if daily_pnl_rate >= 0
-                        else "warning"
-                    ),
-                },
-            ])
+        # --- ROI section (always shown, with "—" when not enough data) ---
+        comparisons.append({"metric": "_separator", "expected": "", "actual": "", "status": ""})
+
+        # Daily ROI
+        comparisons.append({
+            "metric": "Denni ROI",
+            "expected": _roi_str(daily_roi_expected),
+            "actual": _roi_str(daily_roi_actual) if full_days >= 1 else "—",
+            "status": _pnl_status(daily_roi_actual) if full_days >= 1 else "too_early",
+        })
+
+        # Weekly ROI
+        comparisons.append({
+            "metric": "Tydenni ROI",
+            "expected": _roi_str(weekly_roi_expected),
+            "actual": _roi_str(weekly_roi_actual) if weekly_roi_actual is not None else "—",
+            "status": _pnl_status(weekly_roi_actual, 20) if weekly_roi_actual is not None else "too_early",
+        })
+
+        # Monthly ROI
+        comparisons.append({
+            "metric": "Mesicni ROI",
+            "expected": _roi_str(monthly_roi_expected),
+            "actual": _roi_str(monthly_roi_actual) if monthly_roi_actual is not None else "—",
+            "status": _pnl_status(monthly_roi_actual, 50) if monthly_roi_actual is not None else "too_early",
+        })
+
+        # --- P&L absolutes ---
+        comparisons.append({"metric": "_separator", "expected": "", "actual": "", "status": ""})
+
+        comparisons.append({
+            "metric": "P&L / den",
+            "expected": _pnl_str(baseline["oos_daily_pnl"]),
+            "actual": _pnl_str(resolved_pnl / max(full_days, 1)) if full_days >= 1 else "—",
+            "status": _pnl_status(resolved_pnl / max(full_days, 1)) if full_days >= 1 else "too_early",
+        })
+
+        comparisons.append({
+            "metric": "P&L / tyden",
+            "expected": _pnl_str(baseline["oos_weekly_pnl"]),
+            "actual": _pnl_str(resolved_pnl / (days_active / 7)) if days_active >= 7 else "—",
+            "status": (
+                _pnl_status(resolved_pnl / (days_active / 7), 20)
+                if days_active >= 7 else "too_early"
+            ),
+        })
+
+        comparisons.append({
+            "metric": "P&L / mesic",
+            "expected": _pnl_str(baseline["oos_daily_pnl"] * 30),
+            "actual": _pnl_str(resolved_pnl / (days_active / 30)) if days_active >= 30 else "—",
+            "status": (
+                _pnl_status(resolved_pnl / (days_active / 30), 50)
+                if days_active >= 30 else "too_early"
+            ),
+        })
 
         result_data["comparison"] = comparisons
         result_data["daily_series"] = daily_series

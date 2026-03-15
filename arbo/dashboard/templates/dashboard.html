@@ -1583,18 +1583,24 @@
         const comparisons = data.comparison || [];
         if (comparisons.length > 0) {
             tbody.innerHTML = comparisons.map(c => {
+                // Separator row
+                if (c.metric === '_separator') {
+                    return `<tr><td colspan="4" style="border-bottom:1px solid var(--border);padding:2px 0"></td></tr>`;
+                }
                 const statusMap = {
-                    'ok': {icon: '✓', color: 'var(--green)'},
-                    'warning': {icon: '!', color: 'var(--red)'},
-                    'too_early': {icon: '○', color: 'var(--text-dim)'},
-                    'info': {icon: '', color: 'var(--text-dim)'},
+                    'ok': {icon: '●', color: 'var(--green)', bg: 'rgba(63,185,80,0.08)'},
+                    'warning': {icon: '●', color: 'var(--red)', bg: 'rgba(248,81,73,0.08)'},
+                    'too_early': {icon: '○', color: 'var(--text-dim)', bg: 'transparent'},
+                    'info': {icon: '', color: 'var(--text-dim)', bg: 'transparent'},
                 };
                 const st = statusMap[c.status] || statusMap.info;
-                return `<tr>
+                // Color the actual value based on status
+                const actualColor = c.status === 'ok' ? 'var(--green)' : c.status === 'warning' ? 'var(--red)' : 'var(--text)';
+                return `<tr style="background:${st.bg}">
                     <td style="font-weight:600">${c.metric}</td>
                     <td style="color:var(--text-dim)">${c.expected}</td>
-                    <td>${c.actual}</td>
-                    <td style="color:${st.color};font-weight:700">${st.icon}</td>
+                    <td style="color:${actualColor};font-weight:${c.status === 'info' || c.status === 'too_early' ? '400' : '700'}">${c.actual}</td>
+                    <td style="color:${st.color};font-weight:700;font-size:10px">${st.icon}</td>
                 </tr>`;
             }).join('');
         }
