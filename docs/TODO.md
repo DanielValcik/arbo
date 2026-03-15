@@ -357,6 +357,68 @@
 
 ---
 
+---
+
+## Strategy D: Live Edge Harvester (LEH) — Sports
+
+> Spec: `docs/STRATEGY_D_SPEC.md`
+> Code: `research_d/`
+
+### Sprint D-0: Data Infrastructure (COMPLETE 2026-03-15)
+- [x] D-006: SQLite schema + CRUD helpers (`research_d/sports_db.py`)
+- [x] D-003: Game results downloader — ESPN NBA + football-data.co.uk EPL (`download_game_results.py`)
+- [x] D-005: Elo/Glicko-2 rating engine (`elo_glicko_engine.py`)
+- [x] D-001: Polymarket sports price downloader — CLOB /prices-history (`download_sports_prices.py`)
+- [x] D-001b: Goldsky subgraph sports trade downloader — 12+ month history (`download_goldsky_sports.py`)
+- [x] D-004: Pinnacle odds fetcher — The Odds API (`download_pinnacle_odds.py`)
+- [x] D-007: Data validation + quality report (`validate_data.py`)
+- [x] D-008: Pipeline orchestrator (`run_pipeline.py`)
+- [x] 42 tests, all passing (`test_core.py`)
+
+### Data Collection Status (2026-03-15)
+- [x] 4,650 games (3,599 NBA + 1,051 EPL) with full scores
+- [x] 9,260 Elo/Glicko-2 ratings (NBA Brier=0.216, EPL Brier=0.159)
+- [x] 10,065 Polymarket sports markets discovered
+- [~] Goldsky NBA trades downloading (5,683 prices so far)
+- [~] CLOB NBA minute-level prices downloading
+- [x] 13 Pinnacle odds (current games; grows daily)
+- [ ] Set up cron/scheduled job to download Pinnacle odds daily
+- [ ] Download EPL Goldsky trades
+- [ ] Download CLOB EPL minute-level prices
+
+### Sprint D-1: Backtest Engine (NEXT)
+- [ ] D-101: Probability model (Elo 40% + Pinnacle 60% ensemble)
+- [ ] D-102: D1 quality gate (min_edge, competitive_threshold, etc.)
+- [ ] D-103: D1 green book simulator (walk minute-level price trajectories)
+- [ ] D-104: D2 overreaction detector (OU process calibration per sport)
+- [ ] D-105: D2 fade simulator
+- [ ] D-106: Composite score (pnl × sharpe × turnover × dd × green_book)
+- [ ] D-107: Walk-forward validation (4+ folds per sport/season)
+
+### Sprint D-2: Autoresearch Optimization
+- [ ] D-201: Autoresearch prepare.py (immutable eval harness)
+- [ ] D-202: Autoresearch strategy_params.py (mutable params)
+- [ ] D-203: Autoresearch program.md (agent instructions)
+- [ ] D-204: Run autoresearch (target: 500+ experiments)
+- [ ] D-205: Select best model + stress testing
+
+### Sprint D-3: Production Integration
+- [ ] D-301: Sports scanner module (`arbo/strategies/sports_scanner.py`)
+- [ ] D-302: Sports quality gate (`arbo/strategies/sports_quality_gate.py`)
+- [ ] D-303: Green book engine (`arbo/strategies/green_book_engine.py`)
+- [ ] D-304: Overreaction fader (`arbo/strategies/overreaction_fader.py`)
+- [ ] D-305: Live Bayesian updater (`arbo/strategies/live_bayesian.py`)
+- [ ] D-306: Integration with main_rdh.py
+- [ ] D-307: Paper trading deployment
+
+### Sprint D-4: Paper Trading Validation
+- [ ] D-401: 4-week minimum paper trading
+- [ ] D-402: Dashboard integration (strategy D cards)
+- [ ] D-403: Weekly performance reports
+- [ ] D-404: Go/No-go for live trading (CEO approval)
+
+---
+
 ## Cross-Cutting Concerns (Ongoing)
 
 - [ ] All error handling per brief
