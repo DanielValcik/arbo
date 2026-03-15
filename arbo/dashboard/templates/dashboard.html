@@ -1558,7 +1558,8 @@
         }).join('');
         const last = data.checks[data.checks.length - 1];
         const dt = new Date(last.check_at);
-        latest.innerHTML = `Posledni check: ${dt.toLocaleString('cs')} — <span style="color:${last.verdict === 'ok' ? 'var(--green)' : last.verdict === 'needs_attention' ? 'var(--yellow)' : 'var(--red)';font-weight:700">${last.verdict.toUpperCase()}</span> ${last.notes ? '— ' + last.notes.split('\n')[0] : ''}`;
+        const verdictColor = last.verdict === 'ok' ? 'var(--green)' : last.verdict === 'needs_attention' ? 'var(--yellow)' : 'var(--red)';
+        latest.innerHTML = `Posledni check: ${dt.toLocaleString('cs')} — <span style="color:${verdictColor};font-weight:700">${last.verdict.toUpperCase()}</span> ${last.notes ? '— ' + last.notes.split('\n')[0] : ''}`;
     }
 
     // ===== Expected vs Reality =====
