@@ -284,7 +284,7 @@ def discover_sports_markets(
         tag_count = 0
 
         while True:
-            resp = client.list_markets(tags=[tag], limit=100, cursor=cursor)
+            resp = client.list_markets(tags=[tag], limit=1000, cursor=cursor)
             if not resp or "data" not in resp:
                 break
 
@@ -585,6 +585,15 @@ def main() -> None:
         help="Max days of history to fetch (default: 25, safe for Free tier).",
     )
     parser.add_argument(
+        "--game-window-hours", type=int, default=0,
+        help="If >0, only download last N hours before end_date (game window mode).",
+    )
+    parser.add_argument(
+        "--market-type", default="all",
+        choices=["all", "moneyline", "spread", "over_under", "props"],
+        help="Filter by market type (default: all).",
+    )
+    parser.add_argument(
         "--resume", action="store_true",
         help="Skip already-downloaded markets.",
     )
@@ -666,6 +675,25 @@ def main() -> None:
             log(f"  ... and {len(markets) - 20} more")
         return
 
+    # Filter by market type if requested
+    if args.market_type != "all":
+        type_keywords = {
+            "moneyline": ["winner", "win", "beat", "vs", "moneyline"],
+            "spread": ["spread"],
+            "over_under": ["o/u", "over/under", "total"],
+            "props": ["assists", "rebounds", "points", "steals", "blocks",
+                      "threes", "yards", "touchdowns", "goals scored"],
+        }
+        keywords = type_keywords.get(args.market_type, [])
+        filtered = []
+        for m in markets:
+            q = (m.get("question") or "").lower()
+            if any(kw in q for kw in keywords):
+                filtered.append(m)
+        log(f"Filtered to {len(filtered)} {args.market_type} markets "
+            f"(from {len(markets)} total)")
+        markets = filtered
+
     # Download prices
     db = SportsDB(args.db)
     done = load_progress() if args.resume else set()
@@ -707,10 +735,22 @@ def main() -> None:
         game_id = register_market_in_db(market, db, detected_sport)
 
         # Download prices
+        # Game window mode: only last N hours before resolution
+        effective_start = args.start_date
+        if args.game_window_hours > 0:
+            m_end = market.get("end_date") or market.get("resolution_date", "")
+            if m_end:
+                try:
+                    end_dt = datetime.fromisoformat(str(m_end).replace("Z", "+00:00"))
+                    start_dt = end_dt - timedelta(hours=args.game_window_hours)
+                    effective_start = start_dt.strftime("%Y-%m-%d")
+                except (ValueError, TypeError):
+                    pass
+
         n = download_market_prices(
             client, market, db,
             resolution=args.resolution,
-            start_date=args.start_date,
+            start_date=effective_start,
             end_date=args.end_date,
             max_history_days=args.max_history_days,
         )
