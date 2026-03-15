@@ -260,8 +260,8 @@ async def save_health_check(report: HealthReport) -> None:
 async def get_expected_vs_reality() -> dict:
     """Compare backtest expectations to actual paper trading performance.
 
-    Returns dict with daily/weekly/monthly actual vs expected metrics,
-    suitable for dashboard rendering.
+    Shows absolute totals prominently. Only shows per-day rates after 3+ full days
+    to avoid misleading extrapolation from partial-day data.
     """
     now = datetime.now(UTC)
     baseline = AR0134_BASELINE
@@ -276,16 +276,11 @@ async def get_expected_vs_reality() -> dict:
     try:
         factory = get_session_factory()
         async with factory() as session:
-            # All Strategy C resolved trades
-            result = await session.execute(
+            # Count all Strategy C trades (placed)
+            res_all = await session.execute(
                 sa.select(
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
-                    sa.func.sum(sa.case((PaperTrade.status == "lost", 1), else_=0)),
-                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
-                    sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                     sa.func.min(PaperTrade.placed_at),
-                    sa.func.max(PaperTrade.placed_at),
                 )
                 .where(PaperTrade.strategy == "C")
                 .where(
@@ -295,21 +290,53 @@ async def get_expected_vs_reality() -> dict:
                     )
                 )
             )
-            row = result.one()
-            total_trades = row[0] or 0
-            total_wins = row[1] or 0
-            total_losses = row[2] or 0
-            total_pnl = float(row[3] or 0)
-            avg_edge = float(row[4] or 0)
-            first_trade = row[5]
-            _ = row[6]  # last_trade — available if needed
+            row_all = res_all.one()
+            total_placed = row_all[0] or 0
+            first_trade = row_all[1]
 
-            total_resolved = total_wins + total_losses
+            # Resolved Strategy C trades only (for P&L and WR)
+            res_resolved = await session.execute(
+                sa.select(
+                    sa.func.count(PaperTrade.id),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
+                )
+                .where(PaperTrade.strategy == "C")
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
+            )
+            row_r = res_resolved.one()
+            total_resolved = row_r[0] or 0
+            total_wins = row_r[1] or 0
+            total_losses = total_resolved - total_wins
+            resolved_pnl = float(row_r[2] or 0)
+            avg_edge = float(row_r[3] or 0)
+
             total_wr = total_wins / total_resolved if total_resolved > 0 else None
             days_active = (
                 (now - first_trade).total_seconds() / 86400 if first_trade else 0
             )
-            weeks_active = days_active / 7
+            # Use full calendar days for per-day rates (avoid < 1 day distortion)
+            full_days = max(int(days_active), 1)
+
+            # Open positions (unrealized)
+            res_open = await session.execute(
+                sa.select(
+                    sa.func.count(PaperTrade.id),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.size), 0),
+                )
+                .where(PaperTrade.strategy == "C")
+                .where(PaperTrade.status == "open")
+            )
+            row_o = res_open.one()
+            open_count = row_o[0] or 0
+            open_deployed = float(row_o[1] or 0)
 
             # Daily P&L series for cumulative chart
             daily_pnl_rows = await session.execute(
@@ -346,80 +373,91 @@ async def get_expected_vs_reality() -> dict:
 
         result_data["too_early"] = total_resolved < MIN_COMPARISON_TRADES
         result_data["actual"] = {
-            "total_trades": total_trades,
+            "total_placed": total_placed,
             "total_resolved": total_resolved,
             "total_wins": total_wins,
             "total_losses": total_losses,
             "win_rate": round(total_wr, 4) if total_wr is not None else None,
-            "total_pnl": round(total_pnl, 2),
+            "resolved_pnl": round(resolved_pnl, 2),
             "avg_edge": round(avg_edge, 4),
             "days_active": round(days_active, 1),
-            "weeks_active": round(weeks_active, 1),
-            "daily_trade_rate": round(total_trades / days_active, 2) if days_active > 0 else 0,
-            "daily_pnl_rate": round(total_pnl / days_active, 2) if days_active > 0 else 0,
-            "weekly_pnl_rate": round(total_pnl / weeks_active, 2) if weeks_active > 0 else 0,
+            "full_days": full_days,
+            "open_count": open_count,
+            "open_deployed": round(open_deployed, 2),
         }
 
-        # Comparison rows for dashboard table
-        def _status(actual_val, expected_val, tolerance_pct=0.3, higher_is_better=True):
-            if actual_val is None:
-                return "too_early"
-            diff = actual_val - expected_val
-            threshold = abs(expected_val) * tolerance_pct if expected_val != 0 else tolerance_pct
-            if abs(diff) <= threshold:
-                return "ok"
-            if (higher_is_better and diff < 0) or (not higher_is_better and diff > 0):
-                return "warning"
-            return "ok"
-
-        comparisons = []
-        if total_resolved >= MIN_COMPARISON_TRADES:
-            comparisons.append({
-                "metric": "Win Rate",
-                "expected": f"{baseline['oos_wr']:.1%}",
-                "actual": f"{total_wr:.1%}" if total_wr is not None else "—",
-                "status": _status(total_wr, baseline["oos_wr"], 0.15),
-            })
-        else:
-            comparisons.append({
-                "metric": "Win Rate",
-                "expected": f"{baseline['oos_wr']:.1%}",
-                "actual": f"{total_wr:.1%} ({total_resolved} trades)" if total_wr is not None else "—",
-                "status": "too_early",
-            })
-
-        comparisons.extend([
+        # Build comparison table — absolute totals first, rates only if 3+ days
+        comparisons = [
             {
-                "metric": "Obchody/den",
-                "expected": f"{baseline['oos_daily_trades']:.1f}",
-                "actual": f"{total_trades / days_active:.1f}" if days_active > 0 else "—",
-                "status": _status(
-                    total_trades / days_active if days_active > 0 else None,
-                    baseline["oos_daily_trades"], 0.5
+                "metric": "Umisteno obchodu",
+                "expected": f"~{baseline['oos_daily_trades'] * full_days:.0f} za {full_days}d",
+                "actual": str(total_placed),
+                "status": "info",
+            },
+            {
+                "metric": "Resolved",
+                "expected": "—",
+                "actual": f"{total_resolved} ({total_wins}W / {total_losses}L)",
+                "status": "info",
+            },
+            {
+                "metric": "Win Rate",
+                "expected": f"{baseline['oos_wr']:.1%}",
+                "actual": (
+                    f"{total_wr:.1%}" if total_wr is not None else "—"
+                ),
+                "status": (
+                    "too_early" if total_resolved < MIN_COMPARISON_TRADES
+                    else "ok" if abs(total_wr - baseline["oos_wr"]) <= 0.15
+                    else "warning"
                 ),
             },
             {
-                "metric": "P&L/den",
-                "expected": f"+${baseline['oos_daily_pnl']:.2f}",
-                "actual": f"{'+'if total_pnl/days_active >= 0 else ''}${total_pnl/days_active:.2f}" if days_active > 0 else "—",
-                "status": _status(
-                    total_pnl / days_active if days_active > 0 else None,
-                    baseline["oos_daily_pnl"], 0.5
+                "metric": "Realizovany P&L",
+                "expected": f"+${baseline['oos_daily_pnl'] * full_days:.2f} za {full_days}d",
+                "actual": f"{'+'if resolved_pnl >= 0 else ''}${resolved_pnl:.2f}",
+                "status": (
+                    "too_early" if total_resolved < MIN_COMPARISON_TRADES
+                    else "ok" if resolved_pnl >= 0
+                    else "warning"
                 ),
             },
             {
-                "metric": "Prumerny Edge",
-                "expected": f"{baseline['train_avg_edge']:.0%}",
-                "actual": f"{avg_edge:.0%}" if total_trades > 0 else "—",
-                "status": _status(avg_edge, baseline["train_avg_edge"], 0.5),
+                "metric": "Otevrene pozice",
+                "expected": "—",
+                "actual": f"{open_count} (${open_deployed:.0f} deployed)",
+                "status": "info",
             },
-        ])
+        ]
+
+        # Per-day rates only after 3+ full days
+        if full_days >= 3:
+            daily_pnl_rate = resolved_pnl / full_days
+            daily_trade_rate = total_placed / full_days
+            comparisons.extend([
+                {
+                    "metric": "Obchody/den",
+                    "expected": f"{baseline['oos_daily_trades']:.1f}",
+                    "actual": f"{daily_trade_rate:.1f}",
+                    "status": "ok" if 0.5 < daily_trade_rate < 10 else "warning",
+                },
+                {
+                    "metric": "P&L/den",
+                    "expected": f"+${baseline['oos_daily_pnl']:.2f}",
+                    "actual": f"{'+'if daily_pnl_rate >= 0 else ''}${daily_pnl_rate:.2f}",
+                    "status": (
+                        "too_early" if total_resolved < MIN_COMPARISON_TRADES
+                        else "ok" if daily_pnl_rate >= 0
+                        else "warning"
+                    ),
+                },
+            ])
 
         result_data["comparison"] = comparisons
         result_data["daily_series"] = daily_series
 
         # Expected cumulative line (for overlay on chart)
-        if days_active > 0 and daily_series:
+        if daily_series:
             expected_line = []
             for i, ds in enumerate(daily_series):
                 day_num = i + 1

@@ -538,13 +538,14 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <div>
                     <table style="width:100%">
-                        <thead><tr><th>Metrika</th><th>Backtest (OOS)</th><th>Realita</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Metrika</th><th>Ocekavani</th><th>Realita</th><th></th></tr></thead>
                         <tbody id="evrTableBody">
                             <tr><td colspan="4" class="loading">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div>
+                    <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">Kumulativni P&L resolved obchodu</div>
                     <div class="chart-container" style="height:200px">
                         <canvas id="evrChart"></canvas>
                     </div>
@@ -1572,7 +1573,7 @@
         if (data.too_early) {
             tooEarly.style.display = 'block';
             const actual = data.actual || {};
-            tooEarly.textContent = `Prilis brzy na hodnoceni — ${actual.total_resolved || 0} resolved trades (minimum 20 pro statisticky relevantni srovnani)`;
+            tooEarly.textContent = `Statisticke srovnani bude k dispozici po ${20 - (actual.total_resolved || 0)} dalsich resolved trades (aktualne ${actual.total_resolved || 0} z 20)`;
         } else {
             tooEarly.style.display = 'none';
         }
@@ -1582,13 +1583,18 @@
         const comparisons = data.comparison || [];
         if (comparisons.length > 0) {
             tbody.innerHTML = comparisons.map(c => {
-                const statusColor = c.status === 'ok' ? 'var(--green)' : c.status === 'warning' ? 'var(--red)' : 'var(--text-dim)';
-                const statusIcon = c.status === 'ok' ? '●' : c.status === 'warning' ? '▲' : '○';
+                const statusMap = {
+                    'ok': {icon: '✓', color: 'var(--green)'},
+                    'warning': {icon: '!', color: 'var(--red)'},
+                    'too_early': {icon: '○', color: 'var(--text-dim)'},
+                    'info': {icon: '', color: 'var(--text-dim)'},
+                };
+                const st = statusMap[c.status] || statusMap.info;
                 return `<tr>
-                    <td>${c.metric}</td>
-                    <td>${c.expected}</td>
+                    <td style="font-weight:600">${c.metric}</td>
+                    <td style="color:var(--text-dim)">${c.expected}</td>
                     <td>${c.actual}</td>
-                    <td style="color:${statusColor}">${statusIcon}</td>
+                    <td style="color:${st.color};font-weight:700">${st.icon}</td>
                 </tr>`;
             }).join('');
         }
@@ -1597,9 +1603,10 @@
         const series = data.daily_series || [];
         const expLine = data.expected_line || [];
         if (series.length > 0) {
-            const labels = series.map(s => s.date ? s.date.slice(5) : '');
-            const actualData = series.map(s => s.cumulative);
-            const expectedData = expLine.map(e => e.expected_cumulative);
+            // Add day 0 start point for cleaner chart
+            const labels = ['Start', ...series.map(s => s.date ? s.date.slice(5) : '')];
+            const actualData = [0, ...series.map(s => s.cumulative)];
+            const expectedData = [0, ...expLine.map(e => e.expected_cumulative)];
             if (evrChart) evrChart.destroy();
             evrChart = new Chart(document.getElementById('evrChart'), {
                 type: 'line',
@@ -1613,16 +1620,18 @@
                             backgroundColor: 'rgba(88,166,255,0.1)',
                             fill: true,
                             tension: 0.3,
-                            pointRadius: 3,
+                            pointRadius: 4,
+                            borderWidth: 2,
                         },
                         {
                             label: 'Ocekavani (OOS)',
                             data: expectedData,
-                            borderColor: 'rgba(139,148,158,0.5)',
+                            borderColor: 'rgba(63,185,80,0.5)',
                             borderDash: [5, 5],
                             fill: false,
                             tension: 0,
                             pointRadius: 0,
+                            borderWidth: 2,
                         }
                     ]
                 },
@@ -1632,12 +1641,23 @@
                     scales: {
                         x: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { display: false } },
                         y: {
-                            ticks: { color: '#8b949e', callback: v => '$' + v.toFixed(0) },
+                            ticks: { color: '#8b949e', callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0) },
                             grid: { color: 'rgba(48,54,61,0.3)' },
                         }
                     }
                 }
             });
+        } else {
+            // No resolved trades yet — show placeholder
+            const canvas = document.getElementById('evrChart');
+            const ctx = canvas.getContext('2d');
+            if (evrChart) evrChart.destroy();
+            evrChart = null;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Graf se zobrazi po prvnich resolved trades', canvas.width / 2, canvas.height / 2);
         }
 
         // Model description
@@ -1650,7 +1670,7 @@
                     <div><strong>Model:</strong> ${baseline.model} (score ${baseline.score})</div>
                     <div><strong>Kapital:</strong> $${baseline.capital}</div>
                     <div><strong>Train:</strong> ${baseline.train_trades} trades, WR ${(baseline.train_wr*100).toFixed(1)}%</div>
-                    <div><strong>OOS:</strong> $${baseline.oos_pnl} za ${baseline.oos_days}d (${baseline.oos_trades} trades)</div>
+                    <div><strong>OOS:</strong> +$${baseline.oos_pnl} za ${baseline.oos_days}d (${baseline.oos_trades} trades)</div>
                     <div><strong>Walk-forward:</strong> +$${baseline.wf_pnl}</div>
                     <div><strong>Kelly:</strong> ${baseline.kelly_fraction} (quarter-Kelly)</div>
                     <div><strong>Aktivni mesta:</strong> ${baseline.cities_active} z 20</div>
