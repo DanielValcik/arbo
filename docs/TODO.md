@@ -387,11 +387,13 @@
 - [x] Free tier test: 7,100 pts/market, 5,900 NBA markets discovered ✓
 - [x] Data quality validated: clean JSON, correct timestamps, both tokens ✓
 - [~] Upgrade to Ultra ($360/mo) — CEO going to upgrade NOW
-- [ ] Download ALL game-level markets (~4,400) across 10 sports/leagues:
-    - NBA (~1,200 markets), EPL (~600), NFL (~500), La Liga (~300)
-    - Serie A (~250), UCL (~150), UFC/MMA (~200), March Madness (~500)
-    - MLB (~400), NHL (~300)
-- [ ] Estimated: ~40M price points, ~3.8 GB SQLite, ~1.7 hours download
+- [ ] Download ALL markets (~25,000) across 13 sports/leagues:
+    - NBA (~5,900: moneyline + spreads + O/U + player props + futures)
+    - EPL, La Liga, Serie A, UCL, soccer (~5,000+)
+    - NFL + NCAAB/March Madness (~6,000+)
+    - UFC/MMA, MLB, NHL, F1, boxing (~4,000+)
+    - Full dataset: moneyline, spreads, O/U, player props, futures, alt lines
+- [ ] Estimated: ~288M price points, ~27 GB SQLite, ~12 hours download
 - [ ] After download: storno Ultra (keep data forever in SQLite)
 - [ ] Run: `PYTHONPATH=. python3 research_d/download_polymarketdata.py --sport all --resolution 1m --max-history-days 9999 --resume`
 
