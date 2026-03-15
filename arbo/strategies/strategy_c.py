@@ -7,6 +7,7 @@ Main strategy module that orchestrates:
 4. Temperature laddering
 5. Resolution chain management
 6. Paper trading integration
+7. Data collection (scan logs, volume snapshots)
 
 Poll cycle: fetch forecasts → scan markets → quality gate → ladder → execute
 """
@@ -14,7 +15,7 @@ Poll cycle: fetch forecasts → scan markets → quality gate → ladder → exe
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -23,14 +24,17 @@ from arbo.connectors.orderbook_provider import (
     available_depth,
     estimate_fill_price,
 )
+from arbo.connectors.weather_metoffice import MetOfficeWeatherClient
 from arbo.connectors.weather_models import City, WeatherForecast
 from arbo.connectors.weather_noaa import NOAAWeatherClient
-from arbo.connectors.weather_metoffice import MetOfficeWeatherClient
 from arbo.connectors.weather_openmeteo import OpenMeteoWeatherClient
 from arbo.core.risk_manager import MAX_POSITION_PCT, RiskManager, TradeRequest
 from arbo.strategies.resolution_chain import ResolutionChainEngine
 from arbo.strategies.weather_ladder import build_ladders_by_city
-from arbo.strategies.weather_quality_gate import filter_signals
+from arbo.strategies.weather_quality_gate import (
+    check_signal_quality,
+    filter_signals,
+)
 from arbo.strategies.weather_scanner import WeatherSignal, scan_weather_markets
 from arbo.utils.logger import get_logger
 
@@ -363,6 +367,22 @@ class StrategyC:
 
                 # Execute paper trade
                 if self._paper_engine:
+                    # Build trade_details for comprehensive data capture
+                    trade_details = {
+                        "city": signal.market.city.value,
+                        "target_date": str(signal.market.target_date),
+                        "bucket_text": signal.market.question[:120],
+                        "forecast_temp_c": signal.forecast_temp_c,
+                        "forecast_prob": signal.forecast_probability,
+                        "market_price_gamma": float(gamma_price),
+                        "clob_fill_p1": float(clob_fill) if clob_fill else None,
+                        "direction": signal.direction,
+                        "edge_at_scan": round(signal.edge, 4),
+                        "volume_24h": signal.market.volume_24h,
+                        "liquidity": signal.market.liquidity,
+                        "confidence": signal.confidence,
+                    }
+
                     trade_result = self._paper_engine.place_trade(
                         market_condition_id=signal.market.condition_id,
                         token_id=token_id,
@@ -376,6 +396,7 @@ class StrategyC:
                         volume_24h=Decimal(str(signal.market.volume_24h)),
                         liquidity=Decimal(str(signal.market.liquidity)),
                         clob_fill_price=clob_fill,
+                        trade_details=trade_details,
                     )
                     if trade_result:
                         self._risk.post_trade_update(
@@ -404,6 +425,29 @@ class StrategyC:
             ladders=len(ladders),
             trades=len(traded_signals),
         )
+
+        # Data collection (best-effort, non-blocking)
+        traded_ids = {s.market.condition_id for s in traded_signals}
+        traded_sizes = {
+            s.market.condition_id: float(
+                min(
+                    Decimal(str(s.market.volume_24h)) * MAX_VOLUME_POSITION_PCT,
+                    self._risk._state.capital * MAX_POSITION_PCT,
+                )
+            )
+            for s in traded_signals
+        }
+        try:
+            await self.save_scan_log(
+                signals, qualified, traded_ids, traded_sizes, oldest_fetch
+            )
+        except Exception as e:
+            logger.debug("scan_log_async_error", error=str(e))
+        try:
+            await self.save_volume_snapshot(markets)
+        except Exception as e:
+            logger.debug("volume_snapshot_async_error", error=str(e))
+
         return traded_signals
 
     def handle_resolution(
@@ -469,3 +513,144 @@ class StrategyC:
             "max_abs_drift": max_abs_drift,
             "trades_skipped_volatility": self._trades_skipped_volatility,
         }
+
+    # ------------------------------------------------------------------
+    # Data collection: scan logs, volume snapshots, forecasts
+    # ------------------------------------------------------------------
+
+    async def save_scan_log(
+        self,
+        all_signals: list[WeatherSignal],
+        qualified: list[WeatherSignal],
+        traded_condition_ids: set[str],
+        traded_sizes: dict[str, float],
+        forecast_fetched_at: datetime,
+    ) -> None:
+        """Persist every scanned signal (qualified + rejected) to weather_scan_log.
+
+        This captures the full picture: what was available, what passed quality gate,
+        and what was actually traded. Critical for future backtesting analysis.
+        """
+        try:
+            from arbo.utils.db import WeatherScanLog, get_session_factory
+
+            now = datetime.now(timezone.utc)
+            qualified_ids = {s.market.condition_id for s in qualified}
+            factory = get_session_factory()
+
+            async with factory() as session:
+                for signal in all_signals:
+                    is_qualified = signal.market.condition_id in qualified_ids
+                    is_traded = signal.market.condition_id in traded_condition_ids
+
+                    # Get quality gate reason for rejected signals
+                    gate_reason = None
+                    if not is_qualified:
+                        decision = check_signal_quality(signal, forecast_fetched_at)
+                        gate_reason = decision.reason
+
+                    row = WeatherScanLog(
+                        scan_at=now,
+                        city=signal.market.city.value,
+                        target_date=signal.market.target_date,
+                        condition_id=signal.market.condition_id,
+                        question=signal.market.question,
+                        forecast_temp_c=signal.forecast_temp_c,
+                        forecast_prob=signal.forecast_probability,
+                        market_price=signal.market.market_price,
+                        edge=signal.edge,
+                        direction=signal.direction,
+                        volume_24h=signal.market.volume_24h,
+                        liquidity=signal.market.liquidity,
+                        quality_gate_passed=is_qualified,
+                        quality_gate_reason=gate_reason if not is_qualified else "passed",
+                        traded=is_traded,
+                        trade_size=traded_sizes.get(signal.market.condition_id),
+                    )
+                    session.add(row)
+                await session.commit()
+
+            logger.info(
+                "scan_log_saved",
+                total=len(all_signals),
+                qualified=len(qualified),
+                traded=len(traded_condition_ids),
+            )
+        except Exception as e:
+            logger.debug("scan_log_save_error", error=str(e))
+
+    async def save_volume_snapshot(self, markets: list[Any]) -> None:
+        """Save daily volume per city from weather markets.
+
+        Aggregates volume_24h and liquidity per city, stores one row per city per day.
+        Uses upsert to avoid duplicates within the same day.
+        """
+        try:
+            from collections import defaultdict
+
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            from arbo.utils.db import CityVolumeDaily, get_session_factory
+
+            today = date.today()
+            city_data: dict[str, dict[str, Any]] = defaultdict(
+                lambda: {"volume": 0.0, "liquidity": 0.0, "count": 0, "prices": []}
+            )
+
+            for m in markets:
+                # Parse city from market question
+                city_name = getattr(m, "city", None)
+                if city_name is None:
+                    from arbo.strategies.weather_scanner import parse_city
+
+                    q = getattr(m, "question", "") or getattr(m, "title", "")
+                    city_obj = parse_city(q)
+                    if city_obj is None:
+                        continue
+                    city_name = city_obj.value
+                elif hasattr(city_name, "value"):
+                    city_name = city_name.value
+
+                vol = float(getattr(m, "volume_24h", 0) or 0)
+                liq = float(getattr(m, "liquidity", 0) or 0)
+                price = float(getattr(m, "price_yes", 0) or getattr(m, "market_price", 0) or 0)
+
+                city_data[city_name]["volume"] += vol
+                city_data[city_name]["liquidity"] += liq
+                city_data[city_name]["count"] += 1
+                if price > 0:
+                    city_data[city_name]["prices"].append(price)
+
+            if not city_data:
+                return
+
+            factory = get_session_factory()
+            async with factory() as session:
+                for city, data in city_data.items():
+                    avg_price = (
+                        sum(data["prices"]) / len(data["prices"]) if data["prices"] else None
+                    )
+                    stmt = pg_insert(CityVolumeDaily).values(
+                        city=city,
+                        date=today,
+                        volume_24h=Decimal(str(round(data["volume"], 2))),
+                        liquidity=Decimal(str(round(data["liquidity"], 2))),
+                        num_markets=data["count"],
+                        avg_price=avg_price,
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_city_volume_daily",
+                        set_={
+                            "volume_24h": stmt.excluded.volume_24h,
+                            "liquidity": stmt.excluded.liquidity,
+                            "num_markets": stmt.excluded.num_markets,
+                            "avg_price": stmt.excluded.avg_price,
+                            "captured_at": datetime.now(timezone.utc),
+                        },
+                    )
+                    await session.execute(stmt)
+                await session.commit()
+
+            logger.info("volume_snapshot_saved", cities=len(city_data))
+        except Exception as e:
+            logger.debug("volume_snapshot_save_error", error=str(e))

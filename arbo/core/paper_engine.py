@@ -58,6 +58,7 @@ class PaperTrade:
     placed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     notes: str = ""
+    trade_details: dict | None = None  # Comprehensive data for backtesting
 
 
 @dataclass
@@ -165,6 +166,7 @@ class PaperTradingEngine:
         volume_24h: Decimal | None = None,
         liquidity: Decimal | None = None,
         clob_fill_price: Decimal | None = None,
+        trade_details: dict | None = None,
     ) -> PaperTrade | None:
         """Place a simulated paper trade.
 
@@ -294,6 +296,7 @@ class PaperTradingEngine:
             kelly_fraction=kelly,
             fee=fee * size + POLYGON_GAS_COST_USD,
             strategy=strategy,
+            trade_details=trade_details,
         )
         self._next_trade_id += 1
         self._trades.append(trade)
@@ -470,6 +473,7 @@ class PaperTradingEngine:
                     placed_at=trade.placed_at,
                     notes=trade.notes or None,
                     strategy=trade.strategy or None,
+                    trade_details=trade.trade_details,
                 )
                 session.add(db_trade)
                 await session.commit()

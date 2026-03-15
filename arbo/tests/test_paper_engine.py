@@ -104,10 +104,13 @@ class TestTradePlacement:
         assert t2.id == t1.id + 1
 
     def test_balance_deducted_after_trade(self, engine: PaperTradingEngine) -> None:
+        from arbo.core.paper_engine import POLYGON_GAS_COST_USD
+
         initial = engine.balance
         trade = _place_trade(engine)
         assert trade is not None
-        assert engine.balance == initial - trade.size
+        # Balance deducted by trade size + Polygon gas cost ($0.007)
+        assert engine.balance == initial - trade.size - POLYGON_GAS_COST_USD
 
     def test_trade_history_tracked(self, engine: PaperTradingEngine) -> None:
         _place_trade(engine, token_id="tok_1")
@@ -266,13 +269,15 @@ class TestMarketResolution:
         assert pnl == -trade.size
 
     def test_resolution_returns_capital_to_balance(self, engine: PaperTradingEngine) -> None:
-        """After resolution, invested capital + P&L returns to balance."""
+        """After resolution, invested capital + P&L returns to balance (minus gas)."""
+        from arbo.core.paper_engine import POLYGON_GAS_COST_USD
+
         trade = _place_trade(engine, token_id="tok_1", side="BUY")
         assert trade is not None
         balance_after_trade = engine.balance
         pnl = engine.resolve_market("tok_1", winning_outcome=True)
-        # Balance should be: balance_after_trade + trade.size + pnl
-        expected = balance_after_trade + trade.size + pnl
+        # Balance = balance_after_trade + trade.size + pnl - gas (claim tx)
+        expected = balance_after_trade + trade.size + pnl - POLYGON_GAS_COST_USD
         assert engine.balance == expected
 
     def test_position_removed_after_resolution(self, engine: PaperTradingEngine) -> None:

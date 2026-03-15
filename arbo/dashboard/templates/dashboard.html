@@ -388,7 +388,10 @@
             <span class="header-sub">RDH</span>
             <span class="badge badge-{{ mode }}">{{ mode }}</span>
         </div>
-        <div class="refresh-info">Last refresh: <span id="lastRefresh">--</span></div>
+        <div style="display:flex;align-items:center;gap:16px">
+            <a href="/experiments" style="color:#58a6ff;text-decoration:none;font-size:12px;font-weight:600;letter-spacing:1px;">EXPERIMENTS</a>
+            <span class="refresh-info">Last refresh: <span id="lastRefresh">--</span></span>
+        </div>
     </div>
 
     <div class="tab-bar">
@@ -516,6 +519,64 @@
             </div>
             <div class="chart-container" style="height:180px">
                 <canvas id="driftChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Health Check Timeline -->
+        <div class="card grid-full">
+            <div class="card-title">Health Check Timeline (12h)</div>
+            <div id="healthTimeline" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:40px">
+                <div class="loading" style="font-size:11px">Ceka se na prvni health check...</div>
+            </div>
+            <div id="healthLatest" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
+        </div>
+
+        <!-- Expected vs Reality -->
+        <div class="card grid-full">
+            <div class="card-title">Expected vs Reality — Strategy C (AR-0134)</div>
+            <div id="evrTooEarly" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                    <table style="width:100%">
+                        <thead><tr><th>Metrika</th><th>Backtest (OOS)</th><th>Realita</th><th>Status</th></tr></thead>
+                        <tbody id="evrTableBody">
+                            <tr><td colspan="4" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <div class="chart-container" style="height:200px">
+                        <canvas id="evrChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy C Model Description -->
+        <div class="card grid-full" id="modelDescCard" style="display:none">
+            <div class="card-title">Model AR-0134 — Popis</div>
+            <div id="modelDescContent" style="font-size:11px;line-height:1.7;color:var(--text-dim)"></div>
+        </div>
+
+        <!-- City Volume Monitor -->
+        <div class="card grid-full">
+            <div class="card-title">Volume per mesto (7d)</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mesto</th>
+                            <th>Dnes Volume</th>
+                            <th>7d Prumer</th>
+                            <th>Trend</th>
+                            <th>Max Pozice</th>
+                            <th>Trhy</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cityVolBody">
+                        <tr><td colspan="6" class="loading">Sbira se data...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -1477,6 +1538,155 @@
         }
     }
 
+    // ===== Health Check Timeline =====
+    async function updateHealthChecks() {
+        const data = await fetchJSON('/api/health-checks');
+        if (!data || !data.checks) return;
+        const container = document.getElementById('healthTimeline');
+        const latest = document.getElementById('healthLatest');
+        if (data.checks.length === 0) {
+            container.innerHTML = '<div style="font-size:11px;color:var(--text-dim)">Zatim zadny health check — prvni probehne za ~1 hodinu</div>';
+            return;
+        }
+        container.innerHTML = data.checks.map(c => {
+            const color = c.verdict === 'ok' ? 'var(--green)' : c.verdict === 'needs_attention' ? 'var(--yellow)' : 'var(--red)';
+            const dt = new Date(c.check_at);
+            const label = dt.toLocaleDateString('cs', {day:'numeric',month:'short'}) + ' ' + dt.toLocaleTimeString('cs', {hour:'2-digit',minute:'2-digit'});
+            const m = c.metrics || {};
+            const tip = `${label}\nVerdict: ${c.verdict}\nTrades: ${m.total_trades||0} (${m.total_resolved||0} resolved)\nWR: ${m.total_wr != null ? (m.total_wr * 100).toFixed(1)+'%' : '—'}\nP&L: $${(m.total_pnl||0).toFixed(2)}`;
+            return `<div title="${tip}" style="width:20px;height:20px;border-radius:50%;background:${color};cursor:pointer;flex-shrink:0;border:2px solid var(--bg)" onclick="this.nextElementSibling?.classList.toggle('detail-visible')"></div><div class="strategy-detail" style="font-size:10px;max-width:250px">${c.notes||''}</div>`;
+        }).join('');
+        const last = data.checks[data.checks.length - 1];
+        const dt = new Date(last.check_at);
+        latest.innerHTML = `Posledni check: ${dt.toLocaleString('cs')} — <span style="color:${last.verdict === 'ok' ? 'var(--green)' : last.verdict === 'needs_attention' ? 'var(--yellow)' : 'var(--red)';font-weight:700">${last.verdict.toUpperCase()}</span> ${last.notes ? '— ' + last.notes.split('\n')[0] : ''}`;
+    }
+
+    // ===== Expected vs Reality =====
+    let evrChart = null;
+    async function updateExpectedVsReality() {
+        const data = await fetchJSON('/api/expected-vs-reality');
+        if (!data) return;
+
+        const tooEarly = document.getElementById('evrTooEarly');
+        if (data.too_early) {
+            tooEarly.style.display = 'block';
+            const actual = data.actual || {};
+            tooEarly.textContent = `Prilis brzy na hodnoceni — ${actual.total_resolved || 0} resolved trades (minimum 20 pro statisticky relevantni srovnani)`;
+        } else {
+            tooEarly.style.display = 'none';
+        }
+
+        // Comparison table
+        const tbody = document.getElementById('evrTableBody');
+        const comparisons = data.comparison || [];
+        if (comparisons.length > 0) {
+            tbody.innerHTML = comparisons.map(c => {
+                const statusColor = c.status === 'ok' ? 'var(--green)' : c.status === 'warning' ? 'var(--red)' : 'var(--text-dim)';
+                const statusIcon = c.status === 'ok' ? '●' : c.status === 'warning' ? '▲' : '○';
+                return `<tr>
+                    <td>${c.metric}</td>
+                    <td>${c.expected}</td>
+                    <td>${c.actual}</td>
+                    <td style="color:${statusColor}">${statusIcon}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Cumulative P&L chart (actual vs expected)
+        const series = data.daily_series || [];
+        const expLine = data.expected_line || [];
+        if (series.length > 0) {
+            const labels = series.map(s => s.date ? s.date.slice(5) : '');
+            const actualData = series.map(s => s.cumulative);
+            const expectedData = expLine.map(e => e.expected_cumulative);
+            if (evrChart) evrChart.destroy();
+            evrChart = new Chart(document.getElementById('evrChart'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Realita',
+                            data: actualData,
+                            borderColor: '#58a6ff',
+                            backgroundColor: 'rgba(88,166,255,0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 3,
+                        },
+                        {
+                            label: 'Ocekavani (OOS)',
+                            data: expectedData,
+                            borderColor: 'rgba(139,148,158,0.5)',
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { display: false } },
+                        y: {
+                            ticks: { color: '#8b949e', callback: v => '$' + v.toFixed(0) },
+                            grid: { color: 'rgba(48,54,61,0.3)' },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Model description
+        const modelCard = document.getElementById('modelDescCard');
+        const baseline = data.baseline || {};
+        if (baseline.model) {
+            modelCard.style.display = 'block';
+            document.getElementById('modelDescContent').innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div><strong>Model:</strong> ${baseline.model} (score ${baseline.score})</div>
+                    <div><strong>Kapital:</strong> $${baseline.capital}</div>
+                    <div><strong>Train:</strong> ${baseline.train_trades} trades, WR ${(baseline.train_wr*100).toFixed(1)}%</div>
+                    <div><strong>OOS:</strong> $${baseline.oos_pnl} za ${baseline.oos_days}d (${baseline.oos_trades} trades)</div>
+                    <div><strong>Walk-forward:</strong> +$${baseline.wf_pnl}</div>
+                    <div><strong>Kelly:</strong> ${baseline.kelly_fraction} (quarter-Kelly)</div>
+                    <div><strong>Aktivni mesta:</strong> ${baseline.cities_active} z 20</div>
+                    <div><strong>Vyloucena:</strong> ${(baseline.excluded_cities||[]).join(', ')}</div>
+                </div>
+                <div style="margin-top:8px">
+                    Ocekavane chovani: 2-3 obchody denne, win rate ~40%, vetsina profitu z teplotnich extremu.
+                    Zima (prosinec-unor) generuje ~67% celkoveho zisku diky vetsi variabilite teplot.
+                </div>
+            `;
+        }
+    }
+
+    // ===== City Volume Monitor =====
+    async function updateCityVolumes() {
+        const data = await fetchJSON('/api/city-volumes');
+        if (!data || !data.cities) return;
+        const tbody = document.getElementById('cityVolBody');
+        if (data.cities.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">Zatim zadna data — volume se zacne sbirat po prvnim scanu</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.cities.map(c => {
+            const trendIcon = c.trend === 'up' ? '↑' : c.trend === 'down' ? '↓' : '→';
+            const trendColor = c.trend === 'up' ? 'var(--green)' : c.trend === 'down' ? 'var(--red)' : 'var(--text-dim)';
+            const volColor = c.today_volume < c.avg_7d_volume * 0.5 ? 'var(--red)' : 'var(--text)';
+            return `<tr>
+                <td style="font-weight:600">${c.city}</td>
+                <td style="color:${volColor}">$${c.today_volume.toLocaleString()}</td>
+                <td>$${c.avg_7d_volume.toLocaleString()}</td>
+                <td style="color:${trendColor};font-weight:700">${trendIcon}</td>
+                <td>$${c.max_position.toFixed(2)}</td>
+                <td>${c.num_markets}</td>
+            </tr>`;
+        }).join('');
+    }
+
     async function fetchAll() {
         await Promise.allSettled([
             updatePortfolio(),
@@ -1490,6 +1700,9 @@
             updateInfra(),
             updateTrades(),
             updateDrift(),
+            updateHealthChecks(),
+            updateExpectedVsReality(),
+            updateCityVolumes(),
         ]);
         document.getElementById('lastRefresh').textContent =
             new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
