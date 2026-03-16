@@ -1198,22 +1198,27 @@
         // --- Header avg daily P&L strip ---
         const stripEl = document.getElementById('avgDailyPnl');
         if (stripEl && data.avg_by_strategy) {
+            const stratAlloc = {'A': 400, 'B': 400, 'C': 1000};
             const parts = [];
             const strategies = Object.keys(data.avg_by_strategy).sort();
             for (const s of strategies) {
                 const v = data.avg_by_strategy[s];
                 const cls = v >= 0 ? 'positive' : 'negative';
                 const sign = v >= 0 ? '+' : '';
+                const alloc = stratAlloc[s] || 400;
+                const roiPct = (v / alloc * 100).toFixed(2);
+                const roiSign = v >= 0 ? '+' : '';
                 parts.push(
-                    `<span class="avg-item"><span class="avg-label">${s}</span><span class="avg-value ${cls}">${sign}$${Math.abs(v).toFixed(2)}</span></span>`
+                    `<span class="avg-item"><span class="avg-label">${s}</span><span class="avg-value ${cls}">${sign}$${Math.abs(v).toFixed(2)}</span><span style="font-size:9px;color:var(--text-dim);margin-left:2px">(${roiSign}${roiPct}%)</span></span>`
                 );
             }
             // Total
             const total = data.avg_daily || 0;
             const tCls = total >= 0 ? 'positive' : 'negative';
             const tSign = total >= 0 ? '+' : '';
+            const totalRoi = (total / 2000 * 100).toFixed(2);
             parts.push(
-                `<span class="avg-sep">|</span><span class="avg-item"><span class="avg-label">Avg/day</span><span class="avg-value ${tCls}">${tSign}$${Math.abs(total).toFixed(2)}</span></span>`
+                `<span class="avg-sep">|</span><span class="avg-item"><span class="avg-label">Avg/day</span><span class="avg-value ${tCls}">${tSign}$${Math.abs(total).toFixed(2)}</span><span style="font-size:9px;color:var(--text-dim);margin-left:2px">(${tSign}${totalRoi}%)</span></span>`
             );
             stripEl.innerHTML = parts.join('');
         }
