@@ -532,6 +532,31 @@
             </div>
         </div>
 
+        <!-- Weather Download Progress -->
+        <div class="card grid-full" id="weatherDlCard" style="display:none">
+            <div class="card-title" style="display:flex;align-items:center;gap:10px">
+                Strategy C — Stahovani dat pocasi
+                <span id="wdlStatus" style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--green);color:#000;font-weight:bold">STAHUJE</span>
+            </div>
+            <div style="margin:12px 16px 4px;position:relative">
+                <div style="background:var(--bg-tertiary);border-radius:6px;height:24px;overflow:hidden;position:relative">
+                    <div id="wdlBar" style="height:100%;background:linear-gradient(90deg, #ff9800, #f44336);width:0%;transition:width 0.5s;border-radius:6px"></div>
+                    <div id="wdlBarText" style="position:absolute;top:0;left:0;right:0;height:100%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:white;text-shadow:0 1px 2px rgba(0,0,0,0.5)">0%</div>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin:2px 16px 12px;font-size:11px;color:var(--text-dim)">
+                <span>20 mest, 1-min rozliseni, kompletni historie</span>
+                <span id="wdlUpdated">--</span>
+            </div>
+            <div class="metrics">
+                <div class="metric"><div class="metric-value" id="wdlMarkets">--</div><div class="metric-label">Markety</div></div>
+                <div class="metric"><div class="metric-value" id="wdlPrices" style="color:var(--green)">--</div><div class="metric-label">Ceny (miliony)</div></div>
+                <div class="metric"><div class="metric-value" id="wdlDb">--</div><div class="metric-label">Velikost DB</div></div>
+                <div class="metric"><div class="metric-value" id="wdlCities">--</div><div class="metric-label">Mesta</div></div>
+                <div class="metric"><div class="metric-value" id="wdlEta">--</div><div class="metric-label">Zbyva</div></div>
+            </div>
+        </div>
+
         <!-- Infrastructure -->
         <div class="card grid-full">
             <div class="card-title">Infrastructure</div>
@@ -1715,6 +1740,47 @@
         }
     }
 
+    async function updateWeatherDownload() {
+        const data = await fetchJSON('/api/weather-download-progress');
+        if (!data) return;
+        const card = document.getElementById('weatherDlCard');
+        if (data.markets_done > 0 || data.active) {
+            card.style.display = 'block';
+            const done = data.markets_done || 0;
+            const total = data.markets_total || 1;
+            const pct = data.progress_pct || 0;
+            document.getElementById('wdlMarkets').textContent =
+                done.toLocaleString() + ' / ' + total.toLocaleString();
+            document.getElementById('wdlPrices').textContent =
+                (data.prices_millions || 0).toFixed(1) + ' M';
+            document.getElementById('wdlDb').textContent =
+                (data.db_size_mb || 0).toFixed(0) + ' MB';
+            document.getElementById('wdlCities').textContent =
+                (data.cities_done || 0) + ' / ' + (data.cities_total || 20);
+            const eta = data.eta_hours || 0;
+            document.getElementById('wdlEta').textContent =
+                eta > 0 ? eta.toFixed(1) + ' hodin' : 'Hotovo';
+            document.getElementById('wdlBar').style.width = pct + '%';
+            document.getElementById('wdlBarText').textContent = pct.toFixed(1) + '%';
+            const statusEl = document.getElementById('wdlStatus');
+            if (pct >= 99) {
+                statusEl.textContent = 'HOTOVO'; statusEl.style.background = 'var(--blue)';
+            } else if (data.active) {
+                statusEl.textContent = 'STAHUJE'; statusEl.style.background = 'var(--green)';
+            } else {
+                statusEl.textContent = 'POZASTAVENO'; statusEl.style.background = 'var(--yellow)';
+            }
+            const updated = data.updated_at || '';
+            if (updated) {
+                const ago = Math.round((Date.now() - new Date(updated).getTime()) / 60000);
+                document.getElementById('wdlUpdated').textContent =
+                    ago <= 1 ? 'Prave ted' : 'Pred ' + ago + ' min';
+            }
+        } else {
+            card.style.display = 'none';
+        }
+    }
+
     function renderTrades() {
         const tbody = document.getElementById('tradesBody');
         const filtered = latestTrades.filter(t => matchesFilter(t));
@@ -2134,6 +2200,7 @@
             updateRisk(),
             updateInfra(),
             updateDownloadProgress(),
+            updateWeatherDownload(),
             updateTrades(),
             updateDrift(),
             updateHealthChecks(),

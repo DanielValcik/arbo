@@ -743,6 +743,40 @@ async def api_download_progress(
     }
 
 
+@app.get("/api/weather-download-progress")
+async def api_weather_download_progress(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Strategy C weather data download progress."""
+    import json as _json
+
+    status_path = Path("/opt/arbo/research/data/weather_status.json")
+    if status_path.exists():
+        try:
+            data = _json.loads(status_path.read_text())
+            done = data.get("markets_done", 0)
+            total = data.get("markets_total", 1)
+            pct = done / max(total, 1) * 100
+            remaining = total - done
+            eta_min = remaining / 15  # ~15 markets/min estimate
+            return {
+                "active": done > 0 and done < total,
+                "markets_done": done,
+                "markets_total": total,
+                "progress_pct": round(pct, 1),
+                "prices_total": data.get("prices_total", 0),
+                "prices_millions": round(data.get("prices_total", 0) / 1_000_000, 1),
+                "db_size_mb": data.get("db_size_mb", 0),
+                "cities_done": data.get("cities_done", 0),
+                "cities_total": 20,
+                "eta_hours": round(eta_min / 60, 1),
+                "updated_at": data.get("updated_at", "?"),
+            }
+        except Exception:
+            pass
+    return {"active": False, "markets_done": 0, "markets_total": 0, "progress_pct": 0}
+
+
 @app.get("/api/infra")
 async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Infrastructure: uptime, system resources, strategy task count."""
