@@ -527,17 +527,42 @@ def register_market_in_db(
     return game_id
 
 
-# ── Progress Tracking ────────────────────────────────────────────────
+# ── Progress Tracking (file-lock safe for parallel workers) ──────────
+
+# Append-only log file: one market_id per line (no race condition)
+PROGRESS_LOG_PATH = DATA_DIR / "pmd_progress_log.txt"
+
 
 def load_progress() -> set[str]:
+    """Load completed market IDs from append-only log + legacy JSON."""
+    done: set[str] = set()
+    # Read legacy JSON (from single-threaded runs)
     if PROGRESS_PATH.exists():
-        return set(json.loads(PROGRESS_PATH.read_text()))
-    return set()
+        try:
+            done = set(json.loads(PROGRESS_PATH.read_text()))
+        except (json.JSONDecodeError, ValueError):
+            pass
+    # Read append-only log (from parallel workers)
+    if PROGRESS_LOG_PATH.exists():
+        for line in PROGRESS_LOG_PATH.read_text().splitlines():
+            line = line.strip()
+            if line:
+                done.add(line)
+    return done
 
 
 def save_progress(done: set[str]) -> None:
+    """No-op for parallel mode. Use mark_done() instead."""
+    # Keep for backwards compatibility with single-threaded mode
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PROGRESS_PATH.write_text(json.dumps(sorted(done)))
+
+
+def mark_done(market_id: str) -> None:
+    """Append a single market ID to the progress log. Safe for parallel workers."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(PROGRESS_LOG_PATH, "a") as f:
+        f.write(market_id + "\n")
 
 
 # ── Main ─────────────────────────────────────────────────────────────

@@ -128,7 +128,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from pathlib import Path
 from research_d.download_polymarketdata import (
     PMDataClient, download_market_prices, register_market_in_db,
-    load_progress, save_progress, log,
+    load_progress, mark_done, log,
 )
 from research_d.sports_db import SportsDB
 from datetime import datetime, timedelta, timezone
@@ -205,9 +205,8 @@ for idx, mid in enumerate(chunk_ids):
     )
     total_prices += n
 
-    # Update shared progress
-    done.add(mid)
-    save_progress(done)
+    # Append to progress log (safe for parallel workers, no race condition)
+    mark_done(mid)
 
     if (idx + 1) % 20 == 0:
         pct = (idx + 1) / len(chunk_ids) * 100
