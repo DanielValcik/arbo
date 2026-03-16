@@ -758,7 +758,7 @@ async def api_weather_download_progress(
             total = data.get("markets_total", 1)
             pct = done / max(total, 1) * 100
             remaining = total - done
-            eta_min = remaining / 15  # ~15 markets/min estimate
+            eta_min = remaining / 100  # ~100 markets/min (10-min res, 5 workers)
             return {
                 "active": done > 0 and done < total,
                 "markets_done": done,
