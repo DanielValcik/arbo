@@ -544,6 +544,23 @@
             </div>
         </div>
 
+        <!-- Strategy D Download Progress -->
+        <div class="card grid-full" id="downloadCard" style="display:none">
+            <div class="card-title">Strategy D — Data Download</div>
+            <div class="metrics">
+                <div class="metric"><div class="metric-value" id="dlPass" style="color:var(--blue)">--</div><div class="metric-label">Pass</div></div>
+                <div class="metric"><div class="metric-value" id="dlMarkets">--</div><div class="metric-label">Markets</div></div>
+                <div class="metric"><div class="metric-value" id="dlPrices" style="color:var(--green)">--</div><div class="metric-label">Prices (M)</div></div>
+                <div class="metric"><div class="metric-value" id="dlDb">--</div><div class="metric-label">DB Size (GB)</div></div>
+                <div class="metric"><div class="metric-value" id="dlWorkers">--</div><div class="metric-label">Workers</div></div>
+                <div class="metric"><div class="metric-value" id="dlEta">--</div><div class="metric-label">ETA (hours)</div></div>
+            </div>
+            <div style="margin:8px 16px 12px;background:var(--bg-tertiary);border-radius:4px;height:8px;overflow:hidden">
+                <div id="dlBar" style="height:100%;background:var(--blue);width:0%;transition:width 0.5s"></div>
+            </div>
+            <div style="text-align:center;color:var(--text-dim);font-size:12px" id="dlUpdated">--</div>
+        </div>
+
         <!-- Price Drift (latency re-check) -->
         <div class="card grid-full">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -1604,6 +1621,30 @@
             q.remaining !== 'N/A' ? q.remaining + '/' + q.total : 'N/A';
     }
 
+    async function updateDownloadProgress() {
+        const data = await fetchJSON('/api/download-progress');
+        if (!data) return;
+        const card = document.getElementById('downloadCard');
+        if (data.markets_done > 0 || data.active) {
+            card.style.display = 'block';
+            document.getElementById('dlPass').textContent = data.pass || '?';
+            document.getElementById('dlMarkets').textContent =
+                (data.markets_done || 0).toLocaleString() + ' / ' + (data.markets_total || 0).toLocaleString();
+            document.getElementById('dlPrices').textContent = (data.prices_millions || 0).toFixed(1) + 'M';
+            document.getElementById('dlDb').textContent = (data.db_size_gb || 0).toFixed(1);
+            document.getElementById('dlWorkers').textContent = data.workers_alive || 0;
+            const eta = data.eta_hours || 0;
+            document.getElementById('dlEta').textContent = eta > 0 ? eta.toFixed(0) + 'h' : 'done';
+            document.getElementById('dlBar').style.width = (data.progress_pct || 0) + '%';
+            document.getElementById('dlUpdated').textContent = 'Updated: ' + (data.updated_at || '?');
+            // Color workers
+            const wEl = document.getElementById('dlWorkers');
+            wEl.style.color = data.workers_alive > 0 ? 'var(--green)' : 'var(--red)';
+        } else {
+            card.style.display = 'none';
+        }
+    }
+
     function renderTrades() {
         const tbody = document.getElementById('tradesBody');
         const filtered = latestTrades.filter(t => matchesFilter(t));
@@ -2022,6 +2063,7 @@
             updateSignals(),
             updateRisk(),
             updateInfra(),
+            updateDownloadProgress(),
             updateTrades(),
             updateDrift(),
             updateHealthChecks(),

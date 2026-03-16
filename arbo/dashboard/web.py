@@ -688,6 +688,61 @@ async def api_risk(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     }
 
 
+@app.get("/api/download-progress")
+async def api_download_progress(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Strategy D data download progress from download VPS."""
+    import json as _json
+
+    status_path = Path("/opt/arbo/research_d/data/download_status.json")
+    if status_path.exists():
+        try:
+            data = _json.loads(status_path.read_text())
+            done = data.get("markets_done", 0)
+            total = data.get("markets_total", 1)
+            prices = data.get("prices_total", 0)
+            db_gb = data.get("db_size_bytes", 0) / (1024**3)
+            workers = data.get("workers_alive", 0)
+            updated = data.get("updated_at", "?")
+            current_pass = data.get("pass", "?")
+            pct = done / max(total, 1) * 100
+            # Estimate ETA based on speed (rough: 70 markets/min)
+            remaining = total - done
+            eta_min = remaining / 70 if done > 0 else 0
+            eta_h = eta_min / 60
+
+            return {
+                "active": workers > 0,
+                "pass": current_pass,
+                "markets_done": done,
+                "markets_total": total,
+                "progress_pct": round(pct, 1),
+                "prices_total": prices,
+                "prices_millions": round(prices / 1_000_000, 1),
+                "db_size_gb": round(db_gb, 1),
+                "workers_alive": workers,
+                "eta_hours": round(eta_h, 1),
+                "updated_at": updated,
+            }
+        except Exception:
+            pass
+
+    return {
+        "active": False,
+        "pass": "unknown",
+        "markets_done": 0,
+        "markets_total": 0,
+        "progress_pct": 0,
+        "prices_total": 0,
+        "prices_millions": 0,
+        "db_size_gb": 0,
+        "workers_alive": 0,
+        "eta_hours": 0,
+        "updated_at": "no data",
+    }
+
+
 @app.get("/api/infra")
 async def api_infra(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Infrastructure: uptime, system resources, strategy task count."""
