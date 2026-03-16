@@ -1209,7 +1209,7 @@
                 const roiPct = (v / alloc * 100).toFixed(2);
                 const roiSign = v >= 0 ? '+' : '';
                 parts.push(
-                    `<span class="avg-item"><span class="avg-label">${s}</span><span class="avg-value ${cls}">${sign}$${Math.abs(v).toFixed(2)}</span><span style="font-size:9px;color:var(--text-dim);margin-left:2px">(${roiSign}${roiPct}%)</span></span>`
+                    `<span class="avg-item">${stratBadge(s)}<span class="avg-value ${cls}">${sign}$${Math.abs(v).toFixed(2)}</span><span style="font-size:9px;color:var(--text-dim);margin-left:2px">(${roiSign}${roiPct}%)</span></span>`
                 );
             }
             // Total
