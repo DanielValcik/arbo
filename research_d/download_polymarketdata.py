@@ -373,77 +373,68 @@ def download_market_prices(
     else:
         end_ts = int(datetime.now(timezone.utc).timestamp())
 
-    # Download prices with pagination
+    # Download prices with cursor pagination (no day-by-day chunking)
+    # The API handles large time ranges natively via pagination
     total_points = 0
     cursor = None
 
-    # Download in 24-hour chunks for efficiency
-    chunk_seconds = 86400  # 1 day
-    current_start = start_ts
+    while True:
+        resp = client.get_prices(
+            identifier,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            resolution=resolution,
+            limit=200,
+            cursor=cursor,
+        )
 
-    while current_start < end_ts:
-        chunk_end = min(current_start + chunk_seconds, end_ts)
+        if not resp:
+            break
 
-        cursor = None
-        while True:
-            resp = client.get_prices(
-                identifier,
-                start_ts=current_start,
-                end_ts=chunk_end,
-                resolution=resolution,
-                limit=200,
-                cursor=cursor,
-            )
+        # Response has: data = {token_label: [{t, p}, ...]}
+        data = resp.get("data", {})
+        tokens_map = resp.get("tokens", {})
 
-            if not resp:
-                break
+        for label, price_points in data.items():
+            if not price_points:
+                continue
 
-            # Response has: data = {token_label: [{t, p}, ...]}
-            data = resp.get("data", {})
-            tokens_map = resp.get("tokens", {})
+            # Get token_id for this label
+            token_id = tokens_map.get(label, "")
+            if not token_id:
+                # Try to find from market tokens
+                for t in tokens:
+                    if t.get("label") == label or t.get("outcome") == label:
+                        token_id = t.get("id", t.get("token_id", ""))
+                        break
 
-            for label, price_points in data.items():
-                if not price_points:
-                    continue
+            if not token_id:
+                continue
 
-                # Get token_id for this label
-                token_id = tokens_map.get(label, "")
-                if not token_id:
-                    # Try to find from market tokens
-                    for t in tokens:
-                        if t.get("label") == label or t.get("outcome") == label:
-                            token_id = t.get("id", t.get("token_id", ""))
-                            break
+            # Convert to (ts, price) pairs
+            prices = []
+            for pt in price_points:
+                ts = pt.get("t")
+                p = pt.get("p")
+                if ts is not None and p is not None:
+                    # ts might be ISO string or Unix
+                    if isinstance(ts, str):
+                        try:
+                            ts = int(datetime.fromisoformat(
+                                ts.replace("Z", "+00:00")).timestamp())
+                        except (ValueError, TypeError):
+                            continue
+                    prices.append((int(ts), float(p)))
 
-                if not token_id:
-                    continue
+            if prices:
+                db.insert_prices_simple(str(token_id), prices)
+                total_points += len(prices)
 
-                # Convert to (ts, price) pairs
-                prices = []
-                for pt in price_points:
-                    ts = pt.get("t")
-                    p = pt.get("p")
-                    if ts is not None and p is not None:
-                        # ts might be ISO string or Unix
-                        if isinstance(ts, str):
-                            try:
-                                ts = int(datetime.fromisoformat(
-                                    ts.replace("Z", "+00:00")).timestamp())
-                            except (ValueError, TypeError):
-                                continue
-                        prices.append((int(ts), float(p)))
-
-                if prices:
-                    db.insert_prices_simple(str(token_id), prices)
-                    total_points += len(prices)
-
-            # Pagination
-            meta = resp.get("metadata", {})
-            cursor = meta.get("next_cursor")
-            if not cursor:
-                break
-
-        current_start = chunk_end
+        # Pagination
+        meta = resp.get("metadata", {})
+        cursor = meta.get("next_cursor")
+        if not cursor:
+            break
 
     return total_points
 
