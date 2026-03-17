@@ -500,7 +500,11 @@ class RDHOrchestrator:
 
             factory = get_session_factory()
             async with factory() as session:
-                # Total P&L per strategy (all resolved trades)
+                # Total P&L per strategy (all resolved trades, excluding pre-validation)
+                _no_preval = sa.or_(
+                    PaperTrade.notes.is_(None),
+                    PaperTrade.notes != "pre-validation",
+                )
                 result = await session.execute(
                     sa.select(
                         PaperTrade.strategy,
@@ -508,6 +512,7 @@ class RDHOrchestrator:
                     )
                     .where(PaperTrade.status.in_(["won", "lost"]))
                     .where(PaperTrade.strategy.isnot(None))
+                    .where(_no_preval)
                     .group_by(PaperTrade.strategy)
                 )
                 for row in result.all():
@@ -531,6 +536,7 @@ class RDHOrchestrator:
                     )
                     .where(PaperTrade.status.in_(["won", "lost"]))
                     .where(PaperTrade.strategy.isnot(None))
+                    .where(_no_preval)
                     .where(PaperTrade.resolved_at >= week_start)
                     .group_by(PaperTrade.strategy)
                 )
@@ -548,6 +554,7 @@ class RDHOrchestrator:
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
                     .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(_no_preval)
                     .where(PaperTrade.resolved_at >= today)
                 )
                 daily_total = result.scalar()
@@ -559,6 +566,7 @@ class RDHOrchestrator:
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
                     .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(_no_preval)
                     .where(PaperTrade.resolved_at >= week_start)
                 )
                 weekly_total = result.scalar()
