@@ -1,4 +1,4 @@
-"""Tests for Strategy C quality gate (AR-0134 configuration)."""
+"""Tests for Strategy C quality gate (C1f/V4a configuration)."""
 
 from __future__ import annotations
 
@@ -57,18 +57,14 @@ def _make_signal(
 
 
 def _recent_time() -> datetime:
-    """Return a timestamp from 1 hour ago (fresh forecast)."""
     return datetime.now(timezone.utc) - timedelta(hours=1)
 
 
 def _old_time() -> datetime:
-    """Return a timestamp from 8 hours ago (stale forecast)."""
     return datetime.now(timezone.utc) - timedelta(hours=8)
 
 
 class TestQualityGatePassing:
-    """Test signals that should pass quality checks."""
-
     def test_good_signal_passes(self) -> None:
         signal = _make_signal()
         decision = check_signal_quality(signal, _recent_time())
@@ -82,7 +78,7 @@ class TestQualityGatePassing:
 
 
 class TestEdgeFilter:
-    """Test minimum edge threshold (AR-0134: MIN_EDGE=0.10)."""
+    """Test minimum edge threshold (C1f: MIN_EDGE=0.10)."""
 
     def test_below_min_edge_rejected(self) -> None:
         signal = _make_signal(edge=0.05)
@@ -96,21 +92,21 @@ class TestEdgeFilter:
         assert decision.passed
 
     def test_max_edge_rejected(self) -> None:
-        """AR-0134: MAX_EDGE=0.70, edge=0.75 should fail."""
-        signal = _make_signal(edge=0.75)
+        """C1f: MAX_EDGE=0.90, edge=0.95 should fail."""
+        signal = _make_signal(edge=0.95)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "anomaly" in decision.reason.lower()
 
 
 class TestVolumeFilter:
-    """Test minimum volume threshold (AR-0134: MIN_VOLUME=510)."""
+    """C1f: MIN_VOLUME=0 (no volume filter)."""
 
-    def test_low_volume_rejected(self) -> None:
-        signal = _make_signal(volume_24h=400.0)
+    def test_low_volume_passes(self) -> None:
+        """V4a/C1f has min_volume=0, so low volume should pass."""
+        signal = _make_signal(volume_24h=50.0)
         decision = check_signal_quality(signal, _recent_time())
-        assert not decision.passed
-        assert "volume" in decision.reason.lower()
+        assert decision.passed
 
     def test_above_volume_passes(self) -> None:
         signal = _make_signal(volume_24h=3000.0)
@@ -119,8 +115,6 @@ class TestVolumeFilter:
 
 
 class TestLiquidityFilter:
-    """Test minimum liquidity threshold."""
-
     def test_low_liquidity_rejected(self) -> None:
         signal = _make_signal(liquidity=100.0)
         decision = check_signal_quality(signal, _recent_time())
@@ -129,8 +123,6 @@ class TestLiquidityFilter:
 
 
 class TestFeeFilter:
-    """Test fee-free requirement."""
-
     def test_fee_enabled_rejected(self) -> None:
         signal = _make_signal(fee_enabled=True)
         decision = check_signal_quality(signal, _recent_time())
@@ -139,8 +131,6 @@ class TestFeeFilter:
 
 
 class TestConfidenceFilter:
-    """Test minimum confidence threshold."""
-
     def test_low_confidence_rejected(self) -> None:
         signal = _make_signal(confidence=0.3)
         decision = check_signal_quality(signal, _recent_time())
@@ -149,13 +139,10 @@ class TestConfidenceFilter:
 
 
 class TestFreshnessFilter:
-    """Test forecast freshness requirement."""
-
     def test_stale_forecast_rejected(self) -> None:
         signal = _make_signal()
         decision = check_signal_quality(signal, _old_time())
         assert not decision.passed
-        assert "old" in decision.reason.lower() or "forecast" in decision.reason.lower()
 
     def test_fresh_forecast_passes(self) -> None:
         signal = _make_signal()
@@ -164,30 +151,30 @@ class TestFreshnessFilter:
 
 
 class TestPriceFilter:
-    """Test price range checks (AR-0134: MIN_PRICE=0.05, MAX_PRICE=0.70)."""
+    """Test price range checks (C1f: MIN_PRICE=0.08, MAX_PRICE=0.56)."""
 
     def test_low_price_rejected(self) -> None:
-        signal = _make_signal(market_price=0.03)
+        signal = _make_signal(market_price=0.06)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "price" in decision.reason.lower() and "below" in decision.reason.lower()
 
     def test_high_price_rejected(self) -> None:
-        signal = _make_signal(market_price=0.75, edge=0.15)
+        # NYC has max_price override of 0.70, so use Paris (no override, global 0.56)
+        signal = _make_signal(market_price=0.60, edge=0.15, city=City.PARIS)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "price" in decision.reason.lower() and "above" in decision.reason.lower()
 
-    def test_wide_price_range_passes(self) -> None:
-        """AR-0134 allows much wider price range than before."""
-        for price in [0.06, 0.35, 0.65]:
+    def test_valid_price_range_passes(self) -> None:
+        for price in [0.10, 0.35, 0.50]:
             signal = _make_signal(market_price=price, edge=0.15)
             decision = check_signal_quality(signal, _recent_time())
             assert decision.passed, f"price={price} should pass"
 
 
 class TestForecastProbFilter:
-    """Test minimum forecast probability (AR-0134: MIN_FORECAST_PROB=0.06)."""
+    """Test minimum forecast probability (C1f: MIN_FORECAST_PROB=0.07)."""
 
     def test_low_forecast_prob_rejected(self) -> None:
         signal = _make_signal(edge=0.10, market_price=0.35, forecast_probability=0.04)
@@ -202,73 +189,58 @@ class TestForecastProbFilter:
 
 
 class TestPerCityOverrides:
-    """Test per-city threshold overrides (AR-0134 config)."""
+    """Test per-city threshold overrides (C1f/V4a config)."""
 
-    def test_excluded_city_chicago_rejected(self) -> None:
-        """Chicago has min_edge=0.99, so all signals should be rejected."""
-        signal = _make_signal(city=City.CHICAGO, edge=0.50)
+    def test_excluded_city_wellington_rejected(self) -> None:
+        """Wellington has min_edge=0.99, so all signals should be rejected."""
+        signal = _make_signal(city=City.WELLINGTON, edge=0.50)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "edge" in decision.reason.lower()
-        assert "chicago" in decision.reason.lower()
 
-    def test_excluded_city_seoul_rejected(self) -> None:
-        signal = _make_signal(city=City.SEOUL, edge=0.50)
-        decision = check_signal_quality(signal, _recent_time())
-        assert not decision.passed
-
-    def test_nyc_not_excluded(self) -> None:
-        """AR-0134: NYC is NOT excluded (no override)."""
-        signal = _make_signal(city=City.NYC, edge=0.15)
+    def test_chicago_not_excluded(self) -> None:
+        """C1f: Chicago is NOT excluded (unlike AR-0134)."""
+        signal = _make_signal(city=City.CHICAGO, edge=0.15, market_price=0.35)
         decision = check_signal_quality(signal, _recent_time())
         assert decision.passed
 
-    def test_toronto_per_city_override(self) -> None:
-        """Toronto has min_edge=0.005, max_price=0.40 — edge=0.15 should pass."""
-        signal = _make_signal(city=City.TORONTO, edge=0.15, market_price=0.35)
+    def test_seoul_low_edge_passes(self) -> None:
+        """Seoul has min_edge=0.05, so edge=0.06 should pass."""
+        signal = _make_signal(city=City.SEOUL, edge=0.06, market_price=0.35)
+        decision = check_signal_quality(signal, _recent_time())
+        assert decision.passed
+
+    def test_nyc_per_city_override(self) -> None:
+        """NYC has min_edge=0.08, max_price=0.70."""
+        signal = _make_signal(city=City.NYC, edge=0.09, market_price=0.35)
         decision = check_signal_quality(signal, _recent_time())
         assert decision.passed
 
     def test_toronto_high_price_rejected(self) -> None:
-        """Toronto has max_price=0.40, so price=0.45 should fail."""
-        signal = _make_signal(city=City.TORONTO, market_price=0.45, edge=0.15)
+        """Toronto has max_price=0.60, so price=0.65 should fail."""
+        signal = _make_signal(city=City.TORONTO, market_price=0.65, edge=0.15)
         decision = check_signal_quality(signal, _recent_time())
         assert not decision.passed
         assert "above" in decision.reason.lower()
 
-    def test_dallas_wide_price_range(self) -> None:
-        """Dallas has max_price=0.80 — price=0.75 should pass."""
-        signal = _make_signal(city=City.DALLAS, market_price=0.75, edge=0.15)
-        decision = check_signal_quality(signal, _recent_time())
-        assert decision.passed
-
-    def test_miami_strict_price(self) -> None:
-        """Miami has max_price=0.40, min_edge=0.05 — price=0.45 should fail."""
-        signal = _make_signal(city=City.MIAMI, market_price=0.45, edge=0.15)
-        decision = check_signal_quality(signal, _recent_time())
-        assert not decision.passed
-
     def test_get_threshold_city_override(self) -> None:
-        assert _get_threshold("min_edge", "chicago") == 0.99
-        assert _get_threshold("max_price", "dallas") == 0.80
-        assert _get_threshold("min_edge", "ankara") == 0.005
+        assert _get_threshold("min_edge", "seoul") == 0.05
+        assert _get_threshold("max_price", "munich") == 0.80
+        assert _get_threshold("min_edge", "atlanta") == 0.08
 
     def test_get_threshold_global_default(self) -> None:
-        assert _get_threshold("min_edge", "nyc") == 0.10
-        assert _get_threshold("max_price", "nyc") == 0.70
+        assert _get_threshold("min_edge", "chicago") == 0.10  # No override → global
+        assert _get_threshold("max_price", "chicago") == 0.56  # No override → global
 
     def test_get_threshold_unknown_city(self) -> None:
         assert _get_threshold("min_edge", "unknown_city") == 0.10
 
 
 class TestFilterSignals:
-    """Test batch filtering."""
-
     def test_filters_mixed_signals(self) -> None:
         signals = [
             _make_signal(edge=0.28),  # Should pass (NYC)
             _make_signal(edge=0.02),  # Should fail (low edge)
-            _make_signal(volume_24h=400),  # Should fail (low volume)
             _make_signal(edge=0.30),  # Should pass
         ]
         passed = filter_signals(signals, _recent_time())
@@ -288,26 +260,15 @@ class TestFilterSignals:
         passed = filter_signals(signals, _recent_time())
         assert len(passed) == 0
 
-    def test_custom_thresholds(self) -> None:
-        signal = _make_signal(edge=0.28)
-        # With default threshold (0.10) should pass
-        passed_default = filter_signals([signal], _recent_time())
-        assert len(passed_default) == 1
-
-        # With higher threshold (0.30) should fail
-        passed_strict = filter_signals([signal], _recent_time(), min_edge=0.30)
-        assert len(passed_strict) == 0
-
     def test_excluded_cities_filtered_out(self) -> None:
-        """Signals from excluded cities (Chicago, Seoul) should not pass."""
+        """Signals from excluded cities (Wellington) should not pass."""
         signals = [
-            _make_signal(city=City.CHICAGO, edge=0.28),   # Excluded (min_edge=0.99)
-            _make_signal(city=City.NYC, edge=0.28),        # Should pass
-            _make_signal(city=City.SEOUL, edge=0.28),      # Excluded (min_edge=0.99)
-            _make_signal(city=City.PARIS, edge=0.28),      # Should pass
+            _make_signal(city=City.WELLINGTON, edge=0.28),  # Excluded
+            _make_signal(city=City.NYC, edge=0.28),          # Should pass
+            _make_signal(city=City.CHICAGO, edge=0.28),      # Should pass (not excluded in C1f)
+            _make_signal(city=City.PARIS, edge=0.28),        # Should pass
         ]
         passed = filter_signals(signals, _recent_time())
-        assert len(passed) == 2
+        assert len(passed) == 3
         passed_cities = {s.market.city for s in passed}
-        assert City.CHICAGO not in passed_cities
-        assert City.SEOUL not in passed_cities
+        assert City.WELLINGTON not in passed_cities

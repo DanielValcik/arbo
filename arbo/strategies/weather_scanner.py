@@ -180,9 +180,9 @@ _CITY_BIAS: dict[str, float] = {
     "ankara":       -0.78,
 }
 
-# Probability sharpening: raise raw prob to this power (<1 = less decisive)
-# AR-0134: 0.90 — desharpens slightly (increases lower probabilities)
-_PROB_SHARPENING = 0.90
+# Probability sharpening: raise raw prob to this power (>1 = more decisive)
+# C1f/V4a: 1.10 — sharpens slightly (pushes probabilities toward extremes)
+_PROB_SHARPENING = 1.10
 
 # Bayesian shrinkage: blend with uniform prior (reduces overconfidence)
 _UNIFORM_PRIOR = 0.125  # 1/8 buckets

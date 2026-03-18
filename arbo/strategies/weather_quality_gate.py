@@ -4,10 +4,10 @@ Replaces the confluence scorer with per-strategy signal validation.
 Each signal must pass all quality checks before being forwarded to execution.
 
 Per-city overrides (CITY_OVERRIDES) allow tuning thresholds per city based on
-METAR-calibrated autoresearch results. Cities with min_edge=0.99 are effectively
-excluded. Per-city min_edge, min_price, max_price are optimized by autoresearch.
+autoresearch results. Cities with min_edge=0.99 are effectively excluded.
 
-Production model: AR-0134 (score=170.1, 273 trades, WR=43.6%, OOS=$297, WF=$2,218)
+Production model: C1f-ensemble (score=139.7, OOS=$1,877, 219 trades, WR=36.5%)
+V4a params with GEFS 31-member ensemble sigma (forward-looking).
 """
 
 from __future__ import annotations
@@ -21,33 +21,31 @@ from arbo.utils.logger import get_logger
 
 logger = get_logger("weather_quality_gate")
 
-# ── Global quality gate thresholds (AR-0134 autoresearch-optimized) ──
+# ── Global quality gate thresholds (V4a/C1f optimized) ──
 MIN_EDGE = 0.10  # 10% minimum edge
-MAX_EDGE = 0.70  # Maximum edge (anomaly filter)
-MIN_PRICE = 0.05  # Allow wide price range
-MAX_PRICE = 0.70  # Allow wide price range
-MIN_VOLUME_24H = 510.0  # Minimum 24h volume
+MAX_EDGE = 0.90  # Maximum edge (anomaly filter)
+MIN_PRICE = 0.08  # Minimum price
+MAX_PRICE = 0.56  # Maximum price
+MIN_VOLUME_24H = 0.0  # No volume filter (V4a: min_volume=0)
 MIN_CONFIDENCE = 0.5  # Minimum forecast confidence
 MAX_FORECAST_AGE_HOURS = 6  # Forecast must be less than 6 hours old
 MIN_LIQUIDITY = 200.0  # $200 minimum liquidity
-MIN_FORECAST_PROB = 0.06  # Minimum absolute probability to trade
+MIN_FORECAST_PROB = 0.07  # Minimum absolute probability to trade
 
-# ── Per-city threshold overrides (AR-0134 autoresearch-optimized) ──
-# Excluded: Chicago, Seoul (via min_edge=0.99)
-# Per-city: min_edge, min_price, max_price tuned per autoresearch
+# ── Per-city threshold overrides (V4a/C1f autoresearch-optimized) ──
+# Excluded: Lucknow, Wellington (via min_edge=0.99)
+# Note: Lucknow, Munich, Tokyo, LA not in City enum — parsed via _CITY_PATTERNS
+# Per-city: min_edge, max_price tuned per V4a autoresearch
 CITY_OVERRIDES: dict[str, dict[str, float]] = {
     # Excluded cities
-    City.CHICAGO.value: {"min_edge": 0.99},
-    City.SEOUL.value: {"min_edge": 0.99},
-    # Per-city optimized thresholds
-    City.ANKARA.value: {"max_price": 0.55, "min_edge": 0.005, "min_price": 0.08},
-    City.ATLANTA.value: {"max_price": 0.55, "min_edge": 0.02, "min_price": 0.05},
-    City.BUENOS_AIRES.value: {"max_price": 0.70, "min_edge": 0.02, "min_price": 0.05},
-    City.DALLAS.value: {"max_price": 0.80, "min_edge": 0.05, "min_price": 0.05},
-    City.MIAMI.value: {"max_price": 0.40, "min_edge": 0.05, "min_price": 0.08},
-    City.SEATTLE.value: {"max_price": 0.55, "min_edge": 0.005, "min_price": 0.15},
-    City.TORONTO.value: {"max_price": 0.40, "min_edge": 0.005, "min_price": 0.05},
-    City.WELLINGTON.value: {"max_price": 0.50, "min_edge": 0.02, "min_price": 0.05},
+    City.WELLINGTON.value: {"min_edge": 0.99},
+    "lucknow": {"min_edge": 0.99},
+    # Per-city optimized thresholds (V4a city_overrides)
+    "munich": {"min_edge": 0.05, "max_price": 0.80},
+    City.SEOUL.value: {"min_edge": 0.05, "max_price": 0.70},
+    City.ATLANTA.value: {"min_edge": 0.08, "max_price": 0.70},
+    City.NYC.value: {"min_edge": 0.08, "max_price": 0.70},
+    City.TORONTO.value: {"min_edge": 0.08, "max_price": 0.60},
 }
 
 
