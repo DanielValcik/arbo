@@ -509,6 +509,40 @@ def main():
     c1f_rd["walk_forward"] = c1f_wf
     all_results["C1f_fallback"] = c1f_rd
 
+    # ── C_flat: Baseline WITHOUT compounding ──
+    flat_params_c = {**V4A_PARAMS, "no_compounding": True}
+    c_flat_result = run_experiment(sim_data, flat_params_c, "C_flat")
+
+    emos_v2._emos_enabled = True
+    emos_v2._emos_params = flat_params_c
+    _prefit_emos_all(flat_params_c)
+    c_flat_wf = walk_forward_validate(sim_data, flat_params_c, entry_hours=24, n_folds=3)
+    emos_v2._emos_enabled = False
+
+    log_result(log, "C_flat (V4a baseline — NO compounding)", c_flat_result, c_flat_wf)
+    c_flat_rd = serialize_result(c_flat_result)
+    c_flat_rd["walk_forward"] = c_flat_wf
+    all_results["C_flat"] = c_flat_rd
+
+    # ── C1f_flat: Ensemble WITHOUT compounding ──
+    _variant = "C1f"
+    flat_params_c1f = {**V4A_PARAMS, "no_compounding": True}
+    ef.compute_prob = _compute_prob_with_context
+
+    c1f_flat_result = ef.simulate_portfolio(
+        sim_data, flat_params_c1f, entry_hours=24,
+        experiment_id="C1f_flat", record_equity=True,
+    )
+    c1f_flat_result.score = ef.experiment_score(c1f_flat_result)
+    c1f_flat_wf = walk_forward_validate(sim_data, flat_params_c1f, entry_hours=24, n_folds=3)
+    ef.compute_prob = _original_compute_prob
+    _variant = "C"
+
+    log_result(log, "C1f_flat (ensemble + fallback — NO compounding)", c1f_flat_result, c1f_flat_wf)
+    c1f_flat_rd = serialize_result(c1f_flat_result)
+    c1f_flat_rd["walk_forward"] = c1f_flat_wf
+    all_results["C1f_flat"] = c1f_flat_rd
+
     # ── C1b: Hybrid alpha sweep ──
     for alpha in [0.15, 0.30, 0.50, 0.75]:
         _variant = "C1b"

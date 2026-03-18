@@ -775,7 +775,11 @@ def simulate_portfolio(
 
         # ── 3. NEW ENTRIES ──
         total_deployed = sum(p.size for p in deployed.values())
-        total_capital = cash  # For MAX_POSITION_PCT calc
+        # no_compounding: size positions off starting capital, not current equity
+        if params.get("no_compounding"):
+            total_capital = INITIAL_CAPITAL
+        else:
+            total_capital = cash  # For MAX_POSITION_PCT calc
 
         # Aggregate exposure cap: max % of capital in open positions
         max_agg = params.get("max_aggregate_pct", MAX_AGGREGATE_PCT)
