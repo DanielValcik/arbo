@@ -372,17 +372,109 @@ def _normal_cdf(x: float, mu: float = 0.0, sigma: float = 1.0) -> float:
     return 0.5 * (1.0 + math.erf((x - mu) / (sigma * math.sqrt(2.0))))
 
 
+# ── C1f Ensemble EMOS Support ────────────────────────────────────────
+
+# EMOSEnsembleModel cache: {city: model} — fitted once from historical data
+_ensemble_models_cache: dict[str, Any] = {}
+_ENSEMBLE_MIN_N: int = 10  # Minimum training observations to use ensemble
+
+
+def _get_ensemble_model(city: str) -> Any | None:
+    """Get EMOSEnsembleModel for city, or None if insufficient data."""
+    return _ensemble_models_cache.get(city)
+
+
+def init_ensemble_models(
+    training_obs: dict[str, list[Any]],
+    ensemble_stds: dict[str, dict[str, float]],
+    training_window: int = 66,
+    sigma_floor: float = 0.6,
+    bias_method: str = "rolling_mean",
+    min_n: int = 10,
+) -> int:
+    """Initialize EMOSEnsembleModel per city from historical data.
+
+    Called once at startup from main_rdh.py after loading ensemble stats.
+    Returns number of cities with fitted models.
+    """
+    global _ensemble_models_cache, _ENSEMBLE_MIN_N
+    _ENSEMBLE_MIN_N = min_n
+
+    try:
+        from arbo.models.emos_ensemble import EMOSEnsembleModel
+    except ImportError:
+        logger.warning("emos_ensemble_not_available", msg="EMOSEnsembleModel not importable")
+        return 0
+
+    _ensemble_models_cache = {}
+    for city, obs_list in training_obs.items():
+        city_stds = ensemble_stds.get(city, {})
+        if not city_stds:
+            continue
+
+        model = EMOSEnsembleModel(
+            training_window=training_window,
+            sigma_floor=sigma_floor,
+            bias_method=bias_method,
+        )
+        model.fit(obs_list, city_stds)
+
+        if model.n_observations >= min_n:
+            _ensemble_models_cache[city] = model
+            logger.info(
+                "ensemble_model_fitted",
+                city=city,
+                n_obs=model.n_observations,
+                c=round(model.sigma_params[0], 3),
+                d=round(model.sigma_params[1], 3),
+            )
+
+    logger.info(
+        "ensemble_models_initialized",
+        n_cities=len(_ensemble_models_cache),
+        cities=sorted(_ensemble_models_cache.keys()),
+    )
+    return len(_ensemble_models_cache)
+
+
+def _ensemble_bucket_probability(
+    forecast_temp: float,
+    bucket: TemperatureBucket,
+    ensemble_std: float,
+    model: Any,
+    city: str,
+) -> float:
+    """Compute bucket probability using EMOSEnsembleModel."""
+    raw = model.bucket_probability(
+        forecast_temp,
+        bucket.low_c, bucket.high_c,
+        bucket.bucket_type or "range",
+        ensemble_std=ensemble_std,
+    )
+
+    # Same post-processing as baseline
+    raw = raw * (1.0 - _SHRINKAGE_WEIGHT) + _UNIFORM_PRIOR * _SHRINKAGE_WEIGHT
+    if _PROB_SHARPENING != 1.0 and raw > 0:
+        raw = raw ** _PROB_SHARPENING
+    return raw
+
+
 def estimate_bucket_probability(
     forecast: DailyForecast,
     bucket: TemperatureBucket,
     is_high: bool,
     city: str | None = None,
     days_out: int = 0,
+    ensemble_std: float | None = None,
 ) -> float:
     """Estimate probability of forecast temperature falling in bucket.
 
     Uses METAR-calibrated per-city sigma and bias corrections. Matches
     the research probability model (strategy_experiment.py) exactly.
+
+    C1f mode: when ensemble_std is provided (from GEFS 31-member ensemble),
+    uses EMOSEnsembleModel for forward-looking sigma estimation on cities
+    with sufficient training data. Falls back to fixed sigma for others.
 
     Args:
         forecast: The daily forecast with high/low temperatures.
@@ -399,6 +491,14 @@ def estimate_bucket_probability(
     # Apply bias correction: corrected = forecast + bias
     if city and city in _CITY_BIAS:
         forecast_temp = forecast_temp + _CITY_BIAS[city]
+
+    # C1f: use EMOSEnsembleModel if ensemble_std provided and model available
+    if ensemble_std is not None and city:
+        ens_model = _get_ensemble_model(city)
+        if ens_model is not None:
+            return _ensemble_bucket_probability(
+                forecast_temp, bucket, ensemble_std, ens_model, city,
+            )
 
     sigma = _get_sigma(days_out, city)
 
@@ -430,6 +530,7 @@ def scan_weather_market(
     forecasts: dict[City, WeatherForecast],
     min_edge: float = 0.05,
     min_volume: float = 2000.0,
+    ensemble_stds: dict[str, dict[str, float]] | None = None,
 ) -> WeatherSignal | None:
     """Analyze a single weather market for trading opportunities.
 
@@ -480,8 +581,15 @@ def scan_weather_market(
     is_high = is_high_temp_market(market.question)
     days_out = max(0, (target_date - date.today()).days)
     city_str = city.value
+    # Get ensemble_std for C1f if available
+    ens_std = None
+    if ensemble_stds:
+        from arbo.connectors.gefs_downloader import get_ensemble_std
+        ens_std = get_ensemble_std(city_str, target_date.isoformat(), ensemble_stds)
+
     forecast_prob = estimate_bucket_probability(
         daily_forecast, bucket, is_high, city=city_str, days_out=days_out,
+        ensemble_std=ens_std,
     )
 
     # Calculate edge

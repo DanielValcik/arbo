@@ -270,6 +270,9 @@ class RDHOrchestrator:
         # Web dashboard
         self._web_dashboard = await self._init_optional("WebDashboard", self._init_web_dashboard)
 
+        # GEFS ensemble download + C1f model init
+        await self._init_optional("GEFSEnsemble", self._init_gefs_ensemble)
+
         # Restore paper engine state from DB
         if self._paper_engine is not None:
             try:
@@ -426,6 +429,86 @@ class RDHOrchestrator:
         logger.info("shadow_exit_tracker_initialized", min_hold_edge=0.15)
 
         return s
+
+    async def _init_gefs_ensemble(self) -> Any:
+        """Download today's GEFS ensemble + init C1f EMOSEnsembleModel.
+
+        Daily GEFS download: 31 members × ~400KB = ~12MB via Range requests.
+        Fits EMOSEnsembleModel per city for forward-looking sigma estimation.
+        """
+        from arbo.connectors.gefs_downloader import download_today
+        from arbo.strategies.weather_scanner import init_ensemble_models
+
+        # Download today's ensemble forecast
+        try:
+            ensemble_stats = await download_today()
+            logger.info(
+                "gefs_download_ok",
+                cities=len(ensemble_stats),
+            )
+        except Exception as e:
+            logger.warning("gefs_download_failed", error=str(e))
+            return None
+
+        # Build training observations from DB (historical forecast vs actual)
+        # For now, load from ensemble_stats table for all historical dates
+        try:
+            from arbo.utils.db import get_session_factory
+            from sqlalchemy import text
+
+            factory = get_session_factory()
+            async with factory() as session:
+                rows = await session.execute(
+                    text("SELECT city, target_date, ensemble_std FROM ensemble_stats")
+                )
+                all_stds: dict[str, dict[str, float]] = {}
+                for city, dt, std in rows:
+                    if city not in all_stds:
+                        all_stds[city] = {}
+                    all_stds[city][dt] = std
+
+            # Training observations from weather_forecasts + resolved markets
+            # Simplified: load from weather_scan_log if available
+            rows2 = None
+            async with factory() as session:
+                try:
+                    rows2 = await session.execute(text("""
+                        SELECT city, target_date, forecast_temp, actual_temp
+                        FROM weather_scan_log
+                        WHERE actual_temp IS NOT NULL
+                        ORDER BY target_date
+                    """))
+                except Exception:
+                    pass
+
+            training_obs: dict[str, list] = {}
+            if rows2:
+                from arbo.models.emos_ensemble import Observation
+                for city, dt, forecast, actual in rows2:
+                    if city not in training_obs:
+                        training_obs[city] = []
+                    training_obs[city].append(
+                        Observation(forecast=forecast, actual=actual, date=dt, city=city)
+                    )
+
+            if training_obs and all_stds:
+                n_cities = init_ensemble_models(
+                    training_obs=training_obs,
+                    ensemble_stds=all_stds,
+                )
+                logger.info("c1f_ensemble_ready", n_cities=n_cities)
+            else:
+                logger.info(
+                    "c1f_ensemble_skipped",
+                    reason="insufficient training data",
+                    n_training_cities=len(training_obs),
+                    n_ensemble_cities=len(all_stds),
+                )
+
+        except Exception as e:
+            logger.warning("c1f_ensemble_init_failed", error=str(e))
+
+        return ensemble_stats
 
     async def _init_report_generator(self) -> Any:
         from arbo.dashboard.report_generator import ReportGenerator

@@ -42,11 +42,12 @@ from price_history_db import Bucket, Event, PriceHistoryDB
 # ═══════════════════════════════════════════════════════════════════════════════
 
 INITIAL_CAPITAL = 1000.0
-MAX_POSITION_USD = 200.0
+# MAX_POSITION_USD removed — sizing is now purely % of capital (dynamic)
 SLIPPAGE_PCT = 0.005
 GAS_COST_USD = 0.007
 KELLY_FRACTION = 0.25
-MAX_POSITION_PCT = 0.05
+MAX_POSITION_PCT = 0.05        # 5% of capital per single position
+MAX_AGGREGATE_PCT = 0.40       # 40% max capital in open positions
 MIN_TRADE_SIZE = 1.0
 
 CITY_COORDS = {
@@ -226,17 +227,28 @@ class SimulationData:
     def get_close_ts(self, event_id: str) -> int | None:
         return self._close_ts.get(event_id)
 
-    def build_entry_index(self, entry_hours: float) -> dict[int, list[Event]]:
-        """Map: entry_hour_ts -> events to consider entering that hour."""
-        index: dict[int, list[Event]] = defaultdict(list)
-        offset = int(entry_hours * 3600)
-        for ev in self.events:
-            close_ts = self._close_ts.get(ev.event_id)
-            if close_ts is None or not ev.city:
-                continue
-            entry_ts = close_ts - offset
-            entry_hour = (entry_ts // 3600) * 3600
-            index[entry_hour].append(ev)
+    def build_entry_index(
+        self, entry_hours: float | list[float],
+    ) -> dict[int, list[tuple[Event, int]]]:
+        """Map: entry_hour_ts -> [(event, days_out), ...].
+
+        Supports multiple entry horizons for multi-day positions.
+        entry_hours can be a single value (24) or list ([24, 48, 72]).
+        """
+        if isinstance(entry_hours, (int, float)):
+            entry_hours = [entry_hours]
+
+        index: dict[int, list[tuple[Event, int]]] = defaultdict(list)
+        for hours in entry_hours:
+            offset = int(hours * 3600)
+            days_out = max(0, int(hours / 24))
+            for ev in self.events:
+                close_ts = self._close_ts.get(ev.event_id)
+                if close_ts is None or not ev.city:
+                    continue
+                entry_ts = close_ts - offset
+                entry_hour = (entry_ts // 3600) * 3600
+                index[entry_hour].append((ev, days_out))
         return dict(index)
 
     def build_close_index(self) -> dict[int, list[Event]]:
@@ -250,12 +262,13 @@ class SimulationData:
             index[close_hour].append(ev)
         return dict(index)
 
-    def get_period(self, entry_hours: float = 48) -> tuple[int, int]:
+    def get_period(self, entry_hours: float | list[float] = 48) -> tuple[int, int]:
         """Get simulation period (earliest entry, latest close)."""
         all_close_ts = list(self._close_ts.values())
         if not all_close_ts:
             return (0, 0)
-        offset = int(entry_hours * 3600)
+        max_hours = max(entry_hours) if isinstance(entry_hours, list) else entry_hours
+        offset = int(max_hours * 3600)
         start = min(all_close_ts) - offset
         end = max(all_close_ts)
         return ((start // 3600) * 3600, ((end // 3600) + 1) * 3600)
@@ -412,19 +425,65 @@ def compute_prob(
     else:
         return 0.0
 
-    # Per-city overrides for shrinkage and sharpening
-    city_ov = params.get("city_overrides", {}).get(city, {})
-
-    # Bayesian shrinkage
-    shrinkage = city_ov.get("shrinkage", params.get("shrinkage", 0.03))
+    # Blended shrinkage and sharpening (Bayesian shrinkage toward global)
+    shrinkage = _get_blended_city_param("shrinkage", city, params)
     raw = raw * (1.0 - shrinkage) + 0.125 * shrinkage
 
-    # Probability sharpening
-    sharpening = city_ov.get("prob_sharpening", params.get("prob_sharpening", 1.05))
+    sharpening = _get_blended_city_param("prob_sharpening", city, params)
     if sharpening != 1.0 and raw > 0:
         raw = raw ** sharpening
 
     return raw
+
+
+def _blend_param(
+    key: str,
+    global_val: float,
+    city_val: float | None,
+    city_trades: int,
+    pseudocount: int,
+) -> float:
+    """Bayesian shrinkage blend: α(n) × city + (1-α(n)) × global.
+
+    α(n) = n / (n + k), where k = pseudocount.
+    At n=0: 100% global. At n=k: 50/50. At n→∞: 100% city.
+
+    Stein (1956) empirical Bayes estimator — same principle quant funds
+    use for covariance estimation with small samples.
+    """
+    if city_val is None:
+        return global_val
+    alpha = city_trades / (city_trades + pseudocount)
+    return alpha * city_val + (1 - alpha) * global_val
+
+
+def _get_blended_city_param(
+    key: str, city: str, params: dict,
+) -> float:
+    """Get parameter with Bayesian shrinkage blend toward global."""
+    global_val = params.get(key, 0)
+    city_ov = params.get("city_overrides", {}).get(city, {})
+    city_val = city_ov.get(key)
+    if city_val is None:
+        return global_val
+
+    city_trades = params.get("_city_trade_counts", {}).get(city, 0)
+    pseudocount = params.get("shrinkage_pseudocount", 30)
+    return _blend_param(key, global_val, city_val, city_trades, pseudocount)
+
+
+def progressive_city_exposure(
+    city: str, base_cap: float, params: dict,
+) -> float:
+    """Progressive per-city exposure cap: base × √(n/k).
+
+    Cities with few trades get tighter caps. Automatically relaxes
+    as data accumulates. No manual intervention needed.
+    """
+    city_trades = params.get("_city_trade_counts", {}).get(city, 0)
+    pseudocount = params.get("shrinkage_pseudocount", 30)
+    scale = math.sqrt(min(city_trades / pseudocount, 1.0))
+    return base_cap * max(scale, 0.3)  # Floor at 30% of base to allow discovery
 
 
 def quality_gate(
@@ -435,20 +494,18 @@ def quality_gate(
     city: str,
     params: dict,
 ) -> bool:
-    """Check if a signal passes quality gate filters."""
-    min_edge = params.get("min_edge", 0.08)
+    """Check if a signal passes quality gate filters.
+
+    Uses Bayesian shrinkage blending for per-city parameters when
+    shrinkage_pseudocount is set and _city_trade_counts is provided.
+    """
+    # Blended params (shrinks toward global for cities with few trades)
+    min_edge = _get_blended_city_param("min_edge", city, params)
     max_edge = params.get("max_edge", 0.90)
-    min_price = params.get("min_price", 0.30)
-    max_price = params.get("max_price", 0.43)
+    max_price = _get_blended_city_param("max_price", city, params)
+    min_price = _get_blended_city_param("min_price", city, params)
     min_prob = params.get("min_prob", 0.10)
     min_volume = params.get("min_volume", 1000)
-
-    # Per-city overrides
-    city_ov = params.get("city_overrides", {}).get(city, {})
-    min_edge = city_ov.get("min_edge", min_edge)
-    max_price = city_ov.get("max_price", max_price)
-    min_price = city_ov.get("min_price", min_price)
-    min_volume = city_ov.get("min_volume", min_volume)
 
     if edge < min_edge or edge > max_edge:
         return False
@@ -485,15 +542,18 @@ def compute_size(
     if kelly_raw <= 0:
         return 0.0
 
-    # Per-city kelly_raw_cap override
-    city_ov = params.get("city_overrides", {}).get(city, {})
-    kelly_raw_cap = city_ov.get("kelly_raw_cap", params.get("kelly_raw_cap", 0.40))
+    # Blended kelly_raw_cap (shrinks toward global for cities with few trades)
+    kelly_raw_cap = _get_blended_city_param("kelly_raw_cap", city, params)
     kelly_raw = min(kelly_raw, kelly_raw_cap)
 
     kelly_adj = kelly_raw * KELLY_FRACTION
     size = available * kelly_adj
     size = min(size, total_capital * MAX_POSITION_PCT)
-    size = min(size, MAX_POSITION_USD)
+
+    # Optional absolute cap (params-driven, not hardcoded)
+    max_usd = params.get("max_position_usd", 0)
+    if max_usd > 0:
+        size = min(size, max_usd)
 
     if size < MIN_TRADE_SIZE:
         return 0.0
@@ -591,6 +651,19 @@ def simulate_portfolio(
     # Build indexes
     entry_index = sim_data.build_entry_index(entry_hours)
     close_index = sim_data.build_close_index()
+
+    # Auto-compute city trade counts from resolved events (for shrinkage blending)
+    if "_city_trade_counts" not in params:
+        ctc: dict[str, int] = defaultdict(int)
+        for ev in sim_data.events:
+            if ev.city:
+                # Count resolved buckets (won field set)
+                for b in sim_data.buckets_by_event.get(ev.event_id, []):
+                    if b.won:
+                        ctc[ev.city] += 1
+                        break
+        params = dict(params)  # Don't mutate caller's params
+        params["_city_trade_counts"] = dict(ctc)
 
     if period_start_ts is None or period_end_ts is None:
         p_start, p_end = sim_data.get_period(entry_hours)
@@ -702,15 +775,28 @@ def simulate_portfolio(
 
         # ── 3. NEW ENTRIES ──
         total_deployed = sum(p.size for p in deployed.values())
-        available = cash - total_deployed  # Free cash for new trades
         total_capital = cash  # For MAX_POSITION_PCT calc
+
+        # Aggregate exposure cap: max % of capital in open positions
+        max_agg = params.get("max_aggregate_pct", MAX_AGGREGATE_PCT)
+        agg_budget = total_capital * max_agg - total_deployed
+        available = min(cash - total_deployed, agg_budget)  # Tighter of cash and agg cap
 
         # Per-city deployed capital (for exposure limits)
         city_deployed: dict[str, float] = {}
         for p in deployed.values():
             city_deployed[p.city] = city_deployed.get(p.city, 0) + p.size
 
-        for ev in entry_index.get(hour_ts, []):
+        for entry_item in entry_index.get(hour_ts, []):
+            # Support both old (Event) and new (Event, days_out) format
+            if isinstance(entry_item, tuple):
+                ev, days_out = entry_item
+            else:
+                ev = entry_item
+                days_out = max(0, int(
+                    (entry_hours[0] if isinstance(entry_hours, list) else entry_hours) / 24
+                ))
+
             if available < MIN_TRADE_SIZE:
                 break
             if not ev.city or ev.city in excluded:
@@ -722,11 +808,10 @@ def simulate_portfolio(
             if ev.city in cooldowns and hour_ts < cooldowns[ev.city]:
                 continue
 
-            # Per-city exposure limit
-            city_ov_entry = params.get("city_overrides", {}).get(ev.city, {})
-            city_max_exp = city_ov_entry.get(
-                "max_exposure",
-                params.get("city_max_exposure", 1.0),
+            # Per-city exposure limit (progressive: scales with √(n/k))
+            base_city_cap = params.get("city_max_exposure", 0.25)
+            city_max_exp = progressive_city_exposure(
+                ev.city, base_city_cap, params,
             )
             city_budget = total_capital * city_max_exp - city_deployed.get(ev.city, 0)
             if city_budget < MIN_TRADE_SIZE:
@@ -742,7 +827,6 @@ def simulate_portfolio(
             if close_ts is None:
                 continue
 
-            days_out = max(0, int(entry_hours / 24))
             buckets = sim_data.buckets_by_event.get(ev.event_id, [])
 
             for bucket in buckets:
