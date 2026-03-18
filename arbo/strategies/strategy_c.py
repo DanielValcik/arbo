@@ -193,7 +193,8 @@ class StrategyC:
         available_capital = strategy_state.available
 
         # 5. Build temperature ladders
-        max_pos = self._risk._state.capital * MAX_POSITION_PCT
+        # Max position = 5% of Strategy C allocation (not total portfolio)
+        max_pos = strategy_state.allocated * MAX_POSITION_PCT
         ladders = build_ladders_by_city(qualified, available_capital, max_position_size=max_pos)
 
         # 6. Fetch live CLOB prices for all tokens we might trade
