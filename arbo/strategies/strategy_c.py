@@ -85,6 +85,9 @@ class StrategyC:
         self._drift_log: list[dict[str, Any]] = []
         self._trades_skipped_volatility: int = 0
 
+        # C1f ensemble EMOS: loaded from DB by main_rdh, keyed {city: {date: std}}
+        self._ensemble_stds: dict[str, dict[str, float]] = {}
+
     async def init(self) -> None:
         """Initialize weather clients."""
         self._noaa = NOAAWeatherClient()
@@ -162,7 +165,10 @@ class StrategyC:
             return []
 
         # 2. Scan weather markets
-        signals = scan_weather_markets(markets, forecasts)
+        signals = scan_weather_markets(
+            markets, forecasts,
+            ensemble_stds=self._ensemble_stds or None,
+        )
         self._signals_generated += len(signals)
         if not signals:
             logger.info("no_weather_signals")

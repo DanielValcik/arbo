@@ -638,6 +638,7 @@ def scan_weather_markets(
     forecasts: dict[City, WeatherForecast],
     min_edge: float = 0.05,
     min_volume: float = 2000.0,
+    ensemble_stds: dict[str, dict[str, float]] | None = None,
 ) -> list[WeatherSignal]:
     """Scan all markets for weather trading opportunities.
 
@@ -660,7 +661,10 @@ def scan_weather_markets(
             continue
 
         weather_count += 1
-        signal = scan_weather_market(market, forecasts, min_edge, min_volume)
+        signal = scan_weather_market(
+            market, forecasts, min_edge, min_volume,
+            ensemble_stds=ensemble_stds,
+        )
         if signal:
             signals.append(signal)
             logger.info(

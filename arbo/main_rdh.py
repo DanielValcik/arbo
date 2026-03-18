@@ -509,10 +509,57 @@ class RDHOrchestrator:
                     n_ensemble_cities=len(all_stds),
                 )
 
+            # Pass ensemble_stds to Strategy C for scan_weather_market
+            if self._strategy_c is not None and all_stds:
+                self._strategy_c._ensemble_stds = all_stds
+                logger.info(
+                    "c1f_ensemble_stds_injected",
+                    cities=len(all_stds),
+                )
+
+            # Store today's ensemble stats to DB for accumulation
+            try:
+                await self._store_ensemble_to_db(session, ensemble_stats)
+            except Exception as e:
+                logger.warning("ensemble_db_store_failed", error=str(e))
+
         except Exception as e:
             logger.warning("c1f_ensemble_init_failed", error=str(e))
 
         return ensemble_stats
+
+    async def _store_ensemble_to_db(
+        self, session: Any, ensemble_stats: dict[str, dict[str, float]],
+    ) -> None:
+        """Store today's ensemble stats to PostgreSQL for accumulation."""
+        from datetime import date as _date
+        from sqlalchemy import text
+
+        from arbo.utils.db import get_session_factory
+
+        target_date = _date.today().isoformat()
+        factory = get_session_factory()
+        async with factory() as sess:
+            for city, stats in ensemble_stats.items():
+                await sess.execute(
+                    text("""
+                        INSERT INTO ensemble_stats
+                            (city, target_date, ensemble_mean, ensemble_std,
+                             ensemble_min, ensemble_max, n_members)
+                        VALUES (:city, :date, :mean, :std, :min, :max, :n)
+                        ON CONFLICT (city, target_date) DO UPDATE SET
+                            ensemble_mean = :mean, ensemble_std = :std,
+                            ensemble_min = :min, ensemble_max = :max, n_members = :n
+                    """),
+                    {
+                        "city": city, "date": target_date,
+                        "mean": stats["mean"], "std": stats["std"],
+                        "min": stats["min"], "max": stats["max"],
+                        "n": stats["n_members"],
+                    },
+                )
+            await sess.commit()
+            logger.info("ensemble_stats_stored_to_db", target_date=target_date, cities=len(ensemble_stats))
 
     async def _init_report_generator(self) -> Any:
         from arbo.dashboard.report_generator import ReportGenerator
