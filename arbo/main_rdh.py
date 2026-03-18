@@ -270,9 +270,6 @@ class RDHOrchestrator:
         # Web dashboard
         self._web_dashboard = await self._init_optional("WebDashboard", self._init_web_dashboard)
 
-        # GEFS ensemble download + C1f model init
-        await self._init_optional("GEFSEnsemble", self._init_gefs_ensemble)
-
         # Restore paper engine state from DB
         if self._paper_engine is not None:
             try:
@@ -429,6 +426,13 @@ class RDHOrchestrator:
         logger.info("shadow_exit_tracker_initialized", min_hold_edge=0.15)
 
         return s
+
+    async def _init_gefs_background(self) -> None:
+        """Background task: download GEFS + init C1f models (takes ~3 min)."""
+        try:
+            await self._init_gefs_ensemble()
+        except Exception as e:
+            logger.warning("gefs_background_failed", error=str(e))
 
     async def _init_gefs_ensemble(self) -> Any:
         """Download today's GEFS ensemble + init C1f EMOSEnsembleModel.
@@ -802,6 +806,10 @@ class RDHOrchestrator:
             )
         self._internal_tasks.append(
             asyncio.create_task(self._health_monitor(), name="health_monitor")
+        )
+        # GEFS ensemble download (background — takes ~3 min, must not block startup)
+        self._internal_tasks.append(
+            asyncio.create_task(self._init_gefs_background(), name="gefs_ensemble")
         )
         self._internal_tasks.append(
             asyncio.create_task(self._snapshot_scheduler(), name="snapshot_scheduler")
