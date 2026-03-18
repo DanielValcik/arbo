@@ -317,7 +317,8 @@ async function init() {
         sweeps.sweeps.forEach((s, i) => {
             const opt = document.createElement('option');
             opt.value = s.sweep_id;
-            opt.textContent = `${s.sweep_id} (${s.total_trials} trials${s.quick_mode ? ', quick' : ''})`;
+            const label = s.sweep_type || s.sweep_id;
+            opt.textContent = `${label} (${s.total_trials} trials${s.quick_mode ? ', quick' : ''})`;
             sel.appendChild(opt);
         });
         loadSweep(sweeps.sweeps[0].sweep_id);

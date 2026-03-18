@@ -1491,10 +1491,13 @@ async def api_experiments_sweeps(
         try:
             import json as _json
             with open(f) as fh:
-                meta = _json.load(fh).get("meta", {})
+                data = _json.load(fh)
+            meta = data.get("meta", {})
+            sweep_type = meta.get("sweep_type", "") or data.get("sweep_type", "")
             sweeps.append({
                 "filename": f.name,
                 "sweep_id": meta.get("sweep_id", f.stem),
+                "sweep_type": sweep_type,
                 "timestamp": meta.get("timestamp", ""),
                 "total_trials": meta.get("total_trials", 0),
                 "quick_mode": meta.get("quick_mode", False),

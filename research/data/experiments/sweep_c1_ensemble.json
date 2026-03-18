@@ -6,7 +6,8 @@
     "total_trials": 8,
     "gefs_days": 75,
     "gefs_members": 31,
-    "sweep_id": "c1_ensemble_v2"
+    "sweep_id": "c1_ensemble_v2",
+    "sweep_type": "C1 vs C \u2014 Ensemble Comparison"
   },
   "variants": {
     "C_baseline": {
