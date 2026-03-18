@@ -34,20 +34,22 @@ def main():
     sconn.close()
     print(f"Read {len(rows)} rows from SQLite")
 
-    # Write to PostgreSQL
+    # Write to PostgreSQL — parse from DATABASE_URL
     import psycopg2
+    from urllib.parse import urlparse
 
-    pg_url = os.getenv("DATABASE_URL", "")
-    if pg_url:
-        conn = psycopg2.connect(pg_url)
-    else:
-        conn = psycopg2.connect(
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            dbname=os.getenv("POSTGRES_DB", "arbo"),
-            user=os.getenv("POSTGRES_USER", "arbo"),
-            password=os.getenv("POSTGRES_PASSWORD", ""),
-        )
+    db_url = os.getenv("DATABASE_URL", "")
+    # Strip async driver prefix: postgresql+asyncpg:// → postgresql://
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+    parsed = urlparse(db_url)
+
+    conn = psycopg2.connect(
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 5432,
+        dbname=parsed.path.lstrip("/") or "arbo",
+        user=parsed.username or "arbo",
+        password=parsed.password or "",
+    )
     conn.autocommit = False
     cur = conn.cursor()
 
@@ -76,11 +78,11 @@ def main():
 
     # Verify
     conn = psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "arbo"),
-        user=os.getenv("POSTGRES_USER", "arbo"),
-        password=os.getenv("POSTGRES_PASSWORD", ""),
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 5432,
+        dbname=parsed.path.lstrip("/") or "arbo",
+        user=parsed.username or "arbo",
+        password=parsed.password or "",
     )
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*), COUNT(DISTINCT city), MIN(target_date), MAX(target_date) FROM ensemble_stats")

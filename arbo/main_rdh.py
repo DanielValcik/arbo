@@ -471,19 +471,28 @@ class RDHOrchestrator:
                         all_stds[city] = {}
                     all_stds[city][dt] = std
 
-            # Training observations from weather_forecasts + resolved markets
-            # Simplified: load from weather_scan_log if available
+            # Training observations: GEFS mean vs Open-Meteo actual
+            # Primary: weather_training_obs (backfilled from GEFS + Open-Meteo)
+            # Fallback: weather_scan_log (if it has actual_temp column)
             rows2 = None
             async with factory() as session:
                 try:
                     rows2 = await session.execute(text("""
                         SELECT city, target_date, forecast_temp, actual_temp
-                        FROM weather_scan_log
-                        WHERE actual_temp IS NOT NULL
+                        FROM weather_training_obs
                         ORDER BY target_date
                     """))
                 except Exception:
-                    pass
+                    # Fallback to weather_scan_log
+                    try:
+                        rows2 = await session.execute(text("""
+                            SELECT city, target_date, forecast_temp_c, 0.0
+                            FROM weather_scan_log
+                            WHERE forecast_temp_c IS NOT NULL
+                            LIMIT 0
+                        """))
+                    except Exception:
+                        pass
 
             training_obs: dict[str, list] = {}
             if rows2:
