@@ -27,29 +27,29 @@ logger = get_logger("health_check")
 # ================================================================
 
 AR0134_BASELINE = {
-    "model": "AR-0134",
-    "score": 170.1,
-    # Train performance
-    "train_trades": 273,
-    "train_wr": 0.436,
+    "model": "C1f-ensemble",
+    "score": 139.7,
+    # Train performance (IS)
+    "train_trades": 219,
+    "train_wr": 0.365,
     "train_avg_edge": 0.15,
-    # OOS performance (the conservative reference)
-    "oos_trades": 175,
-    "oos_wr": 0.382,
-    "oos_pnl": 297.0,
+    # OOS performance (walk-forward 3-fold)
+    "oos_trades": 153,
+    "oos_wr": 0.376,
+    "oos_pnl": 1877.0,
     "oos_days": 70,
-    "oos_daily_pnl": 4.24,  # $297 / 70 days
-    "oos_weekly_pnl": 29.7,  # $297 / 10 weeks
-    "oos_daily_trades": 2.5,  # 175 / 70 days
+    "oos_daily_pnl": 26.8,  # $1877 / 70 days
+    "oos_weekly_pnl": 187.7,  # $1877 / 10 weeks
+    "oos_daily_trades": 3.0,  # ~3-5 per day
     # Walk-forward
-    "wf_pnl": 2218.0,
+    "wf_pnl": 1877.0,
     # Risk
-    "max_drawdown_pct": 0.13,
+    "max_drawdown_pct": 0.156,
     # Strategy params
     "capital": 1000.0,
     "kelly_fraction": 0.25,
-    "cities_active": 18,  # 20 - 2 excluded
-    "excluded_cities": ["Chicago", "Seoul"],
+    "cities_active": 19,  # all except lucknow, wellington (ensemble covers 19)
+    "excluded_cities": ["Lucknow", "Wellington"],
     # Seasonality (from backtest analysis)
     "winter_pnl_share": 0.67,  # Dec+Jan+Feb = 67% of total PnL
     "best_months": [12, 1, 2],

@@ -625,7 +625,7 @@
 
         <!-- Expected vs Reality -->
         <div class="card grid-full">
-            <div class="card-title">Expected vs Reality — Strategy C (AR-0134)</div>
+            <div class="card-title">Expected vs Reality — Strategy C (C1f-ensemble)</div>
             <div id="evrTooEarly" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px"></div>
             <div class="evr-grid">
                 <div>
@@ -647,7 +647,7 @@
 
         <!-- Strategy C Model Description -->
         <div class="card grid-full" id="modelDescCard" style="display:none">
-            <div class="card-title">Model AR-0134 — Popis</div>
+            <div class="card-title">Model C1f-ensemble — Popis</div>
             <div id="modelDescContent" style="font-size:11px;line-height:1.7;color:var(--text-dim)"></div>
         </div>
 
@@ -2025,8 +2025,9 @@
                     <div><strong>Vyloucena:</strong> ${(baseline.excluded_cities||[]).join(', ')}</div>
                 </div>
                 <div style="margin-top:8px">
-                    Ocekavane chovani: 2-3 obchody denne, win rate ~40%, vetsina profitu z teplotnich extremu.
-                    Zima (prosinec-unor) generuje ~67% celkoveho zisku diky vetsi variabilite teplot.
+                    C1f model: 31 GFS ensemble clenu urcuje nejistotu predpovedi pro kazdy den a mesto.
+                    Kdyz se modely shodnou = vyssi jistota = vetsi pozice. Kdyz se neshodnou = mensi pozice.
+                    Mesta s malo daty pouzivaji EMOS-lite fallback (rolling MAE sigma).
                 </div>
             `;
         }
