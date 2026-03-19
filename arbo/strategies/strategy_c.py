@@ -46,6 +46,8 @@ MAX_VOLUME_POSITION_PCT = Decimal("0.05")  # Max 5% of 24h volume per position
 LATENCY_RECHECK_DELAY_S = 2.0  # Simulate order signing + submission latency
 VOLATILITY_GUARD_CENTS = Decimal("0.05")  # Skip if price moves >5 cents in 2s
 MAX_DRIFT_LOG_SIZE = 1000  # Rolling window for drift analytics
+MAX_TRADES_PER_SCAN = 3  # Max new trades per scan cycle (prevent batch entry)
+MIN_HOURS_TO_RESOLUTION = 6  # Skip markets resolving in <6 hours
 
 
 class StrategyC:
@@ -192,10 +194,32 @@ class StrategyC:
 
         available_capital = strategy_state.available
 
+        # 4b. Filter out markets resolving too soon
+        now = datetime.now(timezone.utc)
+        time_filtered = []
+        for sig in qualified:
+            td = sig.market.target_date
+            # Resolution is typically midnight UTC of target_date + 1
+            resolution_approx = datetime(td.year, td.month, td.day, tzinfo=timezone.utc)
+            hours_to_resolution = (resolution_approx - now).total_seconds() / 3600
+            if hours_to_resolution < MIN_HOURS_TO_RESOLUTION:
+                logger.info(
+                    "signal_skipped_too_close",
+                    city=sig.market.city.value,
+                    date=str(td),
+                    hours_to_resolution=round(hours_to_resolution, 1),
+                )
+                continue
+            time_filtered.append(sig)
+
+        if not time_filtered:
+            logger.info("no_signals_after_time_filter")
+            return []
+
         # 5. Build temperature ladders
         # Max position = 5% of Strategy C allocation (not total portfolio)
         max_pos = strategy_state.allocated * MAX_POSITION_PCT
-        ladders = build_ladders_by_city(qualified, available_capital, max_position_size=max_pos)
+        ladders = build_ladders_by_city(time_filtered, available_capital, max_position_size=max_pos)
 
         # 6. Fetch live CLOB prices for all tokens we might trade
         token_ids = []
@@ -217,8 +241,18 @@ class StrategyC:
 
         # 7. Execute via paper engine (or live in the future)
         traded_signals = []
+        trades_this_scan = 0
         for ladder in ladders:
+            if trades_this_scan >= MAX_TRADES_PER_SCAN:
+                break
             for position in ladder.positions:
+                if trades_this_scan >= MAX_TRADES_PER_SCAN:
+                    logger.info(
+                        "max_trades_per_scan_reached",
+                        limit=MAX_TRADES_PER_SCAN,
+                        remaining_ladders=len(ladders) - len(traded_signals),
+                    )
+                    break
                 signal = position.signal
 
                 # Volume-based position cap: max 5% of 24h volume
@@ -419,6 +453,7 @@ class StrategyC:
                         self._risk.strategy_post_trade(STRATEGY_ID, trade_size)
                         traded_signals.append(signal)
                         self._trades_placed += 1
+                        trades_this_scan += 1
 
                         logger.info(
                             "paper_trade_placed",

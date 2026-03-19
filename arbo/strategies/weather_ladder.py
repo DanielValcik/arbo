@@ -21,7 +21,9 @@ KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly sizing
 _KELLY_RAW_CAP = 0.40  # C1f/V4a: optimized cap from autoresearch
 
 # Maximum concurrent ladder positions per city per day
-MAX_LADDER_POSITIONS = 3
+# V4a/C1f backtest used 1 trade per event — laddering (multi-bucket) caused
+# correlated losses in production. Keep at 1 until proven otherwise.
+MAX_LADDER_POSITIONS = 1
 # Minimum edge to include a bucket in the ladder
 MIN_LADDER_EDGE = 0.03
 # Minimum position size — below this, trade not worth gas + slippage
