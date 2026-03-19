@@ -429,6 +429,7 @@
         <button class="tab-btn active" onclick="switchTab('arbo')">ARBO</button>
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
+        <button class="tab-btn" onclick="switchTab('skinny')">SKINNY</button>
     </div>
 
     <div id="arboContent" class="tab-content active">
@@ -1042,6 +1043,121 @@
             </div>
         </div>
     </div><!-- end nightcapContent -->
+
+    <div id="skinnyContent" class="tab-content">
+        <div id="skinnyStale" class="stale-banner" style="display:none">DISCONNECTED — Skinny API not responding</div>
+        <div class="grid">
+            <!-- Status -->
+            <div class="card">
+                <div class="card-title">System Status</div>
+                <div style="font-size:12px;line-height:2.2">
+                    <div class="pair-stat"><span>Mode</span><span id="skMode">--</span></div>
+                    <div class="pair-stat"><span>Scanner</span><span id="skScanner">--</span></div>
+                    <div class="pair-stat"><span>Last Scan</span><span id="skLastScan">--</span></div>
+                    <div class="pair-stat"><span>Uptime</span><span id="skUptime">--</span></div>
+                    <div class="pair-stat"><span>Positions</span><span id="skPositionCount">--</span></div>
+                </div>
+            </div>
+
+            <!-- Portfolio -->
+            <div class="card">
+                <div class="card-title">Portfolio</div>
+                <div class="metrics">
+                    <div class="metric"><div class="metric-value" id="skTotalValue">--</div><div class="metric-label">Total Value</div></div>
+                    <div class="metric"><div class="metric-value" id="skDeployed">--</div><div class="metric-label">Deployed</div></div>
+                    <div class="metric"><div class="metric-value" id="skPnl">--</div><div class="metric-label">P&L</div></div>
+                    <div class="metric"><div class="metric-value" id="skPpdd">--</div><div class="metric-label">PPDD</div></div>
+                </div>
+            </div>
+
+            <!-- Risk -->
+            <div class="card">
+                <div class="card-title">Risk Limits</div>
+                <div style="font-size:12px;line-height:2.2">
+                    <div class="pair-stat"><span>Exposure</span><span id="skExposure">--</span></div>
+                    <div class="pair-stat"><span>Daily Loss</span><span id="skDailyLoss">--</span></div>
+                    <div class="pair-stat"><span>Concurrent</span><span id="skConcurrent">--</span></div>
+                    <div class="pair-stat"><span>Max/Skin</span><span id="skMaxSkin">--</span></div>
+                </div>
+            </div>
+
+            <!-- Experiments -->
+            <div class="card">
+                <div class="card-title">Latest Experiments</div>
+                <div style="font-size:12px;line-height:2.2" id="skExperiments">
+                    <div style="text-align:center;color:var(--text-dim);padding:20px">No experiments yet</div>
+                </div>
+            </div>
+
+            <!-- Positions Table -->
+            <div class="card grid-full">
+                <div class="card-title">Open Positions</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Skin</th>
+                                <th>Platform</th>
+                                <th>Buy Price</th>
+                                <th>Target</th>
+                                <th>Hold Days</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="skPositionsBody">
+                            <tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No open positions</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Opportunities -->
+            <div class="card grid-full">
+                <div class="card-title">Recent Opportunities</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Skin</th>
+                                <th>Platform</th>
+                                <th>Price</th>
+                                <th>Spread</th>
+                                <th>Score</th>
+                                <th>Confidence</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="skOpportunitiesBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--text-dim)">No opportunities yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Trade History -->
+            <div class="card grid-full">
+                <div class="card-title">Trade History</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Skin</th>
+                                <th>Buy</th>
+                                <th>Sell</th>
+                                <th>P&L</th>
+                                <th>Hold</th>
+                                <th>Platform</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="skTradesBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--text-dim)">No trades yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div><!-- end skinnyContent -->
 
     <script>
     let pnlChart = null;
@@ -2232,7 +2348,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-        const contentMap = { arbo: 'arboContent', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent' };
+        const contentMap = { arbo: 'arboContent', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
         document.getElementById(contentMap[tab]).classList.add('active');
 
         if (tab === 'cryptoarb') {
@@ -2246,6 +2362,12 @@
             if (!ncRefreshInterval) ncRefreshInterval = setInterval(fetchNightcap, 30000);
         } else {
             if (ncRefreshInterval) { clearInterval(ncRefreshInterval); ncRefreshInterval = null; }
+        }
+        if (tab === 'skinny') {
+            fetchSkinny();
+            if (!skRefreshInterval) skRefreshInterval = setInterval(fetchSkinny, 30000);
+        } else {
+            if (skRefreshInterval) { clearInterval(skRefreshInterval); skRefreshInterval = null; }
         }
     }
 
@@ -2494,13 +2616,162 @@
         `).join('');
     }
 
+    // ===== Skinny Dashboard =====
+    const SK_API_URL = '{{ skinny_api_url | default("") }}';
+    const SK_API_KEY = '{{ skinny_api_key | default("") }}';
+    let skRefreshInterval = null;
+
+    async function skFetch(endpoint) {
+        if (!SK_API_URL) return null;
+        try {
+            const resp = await fetch(`${SK_API_URL}${endpoint}`, {
+                headers: { 'X-API-Key': SK_API_KEY },
+            });
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function fetchSkinny() {
+        if (!SK_API_URL) {
+            document.getElementById('skinnyStale').style.display = 'block';
+            document.getElementById('skinnyStale').textContent = 'SKINNY API URL NOT CONFIGURED';
+            return;
+        }
+
+        const [status, portfolio, positions, risk, trades, opportunities, experiments] = await Promise.all([
+            skFetch('/api/status'),
+            skFetch('/api/portfolio'),
+            skFetch('/api/positions'),
+            skFetch('/api/risk'),
+            skFetch('/api/trades?limit=20'),
+            skFetch('/api/opportunities?limit=10'),
+            skFetch('/api/experiments'),
+        ]);
+
+        const stale = document.getElementById('skinnyStale');
+        if (!status) {
+            stale.style.display = 'block';
+            return;
+        }
+        stale.style.display = 'none';
+
+        // Status card
+        document.getElementById('skMode').textContent = (status.mode || '--').toUpperCase();
+        document.getElementById('skMode').style.color = status.mode === 'live' ? 'var(--red)' : 'var(--yellow)';
+        document.getElementById('skScanner').textContent = status.scanner_active ? 'ACTIVE' : 'STOPPED';
+        document.getElementById('skScanner').style.color = status.scanner_active ? 'var(--green)' : 'var(--red)';
+        document.getElementById('skLastScan').textContent = status.last_scan ? new Date(status.last_scan).toLocaleTimeString() : '--';
+        const up = status.uptime_s || 0;
+        document.getElementById('skUptime').textContent = `${Math.floor(up/3600)}h ${Math.floor((up%3600)/60)}m`;
+        document.getElementById('skPositionCount').textContent = status.positions_count || 0;
+
+        // Portfolio card
+        if (portfolio) {
+            document.getElementById('skTotalValue').textContent = '$' + (portfolio.total_value || 0).toFixed(2);
+            document.getElementById('skDeployed').textContent = '$' + (portfolio.deployed || 0).toFixed(2);
+            const pnl = portfolio.total_pnl || 0;
+            const pnlEl = document.getElementById('skPnl');
+            pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+            pnlEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('skPpdd').textContent = (portfolio.ppdd || 0).toFixed(4);
+        }
+
+        // Risk card
+        if (risk) {
+            document.getElementById('skExposure').textContent = `$${(risk.current_exposure || 0).toFixed(0)} / $${risk.max_exposure || 500}`;
+            document.getElementById('skDailyLoss').textContent = `$${(risk.daily_loss || 0).toFixed(2)} / $${risk.max_daily_loss || 25}`;
+            document.getElementById('skConcurrent').textContent = `${risk.position_count || 0} / ${risk.max_concurrent || 20}`;
+            document.getElementById('skMaxSkin').textContent = `$${risk.max_per_skin || 50}`;
+        }
+
+        // Positions table
+        if (positions && positions.positions) {
+            const tbody = document.getElementById('skPositionsBody');
+            if (positions.positions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No open positions</td></tr>';
+            } else {
+                tbody.innerHTML = positions.positions.map(p => {
+                    const holdDays = p.hold_days || 0;
+                    const holdColor = holdDays > 10 ? 'var(--red)' : holdDays > 7 ? 'var(--yellow)' : 'var(--text)';
+                    return `<tr>
+                        <td>${p.market_hash_name || '--'}</td>
+                        <td>${(p.platform || '--').toUpperCase()}</td>
+                        <td>$${(p.buy_price || 0).toFixed(2)}</td>
+                        <td>$${(p.target_sell_price || 0).toFixed(2)}</td>
+                        <td style="color:${holdColor}">${holdDays.toFixed(1)}d</td>
+                        <td>${p.status || '--'}</td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
+        // Opportunities table
+        if (opportunities && opportunities.opportunities) {
+            const tbody = document.getElementById('skOpportunitiesBody');
+            if (opportunities.opportunities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">No opportunities yet</td></tr>';
+            } else {
+                tbody.innerHTML = opportunities.opportunities.map(o => `<tr>
+                    <td>${o.market_hash_name || '--'}</td>
+                    <td>${(o.platform || '--').toUpperCase()}</td>
+                    <td>$${(o.price || 0).toFixed(2)}</td>
+                    <td style="color:var(--green)">${((o.spread || 0)*100).toFixed(1)}%</td>
+                    <td>${(o.score || 0).toFixed(3)}</td>
+                    <td>${((o.confidence || 0)*100).toFixed(0)}%</td>
+                    <td>${o.time ? new Date(o.time).toLocaleTimeString() : '--'}</td>
+                </tr>`).join('');
+            }
+        }
+
+        // Trades table
+        if (trades && trades.trades) {
+            const tbody = document.getElementById('skTradesBody');
+            if (trades.trades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">No trades yet</td></tr>';
+            } else {
+                tbody.innerHTML = trades.trades.map(t => {
+                    const pnl = t.pnl || 0;
+                    return `<tr>
+                        <td>${t.market_hash_name || '--'}</td>
+                        <td>$${(t.buy_price || 0).toFixed(2)}</td>
+                        <td>$${(t.sell_price || 0).toFixed(2)}</td>
+                        <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                        <td>${(t.hold_days || 0).toFixed(1)}d</td>
+                        <td>${(t.platform || '--').toUpperCase()}</td>
+                        <td>${t.time ? new Date(t.time).toLocaleTimeString() : '--'}</td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
+        // Experiments
+        if (experiments && experiments.experiments) {
+            const container = document.getElementById('skExperiments');
+            if (experiments.experiments.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px">No experiments yet</div>';
+            } else {
+                container.innerHTML = experiments.experiments.slice(0, 5).map(e => {
+                    const ppddColor = (e.ppdd || 0) > 0.03 ? 'var(--green)' : 'var(--text-dim)';
+                    const statusEmoji = e.status === 'kept' ? '&#9989;' : '&#10060;';
+                    return `<div class="pair-stat">
+                        <span>${statusEmoji} ${e.description || e.experiment_id || '--'}</span>
+                        <span style="color:${ppddColor}">PPDD: ${(e.ppdd || 0).toFixed(4)}</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+    }
+
     // ===== Nightcap Dashboard =====
     const NC_API_URL = '{{ nightcap_api_url | default("") }}';
     const NC_API_KEY = '{{ nightcap_api_key | default("") }}';
 
     // Restore active tab (localStorage takes priority, hash as fallback)
     const savedTab = localStorage.getItem('arbo_tab') || location.hash.replace('#', '');
-    if (['arbo', 'cryptoarb', 'nightcap'].includes(savedTab)) {
+    if (['arbo', 'cryptoarb', 'nightcap', 'skinny'].includes(savedTab)) {
         switchTab(savedTab);
     }
     // Clean hash from URL

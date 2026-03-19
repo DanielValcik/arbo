@@ -207,6 +207,8 @@ async def dashboard_page(
         "mode": mode,
         "nightcap_api_url": os.environ.get("NIGHTCAP_API_URL", ""),
         "nightcap_api_key": os.environ.get("NIGHTCAP_API_KEY", ""),
+        "skinny_api_url": os.environ.get("SKINNY_API_URL", ""),
+        "skinny_api_key": os.environ.get("SKINNY_API_KEY", ""),
     })
 
 

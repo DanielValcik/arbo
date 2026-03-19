@@ -600,6 +600,7 @@ class RDHOrchestrator:
             review_queue_channel_id=cfg.slack_review_queue_channel_id,
             weekly_report_channel_id=cfg.slack_weekly_report_channel_id,
             get_cryptoarb_fn=self._get_cryptoarb_for_slack,
+            get_skinny_fn=self._get_skinny_for_slack,
         )
 
     async def _init_web_dashboard(self) -> Any:
@@ -822,6 +823,42 @@ class RDHOrchestrator:
             "pairs": pairs,
             "alerts": raw.get("alerts", []),
         }
+
+    async def _get_skinny_for_slack(self) -> dict[str, Any] | None:
+        """Fetch Skinny CS2 trading status via HTTP from Skinny API."""
+        import os
+
+        import aiohttp
+
+        skinny_url = os.getenv("SKINNY_API_URL", "")
+        skinny_key = os.getenv("SKINNY_API_KEY", "")
+        if not skinny_url:
+            return None
+
+        try:
+            headers = {"X-API-Key": skinny_key} if skinny_key else {}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{skinny_url}/api/portfolio", headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        return None
+                    portfolio = await resp.json()
+
+                async with session.get(
+                    f"{skinny_url}/api/status", headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    status = await resp.json() if resp.status == 200 else {}
+
+                async with session.get(
+                    f"{skinny_url}/api/risk", headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    risk = await resp.json() if resp.status == 200 else {}
+
+            return {"portfolio": portfolio, "status": status, "risk": risk}
+        except Exception as e:
+            logger.debug("skinny_api_error", error=str(e))
+            return None
 
     # ------------------------------------------------------------------
     # Strategy tasks

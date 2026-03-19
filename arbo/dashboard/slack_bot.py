@@ -24,6 +24,7 @@ StatusCallback = Callable[[], Awaitable[dict[str, Any]]]
 PnlCallback = Callable[[], Awaitable[dict[str, Any]]]
 ShutdownCallback = Callable[[], Awaitable[None]]
 CryptoArbCallback = Callable[[], Awaitable[dict[str, Any] | None]]
+SkinnyCallback = Callable[[], Awaitable[dict[str, Any] | None]]
 
 
 class SlackBot:
@@ -53,6 +54,7 @@ class SlackBot:
         review_queue_channel_id: str = "",
         weekly_report_channel_id: str = "",
         get_cryptoarb_fn: CryptoArbCallback | None = None,
+        get_skinny_fn: SkinnyCallback | None = None,
     ) -> None:
         self._bot_token = bot_token
         self._app_token = app_token
@@ -61,6 +63,7 @@ class SlackBot:
         self._get_pnl_fn = get_pnl_fn
         self._shutdown_fn = shutdown_fn
         self._get_cryptoarb_fn = get_cryptoarb_fn
+        self._get_skinny_fn = get_skinny_fn
         # Dedicated channels (fall back to default if not configured)
         self._daily_brief_channel = daily_brief_channel_id or channel_id
         self._review_queue_channel = review_queue_channel_id or channel_id
@@ -183,6 +186,16 @@ class SlackBot:
                         else:
                             blocks = self._format_cryptoarb_blocks(data)
                             await say(blocks=blocks, text="CryptoArb Status")
+                elif command in ("skinny", "sk"):
+                    if self._get_skinny_fn is None:
+                        await say(text="Skinny integration not configured.")
+                    else:
+                        data = await self._get_skinny_fn()
+                        if data is None:
+                            await say(text="Skinny API unavailable.")
+                        else:
+                            blocks = self._format_skinny_blocks(data)
+                            await say(blocks=blocks, text="Skinny Status")
                 elif command == "kill":
                     await say(text="Emergency shutdown initiated...")
                     logger.critical("slack_kill_command_received")
@@ -193,6 +206,7 @@ class SlackBot:
                         "• `@arbo status` — system status\n"
                         "• `@arbo pnl` — P&L summary\n"
                         "• `@arbo cryptoarb` — CryptoArb status\n"
+                        "• `@arbo skinny` — Skinny CS2 trading status\n"
                         "• `@arbo kill` — emergency shutdown"
                     )
                 else:
@@ -501,3 +515,69 @@ class SlackBot:
     async def send_cryptoarb_update(self, blocks: list[dict[str, Any]]) -> None:
         """Send a CryptoArb update to #daily-brief."""
         await self._post(self._daily_brief_channel, text="CryptoArb Update", blocks=blocks)
+
+    # ------------------------------------------------------------------
+    # Skinny formatters
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_skinny_blocks(data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Format Skinny CS2 trading status as Block Kit blocks."""
+        portfolio = data.get("portfolio", {})
+        risk = data.get("risk", {})
+        status = data.get("status", {})
+
+        mode = (status.get("mode") or "paper").upper()
+        ppdd = portfolio.get("ppdd", 0)
+        total_pnl = portfolio.get("total_pnl", 0)
+        win_rate = portfolio.get("win_rate", 0)
+        positions = portfolio.get("positions_count", 0)
+        deployed = portfolio.get("deployed", 0)
+
+        pnl_sign = "+" if total_pnl >= 0 else ""
+        pnl_color = "" if total_pnl >= 0 else ""
+
+        blocks: list[dict[str, Any]] = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Skinny — CS2 Skin Trading"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Mode:* {mode}"},
+                    {"type": "mrkdwn", "text": f"*PPDD:* {ppdd:.4f}"},
+                    {"type": "mrkdwn", "text": f"*P&L:* {pnl_sign}${total_pnl:.2f}"},
+                    {"type": "mrkdwn", "text": f"*Win Rate:* {win_rate:.0f}%"},
+                    {"type": "mrkdwn", "text": f"*Positions:* {positions}"},
+                    {"type": "mrkdwn", "text": f"*Deployed:* ${deployed:.2f}"},
+                ],
+            },
+        ]
+
+        # Risk summary
+        if risk:
+            exposure = risk.get("current_exposure", 0)
+            max_exp = risk.get("max_exposure", 500)
+            daily_loss = risk.get("daily_loss", 0)
+            blocks.append(
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": (
+                                f"Exposure: ${exposure:.0f}/${max_exp} | "
+                                f"Daily loss: ${daily_loss:.2f}/$25 | "
+                                f"Concurrent: {positions}/20"
+                            ),
+                        }
+                    ],
+                }
+            )
+
+        return blocks
+
+    async def send_skinny_update(self, blocks: list[dict[str, Any]]) -> None:
+        """Send a Skinny update to #daily-brief."""
+        await self._post(self._daily_brief_channel, text="Skinny Update", blocks=blocks)
