@@ -2738,7 +2738,7 @@
                         <td>${t.market_hash_name || '--'}</td>
                         <td>$${(t.buy_price || 0).toFixed(2)}</td>
                         <td>$${(t.sell_price || 0).toFixed(2)}</td>
-                        <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                        <td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
                         <td>${(t.hold_days || 0).toFixed(1)}d</td>
                         <td>${(t.platform || '--').toUpperCase()}</td>
                         <td>${t.time ? new Date(t.time).toLocaleTimeString() : '--'}</td>
