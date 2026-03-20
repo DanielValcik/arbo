@@ -775,6 +775,19 @@ class RDHOrchestrator:
     # CryptoArb integration (file-based bridge via state.json)
     # ------------------------------------------------------------------
 
+    def _read_nightcap_state(self) -> dict[str, Any] | None:
+        """Read Nightcap dashboard_state.json from disk."""
+        path = os.getenv(
+            "NIGHTCAP_STATE_PATH",
+            "/opt/nightcap/data/dashboard_state.json",
+        )
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            logger.debug("nightcap_state_read_error", error=str(e), path=path)
+            return None
+
     def _read_cryptoarb_state(self) -> dict[str, Any] | None:
         """Read CryptoArb state.json from disk. Returns raw dict or None."""
         path = os.getenv(
@@ -1585,36 +1598,13 @@ class RDHOrchestrator:
                 await asyncio.sleep(60)
 
     async def _send_daily_report(self) -> None:
-        """Generate and send daily report via Slack."""
-        if self._report_generator is None or self._paper_engine is None:
-            return
-        try:
-            trades = [
-                {
-                    "layer": t.layer,
-                    "actual_pnl": str(t.actual_pnl) if t.actual_pnl else None,
-                    "size": str(t.size),
-                    "notes": getattr(t, "notes", ""),
-                    "strategy": getattr(t, "strategy", ""),
-                }
-                for t in self._paper_engine.trade_history
-            ]
-            report = self._report_generator.generate_daily(trades=trades, signals=[])
-            formatted = self._report_generator.format_slack_report(report)
-            if self._slack_bot is not None:
-                await self._slack_bot.send_daily_report(formatted["blocks"])
-                # Append CryptoArb update as a separate message
-                try:
-                    ca_data = await self._get_cryptoarb_for_slack()
-                    if ca_data is not None:
-                        ca_blocks = self._slack_bot._format_cryptoarb_blocks(ca_data)
-                        await self._slack_bot.send_cryptoarb_update(ca_blocks)
-                        logger.info("cryptoarb_daily_report_sent")
-                except Exception as ca_err:
-                    logger.warning("cryptoarb_daily_report_error", error=str(ca_err))
-            logger.info("daily_report_sent")
-        except Exception as e:
-            logger.error("daily_report_error", error=str(e))
+        """Daily report — now redirects to consolidated morning briefing.
+
+        Previously sent separate Arbo report + CryptoArb message.
+        Now everything is in _send_morning_briefing() as one message.
+        """
+        # Skip — morning briefing handles everything
+        logger.debug("daily_report_skipped_use_morning_briefing")
 
     async def _send_weekly_report(self) -> None:
         """Generate and send weekly report via Slack."""
@@ -1929,7 +1919,11 @@ class RDHOrchestrator:
                 await asyncio.sleep(55)
 
     async def _send_morning_briefing(self) -> None:
-        """Generate and send concise morning briefing via Slack."""
+        """Generate and send consolidated morning briefing via Slack.
+
+        Single message combining Arbo (A+B+C), CryptoArb, and Nightcap status.
+        Replaces: old daily_report + old morning_briefing + CryptoArb separate msg.
+        """
         if self._slack_bot is None or self._paper_engine is None:
             return
 
@@ -1944,6 +1938,9 @@ class RDHOrchestrator:
         )
         yesterday_end = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        lines = [f":sunrise: *Denni prehled — {now.strftime('%d.%m.%Y')}*"]
+
+        # ── ARBO (Polymarket) ──
         async with factory() as session:
             # Yesterday's resolved trades per strategy
             result = await session.execute(
@@ -1960,6 +1957,24 @@ class RDHOrchestrator:
             )
             strat_rows = result.all()
 
+            # Open positions per strategy
+            result = await session.execute(
+                text(
+                    "SELECT strategy, count(*), coalesce(sum(size), 0) "
+                    "FROM paper_positions GROUP BY strategy ORDER BY strategy"
+                )
+            )
+            pos_rows = result.all()
+
+            # Total P&L (all time)
+            result = await session.execute(
+                text(
+                    "SELECT coalesce(sum(actual_pnl), 0) FROM paper_trades "
+                    "WHERE status IN ('won','lost')"
+                )
+            )
+            total_pnl = float(result.scalar())
+
             # Notable trades (top 3 by absolute P&L)
             result = await session.execute(
                 text(
@@ -1973,66 +1988,118 @@ class RDHOrchestrator:
             )
             notable = result.all()
 
-            # Open positions count
-            result = await session.execute(
-                text("SELECT count(*), coalesce(sum(size), 0) FROM paper_positions")
-            )
-            open_row = result.one()
-            open_count = open_row[0]
-            open_deployed = float(open_row[1])
-
-            # Total P&L
-            result = await session.execute(
-                text(
-                    "SELECT coalesce(sum(actual_pnl), 0) FROM paper_trades "
-                    "WHERE status IN ('won','lost')"
-                )
-            )
-            total_pnl = float(result.scalar())
-
-        # Format message
-        total_yesterday = sum(float(r[3]) for r in strat_rows)
+        total_yesterday_pnl = sum(float(r[3]) for r in strat_rows)
         total_resolved = sum(r[1] for r in strat_rows)
         total_wins = sum(r[2] for r in strat_rows)
+        total_open = sum(r[1] for r in pos_rows)
+        total_deployed = sum(float(r[2]) for r in pos_rows)
 
-        lines = [f"*Ranni prehled — {now.strftime('%d.%m.%Y')}*"]
         lines.append("")
+        lines.append("*ARBO (Polymarket)*")
 
+        # Yesterday summary
         if total_resolved > 0:
+            wr = total_wins / total_resolved * 100
+            sign = "+" if total_yesterday_pnl >= 0 else ""
             lines.append(
-                f"*Vcera:* {total_resolved} trades ({total_wins}W/"
-                f"{total_resolved - total_wins}L), "
-                f"P&L {'+'if total_yesterday >= 0 else ''}${total_yesterday:.2f}"
+                f"  Vcera: {total_resolved} trades ({total_wins}W/"
+                f"{total_resolved - total_wins}L, {wr:.0f}%), "
+                f"{sign}${total_yesterday_pnl:.2f}"
             )
             for r in strat_rows:
                 sid, cnt, wins, pnl = r[0], r[1], r[2], float(r[3])
-                lines.append(
-                    f"  • {sid}: {cnt} trades ({wins}W), "
-                    f"{'+'if pnl >= 0 else ''}${pnl:.2f}"
-                )
+                s = "+" if pnl >= 0 else ""
+                sname = {"A": "Theta", "B": "Reflexivity", "C": "Weather"}.get(sid, sid)
+                lines.append(f"    {sid} ({sname}): {cnt}t ({wins}W), {s}${pnl:.2f}")
         else:
-            lines.append("*Vcera:* zadne resolved trades")
+            lines.append("  Vcera: zadne resolved trades")
 
+        # Notable
         if notable:
-            lines.append("")
-            lines.append("*Zajimave:*")
             for n in notable:
                 pnl = float(n[2])
-                emoji = (
-                    ":chart_with_upwards_trend:"
-                    if pnl > 0
-                    else ":chart_with_downwards_trend:"
-                )
-                city = n[3] or ""
+                emoji = ":white_check_mark:" if pnl > 0 else ":x:"
+                city = f" ({n[3]})" if n[3] else ""
+                s = "+" if pnl >= 0 else ""
+                lines.append(f"    {emoji} #{n[0]} {n[1]}{city}: {s}${pnl:.2f}")
+
+        # Current state
+        sign = "+" if total_pnl >= 0 else ""
+        lines.append(
+            f"  Pozice: {total_open} otevreno (${total_deployed:.0f} deployed)"
+        )
+        for r in pos_rows:
+            sid, cnt, deployed = r[0], r[1], float(r[2])
+            sname = {"A": "Theta", "B": "Reflexivity", "C": "Weather"}.get(sid, sid)
+            lines.append(f"    {sid} ({sname}): {cnt} pozic, ${deployed:.0f}")
+        lines.append(f"  Celkovy P&L: {sign}${total_pnl:.2f}")
+
+        # ── CRYPTOARB ──
+        try:
+            ca = await self._get_cryptoarb_for_slack()
+            if ca is not None:
+                lines.append("")
+                lines.append("*CRYPTOARB (statarb)*")
+                eq = ca.get("equity", 1.0)
+                dd = ca.get("drawdown_pct", 0)
+                trades = ca.get("total_trades", 0)
+                wr = ca.get("win_rate", 0)
+                mode = ca.get("mode", "?")
+                pnl_pct = (eq - 1.0) * 100
+
                 lines.append(
-                    f"  {emoji} #{n[0]} ({n[1]}) "
-                    f"{'+'if pnl >= 0 else ''}${pnl:.2f}"
-                    + (f" ({city})" if city else "")
+                    f"  Equity: {eq:.4f} ({'+' if pnl_pct >= 0 else ''}{pnl_pct:.1f}%), "
+                    f"DD: {dd:.1f}%, Trades: {trades}, WR: {wr:.0f}%, Mode: {mode}"
                 )
 
+                pairs = ca.get("pairs", [])
+                if pairs:
+                    active = [p for p in pairs if p.get("position") != "FLAT"]
+                    flat = [p for p in pairs if p.get("position") == "FLAT"]
+                    if active:
+                        lines.append(
+                            "  Aktivni: "
+                            + ", ".join(
+                                f"{p['name']} {p['position']} ({p.get('spread', 0):+.2f}σ)"
+                                for p in active
+                            )
+                        )
+                    lines.append(f"  Flat: {len(flat)}/{len(pairs)} paru")
+        except Exception as e:
+            logger.debug("morning_brief_cryptoarb_error", error=str(e))
+
+        # ── NIGHTCAP ──
+        try:
+            nc = self._read_nightcap_state()
+            if nc is not None:
+                lines.append("")
+                lines.append("*NIGHTCAP (VIX futures)*")
+                regime = nc.get("regime", "?")
+                vix = nc.get("vix_level", 0)
+                eq = nc.get("equity", 0)
+                dd = nc.get("drawdown_pct", 0)
+                env = nc.get("environment", "?")
+                pos = nc.get("position", {})
+                pos_dir = pos.get("direction", "")
+
+                lines.append(
+                    f"  Rezim: {regime}, VIX: {vix:.1f}, "
+                    f"Equity: ${eq:,.0f}, DD: {dd:.1f}%, Mode: {env}"
+                )
+                if pos_dir:
+                    lines.append(
+                        f"  Pozice: {pos.get('symbol', '?')} {pos_dir} "
+                        f"x{pos.get('contracts', 0)}, "
+                        f"P&L: ${pos.get('unrealized_pnl', 0):.2f}"
+                    )
+                else:
+                    lines.append("  Pozice: zadna")
+        except Exception as e:
+            logger.debug("morning_brief_nightcap_error", error=str(e))
+
+        # ── Footer ──
         lines.append("")
-        lines.append(f"*Otevreno:* {open_count} pozic (${open_deployed:.0f} deployed)")
-        lines.append(f"*Celkovy P&L:* {'+'if total_pnl >= 0 else ''}${total_pnl:.2f}")
+        lines.append(f"_Dashboard: arbo.click_")
 
         await self._slack_bot.send_message("\n".join(lines))
         logger.info("morning_briefing_sent")
