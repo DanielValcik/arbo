@@ -2025,14 +2025,26 @@ class RDHOrchestrator:
 
         # Current state
         sign = "+" if total_pnl >= 0 else ""
+        from arbo.core.risk_manager import RESERVE_CAPITAL, STRATEGY_ALLOCATIONS
+        total_capital = float(sum(
+            v for v in STRATEGY_ALLOCATIONS.values()
+        ) + RESERVE_CAPITAL)
+        roi_pct = total_pnl / total_capital * 100 if total_capital > 0 else 0
+        roi_sign = "+" if roi_pct >= 0 else ""
+        yesterday_roi = total_yesterday_pnl / total_capital * 100 if total_capital > 0 else 0
+        yesterday_roi_sign = "+" if yesterday_roi >= 0 else ""
+
         lines.append(
-            f"  Pozice: {total_open} otevreno (${total_deployed:.0f} deployed)"
+            f"  *ROI: {roi_sign}{roi_pct:.1f}%* (vcera {yesterday_roi_sign}{yesterday_roi:.1f}%)"
+        )
+        lines.append(
+            f"  Celkovy P&L: {sign}${total_pnl:.2f}, "
+            f"Pozice: {total_open} (${total_deployed:.0f} deployed)"
         )
         for r in pos_rows:
             sid, cnt, deployed = r[0], r[1], float(r[2])
             sname = {"A": "Theta", "B": "Reflexivity", "C": "Weather"}.get(sid, sid)
             lines.append(f"    {sid} ({sname}): {cnt} pozic, ${deployed:.0f}")
-        lines.append(f"  Celkovy P&L: {sign}${total_pnl:.2f}")
 
         # ── CRYPTOARB ──
         try:
