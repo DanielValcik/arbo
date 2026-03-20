@@ -117,6 +117,8 @@ def download_tmax_member(
     tmp.write_bytes(tmax_data)
 
     try:
+        import gc
+
         import cfgrib
         datasets = cfgrib.open_datasets(str(tmp))
         results = {}
@@ -131,8 +133,9 @@ def download_tmax_member(
                         results[city] = round(val - 273.15, 2)
                     except Exception:
                         pass
-                ds.close()
-                break
+            ds.close()  # Close ALL datasets, not just tmax
+        del datasets
+        gc.collect()  # Force GC to reclaim cfgrib/xarray memory
         return results
     except Exception:
         return {}
