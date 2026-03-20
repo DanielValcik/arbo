@@ -891,6 +891,28 @@
                 </div>
             </div>
 
+            <!-- Expected vs Reality -->
+            <div class="card grid-full">
+                <div class="card-title">Expected vs Reality — CryptoArb Run 3 (composite 1.282)</div>
+                <div id="caEvrTooEarly" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px"></div>
+                <div class="evr-grid">
+                    <div>
+                        <table style="width:100%">
+                            <thead><tr><th>Metrika</th><th>Ocekavani (Run 3)</th><th>Realita</th><th></th></tr></thead>
+                            <tbody id="caEvrTableBody">
+                                <tr><td colspan="4" class="loading">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">Kumulativni P&L — Equity vs Expected</div>
+                        <div class="chart-container" style="height:200px">
+                            <canvas id="caEvrChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Open Positions -->
             <div class="card grid-full">
                 <div class="card-title">Open Positions</div>
@@ -1830,12 +1852,12 @@
 
             // Phase description
             const pass = data.pass || '';
-            if (pass.includes('10min')) {
-                document.getElementById('dlPhaseDesc').textContent =
-                    'Faze 1/2: Vsechny markety, 10-min rozliseni, kompletni historie';
-            } else if (pass.includes('1min')) {
+            if (pass.includes('gamewindow') || pass.includes('2_1min')) {
                 document.getElementById('dlPhaseDesc').textContent =
                     'Faze 2/2: Moneyline + spread, 1-min rozliseni, game window 48h';
+            } else if (pass.includes('10min')) {
+                document.getElementById('dlPhaseDesc').textContent =
+                    'Faze 1/2: Vsechny markety, 10-min rozliseni, kompletni historie';
             }
 
             // Updated time
@@ -2389,17 +2411,19 @@
     }
 
     async function fetchCryptoArb() {
-        const [overview, charts, trades, alerts] = await Promise.all([
+        const [overview, charts, trades, alerts, evr] = await Promise.all([
             fetchJSON('/api/cryptoarb/overview'),
             fetchJSON('/api/cryptoarb/charts'),
             fetchJSON('/api/cryptoarb/trades'),
             fetchJSON('/api/cryptoarb/alerts'),
+            fetchJSON('/api/cryptoarb/expected-vs-reality'),
         ]);
         if (overview) renderCaOverview(overview);
         if (charts) renderCaCharts(charts);
         if (overview) renderCaOpenPositions(overview);
         if (trades) renderCaClosedTrades(trades);
         if (alerts) renderCaAlerts(alerts);
+        if (evr) renderCaExpectedVsReality(evr);
         document.getElementById('lastRefresh').textContent =
             new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     }
@@ -2608,6 +2632,115 @@
                 ${a.message}
             </div>
         `).join('');
+    }
+
+    // ===== CryptoArb Expected vs Reality =====
+    let caEvrChart = null;
+    function renderCaExpectedVsReality(d) {
+        if (d.error) {
+            document.getElementById('caEvrTooEarly').textContent = d.error;
+            document.getElementById('caEvrTooEarly').style.display = 'block';
+            return;
+        }
+
+        // Too early banner
+        const tooEarly = document.getElementById('caEvrTooEarly');
+        if (d.too_early) {
+            tooEarly.style.display = 'block';
+            const actual = d.actual || {};
+            tooEarly.textContent = `Statisticke srovnani bude k dispozici po ${20 - (actual.total_trades || 0)} dalsich obchodech (aktualne ${actual.total_trades || 0} z 20)`;
+        } else {
+            tooEarly.style.display = 'none';
+        }
+
+        // Comparison table
+        const tbody = document.getElementById('caEvrTableBody');
+        const comparisons = d.comparison || [];
+        if (comparisons.length > 0) {
+            tbody.innerHTML = comparisons.map(c => {
+                if (c.metric === '_separator') {
+                    return `<tr><td colspan="4" style="border-bottom:1px solid var(--border);padding:2px 0"></td></tr>`;
+                }
+                const statusMap = {
+                    'ok': {icon: '●', color: 'var(--green)', bg: 'rgba(63,185,80,0.08)'},
+                    'warning': {icon: '●', color: 'var(--red)', bg: 'rgba(248,81,73,0.08)'},
+                    'too_early': {icon: '○', color: 'var(--text-dim)', bg: 'transparent'},
+                    'info': {icon: '', color: 'var(--text-dim)', bg: 'transparent'},
+                };
+                const st = statusMap[c.status] || statusMap.info;
+                const actualColor = c.status === 'ok' ? 'var(--green)' : c.status === 'warning' ? 'var(--red)' : 'var(--text)';
+                return `<tr style="background:${st.bg}">
+                    <td style="font-weight:600">${c.metric}</td>
+                    <td style="color:var(--text-dim)">${c.expected}</td>
+                    <td style="color:${actualColor};font-weight:${c.status === 'info' || c.status === 'too_early' ? '400' : '700'}">${c.actual}</td>
+                    <td style="color:${st.color};font-weight:700;font-size:10px">${st.icon}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Cumulative P&L chart
+        const series = d.daily_series || [];
+        const expLine = d.expected_line || [];
+        if (series.length > 0) {
+            const labels = ['Start', ...series.map(s => s.date ? s.date.slice(5) : '')];
+            const actualData = [0, ...series.map(s => s.cumulative)];
+            const expectedData = [0, ...expLine.map(e => e.expected_cumulative)];
+            if (caEvrChart) {
+                caEvrChart.data.labels = labels;
+                caEvrChart.data.datasets[0].data = actualData;
+                caEvrChart.data.datasets[1].data = expectedData;
+                caEvrChart.update('none');
+            } else {
+                caEvrChart = new Chart(document.getElementById('caEvrChart'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Realita',
+                                data: actualData,
+                                borderColor: '#58a6ff',
+                                backgroundColor: 'rgba(88,166,255,0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 4,
+                                borderWidth: 2,
+                            },
+                            {
+                                label: 'Ocekavani (Run 3)',
+                                data: expectedData,
+                                borderColor: 'rgba(63,185,80,0.5)',
+                                borderDash: [5, 5],
+                                fill: false,
+                                tension: 0,
+                                pointRadius: 0,
+                                borderWidth: 2,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        animation: false,
+                        plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+                        scales: {
+                            x: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { display: false } },
+                            y: {
+                                ticks: { color: '#8b949e', callback: v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%' },
+                                grid: { color: 'rgba(48,54,61,0.3)' },
+                            }
+                        }
+                    }
+                });
+            }
+        } else if (!caEvrChart) {
+            const canvas = document.getElementById('caEvrChart');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Graf se zobrazi po prvnich equity snapshots', canvas.width / 2, canvas.height / 2);
+        }
     }
 
     // ===== Skinny Dashboard =====
