@@ -1430,16 +1430,22 @@ class RDHOrchestrator:
 
                 for pos in positions:
                     cid = pos.market_condition_id
+                    strategy = getattr(pos, "strategy", "")
 
-                    # Skip if end_date in future
-                    cached = self._discovery.get_by_condition_id(cid)
-                    if cached is not None and cached.end_date:
-                        try:
-                            end_dt = datetime.fromisoformat(cached.end_date.replace("Z", "+00:00"))
-                            if end_dt > now:
-                                continue
-                        except (ValueError, TypeError):
-                            pass
+                    # Skip if end_date in future — but NOT for Strategy C
+                    # Strategy C uses METAR target_date (from question),
+                    # not Polymarket end_date which is set days after resolution
+                    if strategy != "C":
+                        cached = self._discovery.get_by_condition_id(cid)
+                        if cached is not None and cached.end_date:
+                            try:
+                                end_dt = datetime.fromisoformat(
+                                    cached.end_date.replace("Z", "+00:00")
+                                )
+                                if end_dt > now:
+                                    continue
+                            except (ValueError, TypeError):
+                                pass
 
                     # Fetch market state
                     if cid not in fetched:
@@ -1469,21 +1475,53 @@ class RDHOrchestrator:
                                 error=str(metar_err),
                             )
 
-                    # Fallback: price-based resolution (requires market closed)
+                    # Fallback: price-based resolution
                     if winning is None:
-                        if market is None or not market.closed:
+                        if market is None:
                             continue
 
                         yes_price = market.price_yes
-                        if yes_price is None:
-                            continue
 
-                        yes_won = yes_price > Decimal("0.5")
-                        if pos.token_id == market.token_id_yes:
-                            winning = yes_won
-                        elif pos.token_id == market.token_id_no:
-                            winning = not yes_won
-                        else:
+                        # Method 1: Market officially closed by Polymarket
+                        if market.closed and yes_price is not None:
+                            yes_won = yes_price > Decimal("0.5")
+                            if pos.token_id == market.token_id_yes:
+                                winning = yes_won
+                            elif pos.token_id == market.token_id_no:
+                                winning = not yes_won
+
+                        # Method 2: Price converged (>0.95 or <0.05) after end_date
+                        # This catches A & B trades that Polymarket hasn't marked
+                        # closed yet but price clearly shows the outcome
+                        if winning is None and yes_price is not None:
+                            end_passed = False
+                            if market.end_date:
+                                try:
+                                    end_dt = datetime.fromisoformat(
+                                        market.end_date.replace("Z", "+00:00")
+                                    )
+                                    end_passed = now > end_dt
+                                except (ValueError, TypeError):
+                                    pass
+
+                            price_converged_yes = yes_price >= Decimal("0.95")
+                            price_converged_no = yes_price <= Decimal("0.05")
+
+                            if end_passed and (price_converged_yes or price_converged_no):
+                                yes_won = price_converged_yes
+                                if pos.token_id == market.token_id_yes:
+                                    winning = yes_won
+                                elif pos.token_id == market.token_id_no:
+                                    winning = not yes_won
+                                if winning is not None:
+                                    logger.info(
+                                        "price_convergence_resolution",
+                                        condition_id=cid[:20],
+                                        yes_price=str(yes_price),
+                                        strategy=strategy,
+                                    )
+
+                        if winning is None:
                             continue
 
                     pnl = self._paper_engine.resolve_market(pos.token_id, winning)
@@ -1520,11 +1558,11 @@ class RDHOrchestrator:
                     )
 
                     # Slack notification
-                    if self._slack is not None:
+                    if self._slack_bot is not None:
                         market_name = getattr(market, "question", cid[:40]) or cid[:40]
                         result_status = "won" if winning else "lost"
                         try:
-                            await self._slack.send_resolution_alert(
+                            await self._slack_bot.send_resolution_alert(
                                 market=market_name,
                                 strategy=strategy or "?",
                                 side=pos.side or "?",
