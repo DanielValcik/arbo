@@ -568,27 +568,37 @@
         <!-- Strategy D Download Progress -->
         <div class="card grid-full" id="downloadCard" style="display:none">
             <div class="card-title" style="display:flex;align-items:center;gap:10px">
-                Strategy D — Stahovani sportovnich dat
-                <span id="dlStatus" style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--green);color:#000;font-weight:bold">RUNNING</span>
+                Strategy D — Sportovni data
+                <span id="dlStatus" style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--green);color:#000;font-weight:bold">STAHUJE</span>
+                <span id="dlUpdated" style="font-size:11px;color:var(--text-dim);margin-left:auto">--</span>
             </div>
-            <!-- Progress bar - prominent -->
-            <div style="margin:12px 16px 4px;position:relative">
-                <div style="background:var(--bg-tertiary);border-radius:6px;height:24px;overflow:hidden;position:relative">
-                    <div id="dlBar" style="height:100%;background:linear-gradient(90deg, #1a73e8, #4CAF50);width:0%;transition:width 0.5s;border-radius:6px"></div>
-                    <div id="dlBarText" style="position:absolute;top:0;left:0;right:0;height:100%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:white;text-shadow:0 1px 2px rgba(0,0,0,0.5)">0%</div>
+            <!-- Pass 1: 10-min -->
+            <div style="margin:10px 16px 4px">
+                <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
+                    Faze 1: Vsechny markety, 10-min rozliseni
+                    <span id="dlP1Status" style="font-size:11px;padding:1px 6px;border-radius:8px;background:var(--blue);color:#fff;margin-left:6px">--</span>
+                </div>
+                <div style="background:var(--bg-tertiary);border-radius:4px;height:14px;overflow:hidden;position:relative">
+                    <div id="dlBar1" style="height:100%;background:linear-gradient(90deg, #1a73e8, #4CAF50);width:0%;transition:width 0.5s;border-radius:4px"></div>
+                    <div id="dlBar1Text" style="position:absolute;top:0;left:0;right:0;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:white;text-shadow:0 1px 1px rgba(0,0,0,0.5)">0%</div>
                 </div>
             </div>
-            <div style="display:flex;justify-content:space-between;margin:2px 16px 12px;font-size:11px;color:var(--text-dim)">
-                <span id="dlPhaseDesc">10-min rozliseni, kompletni historie</span>
-                <span id="dlUpdated">--</span>
+            <!-- Pass 2: 1-min game window -->
+            <div style="margin:8px 16px 4px">
+                <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">
+                    Faze 2: Moneyline + spread, 1-min, game window 48h
+                    <span id="dlP2Status" style="font-size:11px;padding:1px 6px;border-radius:8px;background:var(--bg-tertiary);color:var(--text-dim);margin-left:6px">--</span>
+                </div>
+                <div style="background:var(--bg-tertiary);border-radius:4px;height:14px;overflow:hidden;position:relative">
+                    <div id="dlBar2" style="height:100%;background:linear-gradient(90deg, #ff9800, #f44336);width:0%;transition:width 0.5s;border-radius:4px"></div>
+                    <div id="dlBar2Text" style="position:absolute;top:0;left:0;right:0;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:white;text-shadow:0 1px 1px rgba(0,0,0,0.5)">--</div>
+                </div>
             </div>
-            <div class="metrics">
-                <div class="metric"><div class="metric-value" id="dlMarkets">--</div><div class="metric-label">Markety</div></div>
+            <div class="metrics" style="margin-top:10px">
                 <div class="metric"><div class="metric-value" id="dlPrices" style="color:var(--green)">--</div><div class="metric-label">Ceny (miliony)</div></div>
                 <div class="metric"><div class="metric-value" id="dlDb">--</div><div class="metric-label">Velikost DB</div></div>
                 <div class="metric"><div class="metric-value" id="dlWorkers">--</div><div class="metric-label">Workery</div></div>
                 <div class="metric"><div class="metric-value" id="dlEta">--</div><div class="metric-label">Zbyva</div></div>
-                <div class="metric"><div class="metric-value" id="dlSpeed">--</div><div class="metric-label">Rychlost</div></div>
             </div>
         </div>
 
@@ -1793,71 +1803,70 @@
         const data = await fetchJSON('/api/download-progress');
         if (!data) return;
         const card = document.getElementById('downloadCard');
-        if (data.markets_done > 0 || data.active) {
+        if (data.prices_total > 0 || data.active) {
             card.style.display = 'block';
-
-            const done = data.markets_done || 0;
-            const total = data.markets_total || 1;
-            const pct = data.progress_pct || 0;
-
-            // Markets
-            document.getElementById('dlMarkets').textContent =
-                done.toLocaleString() + ' / ' + total.toLocaleString();
-
-            // Prices
-            document.getElementById('dlPrices').textContent =
-                (data.prices_millions || 0).toFixed(1) + ' M';
-
-            // DB size
-            document.getElementById('dlDb').textContent =
-                (data.db_size_gb || 0).toFixed(1) + ' GB';
-
-            // Workers
-            const wEl = document.getElementById('dlWorkers');
             const w = data.workers_alive || 0;
-            wEl.textContent = w;
-            wEl.style.color = w > 0 ? 'var(--green)' : 'var(--red)';
+            const pass = data.pass || '';
+            const p1done = pass.startsWith('2') || data.progress_pct >= 99;
+            const p2active = data.pass2_active || false;
 
-            // ETA
-            const eta = data.eta_hours || 0;
-            if (eta > 24) {
-                document.getElementById('dlEta').textContent = (eta / 24).toFixed(1) + ' dnu';
-            } else if (eta > 0) {
-                document.getElementById('dlEta').textContent = eta.toFixed(0) + ' hodin';
+            // Pass 1 bar
+            const p1pct = Math.min(data.progress_pct || 0, 100);
+            document.getElementById('dlBar1').style.width = p1pct + '%';
+            document.getElementById('dlBar1Text').textContent = p1pct >= 99.5 ? '100%' : p1pct.toFixed(0) + '%';
+            const p1s = document.getElementById('dlP1Status');
+            if (p1pct >= 99.5) {
+                p1s.textContent = 'HOTOVO';
+                p1s.style.background = 'var(--green)';
+                p1s.style.color = '#000';
             } else {
-                document.getElementById('dlEta').textContent = 'Hotovo';
+                p1s.textContent = 'STAHUJE';
+                p1s.style.background = 'var(--blue)';
             }
 
-            // Speed estimate
-            const pricesM = data.prices_millions || 0;
-            document.getElementById('dlSpeed').textContent =
-                pricesM > 0 ? '~70 mkts/min' : '--';
+            // Pass 2 bar
+            const p2ml = data.pass2_ml_done || 0;
+            const p2sp = data.pass2_sp_done || 0;
+            const p2total = data.pass2_total || 67000;
+            const p2done = p2ml + p2sp;
+            const p2pct = p2total > 0 ? Math.min(p2done / p2total * 100, 100) : 0;
+            document.getElementById('dlBar2').style.width = p2pct + '%';
+            const p2s = document.getElementById('dlP2Status');
+            if (p2active || p2done > 0) {
+                document.getElementById('dlBar2Text').textContent = p2pct.toFixed(0) + '% (' + p2done.toLocaleString() + '/' + p2total.toLocaleString() + ')';
+                if (p2pct >= 99.5) {
+                    p2s.textContent = 'HOTOVO'; p2s.style.background = 'var(--green)'; p2s.style.color = '#000';
+                } else {
+                    p2s.textContent = 'STAHUJE'; p2s.style.background = '#ff9800'; p2s.style.color = '#000';
+                }
+            } else if (p1pct >= 99.5) {
+                document.getElementById('dlBar2Text').textContent = 'Ceka na start...';
+                p2s.textContent = 'CEKA'; p2s.style.background = 'var(--yellow)'; p2s.style.color = '#000';
+            } else {
+                document.getElementById('dlBar2Text').textContent = '--';
+                p2s.textContent = 'CEKA'; p2s.style.background = 'var(--bg-tertiary)'; p2s.style.color = 'var(--text-dim)';
+            }
 
-            // Progress bar
-            document.getElementById('dlBar').style.width = pct + '%';
-            document.getElementById('dlBarText').textContent = pct.toFixed(1) + '%';
+            // Global stats
+            document.getElementById('dlPrices').textContent = (data.prices_millions || 0).toFixed(1) + ' M';
+            document.getElementById('dlDb').textContent = (data.db_size_gb || 0).toFixed(1) + ' GB';
+            const wEl = document.getElementById('dlWorkers');
+            wEl.textContent = w;
+            wEl.style.color = w > 0 ? 'var(--green)' : 'var(--text-dim)';
+
+            const eta = data.eta_hours || 0;
+            document.getElementById('dlEta').textContent =
+                eta > 24 ? (eta/24).toFixed(1) + ' dnu' :
+                eta > 0 ? eta.toFixed(0) + ' hodin' : 'Hotovo';
 
             // Status badge
             const statusEl = document.getElementById('dlStatus');
             if (w > 0) {
-                statusEl.textContent = 'STAHUJE';
-                statusEl.style.background = 'var(--green)';
-            } else if (pct >= 99) {
-                statusEl.textContent = 'HOTOVO';
-                statusEl.style.background = 'var(--blue)';
+                statusEl.textContent = 'STAHUJE'; statusEl.style.background = 'var(--green)';
+            } else if (p1pct >= 99 && p2pct >= 99) {
+                statusEl.textContent = 'KOMPLETNI'; statusEl.style.background = 'var(--blue)'; statusEl.style.color = '#fff';
             } else {
-                statusEl.textContent = 'POZASTAVENO';
-                statusEl.style.background = 'var(--yellow)';
-            }
-
-            // Phase description
-            const pass = data.pass || '';
-            if (pass.includes('gamewindow') || pass.includes('2_1min')) {
-                document.getElementById('dlPhaseDesc').textContent =
-                    'Faze 2/2: Moneyline + spread, 1-min rozliseni, game window 48h';
-            } else if (pass.includes('10min')) {
-                document.getElementById('dlPhaseDesc').textContent =
-                    'Faze 1/2: Vsechny markety, 10-min rozliseni, kompletni historie';
+                statusEl.textContent = 'CEKA'; statusEl.style.background = 'var(--yellow)';
             }
 
             // Updated time

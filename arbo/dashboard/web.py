@@ -714,10 +714,19 @@ async def api_download_progress(
             eta_min = remaining / 70 if done > 0 else 0
             eta_h = eta_min / 60
 
+            # Cap progress at 100% for display
+            pct = min(pct, 100.0)
+
+            # Pass 2 info (if available)
+            p2_ml = data.get("pass2_ml_done", 0)
+            p2_sp = data.get("pass2_sp_done", 0)
+            p2_total = data.get("pass2_total", 0)
+            p2_active = current_pass.startswith("2")
+
             return {
                 "active": workers > 0,
                 "pass": current_pass,
-                "markets_done": done,
+                "markets_done": min(done, total),
                 "markets_total": total,
                 "progress_pct": round(pct, 1),
                 "prices_total": prices,
@@ -726,6 +735,10 @@ async def api_download_progress(
                 "workers_alive": workers,
                 "eta_hours": round(eta_h, 1),
                 "updated_at": updated,
+                "pass2_active": p2_active,
+                "pass2_ml_done": p2_ml,
+                "pass2_sp_done": p2_sp,
+                "pass2_total": p2_total,
             }
         except Exception:
             pass
@@ -1302,6 +1315,226 @@ async def api_cryptoarb_alerts(
 
     alerts = data.get("alerts", [])
     return {"alerts": list(reversed(alerts))}
+
+
+# ---------------------------------------------------------------------------
+# CryptoArb Expected vs Reality
+# ---------------------------------------------------------------------------
+
+# Run 3 backtest baseline (5.5y, 738 trades, composite 1.282)
+_CRYPTOARB_BASELINE = {
+    "model": "Run 3 (vol_scale + z_mom + max_hold)",
+    "composite": 1.282,
+    "trades_per_year": 133,
+    "win_rate": 58.4,
+    "annual_roi_pct": 73.7,
+    "monthly_roi_pct": 6.1,
+    "weekly_roi_pct": 1.42,
+    "daily_roi_pct": 0.202,
+    "sharpe": 1.27,
+    "avg_dur_days": 9.3,
+    "max_dd_pct": -24.3,
+    "per_pair": {
+        "SOL_ETH": {"sharpe": 1.06, "ann_ret": 15.4, "wr": 62.7, "trades_yr": 12.1},
+        "BNB_ETH": {"sharpe": 1.77, "ann_ret": 15.0, "wr": 57.7, "trades_yr": 37.5},
+        "ADA_ETH": {"sharpe": 0.90, "ann_ret": 11.0, "wr": 62.0, "trades_yr": 12.7},
+        "ATOM_ETH": {"sharpe": 1.38, "ann_ret": 17.7, "wr": 49.3, "trades_yr": 19.9},
+        "XRP_ETH": {"sharpe": 1.26, "ann_ret": 14.6, "wr": 60.2, "trades_yr": 15.7},
+    },
+}
+
+
+@app.get("/api/cryptoarb/expected-vs-reality")
+async def api_cryptoarb_expected_vs_reality(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Compare Run 3 backtest expectations to actual paper trading."""
+    try:
+        data = _cryptoarb.read()
+        if data is None:
+            return {
+                "error": "CryptoArb state not available",
+                "too_early": True,
+                "comparison": [],
+                "daily_series": [],
+                "expected_line": [],
+            }
+
+        bl = _CRYPTOARB_BASELINE
+
+        # Actuals from state
+        trade_returns = data.get("trade_returns", [])
+        total_trades = data.get("total_trades", 0)
+        wins = sum(1 for r in trade_returns if r > 0)
+        win_rate = (wins / len(trade_returns) * 100) if trade_returns else 0.0
+        equity = data.get("portfolio_equity", 1.0)
+        total_roi = (equity - 1.0) * 100
+
+        # Days active
+        last_eval = data.get("last_signal_eval", "")
+        equity_snaps = data.get("equity_snapshots", [])
+        days_active = 0.0
+        start_date = None
+        if equity_snaps:
+            try:
+                first_t = equity_snaps[0].get("t", "")
+                start_date = datetime.fromisoformat(first_t.replace("Z", "+00:00"))
+                days_active = (datetime.now(UTC) - start_date).total_seconds() / 86400
+            except (ValueError, TypeError):
+                pass
+
+        # Daily/weekly/monthly ROI (annualized from actual)
+        actual_daily = total_roi / days_active if days_active > 1 else 0.0
+        actual_weekly = actual_daily * 7
+        actual_monthly = actual_daily * 30
+
+        # Trade pace
+        expected_trades_so_far = bl["trades_per_year"] / 365 * days_active if days_active > 0 else 0
+        trades_per_year_actual = total_trades / days_active * 365 if days_active > 1 else 0
+
+        # Open positions
+        open_count = sum(
+            1 for ps in data.get("pairs", {}).values() if ps.get("position", 0) != 0
+        )
+
+        # Avg trade duration
+        avg_dur = 0.0
+        if total_trades > 0:
+            total_hold = sum(
+                ps.get("hold_count", 0)
+                for ps in data.get("pairs", {}).values()
+                if ps.get("position", 0) != 0
+            )
+            # rough: total_hold is for open trades; closed trade dur not stored
+            avg_dur = 0.0  # will show "—" until enough data
+
+        too_early = total_trades < 20
+
+        def _status(actual_val: float, expected_val: float, higher_is_better: bool = True, threshold: float = 0.5) -> str:
+            if too_early:
+                return "too_early"
+            if expected_val == 0:
+                return "info"
+            ratio = actual_val / expected_val if expected_val != 0 else 0
+            if higher_is_better:
+                return "ok" if ratio >= threshold else "warning"
+            else:  # lower is better (e.g. drawdown)
+                return "ok" if ratio <= (2.0 - threshold) else "warning"
+
+        comparison = [
+            {
+                "metric": "Umisteno obchodu",
+                "expected": f"~{expected_trades_so_far:.0f} za {days_active:.0f}d",
+                "actual": str(total_trades),
+                "status": "info",
+            },
+            {
+                "metric": "Win Rate",
+                "expected": f"{bl['win_rate']:.1f}%",
+                "actual": f"{win_rate:.1f}%" if trade_returns else "—",
+                "status": _status(win_rate, bl["win_rate"]),
+            },
+            {
+                "metric": "Celkove P&L",
+                "expected": f"+{bl['daily_roi_pct'] * days_active:.2f}%" if days_active > 0 else "—",
+                "actual": f"{total_roi:+.2f}%",
+                "status": _status(total_roi, bl["daily_roi_pct"] * days_active) if days_active > 1 else "too_early",
+            },
+            {
+                "metric": "Open positions",
+                "expected": "—",
+                "actual": f"{open_count} ({open_count * 10}% deployed)",
+                "status": "info",
+            },
+            {"metric": "_separator", "expected": "", "actual": "", "status": ""},
+            {
+                "metric": "Daily ROI",
+                "expected": f"+{bl['daily_roi_pct']:.3f}%",
+                "actual": f"{actual_daily:+.3f}%" if days_active > 1 else "—",
+                "status": _status(actual_daily, bl["daily_roi_pct"]) if days_active > 1 else "too_early",
+            },
+            {
+                "metric": "Weekly ROI",
+                "expected": f"+{bl['weekly_roi_pct']:.2f}%",
+                "actual": f"{actual_weekly:+.2f}%" if days_active > 7 else "—",
+                "status": _status(actual_weekly, bl["weekly_roi_pct"]) if days_active > 7 else "too_early",
+            },
+            {
+                "metric": "Monthly ROI",
+                "expected": f"+{bl['monthly_roi_pct']:.1f}%",
+                "actual": f"{actual_monthly:+.1f}%" if days_active > 30 else "—",
+                "status": _status(actual_monthly, bl["monthly_roi_pct"]) if days_active > 30 else "too_early",
+            },
+            {"metric": "_separator", "expected": "", "actual": "", "status": ""},
+            {
+                "metric": "Sharpe",
+                "expected": f"{bl['sharpe']:.2f}",
+                "actual": "—",
+                "status": "too_early",
+            },
+            {
+                "metric": "Trades/rok",
+                "expected": f"~{bl['trades_per_year']:.0f}",
+                "actual": f"~{trades_per_year_actual:.0f}" if days_active > 7 else "—",
+                "status": _status(trades_per_year_actual, bl["trades_per_year"], threshold=0.4) if days_active > 7 else "too_early",
+            },
+            {
+                "metric": "Avg trade dur.",
+                "expected": f"{bl['avg_dur_days']:.1f}d",
+                "actual": "—",
+                "status": "too_early",
+            },
+        ]
+
+        # Build daily equity series for chart
+        daily_series = []
+        expected_line = []
+        if equity_snaps:
+            # Group snapshots by date, take last value per day
+            from collections import OrderedDict
+
+            by_date: OrderedDict[str, float] = OrderedDict()
+            for snap in equity_snaps:
+                t = snap.get("t", "")
+                v = snap.get("v", 1.0)
+                if t:
+                    date_str = t[:10]
+                    by_date[date_str] = v
+
+            cumulative = 0.0
+            day_num = 0
+            daily_expected_pnl = bl["daily_roi_pct"] / 100  # fraction per day
+            for date_str, eq_val in by_date.items():
+                day_num += 1
+                pnl = (eq_val - 1.0) * 100  # total ROI in %
+                daily_series.append({
+                    "date": date_str,
+                    "cumulative": round(pnl, 3),
+                })
+                expected_line.append({
+                    "date": date_str,
+                    "expected_cumulative": round(daily_expected_pnl * day_num * 100, 3),
+                })
+
+        return {
+            "baseline": bl,
+            "too_early": too_early,
+            "actual": {
+                "total_trades": total_trades,
+                "wins": wins,
+                "win_rate": round(win_rate, 1),
+                "equity": equity,
+                "total_roi": round(total_roi, 3),
+                "days_active": round(days_active, 1),
+                "open_positions": open_count,
+            },
+            "comparison": comparison,
+            "daily_series": daily_series,
+            "expected_line": expected_line,
+        }
+    except Exception as e:
+        logger.error("cryptoarb_evr_error", error=str(e))
+        return {"error": str(e), "too_early": True, "comparison": [], "daily_series": [], "expected_line": []}
 
 
 # ---------------------------------------------------------------------------
