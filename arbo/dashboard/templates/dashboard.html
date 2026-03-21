@@ -598,7 +598,7 @@
                 <div class="metric"><div class="metric-value" id="dlPrices" style="color:var(--green)">--</div><div class="metric-label">Ceny (miliony)</div></div>
                 <div class="metric"><div class="metric-value" id="dlDb">--</div><div class="metric-label">Velikost DB</div></div>
                 <div class="metric"><div class="metric-value" id="dlWorkers">--</div><div class="metric-label">Workery</div></div>
-                <div class="metric"><div class="metric-value" id="dlEta">--</div><div class="metric-label">Zbyva</div></div>
+                <div class="metric"><div class="metric-value" id="dlEta">--</div><div class="metric-label">Odhad</div></div>
             </div>
         </div>
 
@@ -1854,19 +1854,35 @@
             wEl.textContent = w;
             wEl.style.color = w > 0 ? 'var(--green)' : 'var(--text-dim)';
 
-            const eta = data.eta_hours || 0;
-            document.getElementById('dlEta').textContent =
-                eta > 24 ? (eta/24).toFixed(1) + ' dnu' :
-                eta > 0 ? eta.toFixed(0) + ' hodin' : 'Hotovo';
+            // ETA — show relevant info based on current phase
+            const etaEl = document.getElementById('dlEta');
+            if (p2active || p2done > 0) {
+                // Pass 2 active: estimate based on ~50 mkts/min
+                const p2remaining = p2total - p2done;
+                const p2eta_h = p2remaining / 50 / 60;
+                if (p2pct >= 99) {
+                    etaEl.textContent = 'Hotovo';
+                } else if (p2eta_h > 24) {
+                    etaEl.textContent = (p2eta_h/24).toFixed(1) + ' dnu';
+                } else {
+                    etaEl.textContent = Math.max(1, Math.round(p2eta_h)) + ' hodin';
+                }
+            } else if (p1pct >= 99) {
+                etaEl.textContent = 'Faze 2 startuje...';
+            } else {
+                etaEl.textContent = 'Faze 1 bezi...';
+            }
 
             // Status badge
             const statusEl = document.getElementById('dlStatus');
-            if (w > 0) {
-                statusEl.textContent = 'STAHUJE'; statusEl.style.background = 'var(--green)';
+            if (p2active && p2pct < 99) {
+                statusEl.textContent = 'FAZE 2'; statusEl.style.background = '#ff9800'; statusEl.style.color = '#000';
+            } else if (w > 0 && !p2active) {
+                statusEl.textContent = 'FAZE 1'; statusEl.style.background = 'var(--green)'; statusEl.style.color = '#000';
             } else if (p1pct >= 99 && p2pct >= 99) {
                 statusEl.textContent = 'KOMPLETNI'; statusEl.style.background = 'var(--blue)'; statusEl.style.color = '#fff';
             } else {
-                statusEl.textContent = 'CEKA'; statusEl.style.background = 'var(--yellow)';
+                statusEl.textContent = 'CEKA'; statusEl.style.background = 'var(--yellow)'; statusEl.style.color = '#000';
             }
 
             // Updated time
