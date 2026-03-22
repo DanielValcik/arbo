@@ -841,12 +841,23 @@ class MarketDiscovery:
             params = {"clob_token_ids": token_id, "limit": "1"}
             async with self._session.get(url, params=params) as resp:
                 if resp.status != 200:
+                    logger.warning(
+                        "fetch_by_token_id_http_error",
+                        token_id=token_id[:20],
+                        status=resp.status,
+                    )
                     return None
                 data = await resp.json()
                 if isinstance(data, list) and data:
                     return GammaMarket(data[0])
+                logger.warning(
+                    "fetch_by_token_id_empty",
+                    token_id=token_id[:40],
+                    response_type=type(data).__name__,
+                    response_len=len(data) if isinstance(data, list) else None,
+                )
         except Exception as e:
-            logger.debug("fetch_by_token_id_error", token_id=token_id[:20], error=str(e))
+            logger.warning("fetch_by_token_id_error", token_id=token_id[:20], error=str(e))
         return None
 
     def get_all_active(self) -> list[GammaMarket]:

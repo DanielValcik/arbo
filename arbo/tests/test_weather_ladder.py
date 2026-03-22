@@ -162,15 +162,16 @@ class TestBuildTemperatureLadder:
         assert ladder.total_size_usdc == expected_total
 
     def test_remaining_capital_decreases(self) -> None:
-        """Each position should be sized from remaining capital after previous."""
+        """With MAX_LADDER_POSITIONS=1, ladder contains exactly 1 position."""
         signals = [
             _make_signal(edge=0.15, condition_id="m1"),
             _make_signal(edge=0.10, condition_id="m2"),
         ]
         ladder = build_temperature_ladder(signals, _TEST_CAPITAL)
         assert ladder is not None
-        # First position uses full capital, second uses reduced
-        assert ladder.positions[0].size_usdc > ladder.positions[1].size_usdc
+        # MAX_LADDER_POSITIONS=1 caps at 1 position per ladder
+        assert len(ladder.positions) == 1
+        assert ladder.positions[0].size_usdc > Decimal("0")
 
 
 class TestBuildLaddersByCity:

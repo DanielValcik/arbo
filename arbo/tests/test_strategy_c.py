@@ -6,8 +6,8 @@ Integration tests covering the full poll cycle from forecast to trade.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock
@@ -20,12 +20,24 @@ from arbo.core.paper_engine import PaperTradingEngine, TradeStatus
 from arbo.core.risk_manager import RiskManager
 from arbo.strategies.strategy_c import StrategyC
 
+# Dynamic future date — always 3 days from now so time-filter never triggers
+_FUTURE_DATE = date.today() + timedelta(days=3)
+_FUTURE_DATE_STR = _FUTURE_DATE.strftime("%B %-d")  # e.g. "March 25"
+_FUTURE_DATE_ISO = _FUTURE_DATE.isoformat()  # e.g. "2026-03-25"
+_FUTURE_DATE_NOAA_START = f"{_FUTURE_DATE_ISO}T06:00:00-04:00"
+_FUTURE_DATE_NOAA_END = f"{_FUTURE_DATE_ISO}T18:00:00-04:00"
+_FUTURE_DATE_NOAA_NIGHT_START = f"{_FUTURE_DATE_ISO}T18:00:00-04:00"
+_FUTURE_DATE_NEXT = (date.today() + timedelta(days=4)).isoformat()
+_FUTURE_DATE_NOAA_NIGHT_END = f"{_FUTURE_DATE_NEXT}T06:00:00-04:00"
+
 
 # Mock market matching GammaMarket interface
 @dataclass
 class MockGammaMarket:
     condition_id: str = "0xweather123"
-    question: str = "Will the high temperature in New York City be above 75°F on March 15?"
+    question: str = field(
+        default_factory=lambda: f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?"
+    )
     category: str = "weather"
     price_yes: Decimal | None = Decimal("0.38")
     price_no: Decimal | None = Decimal("0.62")
@@ -51,14 +63,15 @@ class MockPaperEngine:
 
 # Sample NOAA response — 77°F high gives ~67% for "above 75°F"
 # Keeps edge within [0.08, 0.42] when market price is ~0.38
+# Dates are dynamic to avoid time-filter rejection
 NOAA_RESPONSE = {
     "properties": {
         "periods": [
             {
                 "number": 1,
-                "name": "Saturday",
-                "startTime": "2026-03-15T06:00:00-04:00",
-                "endTime": "2026-03-15T18:00:00-04:00",
+                "name": "Day",
+                "startTime": _FUTURE_DATE_NOAA_START,
+                "endTime": _FUTURE_DATE_NOAA_END,
                 "isDaytime": True,
                 "temperature": 77,
                 "temperatureUnit": "F",
@@ -67,9 +80,9 @@ NOAA_RESPONSE = {
             },
             {
                 "number": 2,
-                "name": "Saturday Night",
-                "startTime": "2026-03-15T18:00:00-04:00",
-                "endTime": "2026-03-16T06:00:00-04:00",
+                "name": "Night",
+                "startTime": _FUTURE_DATE_NOAA_NIGHT_START,
+                "endTime": _FUTURE_DATE_NOAA_NIGHT_END,
                 "isDaytime": False,
                 "temperature": 60,
                 "temperatureUnit": "F",
@@ -86,7 +99,7 @@ OPENMETEO_URL = re.compile(r"https://api\.open-meteo\.com/v1/forecast.*")
 
 OPENMETEO_RESPONSE = {
     "daily": {
-        "time": ["2026-03-15"],
+        "time": [_FUTURE_DATE_ISO],
         "temperature_2m_max": [25.0],
         "temperature_2m_min": [15.0],
         "precipitation_probability_max": [10],
@@ -134,8 +147,7 @@ class TestFetchForecasts:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             forecasts = await strategy.fetch_forecasts()
 
@@ -156,7 +168,7 @@ class TestPollCycle:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in New York City be above 75°F on March 15?",
+                question=f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?",
                 price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
@@ -166,8 +178,7 @@ class TestPollCycle:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             traded = await strategy.poll_cycle(markets)
 
@@ -190,7 +201,7 @@ class TestPollCycle:
         # If market priced at 0.82, edge is ~-1% → below 10% threshold
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in New York City be above 75°F on March 15?",
+                question=f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?",
                 price_yes=Decimal("0.82"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
@@ -200,8 +211,7 @@ class TestPollCycle:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             traded = await strategy.poll_cycle(markets)
 
@@ -218,8 +228,7 @@ class TestPollCycle:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             traded = await strategy.poll_cycle([])
         assert traded == []
@@ -243,7 +252,7 @@ class TestStrategyStats:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in New York City be above 75°F on March 15?",
+                question=f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?",
                 price_yes=Decimal("0.38"),
             ),
         ]
@@ -251,8 +260,7 @@ class TestStrategyStats:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             await strategy.poll_cycle(markets)
 
@@ -324,7 +332,7 @@ class TestE2EWithRealPaperEngine:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in New York City be above 75°F on March 15?",
+                question=f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?",
                 price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
@@ -334,8 +342,7 @@ class TestE2EWithRealPaperEngine:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             traded = await real_strategy.poll_cycle(markets)
 
@@ -378,7 +385,7 @@ class TestE2EWithRealPaperEngine:
 
         markets = [
             MockGammaMarket(
-                question="Will the high temperature in New York City be above 75°F on March 15?",
+                question=f"Will the high temperature in New York City be above 75°F on {_FUTURE_DATE_STR}?",
                 price_yes=Decimal("0.38"),
                 volume_24h=Decimal("50000"),
                 liquidity=Decimal("25000"),
@@ -388,8 +395,7 @@ class TestE2EWithRealPaperEngine:
         with aioresponses() as m:
             m.get(NYC_URL, payload=NOAA_RESPONSE)
             m.get(CHICAGO_URL, payload=NOAA_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
-            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE)
+            m.get(OPENMETEO_URL, payload=OPENMETEO_RESPONSE, repeat=True)
 
             await real_strategy.poll_cycle(markets)
 

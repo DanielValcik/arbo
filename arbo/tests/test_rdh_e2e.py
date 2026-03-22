@@ -204,6 +204,7 @@ class TestE2EStrategyC:
         from arbo.core.paper_engine import PaperTradingEngine
 
         pe = PaperTradingEngine(Decimal("2000"), risk_manager=rm)
+        pe.sync_positions_to_db = AsyncMock()
         orch._paper_engine = pe
 
         # Mock Strategy C to return a trade
@@ -287,34 +288,24 @@ class TestE2EReports:
     """Reports generate without errors."""
 
     @patch("arbo.main_rdh.get_config")
-    async def test_daily_report_generates(self, mock_config: MagicMock) -> None:
-        """Daily report generation succeeds."""
+    async def test_daily_report_is_noop(self, mock_config: MagicMock) -> None:
+        """Daily report redirects to morning briefing (no-op)."""
         mock_config.return_value = _mock_config()
 
         from arbo.main_rdh import RDHOrchestrator
 
         orch = RDHOrchestrator(mode="paper")
 
-        from arbo.core.paper_engine import PaperTradingEngine
-
-        rm = RiskManager(Decimal("2000"))
-        orch._risk_manager = rm
-        orch._paper_engine = PaperTradingEngine(Decimal("2000"), risk_manager=rm)
-
         mock_gen = MagicMock()
-        mock_report = MagicMock()
-        mock_gen.generate_daily.return_value = mock_report
-        mock_gen.format_slack_report.return_value = {"blocks": []}
         orch._report_generator = mock_gen
 
         mock_slack = AsyncMock()
-        mock_slack.send_daily_report = AsyncMock()
         orch._slack_bot = mock_slack
 
         await orch._send_daily_report()
 
-        mock_gen.generate_daily.assert_called_once()
-        mock_slack.send_daily_report.assert_called_once()
+        # Daily report is a no-op — morning briefing handles everything
+        mock_gen.generate_daily.assert_not_called()
 
 
 class TestE2EDashboard:
@@ -400,6 +391,7 @@ class TestE2EFullCycle:
         from arbo.core.paper_engine import PaperTradingEngine
 
         pe = PaperTradingEngine(Decimal("2000"), risk_manager=rm)
+        pe.sync_positions_to_db = AsyncMock()
         orch._paper_engine = pe
 
         # Mock strategies with realistic behavior

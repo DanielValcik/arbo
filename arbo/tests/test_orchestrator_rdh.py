@@ -170,6 +170,14 @@ class TestTradeWithStrategyField:
         orch._discovery = MagicMock()
         orch._markets = []
 
+        # Paper engine needed for sync_positions_to_db after trades
+        from arbo.core.paper_engine import PaperTradingEngine
+
+        rm = RiskManager(Decimal("2000"))
+        orch._risk_manager = rm
+        orch._paper_engine = PaperTradingEngine(Decimal("2000"), risk_manager=rm)
+        orch._paper_engine.sync_positions_to_db = AsyncMock()
+
         await orch._run_strategy_b()
 
         # Verify trade was returned with strategy field

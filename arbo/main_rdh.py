@@ -1437,54 +1437,80 @@ class RDHOrchestrator:
                     cid = pos.market_condition_id
                     strategy = getattr(pos, "strategy", "")
 
+                    # --- Step 1: Get market from cache or Gamma API ---
+                    if cid not in fetched:
+                        # Try cache first (fast, works for active markets)
+                        market = self._discovery.get_by_condition_id(cid)
+                        if market is None:
+                            # Cache miss → fetch from Gamma API (works for closed too)
+                            market = await self._discovery.fetch_by_token_id(
+                                pos.token_id
+                            )
+                        fetched[cid] = market
+                    market = fetched[cid]
+
                     # Skip if end_date in future — but NOT for Strategy C
                     # Strategy C uses METAR target_date (from question),
                     # not Polymarket end_date which is set days after resolution
-                    if strategy != "C":
-                        cached = self._discovery.get_by_condition_id(cid)
-                        if cached is not None and cached.end_date:
-                            try:
-                                end_dt = datetime.fromisoformat(
-                                    cached.end_date.replace("Z", "+00:00")
-                                )
-                                if end_dt > now:
-                                    continue
-                            except (ValueError, TypeError):
-                                pass
-
-                    # Fetch market state
-                    if cid not in fetched:
-                        market = await self._discovery.fetch_by_token_id(pos.token_id)
-                        fetched[cid] = market
-
-                    market = fetched[cid]
-
-                    # Strategy C: try METAR-based resolution first
-                    winning = None
-                    strategy = getattr(pos, "strategy", "")
-                    if strategy == "C" and self._weather_resolver is not None:
+                    if strategy != "C" and market is not None and market.end_date:
                         try:
-                            metar_result = await self._weather_resolver.check_resolution(
-                                pos, market
+                            end_dt = datetime.fromisoformat(
+                                market.end_date.replace("Z", "+00:00")
                             )
-                            if metar_result is not None:
-                                _is_resolved, winning = metar_result
-                                logger.info(
-                                    "metar_resolution_used",
-                                    condition_id=cid[:20],
-                                    winning=winning,
+                            if end_dt > now:
+                                continue
+                        except (ValueError, TypeError):
+                            pass
+
+                    # --- Step 2: Strategy C — METAR resolution ---
+                    winning = None
+                    if strategy == "C" and self._weather_resolver is not None:
+                        # Build market substitute from trade_details if needed
+                        resolution_market = market
+                        if resolution_market is None:
+                            td = self._paper_engine.get_trade_details(pos.token_id)
+                            if td and td.get("bucket_text"):
+                                from types import SimpleNamespace
+
+                                direction = td.get("direction", "YES")
+                                resolution_market = SimpleNamespace(
+                                    question=td["bucket_text"],
+                                    token_id_yes=(
+                                        pos.token_id if direction == "YES" else "__no__"
+                                    ),
+                                    token_id_no=(
+                                        pos.token_id if direction == "NO" else "__no__"
+                                    ),
                                 )
-                        except Exception as metar_err:
-                            logger.warning(
-                                "metar_resolution_error",
-                                error=str(metar_err),
-                            )
+                                logger.info(
+                                    "resolution_using_trade_details",
+                                    condition_id=cid[:20],
+                                    city=td.get("city"),
+                                    direction=direction,
+                                )
 
-                    # Fallback: price-based resolution
-                    if winning is None:
-                        if market is None:
-                            continue
+                        if resolution_market is not None:
+                            try:
+                                metar_result = (
+                                    await self._weather_resolver.check_resolution(
+                                        pos, resolution_market
+                                    )
+                                )
+                                if metar_result is not None:
+                                    _is_resolved, winning = metar_result
+                                    logger.info(
+                                        "metar_resolution_used",
+                                        condition_id=cid[:20],
+                                        winning=winning,
+                                    )
+                            except Exception as metar_err:
+                                logger.warning(
+                                    "metar_resolution_error",
+                                    error=str(metar_err),
+                                )
 
+                    # --- Step 3: Price-based resolution ---
+                    if winning is None and market is not None:
                         yes_price = market.price_yes
 
                         # Method 1: Market officially closed by Polymarket
@@ -1496,8 +1522,6 @@ class RDHOrchestrator:
                                 winning = not yes_won
 
                         # Method 2: Price converged (>0.95 or <0.05) after end_date
-                        # This catches A & B trades that Polymarket hasn't marked
-                        # closed yet but price clearly shows the outcome
                         if winning is None and yes_price is not None:
                             end_passed = False
                             if market.end_date:
@@ -1512,7 +1536,9 @@ class RDHOrchestrator:
                             price_converged_yes = yes_price >= Decimal("0.95")
                             price_converged_no = yes_price <= Decimal("0.05")
 
-                            if end_passed and (price_converged_yes or price_converged_no):
+                            if end_passed and (
+                                price_converged_yes or price_converged_no
+                            ):
                                 yes_won = price_converged_yes
                                 if pos.token_id == market.token_id_yes:
                                     winning = yes_won
@@ -1526,8 +1552,45 @@ class RDHOrchestrator:
                                         strategy=strategy,
                                     )
 
-                        if winning is None:
-                            continue
+                    # --- Step 4: CLOB price fallback (A/B when market unavailable) ---
+                    if (
+                        winning is None
+                        and market is None
+                        and strategy in ("A", "B")
+                        and self._orderbook_provider is not None
+                    ):
+                        try:
+                            snap = await self._orderbook_provider.get_snapshot(
+                                pos.token_id, neg_risk=True
+                            )
+                            if snap is not None and snap.midpoint is not None:
+                                token_price = snap.midpoint
+                                if token_price >= Decimal("0.97"):
+                                    winning = True  # This token won
+                                    logger.info(
+                                        "clob_price_resolution",
+                                        condition_id=cid[:20],
+                                        token_price=str(token_price),
+                                        strategy=strategy,
+                                        outcome="won",
+                                    )
+                                elif token_price <= Decimal("0.03"):
+                                    winning = False  # This token lost
+                                    logger.info(
+                                        "clob_price_resolution",
+                                        condition_id=cid[:20],
+                                        token_price=str(token_price),
+                                        strategy=strategy,
+                                        outcome="lost",
+                                    )
+                        except Exception as clob_err:
+                            logger.debug(
+                                "clob_resolution_error",
+                                error=str(clob_err),
+                            )
+
+                    if winning is None:
+                        continue
 
                     pnl = self._paper_engine.resolve_market(pos.token_id, winning)
 
@@ -1553,7 +1616,9 @@ class RDHOrchestrator:
                                     shadow_pnl=comparison.shadow_exit_pnl,
                                 )
 
-                    await self._paper_engine.update_resolved_trades_in_db(pos.token_id)
+                    await self._paper_engine.update_resolved_trades_in_db(
+                        pos.token_id, winning=winning, pnl=pnl
+                    )
 
                     logger.info(
                         "position_resolved",

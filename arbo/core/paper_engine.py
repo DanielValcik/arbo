@@ -397,8 +397,9 @@ class PaperTradingEngine:
                 self._per_strategy_realized_pnl.get(pos.strategy, Decimal("0")) + pnl
             )
 
-        # Update trades
-        status = TradeStatus.WON if pnl > 0 else TradeStatus.LOST
+        # Update trades — status reflects outcome, not P&L sign
+        # (a winning trade with high entry price can have negative P&L after gas)
+        status = TradeStatus.WON if winning_outcome else TradeStatus.LOST
         now = datetime.now(UTC)
         for trade in self._trades:
             if trade.token_id == token_id and trade.status == TradeStatus.OPEN:
@@ -419,6 +420,13 @@ class PaperTradingEngine:
         )
 
         return pnl
+
+    def get_trade_details(self, token_id: str) -> dict | None:
+        """Get trade_details for the most recent open trade with this token_id."""
+        for trade in reversed(self._trades):
+            if trade.token_id == token_id and trade.status == TradeStatus.OPEN:
+                return trade.trade_details
+        return None
 
     def update_position_price(self, token_id: str, current_price: Decimal) -> None:
         """Update current price for an open position (for unrealized P&L)."""
@@ -533,22 +541,51 @@ class PaperTradingEngine:
         except (SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning("sync_positions_to_db_failed", error=str(e))
 
-    async def update_resolved_trades_in_db(self, token_id: str) -> None:
-        """Update DB rows for trades that were just resolved (best-effort)."""
+    async def update_resolved_trades_in_db(
+        self,
+        token_id: str,
+        winning: bool | None = None,
+        pnl: Decimal | None = None,
+    ) -> None:
+        """Update DB rows for trades that were just resolved (best-effort).
+
+        Args:
+            token_id: The token ID of the resolved position.
+            winning: True if this token won. If provided with pnl, updates DB
+                directly without needing in-memory trade data (works after restart).
+            pnl: Realized P&L. Required when winning is provided.
+        """
         try:
             from sqlalchemy import update
 
             from arbo.utils.db import PaperTrade as PaperTradeDB
             from arbo.utils.db import get_session_factory
 
-            # Find the resolved in-memory trade data
-            resolved_trades = [
-                t for t in self._trades
-                if t.token_id == token_id and t.status in (TradeStatus.WON, TradeStatus.LOST)
-                and t.resolved_at is not None
-            ]
-            if not resolved_trades:
-                return
+            # Determine status, pnl, and resolved_at
+            now = datetime.now(UTC)
+            if winning is not None and pnl is not None:
+                # Direct path — works even without in-memory trades (after restart)
+                status_str = "won" if winning else "lost"
+                actual_pnl = pnl
+                resolved_at = now
+            else:
+                # Legacy path — find in-memory trade data
+                resolved_trades = [
+                    t
+                    for t in self._trades
+                    if t.token_id == token_id
+                    and t.status in (TradeStatus.WON, TradeStatus.LOST)
+                    and t.resolved_at is not None
+                ]
+                if not resolved_trades:
+                    logger.warning(
+                        "update_resolved_no_inmemory_trade",
+                        token_id=token_id[:30],
+                    )
+                    return
+                status_str = resolved_trades[0].status.value
+                actual_pnl = resolved_trades[0].actual_pnl
+                resolved_at = resolved_trades[0].resolved_at
 
             factory = get_session_factory()
             async with factory() as session:
@@ -559,9 +596,9 @@ class PaperTradingEngine:
                         PaperTradeDB.status == "open",
                     )
                     .values(
-                        status=resolved_trades[0].status.value,
-                        actual_pnl=resolved_trades[0].actual_pnl,
-                        resolved_at=resolved_trades[0].resolved_at,
+                        status=status_str,
+                        actual_pnl=actual_pnl,
+                        resolved_at=resolved_at,
                     )
                 )
                 await session.commit()
