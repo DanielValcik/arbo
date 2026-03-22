@@ -167,13 +167,19 @@ async def download_today(
     member_temps: dict[str, dict[str, float]] = {}
     success = 0
 
-    for member in MEMBERS:
+    for i, member in enumerate(MEMBERS):
         temps = await loop.run_in_executor(
             None, download_tmax_member, run_date, member, CITIES
         )
         if temps:
             member_temps[member] = temps
             success += 1
+
+        # Memory safety: pause between members to allow GC on 4GB VPS
+        if (i + 1) % 5 == 0:
+            import gc
+            gc.collect()
+            await asyncio.sleep(1)  # Yield to event loop + allow memory reclaim
 
     log.info("gefs_download_complete", members_ok=success, total=len(MEMBERS))
 

@@ -396,7 +396,7 @@ class MarketDiscovery:
         self._gamma_url = config.polymarket.gamma_url
         self._session: aiohttp.ClientSession | None = None
         self._markets: dict[str, GammaMarket] = {}
-        self._last_refresh: float = 0
+        self._last_refresh: float = -999_999  # Force first refresh to always execute
         self._refresh_interval = config.polling.market_discovery
 
     async def initialize(self) -> None:
