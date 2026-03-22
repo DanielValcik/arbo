@@ -321,7 +321,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
                 result = await session.execute(
                     sa.select(PaperTrade.resolved_at, PaperTrade.actual_pnl)
-                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                     .where(PaperTrade.resolved_at.isnot(None))
                     .where(
                         sa.or_(
@@ -404,7 +404,8 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
             today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
             month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            # Per-strategy daily + monthly in one query
+            # Per-strategy daily + monthly + total in one query (from DB — survives restarts)
+            week_start = today_start - timedelta(days=today_start.weekday())
             result = await session.execute(
                 sa.select(
                     PaperTrade.strategy,
@@ -420,14 +421,26 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     sa.func.coalesce(
                         sa.func.sum(
                             sa.case(
+                                (PaperTrade.resolved_at >= week_start, PaperTrade.actual_pnl),
+                                else_=sa.literal(0),
+                            )
+                        ),
+                        0,
+                    ).label("weekly"),
+                    sa.func.coalesce(
+                        sa.func.sum(
+                            sa.case(
                                 (PaperTrade.resolved_at >= month_start, PaperTrade.actual_pnl),
                                 else_=sa.literal(0),
                             )
                         ),
                         0,
                     ).label("monthly"),
+                    sa.func.coalesce(
+                        sa.func.sum(PaperTrade.actual_pnl), 0
+                    ).label("total"),
                 )
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -439,16 +452,26 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
             for row in result.all():
                 sid = row[0] or ""
                 s_daily = _dec(row[1]) or 0.0
-                s_monthly = _dec(row[2]) or 0.0
+                s_weekly = _dec(row[2]) or 0.0
+                s_monthly = _dec(row[3]) or 0.0
+                s_total = _dec(row[4]) or 0.0
                 realized_daily_pnl += s_daily
+                realized_weekly_pnl = realized_weekly_pnl  # already from RM
                 monthly_pnl += s_monthly
                 if sid in strategy_pnl:
                     strategy_pnl[sid]["daily_pnl"] = round(s_daily, 2)
+                    strategy_pnl[sid]["weekly_pnl"] = round(s_weekly, 2)
                     strategy_pnl[sid]["monthly_pnl"] = round(s_monthly, 2)
+                    # Use DB total — risk manager resets after restart
+                    strategy_pnl[sid]["total_pnl"] = round(s_total, 2)
+                    realized_total_pnl = sum(
+                        sp.get("total_pnl", 0) or 0 for sp in strategy_pnl.values()
+                    )
 
-            # Ensure all strategies have daily/monthly keys
+            # Ensure all strategies have all P&L keys
             for sid in strategy_pnl:
                 strategy_pnl[sid].setdefault("daily_pnl", 0.0)
+                strategy_pnl[sid].setdefault("weekly_pnl", 0.0)
                 strategy_pnl[sid].setdefault("monthly_pnl", 0.0)
                 # ROI per strategy
                 alloc = strategy_pnl[sid].get("allocated", 0) or 1
@@ -897,7 +920,7 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
             result = await session.execute(
                 sa.select(PaperTrade, Market.question, Market.category)
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -953,7 +976,7 @@ async def api_daily_pnl(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     sa.func.sum(PaperTrade.actual_pnl).label("pnl"),
                     sa.func.count().label("trades"),
                 )
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .group_by(sa.func.date(PaperTrade.resolved_at))
                 .order_by(sa.func.date(PaperTrade.resolved_at))
@@ -976,7 +999,7 @@ async def api_daily_pnl(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         "num_days"
                     ),
                 )
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .where(PaperTrade.strategy.isnot(None))
                 .group_by(PaperTrade.strategy)
@@ -1975,7 +1998,7 @@ async def api_city_performance(_user: str = Depends(_verify_credentials)) -> dic
                 )
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
             )
 
@@ -2143,7 +2166,7 @@ async def api_pnl_projection(_user: str = Depends(_verify_credentials)) -> dict[
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                 )
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
                 .group_by(sa.text("1"))
                 .order_by(sa.text("1"))
@@ -2202,7 +2225,7 @@ async def api_strategy_pnl_series(
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                 )
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
                 .group_by(PaperTrade.strategy, sa.text("2"))
