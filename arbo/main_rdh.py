@@ -1422,6 +1422,10 @@ class RDHOrchestrator:
                 continue
             try:
                 positions = list(self._paper_engine.open_positions)
+                logger.info(
+                    "resolution_check_cycle",
+                    open_positions=len(positions),
+                )
                 if not positions:
                     continue
 
@@ -1429,6 +1433,7 @@ class RDHOrchestrator:
                 fetched: dict[str, Any] = {}
 
                 for pos in positions:
+                  try:
                     cid = pos.market_condition_id
                     strategy = getattr(pos, "strategy", "")
 
@@ -1572,6 +1577,14 @@ class RDHOrchestrator:
                             )
                         except Exception as slack_err:
                             logger.warning("resolution_slack_error", error=str(slack_err))
+
+                  except Exception as pos_err:
+                    logger.error(
+                        "resolution_position_error",
+                        token_id=getattr(pos, "token_id", "?")[:20],
+                        error=str(pos_err),
+                    )
+                    # Continue to next position — don't let one crash block all
 
             except Exception as e:
                 logger.error("resolution_check_error", error=str(e))
