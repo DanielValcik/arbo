@@ -2246,9 +2246,13 @@ class RDHOrchestrator:
         """Run anomaly checks and send Slack alerts if needed.
 
         Deduplication: each alert type is sent at most once per day.
+        State persisted to /tmp/arbo_anomaly_state.json so restarts don't re-send.
         """
         if self._slack_bot is None:
             return
+
+        import json as _json
+        from pathlib import Path
 
         from sqlalchemy import text
 
@@ -2259,23 +2263,28 @@ class RDHOrchestrator:
         now = datetime.now(UTC)
         today_key = now.strftime("%Y-%m-%d")
 
-        # Track which alerts were already sent today
-        if not hasattr(self, "_anomaly_sent_today"):
-            self._anomaly_sent_today: dict[str, str] = {}
-        # Reset tracker on new day
-        if self._anomaly_sent_today.get("_date") != today_key:
-            self._anomaly_sent_today = {"_date": today_key}
+        # Load persisted dedup state (survives restarts)
+        state_path = Path("/tmp/arbo_anomaly_state.json")
+        sent_today: dict[str, str] = {}
+        try:
+            if state_path.exists():
+                sent_today = _json.loads(state_path.read_text())
+        except Exception:
+            sent_today = {}
+        # Reset on new day
+        if sent_today.get("_date") != today_key:
+            sent_today = {"_date": today_key}
 
         async with factory() as session:
             # 1. No trades in 24 hours (alert once per day)
-            if "no_trades" not in self._anomaly_sent_today:
+            if "no_trades" not in sent_today:
                 result = await session.execute(
                     text("SELECT count(*) FROM paper_trades WHERE placed_at > :since"),
                     {"since": now - timedelta(hours=24)},
                 )
                 if result.scalar() == 0:
                     alerts.append(":warning: Zadne obchody za poslednich 24 hodin")
-                    self._anomaly_sent_today["no_trades"] = today_key
+                    sent_today["no_trades"] = today_key
 
             # 2. Daily loss > $150 (realistic threshold for 3-strategy portfolio)
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2287,11 +2296,11 @@ class RDHOrchestrator:
                 {"start": today_start},
             )
             daily_pnl = float(result.scalar())
-            if daily_pnl < -150 and "daily_loss" not in self._anomaly_sent_today:
+            if daily_pnl < -150 and "daily_loss" not in sent_today:
                 alerts.append(
                     f":red_circle: Dnesni ztrata ${abs(daily_pnl):.2f} prekrocila $150 limit"
                 )
-                self._anomaly_sent_today["daily_loss"] = today_key
+                sent_today["daily_loss"] = today_key
 
         # 3. Tasks health (always check — task crash is critical)
         stopped = [name for name, ts in self._tasks.items() if ts.task and ts.task.done()]
@@ -2302,6 +2311,12 @@ class RDHOrchestrator:
             msg = "*Anomalie detekovana:*\n" + "\n".join(alerts)
             await self._slack_bot.send_message(msg)
             logger.warning("anomaly_alerts_sent", count=len(alerts))
+
+        # Persist state to disk (survives restarts)
+        try:
+            state_path.write_text(_json.dumps(sent_today))
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Properties (for dashboard/Slack integration)
