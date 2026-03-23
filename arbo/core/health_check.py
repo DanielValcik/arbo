@@ -93,8 +93,8 @@ async def run_health_check(window_hours: int = 12) -> HealthReport:
         factory = get_session_factory()
         async with factory() as session:
             # --- Strategy C trades in window ---
-            _won = PaperTrade.status.in_(["won", "archived_won"])
-            _lost = PaperTrade.status.in_(["lost", "archived_lost"])
+            _won = PaperTrade.status == "won"
+            _lost = PaperTrade.status == "lost"
             result = await session.execute(
                 sa.select(
                     sa.func.count(PaperTrade.id),
@@ -297,19 +297,15 @@ async def get_expected_vs_reality() -> dict:
             first_trade = row_all[1]
 
             # Resolved Strategy C trades only (for P&L and WR)
-            _resolved_statuses = ["won", "lost", "archived_won", "archived_lost"]
-            _won_statuses = ["won", "archived_won"]
             res_resolved = await session.execute(
                 sa.select(
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(
-                        sa.case((PaperTrade.status.in_(_won_statuses), 1), else_=0)
-                    ),
+                    sa.func.sum(sa.case((_won, 1), else_=0)),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                 )
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(_resolved_statuses))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -350,12 +346,10 @@ async def get_expected_vs_reality() -> dict:
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(
-                        sa.case((PaperTrade.status.in_(_won_statuses), 1), else_=0)
-                    ),
+                    sa.func.sum(sa.case((_won, 1), else_=0)),
                 )
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(_resolved_statuses))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -558,14 +552,12 @@ async def get_seasonality_analysis() -> dict:
         factory = get_session_factory()
         async with factory() as session:
             # Monthly breakdown of actual Strategy C trades
-            _won_s = ["won", "archived_won"]
-            _lost_s = ["lost", "archived_lost"]
             result = await session.execute(
                 sa.select(
                     sa.extract("month", PaperTrade.placed_at).label("month"),
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status.in_(_won_s), 1), else_=0)),
-                    sa.func.sum(sa.case((PaperTrade.status.in_(_lost_s), 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "lost", 1), else_=0)),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                 )
                 .where(PaperTrade.strategy == "C")

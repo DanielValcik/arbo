@@ -321,7 +321,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
 
                 result = await session.execute(
                     sa.select(PaperTrade.resolved_at, PaperTrade.actual_pnl)
-                    .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost"]))
                     .where(PaperTrade.resolved_at.isnot(None))
                     .where(
                         sa.or_(
@@ -440,7 +440,7 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         sa.func.sum(PaperTrade.actual_pnl), 0
                     ).label("total"),
                 )
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -920,7 +920,7 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
             result = await session.execute(
                 sa.select(PaperTrade, Market.question, Market.category)
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -976,7 +976,7 @@ async def api_daily_pnl(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     sa.func.sum(PaperTrade.actual_pnl).label("pnl"),
                     sa.func.count().label("trades"),
                 )
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .group_by(sa.func.date(PaperTrade.resolved_at))
                 .order_by(sa.func.date(PaperTrade.resolved_at))
@@ -999,7 +999,7 @@ async def api_daily_pnl(_user: str = Depends(_verify_credentials)) -> dict[str, 
                         "num_days"
                     ),
                 )
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .where(PaperTrade.strategy.isnot(None))
                 .group_by(PaperTrade.strategy)
@@ -1998,7 +1998,7 @@ async def api_city_performance(_user: str = Depends(_verify_credentials)) -> dic
                 )
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
             )
 
@@ -2166,7 +2166,7 @@ async def api_pnl_projection(_user: str = Depends(_verify_credentials)) -> dict[
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                 )
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
                 .group_by(sa.text("1"))
                 .order_by(sa.text("1"))
@@ -2225,7 +2225,7 @@ async def api_strategy_pnl_series(
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                 )
-                .where(PaperTrade.status.in_(["won", "lost", "archived_won", "archived_lost"]))
+                .where(PaperTrade.status.in_(["won", "lost"]))
                 .where(PaperTrade.resolved_at.isnot(None))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
                 .group_by(PaperTrade.strategy, sa.text("2"))
