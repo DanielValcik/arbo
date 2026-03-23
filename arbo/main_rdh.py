@@ -2243,7 +2243,10 @@ class RDHOrchestrator:
             await asyncio.sleep(7200)
 
     async def _check_anomalies(self) -> None:
-        """Run anomaly checks and send Slack alerts if needed."""
+        """Run anomaly checks and send Slack alerts if needed.
+
+        Deduplication: each alert type is sent at most once per day.
+        """
         if self._slack_bot is None:
             return
 
@@ -2254,17 +2257,27 @@ class RDHOrchestrator:
         alerts: list[str] = []
         factory = get_session_factory()
         now = datetime.now(UTC)
+        today_key = now.strftime("%Y-%m-%d")
+
+        # Track which alerts were already sent today
+        if not hasattr(self, "_anomaly_sent_today"):
+            self._anomaly_sent_today: dict[str, str] = {}
+        # Reset tracker on new day
+        if self._anomaly_sent_today.get("_date") != today_key:
+            self._anomaly_sent_today = {"_date": today_key}
 
         async with factory() as session:
-            # 1. No trades in 24 hours
-            result = await session.execute(
-                text("SELECT count(*) FROM paper_trades WHERE placed_at > :since"),
-                {"since": now - timedelta(hours=24)},
-            )
-            if result.scalar() == 0:
-                alerts.append(":warning: Zadne obchody za poslednich 24 hodin")
+            # 1. No trades in 24 hours (alert once per day)
+            if "no_trades" not in self._anomaly_sent_today:
+                result = await session.execute(
+                    text("SELECT count(*) FROM paper_trades WHERE placed_at > :since"),
+                    {"since": now - timedelta(hours=24)},
+                )
+                if result.scalar() == 0:
+                    alerts.append(":warning: Zadne obchody za poslednich 24 hodin")
+                    self._anomaly_sent_today["no_trades"] = today_key
 
-            # 2. Daily loss > $50
+            # 2. Daily loss > $150 (realistic threshold for 3-strategy portfolio)
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             result = await session.execute(
                 text(
@@ -2274,12 +2287,13 @@ class RDHOrchestrator:
                 {"start": today_start},
             )
             daily_pnl = float(result.scalar())
-            if daily_pnl < -50:
+            if daily_pnl < -150 and "daily_loss" not in self._anomaly_sent_today:
                 alerts.append(
-                    f":red_circle: Dnesni ztrata ${abs(daily_pnl):.2f} prekrocila $50 limit"
+                    f":red_circle: Dnesni ztrata ${abs(daily_pnl):.2f} prekrocila $150 limit"
                 )
+                self._anomaly_sent_today["daily_loss"] = today_key
 
-        # 3. Tasks health
+        # 3. Tasks health (always check — task crash is critical)
         stopped = [name for name, ts in self._tasks.items() if ts.task and ts.task.done()]
         if stopped:
             alerts.append(f":red_circle: Strategie zastaveny: {', '.join(stopped)}")
