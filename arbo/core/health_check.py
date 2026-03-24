@@ -300,7 +300,9 @@ async def get_expected_vs_reality() -> dict:
             res_resolved = await session.execute(
                 sa.select(
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((_won, 1), else_=0)),
+                    sa.func.sum(
+                        sa.case((PaperTrade.status == "won", 1), else_=0)
+                    ),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                 )
@@ -346,7 +348,9 @@ async def get_expected_vs_reality() -> dict:
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((_won, 1), else_=0)),
+                    sa.func.sum(
+                        sa.case((PaperTrade.status == "won", 1), else_=0)
+                    ),
                 )
                 .where(PaperTrade.strategy == "C")
                 .where(PaperTrade.status.in_(["won", "lost"]))
