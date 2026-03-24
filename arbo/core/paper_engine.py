@@ -126,6 +126,7 @@ class PaperTradingEngine:
         self._next_trade_id = 1
         self._per_layer_realized_pnl: dict[int, Decimal] = {}
         self._per_strategy_realized_pnl: dict[str, Decimal] = {}
+        self._trade_details_cache: dict[str, dict] = {}  # token_id → trade_details
 
     @property
     def balance(self) -> Decimal:
@@ -422,11 +423,16 @@ class PaperTradingEngine:
         return pnl
 
     def get_trade_details(self, token_id: str) -> dict | None:
-        """Get trade_details for the most recent open trade with this token_id."""
+        """Get trade_details for a token_id.
+
+        Checks in-memory trades first, then falls back to DB cache
+        (populated during load_state_from_db after restart).
+        """
         for trade in reversed(self._trades):
             if trade.token_id == token_id and trade.status == TradeStatus.OPEN:
                 return trade.trade_details
-        return None
+        # Fallback: DB cache (loaded at startup)
+        return self._trade_details_cache.get(token_id)
 
     def update_position_price(self, token_id: str, current_price: Decimal) -> None:
         """Update current price for an open position (for unrealized P&L)."""
@@ -640,6 +646,26 @@ class PaperTradingEngine:
                         opened_at=db_pos.opened_at or datetime.now(UTC),
                     )
                     self._positions[pos.token_id] = pos
+
+                # Load trade_details for open positions (needed for METAR resolution)
+                if self._positions:
+                    from arbo.utils.db import PaperTrade as PaperTradeDB
+
+                    token_ids = list(self._positions.keys())
+                    td_result = await session.execute(
+                        select(PaperTradeDB.token_id, PaperTradeDB.trade_details)
+                        .where(PaperTradeDB.token_id.in_(token_ids))
+                        .where(PaperTradeDB.status == "open")
+                        .where(PaperTradeDB.trade_details.isnot(None))
+                    )
+                    for td_row in td_result:
+                        if td_row[1] and isinstance(td_row[1], dict):
+                            self._trade_details_cache[td_row[0]] = td_row[1]
+                    logger.info(
+                        "trade_details_cache_loaded",
+                        cached=len(self._trade_details_cache),
+                        positions=len(self._positions),
+                    )
 
                 # Load last snapshot for balance
                 result = await session.execute(

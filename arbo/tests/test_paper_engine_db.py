@@ -138,7 +138,10 @@ class TestLoadStateFromDb:
         snap_result = MagicMock()
         snap_result.scalars.return_value.first.return_value = mock_snap
 
-        mock_session.execute = AsyncMock(side_effect=[pos_result, snap_result])
+        # trade_details query returns empty result set
+        td_result = MagicMock()
+        td_result.__iter__ = MagicMock(return_value=iter([]))
+        mock_session.execute = AsyncMock(side_effect=[pos_result, td_result, snap_result])
 
         with patch("arbo.utils.db.get_session_factory", return_value=mock_factory):
             await engine.load_state_from_db()
