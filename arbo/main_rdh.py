@@ -2264,7 +2264,7 @@ class RDHOrchestrator:
         today_key = now.strftime("%Y-%m-%d")
 
         # Load persisted dedup state (survives restarts)
-        state_path = Path("/tmp/arbo_anomaly_state.json")
+        state_path = Path("/opt/arbo/anomaly_state.json")
         sent_today: dict[str, str] = {}
         try:
             if state_path.exists():
