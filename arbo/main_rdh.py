@@ -2276,14 +2276,17 @@ class RDHOrchestrator:
             sent_today = {"_date": today_key}
 
         async with factory() as session:
-            # 1. No trades in 24 hours (alert once per day)
+            # 1. No activity in 24h (no new trades AND no resolutions)
             if "no_trades" not in sent_today:
                 result = await session.execute(
-                    text("SELECT count(*) FROM paper_trades WHERE placed_at > :since"),
+                    text(
+                        "SELECT count(*) FROM paper_trades "
+                        "WHERE placed_at > :since OR resolved_at > :since"
+                    ),
                     {"since": now - timedelta(hours=24)},
                 )
                 if result.scalar() == 0:
-                    alerts.append(":warning: Zadne obchody za poslednich 24 hodin")
+                    alerts.append(":warning: Zadna aktivita za poslednich 24 hodin")
                     sent_today["no_trades"] = today_key
 
             # 2. Daily loss > $150 (realistic threshold for 3-strategy portfolio)
