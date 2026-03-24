@@ -1472,14 +1472,15 @@ class RDHOrchestrator:
                             if td and td.get("bucket_text"):
                                 from types import SimpleNamespace
 
-                                direction = td.get("direction", "YES")
+                                direction = td.get("direction", "BUY_YES")
+                                is_yes = "YES" in direction.upper()
                                 resolution_market = SimpleNamespace(
                                     question=td["bucket_text"],
                                     token_id_yes=(
-                                        pos.token_id if direction == "YES" else "__no__"
+                                        pos.token_id if is_yes else "__no__"
                                     ),
                                     token_id_no=(
-                                        pos.token_id if direction == "NO" else "__no__"
+                                        pos.token_id if not is_yes else "__no__"
                                     ),
                                 )
                                 logger.info(
