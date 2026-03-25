@@ -36,6 +36,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "A": Decimal("400"),   # Theta Decay — 20%
     "B": Decimal("400"),   # Reflexivity Surfer — 20%
     "C": Decimal("1000"),  # Compound Weather — 50%
+    "C2": Decimal("1000"), # EMOS + Edge Exit Fusion (weather variant)
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
 MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy

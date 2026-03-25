@@ -87,6 +87,7 @@ class RDHOrchestrator:
         self._strategy_a: Any = None
         self._strategy_b: Any = None
         self._strategy_c: Any = None
+        self._strategy_c2: Any = None  # EMOS + Edge Exit Fusion (weather variant)
 
         # B2 social momentum (Santiment + CoinGecko)
         self._santiment: Any = None
@@ -156,7 +157,7 @@ class RDHOrchestrator:
                     await state.task
 
         # Close strategies
-        for strategy in [self._strategy_a, self._strategy_b, self._strategy_c]:
+        for strategy in [self._strategy_a, self._strategy_b, self._strategy_c, self._strategy_c2]:
             if strategy is not None and hasattr(strategy, "close"):
                 with contextlib.suppress(Exception):
                     await strategy.close()
@@ -255,6 +256,9 @@ class RDHOrchestrator:
 
         # Strategy C: Compound Weather
         self._strategy_c = await self._init_optional("StrategyC", self._init_strategy_c)
+
+        # Strategy C2: EMOS + Edge Exit Fusion (weather variant)
+        self._strategy_c2 = await self._init_optional("StrategyC2", self._init_strategy_c2)
 
         # Reports
         self._report_generator = await self._init_optional(
@@ -425,6 +429,23 @@ class RDHOrchestrator:
         self._shadow_exit_tracker = ShadowExitTracker(min_hold_edge=0.15)
         logger.info("shadow_exit_tracker_initialized", min_hold_edge=0.15)
 
+        return s
+
+    async def _init_strategy_c2(self) -> Any:
+        """Initialize Strategy C2: EMOS + Edge Exit Fusion.
+
+        Reuses Strategy C's CLOB client and orderbook provider.
+        C2 runs its own quality gate and exit logic but shares forecasts with C.
+        """
+        from arbo.strategies.strategy_c2 import StrategyC2
+
+        s = StrategyC2(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine,
+            orderbook_provider=self._orderbook_provider,
+            strategy_c=self._strategy_c,  # Reuse C's forecast clients
+        )
+        await s.init()
         return s
 
     async def _init_gefs_background(self) -> None:
@@ -618,7 +639,7 @@ class RDHOrchestrator:
         if self._paper_engine is None or self._risk_manager is None:
             return
         # Strategy → category mapping for exposure tracking
-        _strategy_category = {"C": "weather", "A": "crypto", "B": "crypto"}
+        _strategy_category = {"C": "weather", "C2": "weather", "A": "crypto", "B": "crypto"}
         for pos in self._paper_engine.open_positions:
             strategy = getattr(pos, "strategy", "")
             category = _strategy_category.get(strategy, "other")
@@ -892,6 +913,9 @@ class RDHOrchestrator:
         if self._strategy_c is not None:
             wx_cfg = self._config.weather
             task_defs.append(("strategy_C", self._run_strategy_c, wx_cfg.scan_interval_s))
+        if self._strategy_c2 is not None:
+            wx_cfg = self._config.weather
+            task_defs.append(("strategy_C2", self._run_strategy_c2, wx_cfg.scan_interval_s))
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
@@ -1126,6 +1150,47 @@ class RDHOrchestrator:
                         "shadow_exits_triggered",
                         count=len(shadow_exits),
                         tokens=[e.token_id[:20] for e in shadow_exits],
+                    )
+
+    async def _run_strategy_c2(self) -> None:
+        """Run Strategy C2: EMOS + Edge Exit Fusion poll cycle."""
+        if self._strategy_c2 is None:
+            return
+        trades = await self._strategy_c2.poll_cycle(self._markets)
+        if trades:
+            logger.info("strategy_c2_trades", count=len(trades))
+            await self._save_trades_to_db(trades)
+            await self._save_signals_to_db(trades, strategy="C2")
+            await self._paper_engine.sync_positions_to_db()
+
+        # C2 edge-based exit checks on open positions
+        if (
+            self._strategy_c2 is not None
+            and self._paper_engine is not None
+            and self._orderbook_provider is not None
+        ):
+            c2_positions = [
+                p for p in self._paper_engine.open_positions
+                if getattr(p, "strategy", "") == "C2"
+            ]
+            if c2_positions:
+                token_ids = [p.token_id for p in c2_positions]
+                snapshots = await self._orderbook_provider.get_snapshots_batch(
+                    token_ids, neg_risk=True
+                )
+                current_prices: dict[str, Decimal] = {}
+                for tid, snap in snapshots.items():
+                    if snap is not None and snap.best_bid is not None:
+                        current_prices[tid] = snap.best_bid
+
+                exits = await self._strategy_c2.check_exits(
+                    current_prices, self._strategy_c2._forecasts,
+                )
+                if exits:
+                    logger.info(
+                        "c2_exits_triggered",
+                        count=len(exits),
+                        tokens=[t[:20] for t in exits],
                     )
 
     def _get_current_prices(
@@ -1601,6 +1666,8 @@ class RDHOrchestrator:
                         self._strategy_a.handle_resolution(cid, pnl)
                     elif strategy == "B" and self._strategy_b is not None:
                         self._strategy_b.handle_resolution(cid, pnl)
+                    elif strategy == "C2" and self._strategy_c2 is not None:
+                        self._strategy_c2.handle_resolution(cid, pnl)
                     elif strategy == "C" and self._strategy_c is not None:
                         self._strategy_c.handle_resolution(cid, pnl)
                         # Shadow exit A/B comparison
@@ -2336,6 +2403,8 @@ class RDHOrchestrator:
             result["B"] = self._strategy_b.stats
         if self._strategy_c is not None:
             result["C"] = self._strategy_c.stats
+        if self._strategy_c2 is not None:
+            result["C2"] = self._strategy_c2.stats
         return result
 
     @property

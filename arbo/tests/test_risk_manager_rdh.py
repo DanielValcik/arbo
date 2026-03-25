@@ -54,7 +54,7 @@ class TestStrategyAllocations:
 
     def test_allocations_sum_correctly(self) -> None:
         total = sum(STRATEGY_ALLOCATIONS.values()) + RESERVE_CAPITAL
-        assert total == Decimal("2000")
+        assert total == Decimal("3000")  # A=400 + B=400 + C=1000 + C2=1000 + Reserve=200
 
     def test_strategy_a(self) -> None:
         assert STRATEGY_ALLOCATIONS["A"] == Decimal("400")
