@@ -2265,7 +2265,7 @@ class RDHOrchestrator:
         today_key = now.strftime("%Y-%m-%d")
 
         # Load persisted dedup state (survives restarts)
-        state_path = Path("/opt/arbo/anomaly_state.json")
+        state_path = Path("/opt/arbo/logs/anomaly_state.json")
         sent_today: dict[str, str] = {}
         try:
             if state_path.exists():
@@ -2319,8 +2319,8 @@ class RDHOrchestrator:
         # Persist state to disk (survives restarts)
         try:
             state_path.write_text(_json.dumps(sent_today))
-        except Exception:
-            pass
+        except Exception as write_err:
+            logger.warning("anomaly_state_write_failed", error=str(write_err), path=str(state_path))
 
     # ------------------------------------------------------------------
     # Properties (for dashboard/Slack integration)
