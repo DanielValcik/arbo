@@ -136,8 +136,14 @@ def check_signal_quality(
     if signal.edge > eff_max_edge:
         return QualityDecision(False, f"edge_anomaly:{signal.edge:.4f}>{eff_max_edge}")
 
-    # Price range
-    price = signal.market.market_price
+    # Price range — use effective price (what we actually pay)
+    # BUY_YES: pay market_price. BUY_NO: pay (1 - market_price).
+    # Autoresearch was calibrated on YES prices, so for BUY_NO we check the NO price.
+    raw_price = signal.market.market_price
+    if signal.direction == "BUY_NO":
+        price = 1.0 - raw_price
+    else:
+        price = raw_price
     eff_min_price = _get_threshold("min_price", city)
     eff_max_price = _get_threshold("max_price", city)
     if price < eff_min_price:
