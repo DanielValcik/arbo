@@ -405,17 +405,17 @@ class StrategyC2:
         self,
         current_prices: dict[str, Decimal],
         forecasts: dict[City, WeatherForecast],
-    ) -> list[str]:
+    ) -> list[tuple[str, str]]:
         """Check open C2 positions for edge-based exit triggers.
 
         Called each poll cycle. Computes updated probability using latest
         forecast and checks if edge has dropped below MIN_HOLD_EDGE.
 
-        Returns list of token_ids where exit was triggered (for logging).
+        Returns list of (token_id, exit_reason) tuples.
         """
         from arbo.strategies.weather_scanner import estimate_bucket_probability
 
-        triggered: list[str] = []
+        triggered: list[tuple[str, str]] = []
 
         for token_id, pos_data in list(self._open_positions.items()):
             current_price = current_prices.get(token_id)
@@ -440,7 +440,7 @@ class StrategyC2:
                     current=round(price_f, 4),
                     gain=round(price_f - entry_price, 4),
                 )
-                triggered.append(token_id)
+                triggered.append((token_id, "profit_take"))
                 self._exits_triggered += 1
                 continue
 
@@ -468,7 +468,7 @@ class StrategyC2:
                             updated_edge=round(updated_edge, 4),
                             min_hold_edge=MIN_HOLD_EDGE,
                         )
-                        triggered.append(token_id)
+                        triggered.append((token_id, "edge_lost"))
                         self._exits_triggered += 1
                         continue
 
@@ -481,11 +481,11 @@ class StrategyC2:
                         token_id=token_id[:20],
                         price=round(price_f, 4),
                     )
-                    triggered.append(token_id)
+                    triggered.append((token_id, "prob_floor"))
                     self._exits_triggered += 1
 
         # Clean up tracked positions for triggered exits
-        for tid in triggered:
+        for tid, _ in triggered:
             self._open_positions.pop(tid, None)
 
         return triggered

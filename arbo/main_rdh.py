@@ -1153,9 +1153,16 @@ class RDHOrchestrator:
                     )
 
     async def _run_strategy_c2(self) -> None:
-        """Run Strategy C2: EMOS + Edge Exit Fusion poll cycle."""
+        """Run Strategy C2: EMOS + Edge Exit Fusion poll cycle.
+
+        Two phases:
+        1. Entry: scan markets, place new paper trades
+        2. Exit: check open positions, sell if edge lost / profit target hit
+        """
         if self._strategy_c2 is None:
             return
+
+        # Phase 1: New entries
         trades = await self._strategy_c2.poll_cycle(self._markets)
         if trades:
             logger.info("strategy_c2_trades", count=len(trades))
@@ -1163,10 +1170,9 @@ class RDHOrchestrator:
             await self._save_signals_to_db(trades, strategy="C2")
             await self._paper_engine.sync_positions_to_db()
 
-        # C2 edge-based exit checks on open positions
+        # Phase 2: Exit checks — ACTUALLY SELL positions
         if (
-            self._strategy_c2 is not None
-            and self._paper_engine is not None
+            self._paper_engine is not None
             and self._orderbook_provider is not None
         ):
             c2_positions = [
@@ -1187,11 +1193,46 @@ class RDHOrchestrator:
                     current_prices, self._strategy_c2._forecasts,
                 )
                 if exits:
+                    # Execute sells via paper engine
+                    for token_id, exit_reason in exits:
+                        bid_price = current_prices.get(token_id)
+                        if bid_price is None:
+                            continue
+
+                        pos = next(
+                            (p for p in c2_positions if p.token_id == token_id),
+                            None,
+                        )
+                        if pos is None:
+                            continue
+
+                        # Execute paper sell
+                        pnl = self._paper_engine.sell_position(
+                            token_id=token_id,
+                            sell_price=bid_price,
+                            exit_reason=exit_reason,
+                        )
+
+                        # Release capital in risk manager
+                        self._risk_manager.post_trade_update(
+                            pos.market_condition_id, "weather", pos.size, pnl=pnl,
+                        )
+                        self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
+
+                        # Persist to DB
+                        await self._paper_engine.update_resolved_trades_in_db(
+                            token_id=token_id,
+                            pnl=pnl,
+                            exit_price=bid_price,
+                            exit_reason=exit_reason,
+                        )
+
                     logger.info(
-                        "c2_exits_triggered",
+                        "c2_exits_executed",
                         count=len(exits),
-                        tokens=[t[:20] for t in exits],
+                        tokens=[t[:20] for t, _ in exits],
                     )
+                    await self._paper_engine.sync_positions_to_db()
 
     def _get_current_prices(
         self, price_type: str = "yes"

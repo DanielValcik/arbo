@@ -115,11 +115,13 @@ class PaperTrade(Base):
     edge_at_exec: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
     confluence_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     kelly_fraction: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="open")  # open, won, lost, cancelled
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open, won, lost, sold, cancelled
     actual_pnl: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     fee_paid: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=Decimal("0"))
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)  # Early exit fill
+    exit_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)  # edge_lost, profit_take, prob_floor
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     strategy: Mapped[str | None] = mapped_column(String(8), nullable=True)  # RDH: "A", "B", "C"
     trade_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # type: ignore[type-arg]

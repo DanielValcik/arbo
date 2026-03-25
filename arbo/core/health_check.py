@@ -161,7 +161,7 @@ async def run_health_check(window_hours: int = 12) -> HealthReport:
                 sa.select(sa.func.count(PaperTrade.id))
                 .where(PaperTrade.strategy == "C")
                 .where(PaperTrade.resolved_at >= window_start)
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
             )
             resolved_in_window = max(resolved_in_window, res_resolved_window.scalar() or 0)
 
@@ -349,7 +349,7 @@ async def get_expected_vs_reality() -> dict:
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                 )
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -395,7 +395,7 @@ async def get_expected_vs_reality() -> dict:
                     ),
                 )
                 .where(PaperTrade.strategy == "C")
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                 .where(
                     sa.or_(
                         PaperTrade.notes.is_(None),
@@ -612,7 +612,7 @@ async def get_expected_vs_reality_c2() -> dict:
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                 )
                 .where(PaperTrade.strategy == "C2")
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
             )
             row_r = res_resolved.one()
@@ -647,7 +647,7 @@ async def get_expected_vs_reality_c2() -> dict:
                     sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
                 )
                 .where(PaperTrade.strategy == "C2")
-                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                 .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
                 .group_by(sa.text("1"))
                 .order_by(sa.text("1"))

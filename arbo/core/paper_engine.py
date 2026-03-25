@@ -32,6 +32,7 @@ class TradeStatus(Enum):
     OPEN = "open"
     WON = "won"
     LOST = "lost"
+    SOLD = "sold"  # Early exit (before market resolution)
     CANCELLED = "cancelled"
 
 
@@ -55,6 +56,8 @@ class PaperTrade:
     strategy: str = ""  # RDH strategy ID: "A", "B", "C" (empty = legacy layer)
     status: TradeStatus = TradeStatus.OPEN
     actual_pnl: Decimal | None = None
+    exit_price: Decimal | None = None  # Fill price on early exit
+    exit_reason: str | None = None  # Why exited: edge_lost, profit_take, prob_floor
     placed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     notes: str = ""
@@ -422,6 +425,82 @@ class PaperTradingEngine:
 
         return pnl
 
+    def sell_position(
+        self,
+        token_id: str,
+        sell_price: Decimal,
+        exit_reason: str,
+    ) -> Decimal:
+        """Sell a position early (before market resolution).
+
+        Calculates P&L based on sell_price vs entry fill_price, accounts for
+        exit slippage and gas. Returns capital + P&L to balance.
+
+        Args:
+            token_id: The token ID of the position to sell.
+            sell_price: The exit bid price from CLOB (slippage already in price).
+            exit_reason: Reason for exit (edge_lost, profit_take, prob_floor).
+
+        Returns:
+            Realized P&L for this position.
+        """
+        if token_id not in self._positions:
+            logger.warning("sell_position_not_found", token_id=token_id[:30])
+            return Decimal("0")
+
+        pos = self._positions[token_id]
+
+        # P&L: shares × (sell_price - entry_price) for BUY side
+        if pos.side == "BUY":
+            pnl = pos.shares * (sell_price - pos.avg_price)
+        else:
+            pnl = pos.shares * (pos.avg_price - sell_price)
+
+        # Gas for sell transaction
+        pnl -= POLYGON_GAS_COST_USD
+
+        # Return invested capital + P&L to balance
+        self._balance += pos.size + pnl
+
+        # Track per-layer P&L
+        layer = pos.layer
+        self._per_layer_realized_pnl[layer] = (
+            self._per_layer_realized_pnl.get(layer, Decimal("0")) + pnl
+        )
+
+        # Track per-strategy P&L
+        if pos.strategy:
+            self._per_strategy_realized_pnl[pos.strategy] = (
+                self._per_strategy_realized_pnl.get(pos.strategy, Decimal("0")) + pnl
+            )
+
+        # Update trades — mark as SOLD with exit details
+        now = datetime.now(UTC)
+        for trade in self._trades:
+            if trade.token_id == token_id and trade.status == TradeStatus.OPEN:
+                trade.status = TradeStatus.SOLD
+                trade.actual_pnl = pnl
+                trade.exit_price = sell_price
+                trade.exit_reason = exit_reason
+                trade.resolved_at = now
+
+        # Remove position
+        del self._positions[token_id]
+
+        logger.info(
+            "paper_position_sold",
+            token_id=token_id[:30],
+            side=pos.side,
+            entry_price=str(pos.avg_price),
+            exit_price=str(sell_price),
+            pnl=str(pnl),
+            reason=exit_reason,
+            balance=str(self._balance),
+            strategy=pos.strategy,
+        )
+
+        return pnl
+
     def get_trade_details(self, token_id: str) -> dict | None:
         """Get trade_details for a token_id.
 
@@ -552,14 +631,18 @@ class PaperTradingEngine:
         token_id: str,
         winning: bool | None = None,
         pnl: Decimal | None = None,
+        exit_price: Decimal | None = None,
+        exit_reason: str | None = None,
     ) -> None:
-        """Update DB rows for trades that were just resolved (best-effort).
+        """Update DB rows for trades that were just resolved or sold (best-effort).
 
         Args:
-            token_id: The token ID of the resolved position.
+            token_id: The token ID of the resolved/sold position.
             winning: True if this token won. If provided with pnl, updates DB
                 directly without needing in-memory trade data (works after restart).
             pnl: Realized P&L. Required when winning is provided.
+            exit_price: Fill price on early exit (SOLD status).
+            exit_reason: Reason for early exit.
         """
         try:
             from sqlalchemy import update
@@ -567,20 +650,27 @@ class PaperTradingEngine:
             from arbo.utils.db import PaperTrade as PaperTradeDB
             from arbo.utils.db import get_session_factory
 
-            # Determine status, pnl, and resolved_at
             now = datetime.now(UTC)
-            if winning is not None and pnl is not None:
-                # Direct path — works even without in-memory trades (after restart)
+
+            if exit_reason is not None and pnl is not None:
+                # Early exit path
+                status_str = "sold"
+                actual_pnl = pnl
+                resolved_at = now
+            elif winning is not None and pnl is not None:
+                # Direct resolution path
                 status_str = "won" if winning else "lost"
                 actual_pnl = pnl
                 resolved_at = now
+                exit_price = None
+                exit_reason = None
             else:
                 # Legacy path — find in-memory trade data
                 resolved_trades = [
                     t
                     for t in self._trades
                     if t.token_id == token_id
-                    and t.status in (TradeStatus.WON, TradeStatus.LOST)
+                    and t.status in (TradeStatus.WON, TradeStatus.LOST, TradeStatus.SOLD)
                     and t.resolved_at is not None
                 ]
                 if not resolved_trades:
@@ -589,23 +679,32 @@ class PaperTradingEngine:
                         token_id=token_id[:30],
                     )
                     return
-                status_str = resolved_trades[0].status.value
-                actual_pnl = resolved_trades[0].actual_pnl
-                resolved_at = resolved_trades[0].resolved_at
+                t = resolved_trades[0]
+                status_str = t.status.value
+                actual_pnl = t.actual_pnl
+                resolved_at = t.resolved_at
+                exit_price = t.exit_price
+                exit_reason = t.exit_reason
 
             factory = get_session_factory()
             async with factory() as session:
+                values: dict = {
+                    "status": status_str,
+                    "actual_pnl": actual_pnl,
+                    "resolved_at": resolved_at,
+                }
+                if exit_price is not None:
+                    values["exit_price"] = exit_price
+                if exit_reason is not None:
+                    values["exit_reason"] = exit_reason
+
                 await session.execute(
                     update(PaperTradeDB)
                     .where(
                         PaperTradeDB.token_id == token_id,
                         PaperTradeDB.status == "open",
                     )
-                    .values(
-                        status=status_str,
-                        actual_pnl=actual_pnl,
-                        resolved_at=resolved_at,
-                    )
+                    .values(**values)
                 )
                 await session.commit()
         except Exception as e:
