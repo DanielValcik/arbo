@@ -39,7 +39,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
 MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy
-STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.15")  # 15% weekly drawdown → halt strategy
+STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.25")  # 25% weekly drawdown → halt strategy (1.6x backtest max DD)
 
 
 @dataclass
@@ -382,7 +382,7 @@ class RiskManager:
         if ss.is_halted:
             return RiskDecision(
                 approved=False,
-                reason=f"Strategy {strategy} is halted (15% weekly drawdown breached). "
+                reason=f"Strategy {strategy} is halted (25% weekly drawdown breached). "
                 f"CEO escalation required.",
             )
 
@@ -433,7 +433,7 @@ class RiskManager:
             ss.weekly_pnl += pnl
             ss.total_pnl += pnl
 
-            # Check per-strategy kill switch (15% weekly drawdown)
+            # Check per-strategy kill switch (25% weekly drawdown)
             if ss.weekly_pnl < Decimal("0"):
                 drawdown_pct = abs(ss.weekly_pnl) / ss.allocated
                 if drawdown_pct >= STRATEGY_WEEKLY_DRAWDOWN_PCT:
@@ -443,7 +443,7 @@ class RiskManager:
                         strategy=strategy,
                         weekly_pnl=str(ss.weekly_pnl),
                         drawdown_pct=f"{drawdown_pct*100:.1f}%",
-                        reason="15% weekly drawdown breached — CEO escalation required",
+                        reason="25% weekly drawdown breached — CEO escalation required",
                     )
 
         logger.info(

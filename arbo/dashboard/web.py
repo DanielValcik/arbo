@@ -713,6 +713,122 @@ async def api_risk(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     }
 
 
+@app.get("/api/drawdown")
+async def api_drawdown(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Per-strategy drawdown monitoring with history chart data."""
+    orch = state.orchestrator
+    if orch is None:
+        return {"error": "Orchestrator not available"}
+
+    rm = orch._risk_manager
+    if rm is None:
+        return {"error": "Risk manager not available"}
+
+    from arbo.core.risk_manager import STRATEGY_WEEKLY_DRAWDOWN_PCT
+
+    threshold_pct = float(STRATEGY_WEEKLY_DRAWDOWN_PCT) * 100  # 25%
+
+    # Per-strategy current state
+    strategies: list[dict[str, Any]] = []
+    for sid in ["A", "B", "C"]:
+        ss = rm.get_strategy_state(sid)
+        if ss is None:
+            continue
+        allocated = float(ss.allocated)
+        weekly = float(ss.weekly_pnl)
+        dd_pct = abs(weekly) / allocated * 100 if weekly < 0 and allocated > 0 else 0.0
+        strategies.append({
+            "id": sid,
+            "name": _STRATEGY_META.get(sid, {}).get("name", sid),
+            "allocated": allocated,
+            "weekly_pnl": round(weekly, 2),
+            "drawdown_pct": round(dd_pct, 1),
+            "threshold_pct": threshold_pct,
+            "utilization_pct": round(min(dd_pct / threshold_pct * 100, 100), 1) if threshold_pct else 0,
+            "is_halted": ss.is_halted,
+            "headroom": round(threshold_pct - dd_pct, 1),
+        })
+
+    # Daily drawdown chart — cumulative resolved PnL per day per strategy (this week)
+    chart_data: list[dict[str, Any]] = []
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory as _gsf
+
+        now = datetime.now(UTC)
+        monday = now - timedelta(days=now.weekday())
+        week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        factory = _gsf()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
+                    PaperTrade.strategy,
+                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    sa.func.count(PaperTrade.id),
+                )
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(PaperTrade.resolved_at >= week_start)
+                .where(PaperTrade.strategy.isnot(None))
+                .where(
+                    sa.or_(
+                        PaperTrade.notes.is_(None),
+                        PaperTrade.notes != "pre-validation",
+                    )
+                )
+                .group_by(sa.text("1"), sa.text("2"))
+                .order_by(sa.text("1"))
+            )
+
+            # Build cumulative series per strategy
+            cumulative: dict[str, float] = {"A": 0.0, "B": 0.0, "C": 0.0}
+            day_data: dict[str, dict[str, Any]] = {}  # day_str → {A:, B:, C:}
+
+            for row in result:
+                day_str = row[0].strftime("%Y-%m-%d") if row[0] else None
+                if not day_str:
+                    continue
+                sid = row[1]
+                pnl = float(row[2])
+                trades = row[3]
+
+                if sid not in cumulative:
+                    continue
+
+                cumulative[sid] += pnl
+
+                if day_str not in day_data:
+                    day_data[day_str] = {}
+                day_data[day_str][sid] = {
+                    "pnl": round(pnl, 2),
+                    "cumulative": round(cumulative[sid], 2),
+                    "trades": trades,
+                }
+
+            for day_str in sorted(day_data.keys()):
+                entry: dict[str, Any] = {"date": day_str}
+                for sid in ["A", "B", "C"]:
+                    d = day_data[day_str].get(sid, {})
+                    entry[f"{sid}_pnl"] = d.get("pnl", 0)
+                    entry[f"{sid}_cumulative"] = d.get("cumulative", cumulative.get(sid, 0))
+                    entry[f"{sid}_trades"] = d.get("trades", 0)
+                chart_data.append(entry)
+
+    except Exception as e:
+        logger.warning("drawdown_chart_error", error=str(e))
+
+    # Backtest reference
+    backtest_max_dd = 15.6  # AR-0134 max drawdown %
+
+    return {
+        "strategies": strategies,
+        "threshold_pct": threshold_pct,
+        "backtest_max_dd_pct": backtest_max_dd,
+        "chart": chart_data,
+        "week_start": week_start.isoformat() if chart_data else None,
+    }
+
+
 @app.get("/api/download-progress")
 async def api_download_progress(
     _user: str = Depends(_verify_credentials),
@@ -732,10 +848,8 @@ async def api_download_progress(
             updated = data.get("updated_at", "?")
             current_pass = data.get("pass", "?")
             pct = done / max(total, 1) * 100
-            # Estimate ETA based on speed (rough: 70 markets/min)
-            remaining = total - done
-            eta_min = remaining / 70 if done > 0 else 0
-            eta_h = eta_min / 60
+            # Use ETA from update_progress.sh (computed from actual rate)
+            eta_h = data.get("eta_hours", 0)
 
             # Cap progress at 100% for display
             pct = min(pct, 100.0)
@@ -744,6 +858,7 @@ async def api_download_progress(
             p2_ml = data.get("pass2_ml_done", 0)
             p2_sp = data.get("pass2_sp_done", 0)
             p2_total = data.get("pass2_total", 0)
+            p2_done = data.get("pass2_done", p2_ml + p2_sp)
             p2_active = current_pass.startswith("2")
 
             return {
@@ -762,6 +877,7 @@ async def api_download_progress(
                 "pass2_ml_done": p2_ml,
                 "pass2_sp_done": p2_sp,
                 "pass2_total": p2_total,
+                "pass2_done": p2_done,
             }
         except Exception:
             pass

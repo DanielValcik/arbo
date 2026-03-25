@@ -146,16 +146,16 @@ class TestStrategyKillSwitch:
     """Test 15% weekly drawdown kill switch."""
 
     def test_kill_switch_triggers(self, risk: RiskManager) -> None:
-        """15% weekly drawdown should halt strategy."""
-        # Strategy C allocation = 1000, 15% = 150
+        """25% weekly drawdown should halt strategy."""
+        # Strategy C allocation = 1000, 25% = 250
         # Simulate a losing trade
-        r = _make_strategy_request(strategy="C", size=Decimal("200"), market_id="loss_mkt")
+        r = _make_strategy_request(strategy="C", size=Decimal("300"), market_id="loss_mkt")
         risk.pre_trade_check(r)
-        risk.post_trade_update("loss_mkt", "weather", Decimal("200"))
-        risk.strategy_post_trade("C", Decimal("200"))
+        risk.post_trade_update("loss_mkt", "weather", Decimal("300"))
+        risk.strategy_post_trade("C", Decimal("300"))
 
-        # Resolve with -160 P&L (16% of 1000 > 15% threshold)
-        risk.strategy_post_trade("C", Decimal("200"), pnl=Decimal("-160"))
+        # Resolve with -260 P&L (26% of 1000 > 25% threshold)
+        risk.strategy_post_trade("C", Decimal("300"), pnl=Decimal("-260"))
 
         # Strategy should be halted
         ss = risk.get_strategy_state("C")
@@ -169,14 +169,14 @@ class TestStrategyKillSwitch:
         assert "halted" in decision.reason.lower()
 
     def test_kill_switch_below_threshold(self, risk: RiskManager) -> None:
-        """Losses below 15% should not halt strategy."""
-        r = _make_strategy_request(strategy="C", size=Decimal("100"), market_id="loss_mkt")
+        """Losses below 25% should not halt strategy."""
+        r = _make_strategy_request(strategy="C", size=Decimal("200"), market_id="loss_mkt")
         risk.pre_trade_check(r)
-        risk.post_trade_update("loss_mkt", "weather", Decimal("100"))
-        risk.strategy_post_trade("C", Decimal("100"))
+        risk.post_trade_update("loss_mkt", "weather", Decimal("200"))
+        risk.strategy_post_trade("C", Decimal("200"))
 
-        # Resolve with -140 P&L (14% < 15%)
-        risk.strategy_post_trade("C", Decimal("100"), pnl=Decimal("-140"))
+        # Resolve with -240 P&L (24% < 25%)
+        risk.strategy_post_trade("C", Decimal("200"), pnl=Decimal("-240"))
 
         ss = risk.get_strategy_state("C")
         assert ss is not None
@@ -188,8 +188,8 @@ class TestStrategyKillSwitch:
         r = _make_strategy_request(strategy="C", size=Decimal("200"), market_id="loss_mkt")
         risk.pre_trade_check(r)
         risk.post_trade_update("loss_mkt", "weather", Decimal("200"))
-        risk.strategy_post_trade("C", Decimal("200"))
-        risk.strategy_post_trade("C", Decimal("200"), pnl=Decimal("-160"))
+        risk.strategy_post_trade("C", Decimal("300"))
+        risk.strategy_post_trade("C", Decimal("300"), pnl=Decimal("-260"))
 
         assert risk.get_strategy_state("C").is_halted  # type: ignore[union-attr]
 

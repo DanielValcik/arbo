@@ -533,6 +533,18 @@
             </div>
         </div>
 
+        <!-- Drawdown Monitor -->
+        <div class="card">
+            <div class="card-title">Drawdown Monitor (weekly)</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">
+                Kill switch: 25% weekly DD (1.6x backtest max 15.6%). Reset: pondeli 00:00 UTC.
+            </div>
+            <div id="drawdownStrategies"></div>
+            <div style="margin-top:12px">
+                <canvas id="drawdownChart" height="140"></canvas>
+            </div>
+        </div>
+
         <!-- Weather Data Summary (Static) -->
         <div class="card grid-full">
             <div class="card-title" style="display:flex;align-items:center;gap:10px">
@@ -1785,6 +1797,78 @@
         }
     }
 
+    let ddChartInstance = null;
+    async function updateDrawdown() {
+        const data = await fetchJSON('/api/drawdown');
+        if (!data || data.error) return;
+
+        const container = document.getElementById('drawdownStrategies');
+        if (!container) return;
+
+        const threshold = data.threshold_pct || 25;
+        const btDD = data.backtest_max_dd_pct || 15.6;
+
+        let html = '';
+        for (const s of (data.strategies || [])) {
+            const dd = s.drawdown_pct || 0;
+            const util = s.utilization_pct || 0;
+            const color = s.is_halted ? 'var(--red)' : dd > btDD ? '#f59e0b' : 'var(--green)';
+            const statusBadge = s.is_halted
+                ? '<span style="background:var(--red);color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:bold;margin-left:6px">HALTED</span>'
+                : '';
+            const sign = s.weekly_pnl >= 0 ? '+' : '';
+
+            html += `
+                <div style="margin-bottom:10px">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+                        <span><b>${s.id}</b> ${s.name}${statusBadge}</span>
+                        <span style="color:${s.weekly_pnl >= 0 ? 'var(--green)' : 'var(--red)'}">${sign}$${s.weekly_pnl.toFixed(2)} (DD: ${dd.toFixed(1)}% / ${threshold}%)</span>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width:${Math.min(util, 100)}%;background:${color}"></div>
+                    </div>
+                    <div style="font-size:9px;color:var(--text-dim);margin-top:1px">
+                        Headroom: ${s.headroom.toFixed(1)}pp | Backtest max DD: ${btDD}% | Allocated: $${s.allocated}
+                    </div>
+                </div>`;
+        }
+        container.innerHTML = html;
+
+        // Chart: cumulative weekly PnL per strategy
+        const chart = data.chart || [];
+        if (chart.length > 0 && typeof Chart !== 'undefined') {
+            const labels = chart.map(d => d.date.slice(5));  // MM-DD
+            const datasets = [
+                {label: 'A', data: chart.map(d => d.A_cumulative || 0), borderColor: '#3b82f6', fill: false, tension: 0.3, pointRadius: 2},
+                {label: 'B', data: chart.map(d => d.B_cumulative || 0), borderColor: '#a855f7', fill: false, tension: 0.3, pointRadius: 2},
+                {label: 'C', data: chart.map(d => d.C_cumulative || 0), borderColor: '#22c55e', fill: false, tension: 0.3, pointRadius: 2},
+            ];
+
+            const ctx = document.getElementById('drawdownChart');
+            if (ddChartInstance) ddChartInstance.destroy();
+            ddChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {labels, datasets},
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {display: true, position: 'top', labels: {boxWidth: 12, font: {size: 10}, color: '#94a3b8'}},
+                        annotation: {
+                            annotations: {
+                                zeroLine: {type: 'line', yMin: 0, yMax: 0, borderColor: '#475569', borderWidth: 1, borderDash: [4,4]},
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {ticks: {font: {size: 9}, color: '#94a3b8'}, grid: {display: false}},
+                        y: {ticks: {font: {size: 9}, color: '#94a3b8', callback: v => '$' + v}, grid: {color: '#1e293b'}},
+                    }
+                }
+            });
+        }
+    }
+
     async function updateInfra() {
         const data = await fetchJSON('/api/infra');
         if (!data) return;
@@ -2357,6 +2441,7 @@
             updateClosed(),
             updateSignals(),
             updateRisk(),
+            updateDrawdown(),
             updateInfra(),
             updateDownloadProgress(),
             updateTrades(),
