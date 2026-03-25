@@ -123,6 +123,15 @@ async def run_health_check(window_hours: int = 12) -> HealthReport:
 
             resolved_in_window = wins_in_window + losses_in_window
 
+            # Also count trades resolved in this window (placed earlier but resolved now)
+            res_resolved_window = await session.execute(
+                sa.select(sa.func.count(PaperTrade.id))
+                .where(PaperTrade.strategy == "C")
+                .where(PaperTrade.resolved_at >= window_start)
+                .where(PaperTrade.status.in_(["won", "lost"]))
+            )
+            resolved_in_window = max(resolved_in_window, res_resolved_window.scalar() or 0)
+
             # --- All-time Strategy C stats ---
             result = await session.execute(
                 sa.select(
@@ -182,10 +191,10 @@ async def run_health_check(window_hours: int = 12) -> HealthReport:
         # --- Verdict logic ---
         verdict = "ok"
 
-        # Bug detection: zero trades in window when system has been running
-        if trades_in_window == 0 and days_active > 1:
+        # Bug detection: zero activity (no placed AND no resolved) in window
+        if trades_in_window == 0 and resolved_in_window == 0 and days_active > 1:
             notes.append(
-                f"Zadne obchody za poslednich {window_hours} hodin — mozny problem se systemem"
+                f"Zadna aktivita za poslednich {window_hours} hodin — mozny problem se systemem"
             )
             verdict = "bug_detected"
 
