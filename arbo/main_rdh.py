@@ -914,9 +914,8 @@ class RDHOrchestrator:
             wx_cfg = self._config.weather
             task_defs.append(("strategy_C", self._run_strategy_c, wx_cfg.scan_interval_s))
         if self._strategy_c2 is not None:
-            wx_cfg = self._config.weather
-            task_defs.append(("strategy_C2", self._run_strategy_c2, wx_cfg.scan_interval_s))
-            task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # every 60s
+            task_defs.append(("strategy_C2", self._run_strategy_c2, 300))       # entry scan every 5 min
+            task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # exit check every 60s
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
