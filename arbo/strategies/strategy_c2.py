@@ -302,7 +302,7 @@ class StrategyC2:
             odds = (1.0 / price) - 1.0
             kelly_raw = (prob * odds - (1 - prob)) / odds if odds > 0 else 0
             kelly_raw = min(max(kelly_raw, 0), city_kelly_cap)
-            kelly_adj = kelly_raw * Decimal("0.25")
+            kelly_adj = Decimal(str(round(kelly_raw * 0.25, 6)))
             trade_size = min(
                 available_capital * kelly_adj,
                 strategy_state.allocated * MAX_POSITION_PCT,
