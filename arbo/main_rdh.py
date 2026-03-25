@@ -916,6 +916,7 @@ class RDHOrchestrator:
         if self._strategy_c2 is not None:
             wx_cfg = self._config.weather
             task_defs.append(("strategy_C2", self._run_strategy_c2, wx_cfg.scan_interval_s))
+            task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # every 60s
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
@@ -1153,16 +1154,13 @@ class RDHOrchestrator:
                     )
 
     async def _run_strategy_c2(self) -> None:
-        """Run Strategy C2: EMOS + Edge Exit Fusion poll cycle.
+        """Run Strategy C2: EMOS + Edge Exit Fusion — entry scan only.
 
-        Two phases:
-        1. Entry: scan markets, place new paper trades
-        2. Exit: check open positions, sell if edge lost / profit target hit
+        Fetches forecasts, scans markets, places new paper trades.
+        Exit checks run separately via _run_c2_exit_check (every 60s).
         """
         if self._strategy_c2 is None:
             return
-
-        # Phase 1: New entries
         trades = await self._strategy_c2.poll_cycle(self._markets)
         if trades:
             logger.info("strategy_c2_trades", count=len(trades))
@@ -1170,69 +1168,78 @@ class RDHOrchestrator:
             await self._save_signals_to_db(trades, strategy="C2")
             await self._paper_engine.sync_positions_to_db()
 
-        # Phase 2: Exit checks — ACTUALLY SELL positions
+    async def _run_c2_exit_check(self) -> None:
+        """Check C2 positions for exit triggers every 60 seconds.
+
+        Lightweight: fetches CLOB bid prices and checks thresholds.
+        Runs independently from the entry scan (every 30 min).
+        """
         if (
-            self._paper_engine is not None
-            and self._orderbook_provider is not None
+            self._strategy_c2 is None
+            or self._paper_engine is None
+            or self._orderbook_provider is None
         ):
-            c2_positions = [
-                p for p in self._paper_engine.open_positions
-                if getattr(p, "strategy", "") == "C2"
-            ]
-            if c2_positions:
-                token_ids = [p.token_id for p in c2_positions]
-                snapshots = await self._orderbook_provider.get_snapshots_batch(
-                    token_ids, neg_risk=True
-                )
-                current_prices: dict[str, Decimal] = {}
-                for tid, snap in snapshots.items():
-                    if snap is not None and snap.best_bid is not None:
-                        current_prices[tid] = snap.best_bid
+            return
 
-                exits = await self._strategy_c2.check_exits(
-                    current_prices, self._strategy_c2._forecasts,
-                )
-                if exits:
-                    # Execute sells via paper engine
-                    for token_id, exit_reason in exits:
-                        bid_price = current_prices.get(token_id)
-                        if bid_price is None:
-                            continue
+        c2_positions = [
+            p for p in self._paper_engine.open_positions
+            if getattr(p, "strategy", "") == "C2"
+        ]
+        if not c2_positions:
+            return
 
-                        pos = next(
-                            (p for p in c2_positions if p.token_id == token_id),
-                            None,
-                        )
-                        if pos is None:
-                            continue
+        token_ids = [p.token_id for p in c2_positions]
+        snapshots = await self._orderbook_provider.get_snapshots_batch(
+            token_ids, neg_risk=True
+        )
+        current_prices: dict[str, Decimal] = {}
+        for tid, snap in snapshots.items():
+            if snap is not None and snap.best_bid is not None:
+                current_prices[tid] = snap.best_bid
 
-                        # Execute paper sell
-                        pnl = self._paper_engine.sell_position(
-                            token_id=token_id,
-                            sell_price=bid_price,
-                            exit_reason=exit_reason,
-                        )
+        exits = await self._strategy_c2.check_exits(
+            current_prices, self._strategy_c2._forecasts,
+        )
+        if not exits:
+            return
 
-                        # Release capital in risk manager
-                        self._risk_manager.post_trade_update(
-                            pos.market_condition_id, "weather", pos.size, pnl=pnl,
-                        )
-                        self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
+        # Execute sells
+        for token_id, exit_reason in exits:
+            bid_price = current_prices.get(token_id)
+            if bid_price is None:
+                continue
 
-                        # Persist to DB
-                        await self._paper_engine.update_resolved_trades_in_db(
-                            token_id=token_id,
-                            pnl=pnl,
-                            exit_price=bid_price,
-                            exit_reason=exit_reason,
-                        )
+            pos = next(
+                (p for p in c2_positions if p.token_id == token_id),
+                None,
+            )
+            if pos is None:
+                continue
 
-                    logger.info(
-                        "c2_exits_executed",
-                        count=len(exits),
-                        tokens=[t[:20] for t, _ in exits],
-                    )
-                    await self._paper_engine.sync_positions_to_db()
+            pnl = self._paper_engine.sell_position(
+                token_id=token_id,
+                sell_price=bid_price,
+                exit_reason=exit_reason,
+            )
+
+            self._risk_manager.post_trade_update(
+                pos.market_condition_id, "weather", pos.size, pnl=pnl,
+            )
+            self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
+
+            await self._paper_engine.update_resolved_trades_in_db(
+                token_id=token_id,
+                pnl=pnl,
+                exit_price=bid_price,
+                exit_reason=exit_reason,
+            )
+
+        logger.info(
+            "c2_exits_executed",
+            count=len(exits),
+            tokens=[t[:20] for t, _ in exits],
+        )
+        await self._paper_engine.sync_positions_to_db()
 
     def _get_current_prices(
         self, price_type: str = "yes"
