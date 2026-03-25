@@ -35,6 +35,8 @@ from arbo.connectors.orderbook_provider import (
     estimate_fill_price,
 )
 from arbo.connectors.weather_models import City, WeatherForecast
+from arbo.connectors.weather_noaa import NOAAWeatherClient
+from arbo.connectors.weather_openmeteo import OpenMeteoWeatherClient
 from arbo.core.risk_manager import MAX_POSITION_PCT, RiskManager, TradeRequest
 from arbo.strategies.weather_quality_gate_c2 import (
     CITY_OVERRIDES,
@@ -70,21 +72,25 @@ MAX_VOLUME_POSITION_PCT = Decimal("0.05")
 class StrategyC2:
     """EMOS + Edge Exit Fusion strategy for weather markets.
 
-    Uses Strategy C's infrastructure (forecast fetching, market scanning)
-    but applies its own quality gate, probability model, and exit logic.
+    Fully independent — fetches own forecasts, applies own quality gate,
+    probability model, and exit logic. Does NOT depend on Strategy C.
     """
 
     def __init__(
         self,
         risk_manager: RiskManager,
         paper_engine: Any = None,
+        metoffice_api_key: str = "",
         orderbook_provider: OrderbookProvider | None = None,
-        strategy_c: Any = None,
     ) -> None:
         self._risk = risk_manager
         self._paper_engine = paper_engine
+        self._metoffice_key = metoffice_api_key
         self._orderbook = orderbook_provider
-        self._strategy_c = strategy_c  # Reuse C's forecast fetching
+
+        # Own weather clients
+        self._noaa: NOAAWeatherClient | None = None
+        self._openmeteo: OpenMeteoWeatherClient | None = None
 
         # State
         self._forecasts: dict[City, WeatherForecast] = {}
@@ -98,18 +104,46 @@ class StrategyC2:
         self._open_positions: dict[str, dict[str, Any]] = {}
 
     async def init(self) -> None:
-        """Initialize C2 (lightweight — reuses C's weather clients)."""
+        """Initialize C2 with own weather clients."""
+        self._noaa = NOAAWeatherClient()
+        self._openmeteo = OpenMeteoWeatherClient()
         logger.info(
             "strategy_c2_initialized",
             min_hold_edge=MIN_HOLD_EDGE,
             profit_target=PROFIT_TARGET_ABS,
             emos_window=EMOS_TRAINING_WINDOW,
             emos_sigma_method=EMOS_SIGMA_METHOD,
+            independent=True,
         )
 
     async def close(self) -> None:
-        """Nothing to close — C2 reuses C's clients."""
-        pass
+        """Close weather clients."""
+        if self._noaa:
+            await self._noaa.close()
+        if self._openmeteo:
+            await self._openmeteo.close()
+
+    async def fetch_forecasts(self) -> dict[City, WeatherForecast]:
+        """Fetch forecasts from NOAA + Open-Meteo (independent from C)."""
+        forecasts: dict[City, WeatherForecast] = {}
+
+        if self._noaa:
+            try:
+                for f in await self._noaa.get_all_forecasts():
+                    forecasts[f.city] = f
+            except Exception as e:
+                logger.error("c2_noaa_error", error=str(e))
+
+        if self._openmeteo:
+            try:
+                for f in await self._openmeteo.get_all_forecasts():
+                    forecasts[f.city] = f
+            except Exception as e:
+                logger.error("c2_openmeteo_error", error=str(e))
+
+        self._forecasts = forecasts
+        logger.info("c2_forecasts_fetched", cities=len(forecasts))
+        return forecasts
 
     @property
     def stats(self) -> dict[str, Any]:
@@ -124,19 +158,16 @@ class StrategyC2:
     async def poll_cycle(self, markets: list[Any]) -> list[WeatherSignal]:
         """Run one C2 poll cycle.
 
-        Reuses Strategy C's forecasts if available, otherwise fetches own.
-        Applies C2 quality gate (looser entry, different thresholds).
+        Fetches own forecasts, scans markets, applies C2 quality gate.
+        Fully independent from Strategy C.
         """
         import asyncio
 
-        # 1. Get forecasts (reuse from Strategy C if available)
-        if self._strategy_c is not None and self._strategy_c._forecasts:
-            forecasts = self._strategy_c._forecasts
-        else:
-            logger.warning("c2_no_forecasts_from_c")
+        # 1. Fetch own forecasts
+        forecasts = await self.fetch_forecasts()
+        if not forecasts:
+            logger.warning("c2_no_forecasts")
             return []
-
-        self._forecasts = forecasts
 
         # 2. Scan weather markets (same scanner, no ensemble_stds override)
         signals = scan_weather_markets(markets, forecasts)

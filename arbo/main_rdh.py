@@ -434,16 +434,16 @@ class RDHOrchestrator:
     async def _init_strategy_c2(self) -> Any:
         """Initialize Strategy C2: EMOS + Edge Exit Fusion.
 
-        Reuses Strategy C's CLOB client and orderbook provider.
-        C2 runs its own quality gate and exit logic but shares forecasts with C.
+        Fully independent — own forecast clients, own quality gate, own exit logic.
+        Shares only the CLOB orderbook provider (read-only, stateless).
         """
         from arbo.strategies.strategy_c2 import StrategyC2
 
         s = StrategyC2(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
+            metoffice_api_key=self._config.metoffice_api_key,
             orderbook_provider=self._orderbook_provider,
-            strategy_c=self._strategy_c,  # Reuse C's forecast clients
         )
         await s.init()
         return s
