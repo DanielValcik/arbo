@@ -402,10 +402,10 @@ class TestStrategiesAPI:
         data = resp.json()
         assert "strategies" in data
         strategies = data["strategies"]
-        assert len(strategies) == 3
+        assert len(strategies) == 4
 
         ids = {s["id"] for s in strategies}
-        assert ids == {"A", "B", "C"}
+        assert ids == {"A", "B", "C", "C2"}
 
     def test_strategy_structure(self, client: TestClient) -> None:
         resp = client.get("/api/strategies", auth=AUTH)

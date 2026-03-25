@@ -18,6 +18,7 @@
             --blue: #58a6ff;
             --purple: #bc8cff;
             --orange: #f0883e;
+            --teal: #14b8a6;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -195,6 +196,7 @@
         .strat-a { background: var(--orange); color: #000; }
         .strat-b { background: var(--purple); color: #000; }
         .strat-c { background: var(--blue); color: #000; }
+        .strat-c2 { background: var(--teal); color: #000; }
         .strategy-short {
             font-size: 10px;
             color: var(--text-dim);
@@ -440,6 +442,7 @@
             <option value="A">A — Theta Decay</option>
             <option value="B">B — Reflexivity Surfer</option>
             <option value="C">C — Compound Weather</option>
+            <option value="C2">C2 — EMOS Exit Fusion</option>
         </select>
     </div>
 
@@ -705,6 +708,59 @@
                         </tr>
                     </thead>
                     <tbody id="cityPerfBody">
+                        <tr><td colspan="6" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Expected vs Reality — C2 -->
+        <div class="card grid-full">
+            <div class="card-title" style="border-left:3px solid var(--teal);padding-left:8px">Expected vs Reality — Strategy C2 (EMOS Exit Fusion)</div>
+            <div id="evrC2TooEarly" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;padding:6px 10px;background:rgba(210,153,34,0.1);border-radius:4px"></div>
+            <div class="evr-grid">
+                <div>
+                    <table style="width:100%">
+                        <thead><tr><th>Metrika</th><th>Ocekavani</th><th>Realita</th><th></th></tr></thead>
+                        <tbody id="evrC2TableBody">
+                            <tr><td colspan="4" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">Kumulativni P&L resolved obchodu (C2)</div>
+                    <div class="chart-container" style="height:200px">
+                        <canvas id="evrC2Chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy C2 Model Description -->
+        <div class="card grid-full" id="modelDescC2Card" style="display:none">
+            <div class="card-title" style="border-left:3px solid var(--teal);padding-left:8px">Model EMOS-Exit-Fusion — Popis</div>
+            <div id="modelDescC2Content" style="font-size:11px;line-height:1.7;color:var(--text-dim)"></div>
+        </div>
+
+        <!-- Per-City Performance C2 -->
+        <div class="card grid-full">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="card-title" style="margin-bottom:0;border-left:3px solid var(--teal);padding-left:8px">Vykonnost per mesto (Strategy C2)</div>
+            </div>
+            <div id="cityPerfC2NoData" style="display:none;font-size:11px;color:var(--text-dim)">Zatim zadne resolved trades s city daty</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mesto</th>
+                            <th>Resolved</th>
+                            <th>W/L</th>
+                            <th>Win Rate</th>
+                            <th>P&L</th>
+                            <th>Prumerny Edge</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cityPerfC2Body">
                         <tr><td colspan="6" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
@@ -1228,6 +1284,7 @@
         let cls = 'strat-a';
         let label = 'A';
         if (s === 'B' || s === 'strategy_B') { cls = 'strat-b'; label = 'B'; }
+        else if (s === 'C2' || s === 'strategy_C2') { cls = 'strat-c2'; label = 'C2'; }
         else if (s === 'C' || s === 'strategy_C') { cls = 'strat-c'; label = 'C'; }
         else if (s === 'A' || s === 'strategy_A') { cls = 'strat-a'; label = 'A'; }
         else { return `<span class="strategy-badge" style="background:var(--text-dim);color:#000">${s}</span>`; }
@@ -1504,11 +1561,13 @@
         'A': 'Sazi proti udalostem, ktere se pravdepodobne nestanou.',
         'B': 'Vydelava na hype cyklech kolem kryptomen.',
         'C': 'Presnejsi predpoved pocasi nez co trh ocekava.',
+        'C2': 'Chytrejsi exit — prodava kdyz vyhoda zmizi, nenecha prodelat.',
     };
     const STRATEGY_DETAIL = {
         'A': 'Kupuje NO kontrakty u longshotovych udalosti (cena YES pod 15 centu). Trh precenuje sanci, ze se udalost stane. Jak se blizi expirace a nic se nedeje, cena NO roste a my profitujeme. Filtrujeme pres 3-sigma taker flow a min. $10K volume.',
         'B': 'Sleduje socialni data (Santiment, CoinGecko) a identifikuje boom-bust vzory na crypto trzich. Ve fazi boomu kupuje YES, na vrcholu prodava. Pouziva divergenci mezi socialnim sentimentem a cenou na Polymarketu jako signal.',
         'C': 'Kombinuje predpovedi z NOAA, Met Office a Open-Meteo pro 20 mest. Porovnava nasi pravdepodobnost s cenou na Polymarketu. Vydelava tam, kde mame presnejsi odhad teploty. Pouziva stejna METAR letistni data jako Polymarket pro rozhodovani.',
+        'C2': 'EMOS model se uci z historickych chyb predpovedi a adaptuje nejistotu per mesto. Misto cekani na vysledek (0 nebo 1 dolar) proda pozici kdyz model rika "vyhoda zmizela". Tim zachrani penize na prohravajicich obchodech (95% uspesnost exitu). Aktivni v 15 mestech, vylouceny Sao Paulo, Tel Aviv, Tokyo, Lucknow.',
     };
 
     async function updateStrategies() {
@@ -2310,6 +2369,7 @@
             {label: 'A Theta', data: series.A || [], borderColor: '#f0883e', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
             {label: 'B Reflexivity', data: series.B || [], borderColor: '#bc8cff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
             {label: 'C Weather', data: series.C || [], borderColor: '#58a6ff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
+            {label: 'C2 EMOS Exit', data: series.C2 || [], borderColor: '#14b8a6', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
         ];
         if (stratCompChart) {
             stratCompChart.data.labels = labels;
@@ -2431,6 +2491,105 @@
         }).join('');
     }
 
+    // ===== C2 Expected vs Reality =====
+    let evrC2Chart = null;
+    async function updateExpectedVsRealityC2() {
+        const data = await fetchJSON('/api/expected-vs-reality-c2');
+        if (!data) return;
+        const tbody = document.getElementById('evrC2TableBody');
+        const tooEarlyEl = document.getElementById('evrC2TooEarly');
+        if (data.too_early) {
+            tooEarlyEl.style.display = 'block';
+            tooEarlyEl.textContent = `Zatim malo dat pro porovnani (min. ${20} resolved trades).`;
+        } else {
+            tooEarlyEl.style.display = 'none';
+        }
+        // Build comparison table
+        if (data.comparison && data.comparison.length > 0) {
+            tbody.innerHTML = data.comparison.map(c => {
+                if (c.metric === '_separator') return '<tr><td colspan="4" style="border-bottom:1px solid var(--border);padding:0;height:4px"></td></tr>';
+                const icon = c.status === 'ok' ? '<span style="color:var(--green)">●</span>' : c.status === 'warning' ? '<span style="color:var(--red)">●</span>' : c.status === 'too_early' ? '<span style="color:var(--yellow)">○</span>' : '';
+                return `<tr><td>${c.metric}</td><td style="color:var(--text-dim)">${c.expected}</td><td style="font-weight:700">${c.actual}</td><td style="width:20px">${icon}</td></tr>`;
+            }).join('');
+        }
+        // Model description card
+        const descCard = document.getElementById('modelDescC2Card');
+        if (data.baseline) {
+            descCard.style.display = 'block';
+            const b = data.baseline;
+            document.getElementById('modelDescC2Content').innerHTML = `
+                <b>Model:</b> ${b.model} (score ${b.score})<br>
+                <b>Kapital:</b> $${b.capital}<br>
+                <b>Train:</b> ${b.train_trades} trades, WR ${(b.train_wr*100).toFixed(1)}%<br>
+                <b>OOS:</b> +$${b.oos_pnl} za ${b.oos_days}d (${b.oos_trades} trades)<br>
+                <b>Kelly:</b> ${b.kelly_fraction} (quarter-Kelly)<br>
+                <b>Aktivni mesta:</b> ${b.cities_active}<br>
+                <b>Vyloucena:</b> ${(b.excluded_cities||[]).join(', ')}<br>
+                <b>Exit:</b> ${b.exit_type}, min_hold_edge=${b.min_hold_edge}, profit_take=$${b.profit_target_abs}<br>
+                <b>EMOS:</b> window=${b.emos_window}, method=${b.emos_method}<br>
+                <b>Exit slippage:</b> ${(b.exit_slippage_pct*100).toFixed(0)}% (realne spready 7%)
+            `;
+        }
+        // Chart
+        const series = data.daily_series || [];
+        if (series.length > 0) {
+            const labels = series.map(d => d.date ? d.date.slice(5) : '');
+            const values = series.map(d => d.cumulative);
+            if (evrC2Chart) {
+                evrC2Chart.data.labels = labels;
+                evrC2Chart.data.datasets[0].data = values;
+                evrC2Chart.update('none');
+            } else {
+                evrC2Chart = new Chart(document.getElementById('evrC2Chart'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Kumulativni P&L (C2)',
+                            data: values,
+                            borderColor: '#14b8a6',
+                            backgroundColor: 'rgba(20,184,166,0.1)',
+                            fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: {legend: {display: false}},
+                        scales: {
+                            x: {ticks: {color: '#8b949e', font: {size: 9}}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                            y: {ticks: {color: '#8b949e', font: {size: 9}, callback: v => '$'+v}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // ===== C2 City Performance =====
+    async function updateCityPerformanceC2() {
+        const data = await fetchJSON('/api/city-performance-c2');
+        if (!data) return;
+        const tbody = document.getElementById('cityPerfC2Body');
+        const noData = document.getElementById('cityPerfC2NoData');
+        if (!data.cities || data.cities.length === 0) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            return;
+        }
+        noData.style.display = 'none';
+        tbody.innerHTML = data.cities.map(c => {
+            const pnlColor = (c.pnl || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+            return `<tr>
+                <td style="font-weight:600">${c.city}</td>
+                <td>${c.resolved}</td>
+                <td>${c.wins}W / ${c.losses}L</td>
+                <td>${c.wr !== null ? (c.wr * 100).toFixed(0) + '%' : '—'}</td>
+                <td style="color:${pnlColor};font-weight:700">${c.pnl >= 0 ? '+' : ''}$${(c.pnl || 0).toFixed(2)}</td>
+                <td>${(c.avg_edge * 100).toFixed(1)}%</td>
+            </tr>`;
+        }).join('');
+    }
+
     async function fetchAll() {
         await Promise.allSettled([
             updatePortfolio(),
@@ -2454,6 +2613,8 @@
             updateProjection(),
             updateCityPerformance(),
             updateForecastAccuracy(),
+            updateExpectedVsRealityC2(),
+            updateCityPerformanceC2(),
         ]);
         document.getElementById('lastRefresh').textContent =
             new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});

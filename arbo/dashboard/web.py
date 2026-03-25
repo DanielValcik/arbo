@@ -156,6 +156,7 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "A": {"name": "Theta Decay", "category": "Longshots", "description": "Sell optimism premium on longshot YES contracts"},
     "B": {"name": "Reflexivity Surfer", "category": "Trending", "description": "Ride reflexive momentum in trending markets"},
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
+    "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
 }
 
 
@@ -1203,6 +1204,29 @@ async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str,
                 "ensemble_members": 31,
                 "ensemble_source": "GEFS (NOAA S3)",
             }
+        elif sid == "C2":
+            entry["model"] = {
+                "name": "EMOS-Exit-Fusion",
+                "score": 138.1,
+                "train_trades": 1878,
+                "train_wr": 54.1,
+                "oos_pnl": 3411,
+                "oos_wr": 53.7,
+                "walkforward_pnl": 3411,
+                "max_drawdown_pct": 8.3,
+                "cities_active": 15,
+                "expected_daily_trades": "8-15",
+                "min_edge": 0.03,
+                "kelly_fraction": 0.25,
+                "prob_sharpening": 0.85,
+                "excluded_cities": ["São Paulo", "Tel Aviv", "Tokyo", "Lucknow"],
+                "exit_type": "edge-based",
+                "min_hold_edge": 0.05,
+                "profit_target": 0.15,
+                "emos_window": 21,
+                "emos_method": "rolling_mae + ewma bias",
+                "exit_slippage_pct": 6.0,
+            }
 
         strategies.append(entry)
 
@@ -2013,6 +2037,79 @@ async def api_expected_vs_reality(
         return {"error": str(e), "too_early": True, "comparison": [], "actual": {}}
 
 
+@app.get("/api/expected-vs-reality-c2")
+async def api_expected_vs_reality_c2(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Compare C2 model expectations to actual paper trading performance."""
+    try:
+        from arbo.core.health_check import get_expected_vs_reality_c2
+
+        return await get_expected_vs_reality_c2()
+    except Exception as e:
+        return {"error": str(e), "too_early": True, "comparison": [], "actual": {}}
+
+
+@app.get("/api/city-performance-c2")
+async def api_city_performance_c2(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Per-city Strategy C2 performance from resolved trades."""
+    try:
+        from arbo.utils.db import Market, PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    PaperTrade.trade_details["city"].astext,
+                    Market.question,
+                    PaperTrade.status,
+                    PaperTrade.actual_pnl,
+                    PaperTrade.edge_at_exec,
+                )
+                .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
+                .where(PaperTrade.strategy == "C2")
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+            )
+            from arbo.strategies.weather_scanner import parse_city
+
+            city_stats: dict[str, dict] = {}
+            for row in result.all():
+                city_name = row[0]
+                if not city_name:
+                    question = row[1] or ""
+                    city_obj = parse_city(question)
+                    city_name = city_obj.value if city_obj else "unknown"
+                if city_name not in city_stats:
+                    city_stats[city_name] = {"wins": 0, "losses": 0, "pnl": 0.0, "edges": []}
+                cs = city_stats[city_name]
+                if row[2] == "won":
+                    cs["wins"] += 1
+                else:
+                    cs["losses"] += 1
+                cs["pnl"] += float(row[3] or 0)
+                if row[4] is not None:
+                    cs["edges"].append(float(row[4]))
+
+            cities = []
+            for city_name, cs in sorted(city_stats.items(), key=lambda x: x[1]["pnl"], reverse=True):
+                resolved = cs["wins"] + cs["losses"]
+                cities.append({
+                    "city": city_name,
+                    "resolved": resolved,
+                    "wins": cs["wins"],
+                    "losses": cs["losses"],
+                    "wr": round(cs["wins"] / resolved, 4) if resolved > 0 else None,
+                    "pnl": round(cs["pnl"], 2),
+                    "avg_edge": round(sum(cs["edges"]) / len(cs["edges"]), 4) if cs["edges"] else 0,
+                })
+            return {"cities": cities}
+    except Exception as e:
+        return {"cities": [], "error": str(e)}
+
+
 @app.get("/api/seasonality")
 async def api_seasonality(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Seasonality analysis for Strategy C."""
@@ -2362,7 +2459,7 @@ async def api_strategy_pnl_series(
 
             labels = sorted(all_dates)
             series: dict[str, list[float]] = {}
-            for strat in ["A", "B", "C"]:
+            for strat in ["A", "B", "C", "C2"]:
                 cum = 0.0
                 values: list[float] = []
                 for day in labels:

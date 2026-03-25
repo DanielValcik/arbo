@@ -56,6 +56,39 @@ AR0134_BASELINE = {
     "worst_months": [6, 7, 8],
 }
 
+C2_BASELINE = {
+    "model": "EMOS-Exit-Fusion",
+    "score": 138.1,
+    # Train performance (IS)
+    "train_trades": 1878,
+    "train_wr": 0.541,
+    "train_avg_edge": 0.06,
+    # OOS performance (walk-forward 3-fold)
+    "oos_trades": 496,
+    "oos_wr": 0.537,
+    "oos_pnl": 3411.0,
+    "oos_days": 70,
+    "oos_daily_pnl": 48.7,  # $3411 / 70 days
+    "oos_weekly_pnl": 341.1,  # $3411 / 10 weeks
+    "oos_daily_trades": 7.1,  # ~496 / 70 days
+    # Walk-forward
+    "wf_pnl": 3411.0,
+    # Risk
+    "max_drawdown_pct": 0.083,
+    # Strategy params
+    "capital": 1000.0,
+    "kelly_fraction": 0.25,
+    "cities_active": 15,
+    "excluded_cities": ["São Paulo", "Tel Aviv", "Tokyo", "Lucknow"],
+    # Exit model
+    "exit_type": "edge-based",
+    "min_hold_edge": 0.05,
+    "profit_target_abs": 0.15,
+    "exit_slippage_pct": 0.06,
+    "emos_window": 21,
+    "emos_method": "rolling_mae",
+}
+
 # Tolerance bands for health check verdicts
 MIN_COMPARISON_TRADES = 20  # Need at least this many for meaningful comparison
 WIN_RATE_WARNING_BAND = 0.15  # ±15pp from baseline before warning
@@ -538,6 +571,149 @@ async def get_expected_vs_reality() -> dict:
 
     except Exception as e:
         logger.error("expected_vs_reality_error", error=str(e))
+
+    return result_data
+
+
+async def get_expected_vs_reality_c2() -> dict:
+    """Compare C2 model expectations to actual paper trading performance."""
+    now = datetime.now(UTC)
+    baseline = C2_BASELINE
+
+    result_data: dict = {
+        "baseline": baseline,
+        "too_early": True,
+        "actual": {},
+        "comparison": [],
+    }
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            # Count all C2 trades
+            res_all = await session.execute(
+                sa.select(
+                    sa.func.count(PaperTrade.id),
+                    sa.func.min(PaperTrade.placed_at),
+                )
+                .where(PaperTrade.strategy == "C2")
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+            )
+            row_all = res_all.one()
+            total_placed = row_all[0] or 0
+            first_trade = row_all[1]
+
+            # Resolved C2 trades
+            res_resolved = await session.execute(
+                sa.select(
+                    sa.func.count(PaperTrade.id),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
+                    sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
+                )
+                .where(PaperTrade.strategy == "C2")
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+            )
+            row_r = res_resolved.one()
+            total_resolved = row_r[0] or 0
+            total_wins = row_r[1] or 0
+            total_losses = total_resolved - total_wins
+            resolved_pnl = float(row_r[2] or 0)
+
+            total_wr = total_wins / total_resolved if total_resolved > 0 else None
+            days_active = (now - first_trade).total_seconds() / 86400 if first_trade else 0
+            full_days = max(int(days_active), 1)
+
+            # Open positions
+            res_open = await session.execute(
+                sa.select(
+                    sa.func.count(PaperTrade.id),
+                    sa.func.coalesce(sa.func.sum(PaperTrade.size), 0),
+                )
+                .where(PaperTrade.strategy == "C2")
+                .where(PaperTrade.status == "open")
+            )
+            row_o = res_open.one()
+            open_count = row_o[0] or 0
+            open_deployed = float(row_o[1] or 0)
+
+            # Daily P&L series for chart
+            daily_pnl_rows = await session.execute(
+                sa.select(
+                    sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
+                    sa.func.sum(PaperTrade.actual_pnl),
+                    sa.func.count(PaperTrade.id),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                )
+                .where(PaperTrade.strategy == "C2")
+                .where(PaperTrade.status.in_(["won", "lost"]))
+                .where(sa.or_(PaperTrade.notes.is_(None), PaperTrade.notes != "pre-validation"))
+                .group_by(sa.text("1"))
+                .order_by(sa.text("1"))
+            )
+            daily_series = []
+            cumulative = 0.0
+            for drow in daily_pnl_rows:
+                day_str = drow[0].strftime("%Y-%m-%d") if drow[0] else None
+                day_pnl = float(drow[1] or 0)
+                cumulative += day_pnl
+                daily_series.append({
+                    "date": day_str,
+                    "pnl": round(day_pnl, 2),
+                    "cumulative": round(cumulative, 2),
+                    "trades": drow[2] or 0,
+                    "wins": drow[3] or 0,
+                })
+
+        result_data["too_early"] = total_resolved < MIN_COMPARISON_TRADES
+        result_data["actual"] = {
+            "total_placed": total_placed,
+            "total_resolved": total_resolved,
+            "total_wins": total_wins,
+            "total_losses": total_losses,
+            "win_rate": round(total_wr, 4) if total_wr is not None else None,
+            "resolved_pnl": round(resolved_pnl, 2),
+            "days_active": round(days_active, 1),
+            "full_days": full_days,
+            "open_count": open_count,
+            "open_deployed": round(open_deployed, 2),
+        }
+
+        capital = baseline["capital"]
+        daily_roi_expected = baseline["oos_daily_pnl"] / capital * 100
+        weekly_roi_expected = baseline["oos_weekly_pnl"] / capital * 100
+        monthly_roi_expected = baseline["oos_daily_pnl"] * 30 / capital * 100
+        daily_roi_actual = resolved_pnl / max(full_days, 1) / capital * 100
+
+        def _pnl_str(val: float) -> str:
+            return f"{'+'if val >= 0 else ''}${val:.2f}"
+
+        def _roi_str(val: float) -> str:
+            return f"{'+'if val >= 0 else ''}{val:.2f}%"
+
+        def _pnl_status(actual_pnl: float, min_resolved: int = 10) -> str:
+            if total_resolved < min_resolved:
+                return "too_early"
+            return "ok" if actual_pnl >= 0 else "warning"
+
+        comparisons = [
+            {"metric": "Umisteno obchodu", "expected": f"~{baseline['oos_daily_trades'] * full_days:.0f} za {full_days}d", "actual": str(total_placed), "status": "info"},
+            {"metric": "Resolved", "expected": "—", "actual": f"{total_resolved} ({total_wins}W / {total_losses}L)", "status": "info"},
+            {"metric": "Win Rate", "expected": f"{baseline['oos_wr']:.1%}", "actual": f"{total_wr:.1%}" if total_wr is not None else "—", "status": "too_early" if total_resolved < MIN_COMPARISON_TRADES else "ok" if total_wr and abs(total_wr - baseline["oos_wr"]) <= 0.15 else "warning"},
+            {"metric": "Realizovany P&L", "expected": _pnl_str(baseline["oos_daily_pnl"] * full_days) + f" za {full_days}d", "actual": _pnl_str(resolved_pnl), "status": _pnl_status(resolved_pnl)},
+            {"metric": "Otevrene pozice", "expected": "—", "actual": f"{open_count} (${open_deployed:.0f} deployed)", "status": "info"},
+            {"metric": "_separator", "expected": "", "actual": "", "status": ""},
+            {"metric": "Denni ROI", "expected": _roi_str(daily_roi_expected), "actual": _roi_str(daily_roi_actual), "status": _pnl_status(resolved_pnl)},
+            {"metric": "Tydenni ROI", "expected": _roi_str(weekly_roi_expected), "actual": "—" if days_active < 7 else _roi_str(resolved_pnl / (days_active / 7) / capital * 100), "status": "too_early" if days_active < 7 else _pnl_status(resolved_pnl)},
+            {"metric": "P&L / den", "expected": _pnl_str(baseline["oos_daily_pnl"]), "actual": _pnl_str(resolved_pnl / max(full_days, 1)), "status": _pnl_status(resolved_pnl)},
+        ]
+
+        result_data["comparison"] = comparisons
+        result_data["daily_series"] = daily_series
+
+    except Exception as e:
+        logger.error("expected_vs_reality_c2_error", error=str(e))
 
     return result_data
 
