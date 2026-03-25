@@ -124,7 +124,13 @@ class StrategyC2:
             await self._openmeteo.close()
 
     async def fetch_forecasts(self) -> dict[City, WeatherForecast]:
-        """Fetch forecasts from NOAA + Open-Meteo (independent from C)."""
+        """Fetch forecasts from NOAA + Open-Meteo (independent from C).
+
+        Adds 5s delay before Open-Meteo to avoid 429 rate limit collision
+        with Strategy C's concurrent fetch.
+        """
+        import asyncio
+
         forecasts: dict[City, WeatherForecast] = {}
 
         if self._noaa:
@@ -133,6 +139,9 @@ class StrategyC2:
                     forecasts[f.city] = f
             except Exception as e:
                 logger.error("c2_noaa_error", error=str(e))
+
+        # Stagger Open-Meteo to avoid 429 collision with Strategy C
+        await asyncio.sleep(5)
 
         if self._openmeteo:
             try:
