@@ -414,9 +414,10 @@ class StrategyC2:
                         trade_details["entry_spread"] = float(ob_snap.best_ask - ob_snap.best_bid)
                         trade_details["entry_spread_pct"] = round(float(ob_snap.best_ask - ob_snap.best_bid) / float(ob_snap.best_ask) * 100, 2) if float(ob_snap.best_ask) > 0 else 0
 
-                if fill.status == "filled":
+                if fill.status in ("filled", "partial") and fill.shares_filled > 0:
                     executed = True
-                    # Also record in paper engine for tracking/dashboard
+                    # Record actual filled amount (not requested)
+                    actual_size = Decimal(str(fill.usdc_spent)) if fill.usdc_spent > 0 else trade_size
                     if self._paper_engine:
                         self._paper_engine.place_trade(
                             market_condition_id=sig.market.condition_id,
@@ -427,13 +428,20 @@ class StrategyC2:
                             layer=0,
                             market_category="weather",
                             strategy=STRATEGY_ID,
-                            pre_computed_size=trade_size,
+                            pre_computed_size=actual_size,
                             volume_24h=Decimal(str(sig.market.volume_24h)),
                             liquidity=Decimal(str(sig.market.liquidity)),
                             clob_fill_price=fill.fill_price or clob_fill,
                             trade_details=trade_details,
                         )
                     live_fill = fill
+                    if fill.status == "partial":
+                        logger.info(
+                            "c2_live_buy_partial",
+                            city=city,
+                            filled=fill.shares_filled,
+                            requested=fill.shares_requested,
+                        )
                 else:
                     logger.warning(
                         "c2_live_buy_failed",
