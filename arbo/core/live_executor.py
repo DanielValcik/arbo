@@ -28,8 +28,9 @@ logger = get_logger("live_executor")
 
 UTC = timezone.utc
 
-# Add buffer to cross spread (1 tick = $0.01)
-TAKER_BUFFER = 0.01
+# No buffer needed — strategy already computes correct ask/bid from orderbook
+# NegRisk markets have inverted spread (bid > ask), so buffer would worsen price
+TAKER_BUFFER = 0.0
 
 
 @dataclass
