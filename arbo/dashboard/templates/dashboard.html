@@ -429,6 +429,7 @@
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('arbo')">ARBO</button>
+        <button class="tab-btn" onclick="switchTab('livec2')" style="color:var(--teal)">LIVE C2</button>
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
         <button class="tab-btn" onclick="switchTab('skinny')">SKINNY</button>
@@ -1253,6 +1254,146 @@
             </div>
         </div>
     </div><!-- end skinnyContent -->
+
+    <!-- ============================================================ -->
+    <!-- LIVE C2 TAB -->
+    <!-- ============================================================ -->
+    <div id="livec2Content" class="tab-content">
+        <div class="grid">
+            <!-- Live Overview -->
+            <div class="card" style="border-top:3px solid var(--teal)">
+                <div class="card-title">C2 Live Overview</div>
+                <div id="lc2Overview" style="font-size:12px">
+                    <div style="text-align:center;padding:20px;color:var(--text-dim)">
+                        <div style="font-size:24px;font-weight:700;color:var(--teal)" id="lc2TotalPnl">$0.00</div>
+                        <div>Total P&L (live)</div>
+                        <div style="margin-top:12px;display:flex;justify-content:space-around">
+                            <div><span id="lc2Trades" style="font-weight:700">0</span><br>Trades</div>
+                            <div><span id="lc2WinRate" style="font-weight:700">—</span><br>Win Rate</div>
+                            <div><span id="lc2Deployed" style="font-weight:700">$0</span><br>Deployed</div>
+                            <div><span id="lc2Capital" style="font-weight:700">$100</span><br>Capital</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friction Summary -->
+            <div class="card" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Friction Analysis</div>
+                <div id="lc2Friction" style="font-size:11px">
+                    <table style="width:100%">
+                        <thead><tr><th>Metric</th><th>Paper</th><th>Live</th><th>Gap</th></tr></thead>
+                        <tbody id="lc2FrictionBody">
+                            <tr><td colspan="4" style="color:var(--text-dim);text-align:center">Zatim zadna live data — spusti live trading</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Live Trades Table -->
+            <div class="card grid-full" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Live Trades</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cas</th>
+                                <th>Mesto</th>
+                                <th>Smer</th>
+                                <th>Size</th>
+                                <th>Entry Fill</th>
+                                <th>Exit Fill</th>
+                                <th>Gas</th>
+                                <th>Slippage</th>
+                                <th>Net P&L</th>
+                                <th>Reason</th>
+                                <th>Hold</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lc2TradesBody">
+                            <tr><td colspan="11" style="color:var(--text-dim);text-align:center">Zatim zadna live data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Paper vs Live Comparison -->
+            <div class="card grid-full" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Paper vs Live — C2 Porovnani</div>
+                <div class="evr-grid">
+                    <div>
+                        <table style="width:100%">
+                            <thead><tr><th>Metrika</th><th>Paper C2</th><th>Live C2</th><th></th></tr></thead>
+                            <tbody id="lc2ComparisonBody">
+                                <tr><td colspan="4" style="color:var(--text-dim);text-align:center">Spusti live trading pro porovnani</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">Kumulativni P&L: Paper vs Live</div>
+                        <div class="chart-container" style="height:200px">
+                            <canvas id="lc2CompChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Per-City Live Performance -->
+            <div class="card grid-full" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Vykonnost per mesto (Live C2)</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mesto</th>
+                                <th>Trades</th>
+                                <th>W/L</th>
+                                <th>Win Rate</th>
+                                <th>P&L</th>
+                                <th>Avg Slippage</th>
+                                <th>Avg Gas</th>
+                                <th>Viable?</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lc2CityBody">
+                            <tr><td colspan="8" style="color:var(--text-dim);text-align:center">Zatim zadna live data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Go-Live Status -->
+            <div class="card" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Go-Live Checklist</div>
+                <div id="lc2Checklist" style="font-size:11px;line-height:2">
+                    <div>&#9744; py-clob-client L1+L2 auth</div>
+                    <div>&#9744; USDC.e funded ($100 + $5 gas)</div>
+                    <div>&#9744; CTF Exchange approval tx</div>
+                    <div>&#9744; NegRisk adapter approval tx</div>
+                    <div>&#9744; Test trade ($1) successful</div>
+                    <div>&#9744; Kill switch verified</div>
+                    <div>&#9744; Slack alerts configured</div>
+                    <div>&#9745; Dashboard live tab ready</div>
+                    <div>&#9745; Paper C2 running alongside</div>
+                </div>
+            </div>
+
+            <!-- Risk Limits -->
+            <div class="card" style="border-top:3px solid var(--teal)">
+                <div class="card-title">Risk Limits (Live)</div>
+                <div style="font-size:11px;line-height:2">
+                    <div><b>Capital:</b> $100</div>
+                    <div><b>Max position:</b> $5 (5%)</div>
+                    <div><b>Weekly kill switch:</b> -$25 (25%)</div>
+                    <div><b>Max per scan:</b> 3 trades</div>
+                    <div><b>Min resolution:</b> 6h</div>
+                    <div><b>Exit monitor:</b> every 60s</div>
+                    <div><b>Entry scan:</b> every 5min</div>
+                    <div style="margin-top:8px;color:var(--yellow)"><b>Excluded:</b> Sao Paulo, Tel Aviv, Tokyo, Lucknow</div>
+                </div>
+            </div>
+        </div>
+    </div><!-- end livec2Content -->
 
     <script>
     let pnlChart = null;
@@ -2644,7 +2785,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-        const contentMap = { arbo: 'arboContent', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
+        const contentMap = { arbo: 'arboContent', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
         document.getElementById(contentMap[tab]).classList.add('active');
 
         if (tab === 'cryptoarb') {
@@ -2664,6 +2805,12 @@
             if (!skRefreshInterval) skRefreshInterval = setInterval(fetchSkinny, 30000);
         } else {
             if (skRefreshInterval) { clearInterval(skRefreshInterval); skRefreshInterval = null; }
+        }
+        if (tab === 'livec2') {
+            fetchLiveC2();
+            if (!lc2RefreshInterval) lc2RefreshInterval = setInterval(fetchLiveC2, 15000);
+        } else {
+            if (lc2RefreshInterval) { clearInterval(lc2RefreshInterval); lc2RefreshInterval = null; }
         }
     }
 
@@ -3027,6 +3174,8 @@
     const SK_API_URL = '{{ skinny_api_url | default("") }}';
     const SK_API_KEY = '{{ skinny_api_key | default("") }}';
     let skRefreshInterval = null;
+    let lc2RefreshInterval = null;
+    let lc2CompChart = null;
 
     async function skFetch(endpoint) {
         if (!SK_API_URL) return null;
@@ -3038,6 +3187,99 @@
             return await resp.json();
         } catch (e) {
             return null;
+        }
+    }
+
+    // ===== Live C2 dashboard =====
+    async function fetchLiveC2() {
+        // Fetch C2 data from existing endpoints (live-specific endpoint added later)
+        const [stratData, tradesData, cityData, evrData] = await Promise.allSettled([
+            fetchJSON('/api/strategies'),
+            fetchJSON('/api/trades?strategy=C2'),
+            fetchJSON('/api/city-performance-c2'),
+            fetchJSON('/api/expected-vs-reality-c2'),
+        ]);
+
+        // Overview card — from strategy state
+        const strats = stratData.value?.strategies || [];
+        const c2 = strats.find(s => s.id === 'C2');
+        if (c2) {
+            const pnl = c2.total_pnl || 0;
+            document.getElementById('lc2TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            document.getElementById('lc2TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lc2Deployed').textContent = '$' + (c2.deployed || 0).toFixed(0);
+            document.getElementById('lc2Capital').textContent = '$' + (c2.allocated || 0).toFixed(0);
+        }
+
+        // Trades + win rate from EVR
+        const evr = evrData.value || {};
+        const actual = evr.actual || {};
+        if (actual.total_resolved > 0) {
+            document.getElementById('lc2Trades').textContent = actual.total_resolved;
+            document.getElementById('lc2WinRate').textContent = actual.win_rate ? (actual.win_rate * 100).toFixed(0) + '%' : '—';
+        }
+
+        // City performance
+        const cities = cityData.value?.cities || [];
+        if (cities.length > 0) {
+            document.getElementById('lc2CityBody').innerHTML = cities.map(c => {
+                const pnlColor = (c.pnl || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+                const viable = (c.pnl || 0) > 0 ? '<span style="color:var(--green)">&#10003;</span>' : '<span style="color:var(--red)">&#10007;</span>';
+                return `<tr>
+                    <td style="font-weight:600">${c.city}</td>
+                    <td>${c.resolved}</td>
+                    <td>${c.wins}W / ${c.losses}L</td>
+                    <td>${c.wr !== null ? (c.wr * 100).toFixed(0) + '%' : '—'}</td>
+                    <td style="color:${pnlColor};font-weight:700">${c.pnl >= 0 ? '+' : ''}$${(c.pnl || 0).toFixed(2)}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>${viable}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // EVR comparison table
+        const comparisons = evr.comparison || [];
+        if (comparisons.length > 0) {
+            document.getElementById('lc2ComparisonBody').innerHTML = comparisons.map(c => {
+                if (c.metric === '_separator') return '<tr><td colspan="4" style="border-bottom:1px solid var(--border);padding:0;height:4px"></td></tr>';
+                const icon = c.status === 'ok' ? '<span style="color:var(--green)">&#9679;</span>' : c.status === 'warning' ? '<span style="color:var(--red)">&#9679;</span>' : c.status === 'too_early' ? '<span style="color:var(--yellow)">&#9675;</span>' : '';
+                return `<tr><td>${c.metric}</td><td style="color:var(--text-dim)">${c.expected}</td><td style="font-weight:700">${c.actual}</td><td style="width:20px">${icon}</td></tr>`;
+            }).join('');
+        }
+
+        // Cumulative P&L chart
+        const series = evr.daily_series || [];
+        if (series.length > 0) {
+            const labels = series.map(d => d.date ? d.date.slice(5) : '');
+            const values = series.map(d => d.cumulative);
+            if (lc2CompChart) {
+                lc2CompChart.data.labels = labels;
+                lc2CompChart.data.datasets[0].data = values;
+                lc2CompChart.update('none');
+            } else {
+                lc2CompChart = new Chart(document.getElementById('lc2CompChart'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'C2 Kumulativni P&L',
+                            data: values,
+                            borderColor: '#14b8a6',
+                            backgroundColor: 'rgba(20,184,166,0.1)',
+                            fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: {legend: {display: false}},
+                        scales: {
+                            x: {ticks: {color: '#8b949e', font: {size: 9}}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                            y: {ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v>=0?'+$':'-$')+Math.abs(v).toFixed(0)}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                        }
+                    }
+                });
+            }
         }
     }
 
