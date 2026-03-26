@@ -402,10 +402,18 @@ class StrategyC2:
                     size_usdc=float(trade_size),
                     neg_risk=sig.market.neg_risk,
                 )
-                trade_details["live_order_id"] = fill.order_id
-                trade_details["live_fill_price"] = float(fill.fill_price) if fill.fill_price else None
-                trade_details["live_latency_ms"] = fill.latency_ms
-                trade_details["live_status"] = fill.status
+                # Merge full monitoring data into trade_details
+                trade_details.update(fill.to_monitoring_dict())
+                trade_details["live_size_usdc"] = float(trade_size)
+                trade_details["live_submitted_shares"] = round(float(trade_size) / float(execution_price), 2) if float(execution_price) > 0 else 0
+                # Orderbook state at entry (for spread analysis)
+                if ob_snap is not None:
+                    from arbo.connectors.orderbook_provider import available_depth
+                    trade_details["entry_ob_bid_depth"] = float(available_depth(ob_snap, "SELL"))
+                    trade_details["entry_ob_ask_depth"] = float(available_depth(ob_snap, "BUY"))
+                    if ob_snap.best_bid and ob_snap.best_ask:
+                        trade_details["entry_spread"] = float(ob_snap.best_ask - ob_snap.best_bid)
+                        trade_details["entry_spread_pct"] = round(float(ob_snap.best_ask - ob_snap.best_bid) / float(ob_snap.best_ask) * 100, 2) if float(ob_snap.best_ask) > 0 else 0
 
                 if fill.status == "filled":
                     executed = True

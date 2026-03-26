@@ -26,7 +26,7 @@ UTC = timezone.utc
 
 @dataclass
 class LiveFill:
-    """Result of a live order execution."""
+    """Result of a live order execution with full monitoring data."""
 
     token_id: str
     side: str  # BUY or SELL
@@ -40,6 +40,21 @@ class LiveFill:
     latency_ms: int = 0
     error: str | None = None
     raw_response: dict | None = None
+
+    def to_monitoring_dict(self) -> dict:
+        """Full monitoring data for trade_details JSONB."""
+        return {
+            "live_order_id": self.order_id,
+            "live_submitted_price": float(self.price),
+            "live_fill_price": float(self.fill_price) if self.fill_price else None,
+            "live_fill_slippage": float(self.fill_price - self.price) if self.fill_price else None,
+            "live_shares_filled": float(self.shares_filled),
+            "live_latency_ms": self.latency_ms,
+            "live_status": self.status,
+            "live_error": self.error,
+            "live_timestamp": self.timestamp.isoformat(),
+            "live_gas_usd": 0.0,  # Polymarket is gasless
+        }
 
 
 class LiveExecutor:
