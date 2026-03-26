@@ -1,4 +1,4 @@
-bankroll: 2000.00
+bankroll: 3000.00  # A=400 + B=400 + C=1000 + C2=1000 + Reserve=200
 currency: EUR
 
 # --- Polymarket connection ---
