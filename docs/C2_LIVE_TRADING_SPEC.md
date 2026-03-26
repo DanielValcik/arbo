@@ -16,15 +16,30 @@ Paper results (first day, 2026-03-26):
 - Avg hold time: 5-30 minutes (fast turnover)
 - NYC is top performer (+$103), Dallas marginal (+$3.34)
 
-## 2. Live Capital & Sizing
+## 2. Capital & Sizing — Paper vs Live
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Initial capital | $100 | Minimum to validate — 1 losing trade = max -$5 |
-| Max position | $5 (5%) | Same % as paper |
-| Max aggregate | $80 (80%) | Same % as paper |
-| Kelly fraction | 0.25 | Quarter-Kelly (unchanged) |
-| Kelly raw cap | 0.30 | Same as paper |
+| Parameter | Paper C2 (current) | Live C2 (initial) | Notes |
+|-----------|-------------------|-------------------|-------|
+| Capital | $1,000 | $100 | Live starts small for validation |
+| Max position (5%) | $50 | $5 | Same percentage |
+| Max aggregate (80%) | $800 | $80 | Same percentage |
+| Kelly fraction | 0.25 | 0.25 | Quarter-Kelly |
+| Kelly raw cap | 0.30 | 0.30 | Same |
+| Weekly kill switch (25%) | $250 | $25 | Same percentage |
+| Max trades/scan | 3 | 3 | Same |
+| Min hours to resolution | 6h | 6h | Same |
+| Entry scan interval | 5 min | 5 min | Same |
+| Exit monitor interval | 60s | 60s | Same |
+| Excluded cities | SP, TA, TK, LK | SP, TA, TK, LK | Same |
+| Quality gate (min_edge) | 0.03 | 0.03 | Same |
+| Price range | [0.03, 0.45] | [0.03, 0.45] | Same |
+| Prob sharpening | 0.85 | 0.85 | Same |
+| Min hold edge (exit) | 0.05 | 0.05 | Same |
+| Profit target (exit) | +$0.15 | +$0.15 | Same |
+| Prob floor (exit) | 0.10 | 0.10 | Same |
+
+All parameters identical except capital. Live uses $100 to limit max loss
+during validation phase. Once validated, scale to $500-1000.
 
 ## 3. Execution Flow (Live)
 
