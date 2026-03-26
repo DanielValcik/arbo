@@ -94,7 +94,8 @@ class LiveExecutor:
             from py_clob_client.order_builder.constants import BUY as _BUY
 
             order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_BUY)
-            options = {"tick_size": tick_size, "neg_risk": neg_risk}
+            from py_clob_client.clob_types import PartialCreateOrderOptions
+            options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
             def _do_buy():
                 signed = self._client.client.create_order(order_args, options)
@@ -179,7 +180,8 @@ class LiveExecutor:
             from py_clob_client.order_builder.constants import SELL as _SELL
 
             order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_SELL)
-            options = {"tick_size": tick_size, "neg_risk": neg_risk}
+            from py_clob_client.clob_types import PartialCreateOrderOptions
+            options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
             def _do_sell():
                 signed = self._client.client.create_order(order_args, options)
