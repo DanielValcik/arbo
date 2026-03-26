@@ -275,10 +275,12 @@ class StrategyC2:
             execution_price = gamma_price
             clob_fill: Decimal | None = None
 
+            city = sig.market.city.value if sig.market.city else ""
             ob_snap = ob_snapshots.get(token_id)
             if ob_snap is not None:
                 depth = available_depth(ob_snap, "BUY")
                 if depth < Decimal("1"):
+                    logger.debug("c2_skip_no_depth", city=city, depth=str(depth))
                     continue
 
                 p1 = estimate_fill_price(ob_snap, "BUY", max_pos)
@@ -289,6 +291,7 @@ class StrategyC2:
                         else Decimal("1") - gamma_price
                     )
                     if abs(float(p1 - expected_price)) > 0.15:
+                        logger.debug("c2_skip_fill_anomaly", city=city, p1=str(p1), expected=str(expected_price))
                         continue
 
                     # Latency recheck
@@ -308,6 +311,7 @@ class StrategyC2:
 
                     # Volatility guard
                     if p2 is not None and abs(p2 - p1) > VOLATILITY_GUARD_CENTS:
+                        logger.debug("c2_skip_volatility", city=city, p1=str(p1), p2=str(p2))
                         continue
 
                     # Revalidate edge with CLOB price
@@ -315,6 +319,7 @@ class StrategyC2:
                         Decimal(str(sig.forecast_probability)) - clob_fill
                     )
                     if clob_edge <= 0:
+                        logger.debug("c2_skip_no_clob_edge", city=city, clob_fill=str(clob_fill), prob=round(sig.forecast_probability, 4))
                         continue
 
             # Kelly sizing (quarter-Kelly with C2 params)
