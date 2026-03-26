@@ -457,12 +457,13 @@ class StrategyC2:
             city_enum = signal.market.city
             if city_enum and city_enum in forecasts:
                 forecast = forecasts[city_enum]
-                bucket = signal.market.bucket if hasattr(signal.market, "bucket") else None
-                if bucket is not None:
+                daily = forecast.get_forecast_for_date(signal.market.target_date)
+                bucket = getattr(signal.market, "bucket", None)
+                if daily is not None and bucket is not None:
                     updated_prob = estimate_bucket_probability(
-                        forecast.get_daily(signal.market.target_date),
+                        daily,
                         bucket,
-                        is_high=True,
+                        is_high=signal.market.is_high_temp,
                         city=city,
                         days_out=0,
                     )
