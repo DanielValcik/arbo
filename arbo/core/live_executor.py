@@ -97,20 +97,12 @@ class LiveExecutor:
         neg_risk: bool = True,
         tick_size: str = "0.01",
     ) -> LiveFill:
-        """Place a BUY order on CLOB.
+        """Place a BUY order and wait for fill.
 
-        Args:
-            token_id: YES or NO token ID.
-            price: Limit price (what we're willing to pay per share).
-            size_usdc: How many USDC to spend.
-            neg_risk: Weather markets are NegRisk.
-            tick_size: Market tick size.
-
-        Returns:
-            LiveFill with execution details.
+        Posts GTC order, then polls order status until matched or timeout.
+        Only returns filled=True when shares are confirmed received.
         """
-        # Calculate shares: size / price (max 2 decimal places per CLOB spec)
-        shares = round(size_usdc / price, 0)  # Round to integer shares for safety
+        shares = round(size_usdc / price, 0)
 
         fill = LiveFill(
             token_id=token_id,
@@ -121,49 +113,57 @@ class LiveExecutor:
 
         t0 = time.monotonic()
         try:
-            # Call py-clob-client directly (sync) via run_in_executor
-            # to avoid async/coroutine confusion in _retry wrapper
-            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
             from py_clob_client.order_builder.constants import BUY as _BUY
 
             order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_BUY)
-            from py_clob_client.clob_types import PartialCreateOrderOptions
             options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
             clob = await self._ensure_clob()
+            loop = asyncio.get_event_loop()
 
+            # Post order
             def _do_buy():
                 signed = clob.create_order(order_args, options)
                 return clob.post_order(signed, OrderType.GTC)
 
-            loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_buy)
-
-            fill.latency_ms = int((time.monotonic() - t0) * 1000)
-            fill.raw_response = result
             fill.order_id = result.get("orderID", result.get("id", ""))
+            fill.raw_response = result
 
-            # Check fill status
             status = result.get("status", "")
             if status in ("matched", "filled"):
+                # Instant fill
                 fill.status = "filled"
                 fill.fill_price = Decimal(str(result.get("price", price)))
                 fill.shares_filled = Decimal(str(shares))
             elif status in ("live", "delayed"):
-                # GTC order posted to orderbook, waiting for match
-                fill.status = "filled"  # Treat as success — order is active
-                fill.fill_price = Decimal(str(price))
-                fill.shares_filled = Decimal(str(shares))
+                # Order in book — poll for fill (max 30s)
+                fill.status = await self._wait_for_fill(
+                    fill.order_id, timeout_s=30, clob=clob
+                )
+                if fill.status == "filled":
+                    fill.fill_price = Decimal(str(price))
+                    fill.shares_filled = Decimal(str(shares))
+                else:
+                    # Cancel unfilled order
+                    try:
+                        await loop.run_in_executor(None, lambda: clob.cancel(fill.order_id))
+                        logger.info("live_buy_cancelled_unfilled", order_id=fill.order_id[:20])
+                    except Exception:
+                        pass
+                    fill.status = "failed"
+                    fill.error = "Order not filled within 30s — cancelled"
             else:
                 fill.status = "failed"
                 fill.error = f"Unexpected status: {status}"
 
+            fill.latency_ms = int((time.monotonic() - t0) * 1000)
             logger.info(
                 "live_buy_executed",
                 token_id=token_id[:30],
                 price=price,
                 shares=shares,
-                size_usdc=size_usdc,
                 status=fill.status,
                 order_id=fill.order_id[:20] if fill.order_id else "",
                 latency_ms=fill.latency_ms,
@@ -173,16 +173,35 @@ class LiveExecutor:
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
             fill.status = "failed"
             fill.error = str(e)
-            logger.error(
-                "live_buy_failed",
-                token_id=token_id[:30],
-                price=price,
-                size_usdc=size_usdc,
-                error=str(e),
-            )
+            logger.error("live_buy_failed", token_id=token_id[:30], error=str(e))
 
         self._fills.append(fill)
         return fill
+
+    async def _wait_for_fill(
+        self, order_id: str, timeout_s: int = 30, clob: Any = None,
+    ) -> str:
+        """Poll order status until matched or timeout."""
+        if not order_id or not clob:
+            return "failed"
+
+        loop = asyncio.get_event_loop()
+        deadline = time.monotonic() + timeout_s
+
+        while time.monotonic() < deadline:
+            await asyncio.sleep(2)
+            try:
+                order = await loop.run_in_executor(None, lambda: clob.get_order(order_id))
+                status = order.get("status", "") if isinstance(order, dict) else ""
+                if status in ("matched", "filled"):
+                    logger.info("live_order_filled", order_id=order_id[:20])
+                    return "filled"
+                if status in ("cancelled", "expired"):
+                    return "failed"
+            except Exception as e:
+                logger.debug("live_order_poll_error", error=str(e))
+
+        return "timeout"
 
     async def sell(
         self,
@@ -192,18 +211,13 @@ class LiveExecutor:
         neg_risk: bool = True,
         tick_size: str = "0.01",
     ) -> LiveFill:
-        """Place a SELL order on CLOB.
+        """Place a SELL order and wait for fill.
 
-        Args:
-            token_id: Token ID of position to sell.
-            price: Limit price (minimum we accept per share).
-            shares: Number of shares to sell.
-            neg_risk: Weather markets are NegRisk.
-            tick_size: Market tick size.
-
-        Returns:
-            LiveFill with execution details.
+        Posts GTC sell, polls until matched or timeout. Rounds shares
+        to integer to avoid precision errors.
         """
+        shares = round(shares, 0)  # Integer shares
+
         fill = LiveFill(
             token_id=token_id,
             side="SELL",
@@ -213,35 +227,47 @@ class LiveExecutor:
 
         t0 = time.monotonic()
         try:
-            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
             from py_clob_client.order_builder.constants import SELL as _SELL
 
             order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_SELL)
-            from py_clob_client.clob_types import PartialCreateOrderOptions
             options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
             clob = await self._ensure_clob()
+            loop = asyncio.get_event_loop()
 
             def _do_sell():
                 signed = clob.create_order(order_args, options)
                 return clob.post_order(signed, OrderType.GTC)
 
-            loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_sell)
-
-            fill.latency_ms = int((time.monotonic() - t0) * 1000)
-            fill.raw_response = result
             fill.order_id = result.get("orderID", result.get("id", ""))
+            fill.raw_response = result
 
             status = result.get("status", "")
             if status in ("matched", "filled"):
                 fill.status = "filled"
                 fill.fill_price = Decimal(str(result.get("price", price)))
                 fill.shares_filled = Decimal(str(shares))
+            elif status in ("live", "delayed"):
+                fill.status = await self._wait_for_fill(
+                    fill.order_id, timeout_s=30, clob=clob
+                )
+                if fill.status == "filled":
+                    fill.fill_price = Decimal(str(price))
+                    fill.shares_filled = Decimal(str(shares))
+                else:
+                    try:
+                        await loop.run_in_executor(None, lambda: clob.cancel(fill.order_id))
+                    except Exception:
+                        pass
+                    fill.status = "failed"
+                    fill.error = "Sell not filled within 30s — cancelled"
             else:
                 fill.status = "failed"
                 fill.error = f"Unexpected status: {status}"
 
+            fill.latency_ms = int((time.monotonic() - t0) * 1000)
             logger.info(
                 "live_sell_executed",
                 token_id=token_id[:30],
@@ -256,13 +282,7 @@ class LiveExecutor:
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
             fill.status = "failed"
             fill.error = str(e)
-            logger.error(
-                "live_sell_failed",
-                token_id=token_id[:30],
-                price=price,
-                shares=shares,
-                error=str(e),
-            )
+            logger.error("live_sell_failed", token_id=token_id[:30], error=str(e))
 
         self._fills.append(fill)
         return fill

@@ -1185,7 +1185,7 @@ class RDHOrchestrator:
             await self._save_signals_to_db(trades, strategy="C2")
             await self._paper_engine.sync_positions_to_db()
 
-            # Slack notification for live entries
+            # Slack notification for LIVE entries only
             if self._strategy_c2._execution_mode == "live" and self._slack_bot:
                 for sig in trades:
                     city = sig.market.city.value if sig.market.city else "?"
@@ -1290,10 +1290,11 @@ class RDHOrchestrator:
                 exit_reason=exit_reason,
             )
 
-            # Slack notification for C2 trade close
-            await self._notify_c2_trade_close(
-                pos, exit_reason, float(pnl), float(bid_price), is_live,
-            )
+            # Slack notification for LIVE trade close only
+            if is_live:
+                await self._notify_c2_trade_close(
+                    pos, exit_reason, float(pnl), float(bid_price), is_live,
+                )
 
         logger.info(
             "c2_exits_executed",
