@@ -28,9 +28,12 @@ logger = get_logger("live_executor")
 
 UTC = timezone.utc
 
-# No buffer needed — strategy already computes correct ask/bid from orderbook
-# NegRisk markets have inverted spread (bid > ask), so buffer would worsen price
-TAKER_BUFFER = 0.0
+# NegRisk pricing: /price?side=BUY is the maker bid, not taker ask.
+# To BUY as taker, we need the SELL price (counterparty's ask).
+# To SELL as taker, we need the BUY price (counterparty's bid).
+# Strategy passes execution_price from estimate_fill_price which returns
+# best_ask = /price BUY price (maker bid). We need to fetch SELL price instead.
+NEGRISK_TAKER = True  # Always fetch fresh taker price from CLOB
 
 
 @dataclass
@@ -108,15 +111,29 @@ class LiveExecutor:
         neg_risk: bool = True,
         tick_size: str = "0.01",
     ) -> LiveFill:
-        """BUY as taker — price at ask + buffer for instant fill.
+        """BUY as taker — fetch real SELL price from CLOB for instant fill.
 
-        Submits limit order above the ask to cross the spread and get
-        matched immediately. Same as paper trading behavior.
+        NegRisk: /price?side=SELL is the actual ask (taker fill price).
+        Strategy passes /price?side=BUY which is maker bid — won't fill.
         """
-        # Price above ask to guarantee taker fill
-        taker_price = round(price + TAKER_BUFFER, 4)
-        taker_price = min(taker_price, 0.99)  # Cap at 0.99
-        shares = int(size_usdc / taker_price)  # Integer shares
+        clob = await self._ensure_clob()
+        loop = asyncio.get_event_loop()
+
+        # Fetch real taker price: SELL price = what we pay to buy as taker
+        if neg_risk:
+            try:
+                raw = await loop.run_in_executor(
+                    None, lambda: clob.get_price(token_id, "SELL")
+                )
+                taker_price = float(raw.get("price", price) if isinstance(raw, dict) else raw)
+                logger.info("live_buy_taker_price", paper_price=price, taker_price=taker_price)
+            except Exception:
+                taker_price = price  # Fallback to strategy price
+        else:
+            taker_price = price
+
+        taker_price = min(taker_price, 0.99)
+        shares = int(size_usdc / taker_price)
         if shares < 1:
             return LiveFill(token_id=token_id, side="BUY", price=Decimal(str(price)),
                             size=Decimal(str(size_usdc)), status="failed", error="shares < 1")
@@ -198,20 +215,35 @@ class LiveExecutor:
         neg_risk: bool = True,
         tick_size: str = "0.01",
     ) -> LiveFill:
-        """SELL as taker — price at bid - buffer for instant fill.
+        """SELL as taker — fetch real BUY price from CLOB for instant fill.
 
-        Uses actual owned shares (not paper amount) to avoid
-        'not enough balance' errors.
+        NegRisk: /price?side=BUY is the actual bid (taker fill price for sellers).
+        Uses actual owned shares to avoid 'not enough balance'.
         """
-        # Use actual owned shares, not paper estimate
         actual_shares = self._shares_owned.get(token_id, 0)
         if actual_shares <= 0:
             return LiveFill(token_id=token_id, side="SELL", price=Decimal(str(price)),
                             size=Decimal("0"), status="failed", error="No shares owned")
 
-        sell_shares = int(actual_shares)  # Integer
-        # Price below bid to guarantee taker fill
-        taker_price = round(max(0.01, price - TAKER_BUFFER), 4)
+        sell_shares = int(actual_shares)
+
+        clob = await self._ensure_clob()
+        loop = asyncio.get_event_loop()
+
+        # Fetch real taker price: BUY price = what buyers bid = what we get as seller
+        if neg_risk:
+            try:
+                raw = await loop.run_in_executor(
+                    None, lambda: clob.get_price(token_id, "BUY")
+                )
+                taker_price = float(raw.get("price", price) if isinstance(raw, dict) else raw)
+                logger.info("live_sell_taker_price", paper_price=price, taker_price=taker_price)
+            except Exception:
+                taker_price = price
+        else:
+            taker_price = price
+
+        taker_price = round(max(0.01, taker_price), 4)
 
         fill = LiveFill(
             token_id=token_id, side="SELL",
