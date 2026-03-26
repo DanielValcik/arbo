@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+import asyncio
+
 from arbo.connectors.polymarket_client import PolymarketClient
 from arbo.utils.logger import get_logger
 
@@ -86,15 +88,20 @@ class LiveExecutor:
 
         t0 = time.monotonic()
         try:
-            result = await self._client.create_and_post_order(
-                token_id=token_id,
-                price=price,
-                size=shares,
-                side="BUY",
-                tick_size=tick_size,
-                neg_risk=neg_risk,
-                order_type="FOK",  # Fill or Kill — immediate execution
-            )
+            # Call py-clob-client directly (sync) via run_in_executor
+            # to avoid async/coroutine confusion in _retry wrapper
+            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.order_builder.constants import BUY as _BUY
+
+            order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_BUY)
+            options = {"tick_size": tick_size, "neg_risk": neg_risk}
+
+            def _do_buy():
+                signed = self._client.client.create_order(order_args, options)
+                return self._client.client.post_order(signed, OrderType.FOK)
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, _do_buy)
 
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
             fill.raw_response = result
@@ -168,15 +175,18 @@ class LiveExecutor:
 
         t0 = time.monotonic()
         try:
-            result = await self._client.create_and_post_order(
-                token_id=token_id,
-                price=price,
-                size=shares,
-                side="SELL",
-                tick_size=tick_size,
-                neg_risk=neg_risk,
-                order_type="FOK",
-            )
+            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.order_builder.constants import SELL as _SELL
+
+            order_args = OrderArgs(token_id=token_id, price=price, size=shares, side=_SELL)
+            options = {"tick_size": tick_size, "neg_risk": neg_risk}
+
+            def _do_sell():
+                signed = self._client.client.create_order(order_args, options)
+                return self._client.client.post_order(signed, OrderType.FOK)
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, _do_sell)
 
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
             fill.raw_response = result
