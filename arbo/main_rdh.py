@@ -88,6 +88,7 @@ class RDHOrchestrator:
         self._strategy_b: Any = None
         self._strategy_c: Any = None
         self._strategy_c2: Any = None  # EMOS + Edge Exit Fusion (weather variant)
+        self._exit_manager: Any = None  # Persistent exit manager for live C2
 
         # B2 social momentum (Santiment + CoinGecko)
         self._santiment: Any = None
@@ -445,11 +446,12 @@ class RDHOrchestrator:
         live_executor = None
 
         if execution_mode == "live":
+            from arbo.core.exit_manager import ExitManager
             from arbo.core.live_executor import LiveExecutor
 
-            # Reuse the authenticated CLOB client (already initialized for orderbook reads)
             if self._poly_client_readonly is not None:
                 live_executor = LiveExecutor(self._poly_client_readonly)
+                self._exit_manager = ExitManager(live_executor)
                 logger.info("c2_live_executor_ready")
             else:
                 logger.warning("c2_live_executor_no_client", msg="Falling back to paper mode")
@@ -1226,17 +1228,15 @@ class RDHOrchestrator:
             if snap is not None and snap.best_bid is not None:
                 current_prices[tid] = snap.best_bid
 
+        # Check for new exit triggers
         exits = await self._strategy_c2.check_exits(
             current_prices, self._strategy_c2._forecasts,
         )
-        if not exits:
-            return
 
-        # Execute sells (paper or live)
         is_live = self._strategy_c2._execution_mode == "live"
-        live_exec = self._strategy_c2._live_executor
 
-        for token_id, exit_reason in exits:
+        # Register new exits with ExitManager (live) or execute immediately (paper)
+        for token_id, exit_reason in (exits or []):
             bid_price = current_prices.get(token_id)
             if bid_price is None:
                 continue
@@ -1248,58 +1248,82 @@ class RDHOrchestrator:
             if pos is None:
                 continue
 
-            # Live sell via CLOB
-            if is_live and live_exec:
+            if is_live and self._exit_manager:
+                # Register with ExitManager — it will keep trying until all sold
                 pos_data = self._strategy_c2._open_positions.get(token_id, {})
-                shares = pos_data.get("shares", float(pos.shares))
-                neg_risk = pos_data.get("neg_risk", True)
-
-                fill = await live_exec.sell(
-                    token_id=token_id,
-                    price=float(bid_price),
-                    shares=shares,
-                    neg_risk=neg_risk,
-                )
-                if fill.status != "filled":
-                    logger.warning(
-                        "c2_live_sell_failed",
-                        token_id=token_id[:20],
-                        status=fill.status,
-                        error=fill.error,
+                shares = self._strategy_c2._live_executor._shares_owned.get(token_id, 0)
+                if shares > 0:
+                    self._exit_manager.register_exit(
+                        token_id=token_id,
+                        city=pos_data.get("city", "?"),
+                        exit_reason=exit_reason,
+                        shares=shares,
+                        entry_price=pos_data.get("entry_price", float(pos.avg_price)),
                     )
-                    continue
-                # Use live fill price for P&L
-                bid_price = fill.fill_price or bid_price
-
-            # Paper sell (always — for tracking even in live mode)
-            pnl = self._paper_engine.sell_position(
-                token_id=token_id,
-                sell_price=bid_price,
-                exit_reason=exit_reason,
-            )
-
-            self._risk_manager.post_trade_update(
-                pos.market_condition_id, "weather", pos.size, pnl=pnl,
-            )
-            self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
-
-            await self._paper_engine.update_resolved_trades_in_db(
-                token_id=token_id,
-                pnl=pnl,
-                exit_price=bid_price,
-                exit_reason=exit_reason,
-            )
-
-            # Slack notification for LIVE trade close only
-            if is_live:
-                await self._notify_c2_trade_close(
-                    pos, exit_reason, float(pnl), float(bid_price), is_live,
+            else:
+                # Paper: instant sell
+                pnl = self._paper_engine.sell_position(
+                    token_id=token_id, sell_price=bid_price, exit_reason=exit_reason,
+                )
+                self._risk_manager.post_trade_update(
+                    pos.market_condition_id, "weather", pos.size, pnl=pnl,
+                )
+                self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id, pnl=pnl,
+                    exit_price=bid_price, exit_reason=exit_reason,
                 )
 
-        logger.info(
-            "c2_exits_executed",
-            count=len(exits),
-            tokens=[t[:20] for t, _ in exits],
+        # Process pending exits (ExitManager keeps trying for live)
+        if is_live and self._exit_manager and self._exit_manager.has_pending:
+            completed = await self._exit_manager.process_exits()
+            for comp in completed:
+                # Record completed live exit
+                token_id = comp["token_id"]
+                pnl_val = comp["pnl"]
+                city = comp["city"]
+
+                # Find paper position to close
+                pos = next(
+                    (p for p in self._paper_engine.open_positions
+                     if p.token_id == token_id and getattr(p, "strategy", "") == "C2"),
+                    None,
+                )
+                if pos:
+                    sell_price = Decimal(str(comp["avg_sell_price"])) if comp["avg_sell_price"] > 0 else current_prices.get(token_id, Decimal("0"))
+                    pnl = self._paper_engine.sell_position(
+                        token_id=token_id, sell_price=sell_price,
+                        exit_reason=comp["exit_reason"],
+                    )
+                    self._risk_manager.post_trade_update(
+                        pos.market_condition_id, "weather", pos.size, pnl=pnl,
+                    )
+                    self._risk_manager.strategy_post_trade("C2", pos.size, pnl=pnl)
+                    await self._paper_engine.update_resolved_trades_in_db(
+                        token_id=token_id, pnl=pnl,
+                        exit_price=sell_price, exit_reason=comp["exit_reason"],
+                    )
+
+                # Slack notification
+                await self._notify_c2_trade_close(
+                    pos, comp["exit_reason"], pnl_val,
+                    comp["avg_sell_price"], True,
+                )
+
+                logger.info(
+                    "c2_live_exit_complete",
+                    city=city,
+                    shares_sold=comp["shares_sold"],
+                    pnl=round(pnl_val, 2),
+                    reason=comp["exit_reason"],
+                )
+
+        if exits:
+            logger.info(
+                "c2_exits_processed",
+                new_triggers=len(exits),
+                pending=len(self._exit_manager.pending_exits) if self._exit_manager else 0,
+                tokens=[t[:20] for t, _ in exits],
         )
         await self._paper_engine.sync_positions_to_db()
 
