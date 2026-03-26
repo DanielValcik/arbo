@@ -109,8 +109,8 @@ class LiveExecutor:
         Returns:
             LiveFill with execution details.
         """
-        # Calculate shares: size / price
-        shares = round(size_usdc / price, 2)
+        # Calculate shares: size / price (max 2 decimal places per CLOB spec)
+        shares = round(size_usdc / price, 0)  # Round to integer shares for safety
 
         fill = LiveFill(
             token_id=token_id,
