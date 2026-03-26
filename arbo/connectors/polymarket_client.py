@@ -163,22 +163,10 @@ class PolymarketClient:
                 funder=config.poly_funder_address or None,
             )
 
-            # Set L2 credentials if available
-            if config.poly_api_key and config.poly_secret and config.poly_passphrase:
-                from py_clob_client.clob_types import ApiCreds
-
-                creds = ApiCreds(
-                    api_key=config.poly_api_key,
-                    api_secret=config.poly_secret,
-                    api_passphrase=config.poly_passphrase,
-                )
-                self._client.set_api_creds(creds)
-                logger.info("polymarket_auth_l2", msg="L2 API credentials set")
-            else:
-                # Derive L2 credentials
-                creds = self._client.create_or_derive_api_creds()
-                self._client.set_api_creds(creds)
-                logger.info("polymarket_auth_derived", msg="L2 API credentials derived")
+            # Always derive L2 credentials from private key (most reliable)
+            creds = self._client.create_or_derive_api_creds()
+            self._client.set_api_creds(creds)
+            logger.info("polymarket_auth_l2_derived", api_key=creds.api_key[:12] + "...")
 
             logger.info("polymarket_initialized", host=self._config.clob_url)
 
