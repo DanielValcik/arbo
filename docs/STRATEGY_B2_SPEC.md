@@ -1,4 +1,4 @@
-# Strategy C3 — Crypto Price Edge + Early Exit
+# Strategy B2 — Crypto Price Edge + Early Exit
 
 > Specifikace nové strategie aplikující C2 model (EMOS + edge-based exit)
 > na crypto price prediction markets s masivní likviditou.
@@ -42,7 +42,7 @@ Náš model říká: pravděpodobnost 52% (z volatility modelu) → edge = 7%
 ### Klíčový Rozdíl
 - Weather: forecast se aktualizuje 1-4x denně → edge trvá hodiny
 - Crypto: exchange price se mění každou sekundu → edge trvá minuty
-- **C3 musí být rychlejší** — entry a exit v řádu minut, ne hodin
+- **B2 musí být rychlejší** — entry a exit v řádu minut, ne hodin
 
 ## 3. Probability Model
 
@@ -157,7 +157,7 @@ SCORE = ROI(25) + Sharpe(15) + DD(10) + Utilization(15) + PnL/hour(15) + OOS(10)
 ## 7. Architektura
 
 ```
-Strategy C3 (crypto_price_strategy.py)
+Strategy B2 (crypto_price_strategy.py)
   ├── CryptoPriceScanner
   │   ├── Binance WebSocket → real-time BTC/ETH/SOL price
   │   ├── Polymarket Gamma → discover crypto price events
@@ -187,8 +187,8 @@ Strategy C3 (crypto_price_strategy.py)
 - `live_executor.py` — beze změny (NegRisk pricing funguje pro crypto i weather)
 - `exit_manager.py` — beze změny
 - `paper_engine.py` — sell_position, tracking
-- Dashboard LIVE tab — přidat C3 data
-- Slack notifications — přidat C3 channel
+- Dashboard LIVE tab — přidat B2 data
+- Slack notifications — přidat B2 channel
 - Autoresearch framework — `experiment_framework.py`
 
 ### Co Je Nové
@@ -200,7 +200,7 @@ Strategy C3 (crypto_price_strategy.py)
 
 ## 8. Porovnání C2 vs C3
 
-| Aspekt | C2 Weather | C3 Crypto Price |
+| Aspekt | C2 Weather | B2 Crypto Price |
 |--------|-----------|-----------------|
 | Likvidita | $100-500/bucket | $1-5M/bucket |
 | Fill rate | 8-53% | ~100% |
@@ -252,7 +252,7 @@ Strategy C3 (crypto_price_strategy.py)
 ### Fáze 3: Paper Trading (2-3 dny)
 1. Implementovat crypto_price_scanner.py
 2. Binance WebSocket pro real-time ceny
-3. Paper trading jako Strategy C3
+3. Paper trading jako Strategy B2
 4. Dashboard karty + Expected vs Reality
 
 ### Fáze 4: Live Trading (1 den)
@@ -283,7 +283,7 @@ Strategy C3 (crypto_price_strategy.py)
 - `get_price` může vrátit empty string → handle gracefully
 
 ### Fill Expectations
-| Aspekt | Weather (C2) | Crypto (C3 předpoklad) |
+| Aspekt | Weather (C2) | Crypto (B2 předpoklad) |
 |--------|-------------|----------------------|
 | Full fill | Vzácný | Běžný (deep book) |
 | Partial fill | 8-53% | Neočekáváme |
@@ -297,7 +297,7 @@ arbo/
 ├── strategies/
 │   ├── crypto_price_scanner.py    # Discover + scan crypto price markets
 │   ├── crypto_quality_gate.py     # Quality gate thresholds
-│   └── strategy_c3.py             # Main C3 strategy class
+│   └── strategy_b2.py             # Main B2 strategy class
 ├── models/
 │   └── volatility_model.py        # Realized vol, EWMA, time decay CDF
 ├── connectors/
@@ -321,6 +321,6 @@ research/
 
 ---
 
-*Tento dokument slouží jako referenční specifikace pro implementaci Strategy C3.
+*Tento dokument slouží jako referenční specifikace pro implementaci Strategy B2.
 Všechny poznatky z C2 live tradingu (NegRisk pricing, fill handling, exit logic)
 jsou přímo aplikovatelné a zdokumentované výše.*
