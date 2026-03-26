@@ -318,9 +318,10 @@ class LiveExecutor:
 
         size_matched = immediate_fill
         if order_id:
+            oid_check = order_id  # Capture for lambda
             try:
                 order_info = await loop.run_in_executor(
-                    None, lambda: clob.get_order(order_id)
+                    None, lambda: clob.get_order(oid_check)
                 )
                 if isinstance(order_info, dict):
                     sm = order_info.get("size_matched", "0") or "0"
@@ -329,10 +330,12 @@ class LiveExecutor:
                 logger.debug("live_order_check_failed", error=str(e))
 
             # ALWAYS cancel order (removes unfilled remainder from book)
+            oid = order_id  # Capture in local variable for lambda
             try:
-                await loop.run_in_executor(None, lambda: clob.cancel(order_id))
-            except Exception:
-                pass  # Already fully filled or already cancelled
+                await loop.run_in_executor(None, lambda: clob.cancel(oid))
+                logger.info("live_order_cancelled", order_id=oid[:16], filled=size_matched)
+            except Exception as e:
+                logger.debug("live_cancel_skip", order_id=oid[:16], error=str(e))
 
         return size_matched
 
