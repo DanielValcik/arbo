@@ -1,16 +1,20 @@
-"""Live order executor for Strategy C2 — v5 (production-ready).
+"""Live order executor v6 — Maker-first strategy.
 
-Handles Polymarket CLOB realities:
-1. Posts GTC at taker price → checks immediate fill → cancels remainder
-2. Tracks actual shares via Polymarket Data API (survives restarts)
-3. Sells only confirmed owned shares
-4. All errors handled gracefully (no crashes)
+ENTRY (BUY): PostOnly at BUY price (maker bid)
+  - Same price as paper model → no spread cost
+  - 0% fee + 20% rebate
+  - Wait up to 3 min for fill, cancel if not filled
 
-NegRisk pricing (CONFIRMED 2026-03-26):
-- BUY order: price = /price?side=SELL (taker ask) → instant match
-- SELL order: price = /price?side=BUY (taker bid) → instant match
+EXIT (SELL): PostOnly at SELL price (maker ask) first
+  - Wait 2 min for fill
+  - If not filled → fallback to taker at BUY price (instant but pays spread)
 
-Gas: $0 (Polymarket gasless relay).
+SPREAD FILTER: Skip if spread > MAX_SPREAD_PCT
+
+Why maker > taker for weather:
+  Paper buys at BUY price (low), sells at SELL price (high) → earns spread
+  Taker buys at SELL price (high), sells at BUY price (low) → pays spread
+  Maker buys at BUY price (low), sells at SELL price (high) → matches paper!
 """
 
 from __future__ import annotations
@@ -30,8 +34,11 @@ from arbo.utils.logger import get_logger
 logger = get_logger("live_executor")
 
 UTC = timezone.utc
-MIN_ORDER_USD = 1.5  # Polymarket min ~$1, add buffer
-FILL_CHECK_DELAY_S = 3  # Wait before checking fill status
+MIN_ORDER_USD = 1.5
+MAKER_FILL_TIMEOUT_ENTRY_S = 180  # 3 min for entry (patient)
+MAKER_FILL_TIMEOUT_EXIT_S = 120  # 2 min for exit (then fallback to taker)
+FILL_POLL_INTERVAL_S = 5  # Check fill every 5s
+MAX_SPREAD_PCT = 0.20  # Skip if spread > 20% of mid
 DATA_API = "https://data-api.polymarket.com"
 
 try:
@@ -43,8 +50,6 @@ except ImportError:
 
 @dataclass
 class LiveFill:
-    """Result of a live order execution."""
-
     token_id: str
     side: str
     price: Decimal
@@ -55,6 +60,7 @@ class LiveFill:
     shares_requested: int = 0
     shares_filled: int = 0
     usdc_spent: float = 0.0
+    order_type: str = ""  # "maker" or "taker"
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     latency_ms: int = 0
     error: str | None = None
@@ -67,6 +73,7 @@ class LiveFill:
             "live_shares_requested": self.shares_requested,
             "live_shares_filled": self.shares_filled,
             "live_usdc_spent": self.usdc_spent,
+            "live_order_type": self.order_type,
             "live_latency_ms": self.latency_ms,
             "live_status": self.status,
             "live_error": self.error,
@@ -76,8 +83,6 @@ class LiveFill:
 
 
 class LiveExecutor:
-    """Production-ready Polymarket CLOB executor."""
-
     def __init__(self, poly_client: Any) -> None:
         self._poly_client = poly_client
         self._clob: Any = None
@@ -90,114 +95,106 @@ class LiveExecutor:
             return self._clob
         import os
         from py_clob_client.client import ClobClient as _ClobClient
-
         self._funder = os.getenv("POLY_FUNDER_ADDRESS", "")
         self._clob = _ClobClient(
-            host="https://clob.polymarket.com",
-            chain_id=137,
-            key=os.getenv("POLY_PRIVATE_KEY", ""),
-            signature_type=2,
+            host="https://clob.polymarket.com", chain_id=137,
+            key=os.getenv("POLY_PRIVATE_KEY", ""), signature_type=2,
             funder=self._funder or None,
         )
         creds = self._clob.create_or_derive_api_creds()
         self._clob.set_api_creds(creds)
-
-        # Load actual positions from Polymarket
         await self._sync_positions()
-
-        logger.info(
-            "live_executor_ready",
-            api_key=creds.api_key[:12] + "...",
-            positions=len(self._shares_owned),
-            funder=self._funder[:12] + "...",
-        )
+        logger.info("live_executor_ready", positions=len(self._shares_owned))
         return self._clob
 
     async def _sync_positions(self) -> None:
-        """Load actual share positions from Polymarket Data API."""
         if not self._funder:
             return
         try:
             url = f"{DATA_API}/positions?user={self._funder}"
             req = urllib.request.Request(url, headers={"User-Agent": "Arbo/1.0"})
             loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(
-                None,
-                lambda: json.loads(
-                    urllib.request.urlopen(req, timeout=10, context=_SSL_CTX).read()
-                ),
-            )
+            data = await loop.run_in_executor(None, lambda: json.loads(
+                urllib.request.urlopen(req, timeout=10, context=_SSL_CTX).read()
+            ))
             self._shares_owned.clear()
             for pos in data:
                 token = pos.get("asset", "")
                 size = int(float(pos.get("size", 0)))
                 if token and size > 0:
                     self._shares_owned[token] = size
-
-            logger.info("live_positions_synced", count=len(self._shares_owned))
         except Exception as e:
-            logger.warning("live_positions_sync_failed", error=str(e))
+            logger.warning("positions_sync_failed", error=str(e))
 
-    async def _get_taker_price(self, token_id: str, side: str) -> float | None:
-        """Get taker fill price. BUY→SELL price, SELL→BUY price."""
+    async def _get_prices(self, token_id: str) -> tuple[float | None, float | None]:
+        """Get BUY (bid) and SELL (ask) prices. Returns (buy_price, sell_price)."""
         try:
-            opposite = "SELL" if side == "BUY" else "BUY"
-            price = await self._poly_client.get_price(token_id, opposite)
-            return float(price)
+            buy_p = float(await self._poly_client.get_price(token_id, "BUY"))
+            sell_p = float(await self._poly_client.get_price(token_id, "SELL"))
+            return buy_p, sell_p
         except Exception as e:
-            logger.warning("live_taker_price_failed", side=side, error=str(e))
-            return None
+            logger.warning("prices_fetch_failed", error=str(e))
+            return None, None
 
     async def buy(
-        self,
-        token_id: str,
-        price: float,
-        size_usdc: float,
-        neg_risk: bool = True,
-        tick_size: str = "0.01",
+        self, token_id: str, price: float, size_usdc: float,
+        neg_risk: bool = True, tick_size: str = "0.01",
     ) -> LiveFill:
-        """BUY: fetch taker price, post GTC, verify fill, cancel remainder."""
-        taker_price = await self._get_taker_price(token_id, "BUY")
-        if taker_price is None:
-            return self._fail(token_id, "BUY", price, size_usdc, "No taker price")
+        """MAKER BUY at BUY price (same as paper). 0% fee + rebate."""
+        buy_price, sell_price = await self._get_prices(token_id)
+        if buy_price is None or sell_price is None:
+            return self._fail(token_id, "BUY", price, size_usdc, "No prices")
 
-        taker_price = min(taker_price, 0.99)
-        shares = int(size_usdc / taker_price)
-        if shares * taker_price < MIN_ORDER_USD:
-            return self._fail(token_id, "BUY", taker_price, size_usdc, f"Below min ${MIN_ORDER_USD}")
+        # Spread check
+        mid = (buy_price + sell_price) / 2
+        spread_pct = (sell_price - buy_price) / mid if mid > 0 else 1.0
+        if spread_pct > MAX_SPREAD_PCT:
+            return self._fail(token_id, "BUY", buy_price, size_usdc,
+                              f"Spread {spread_pct:.0%} > {MAX_SPREAD_PCT:.0%}")
 
-        logger.info("live_buy_start", paper=price, taker=taker_price, shares=shares, token=token_id[:20])
+        # Maker: buy at BUY price (bid level — same as paper)
+        maker_price = buy_price
+        shares = int(size_usdc / maker_price) if maker_price > 0 else 0
+        if shares * maker_price < MIN_ORDER_USD:
+            return self._fail(token_id, "BUY", maker_price, size_usdc, "Below minimum")
+
+        logger.info("live_buy_maker", price=maker_price, spread_pct=round(spread_pct, 3),
+                     shares=shares, token=token_id[:20])
 
         fill = LiveFill(
-            token_id=token_id, side="BUY",
-            price=Decimal(str(taker_price)), size=Decimal(str(size_usdc)),
-            shares_requested=shares,
+            token_id=token_id, side="BUY", price=Decimal(str(maker_price)),
+            size=Decimal(str(size_usdc)), shares_requested=shares, order_type="maker",
         )
 
         t0 = time.monotonic()
         try:
             clob = await self._ensure_clob()
-            size_matched = await self._post_and_verify(
-                clob, token_id, taker_price, shares, "BUY", neg_risk, tick_size,
-                fill,
+            order_id, immediate = await self._post_order(
+                clob, token_id, maker_price, shares, "BUY", neg_risk, tick_size,
             )
+            fill.order_id = order_id
 
-            if size_matched > 0:
-                fill.status = "filled" if size_matched >= shares else "partial"
-                fill.shares_filled = size_matched
-                fill.fill_price = Decimal(str(taker_price))
-                fill.usdc_spent = size_matched * taker_price
-                self._shares_owned[token_id] = self._shares_owned.get(token_id, 0) + size_matched
+            # Wait for maker fill
+            filled = await self._poll_fill(clob, order_id, immediate,
+                                            timeout_s=MAKER_FILL_TIMEOUT_ENTRY_S)
+
+            # Always cancel remainder
+            await self._cancel(order_id, clob)
+
+            if filled > 0:
+                fill.status = "filled" if filled >= shares else "partial"
+                fill.shares_filled = filled
+                fill.fill_price = Decimal(str(maker_price))
+                fill.usdc_spent = filled * maker_price
+                self._shares_owned[token_id] = self._shares_owned.get(token_id, 0) + filled
             else:
                 fill.status = "failed"
-                fill.error = fill.error or "No shares filled"
+                fill.error = "No maker fill within timeout"
 
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
-            logger.info(
-                "live_buy_done", token=token_id[:20], price=taker_price,
-                requested=shares, filled=size_matched,
-                status=fill.status, latency=fill.latency_ms,
-            )
+            logger.info("live_buy_done", token=token_id[:20], price=maker_price,
+                        requested=shares, filled=filled, status=fill.status,
+                        type="maker", latency=fill.latency_ms)
 
         except Exception as e:
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
@@ -209,64 +206,103 @@ class LiveExecutor:
         return fill
 
     async def sell(
-        self,
-        token_id: str,
-        price: float,
-        shares: float | None = None,
-        neg_risk: bool = True,
-        tick_size: str = "0.01",
+        self, token_id: str, price: float, shares: float | None = None,
+        neg_risk: bool = True, tick_size: str = "0.01",
     ) -> LiveFill:
-        """SELL: use actual owned shares, taker price, verify fill."""
-        # Refresh positions from API to get accurate count
+        """MAKER SELL at SELL price first, fallback to TAKER at BUY price."""
         await self._sync_positions()
-
         actual = self._shares_owned.get(token_id, 0)
         if actual <= 0:
-            return self._fail(token_id, "SELL", price, 0, "No shares owned (synced)")
+            return self._fail(token_id, "SELL", price, 0, "No shares owned")
 
-        taker_price = await self._get_taker_price(token_id, "SELL")
-        if taker_price is None:
-            return self._fail(token_id, "SELL", price, 0, "No taker price")
+        buy_price, sell_price = await self._get_prices(token_id)
+        if buy_price is None or sell_price is None:
+            return self._fail(token_id, "SELL", price, 0, "No prices")
 
-        taker_price = round(max(0.01, taker_price), 4)
         sell_shares = actual
 
-        logger.info("live_sell_start", paper=price, taker=taker_price, shares=sell_shares, token=token_id[:20])
+        logger.info("live_sell_start", maker_price=sell_price, taker_price=buy_price,
+                     shares=sell_shares, token=token_id[:20])
 
         fill = LiveFill(
-            token_id=token_id, side="SELL",
-            price=Decimal(str(taker_price)), size=Decimal(str(sell_shares)),
-            shares_requested=sell_shares,
+            token_id=token_id, side="SELL", price=Decimal(str(sell_price)),
+            size=Decimal(str(sell_shares)), shares_requested=sell_shares,
         )
 
         t0 = time.monotonic()
         try:
             clob = await self._ensure_clob()
-            size_matched = await self._post_and_verify(
-                clob, token_id, taker_price, sell_shares, "SELL", neg_risk, tick_size,
-                fill,
-            )
 
-            if size_matched > 0:
-                fill.status = "filled" if size_matched >= sell_shares else "partial"
-                fill.shares_filled = size_matched
-                fill.fill_price = Decimal(str(taker_price))
-                fill.usdc_spent = size_matched * taker_price
-                remaining = actual - size_matched
+            # Phase 1: Maker sell at SELL price (ask level — same as paper exit)
+            fill.order_type = "maker"
+            order_id, immediate = await self._post_order(
+                clob, token_id, sell_price, sell_shares, "SELL", neg_risk, tick_size,
+            )
+            fill.order_id = order_id
+
+            filled = await self._poll_fill(clob, order_id, immediate,
+                                            timeout_s=MAKER_FILL_TIMEOUT_EXIT_S)
+            await self._cancel(order_id, clob)
+
+            if filled >= sell_shares:
+                # Full maker fill — best case
+                fill.status = "filled"
+                fill.shares_filled = filled
+                fill.fill_price = Decimal(str(sell_price))
+                fill.usdc_spent = filled * sell_price
+                self._shares_owned.pop(token_id, None)
+            elif filled > 0:
+                # Partial maker fill
+                remaining = sell_shares - filled
+                fill.shares_filled = filled
+                fill.fill_price = Decimal(str(sell_price))
+                fill.usdc_spent = filled * sell_price
+                self._shares_owned[token_id] = remaining
+
+                # Phase 2: Taker sell remainder at BUY price
+                logger.info("live_sell_taker_fallback", remaining=remaining, token=token_id[:20])
+                fill.order_type = "maker+taker"
+                order_id2, imm2 = await self._post_order(
+                    clob, token_id, buy_price, remaining, "SELL", neg_risk, tick_size,
+                )
+                filled2 = await self._poll_fill(clob, order_id2, imm2, timeout_s=10)
+                await self._cancel(order_id2, clob)
+
+                fill.shares_filled += filled2
+                fill.usdc_spent += filled2 * buy_price
+                new_remaining = remaining - filled2
+                if new_remaining <= 0:
+                    self._shares_owned.pop(token_id, None)
+                else:
+                    self._shares_owned[token_id] = new_remaining
+
+                fill.status = "filled" if new_remaining <= 0 else "partial"
+            else:
+                # No maker fill — taker fallback
+                fill.order_type = "taker"
+                logger.info("live_sell_taker_only", shares=sell_shares, token=token_id[:20])
+                order_id2, imm2 = await self._post_order(
+                    clob, token_id, buy_price, sell_shares, "SELL", neg_risk, tick_size,
+                )
+                filled2 = await self._poll_fill(clob, order_id2, imm2, timeout_s=10)
+                await self._cancel(order_id2, clob)
+
+                fill.shares_filled = filled2
+                fill.fill_price = Decimal(str(buy_price))
+                fill.usdc_spent = filled2 * buy_price
+                remaining = sell_shares - filled2
                 if remaining <= 0:
                     self._shares_owned.pop(token_id, None)
                 else:
                     self._shares_owned[token_id] = remaining
-            else:
-                fill.status = "failed"
-                fill.error = fill.error or "No shares sold"
+                fill.status = "filled" if remaining <= 0 else "partial"
 
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
-            logger.info(
-                "live_sell_done", token=token_id[:20], price=taker_price,
-                requested=sell_shares, filled=size_matched,
-                status=fill.status, latency=fill.latency_ms,
-            )
+            avg_price = fill.usdc_spent / fill.shares_filled if fill.shares_filled > 0 else 0
+            logger.info("live_sell_done", token=token_id[:20],
+                        requested=sell_shares, filled=fill.shares_filled,
+                        avg_price=round(avg_price, 4), type=fill.order_type,
+                        status=fill.status, latency=fill.latency_ms)
 
         except Exception as e:
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
@@ -277,25 +313,15 @@ class LiveExecutor:
         self._fills.append(fill)
         return fill
 
-    async def _post_and_verify(
-        self,
-        clob: Any,
-        token_id: str,
-        price: float,
-        shares: int,
-        side: str,
-        neg_risk: bool,
-        tick_size: str,
-        fill: LiveFill,
-    ) -> int:
-        """Post GTC order, wait, check fill, cancel remainder. Returns shares filled."""
-        from py_clob_client.clob_types import (
-            OrderArgs, OrderType, PartialCreateOrderOptions,
-        )
+    async def _post_order(
+        self, clob: Any, token_id: str, price: float, shares: int,
+        side: str, neg_risk: bool, tick_size: str,
+    ) -> tuple[str, int]:
+        """Post GTC order. Returns (order_id, immediate_fill_count)."""
+        from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
         from py_clob_client.order_builder.constants import BUY as _BUY, SELL as _SELL
 
         loop = asyncio.get_event_loop()
-
         args = OrderArgs(
             token_id=token_id, price=price, size=shares,
             side=_BUY if side == "BUY" else _SELL,
@@ -308,43 +334,61 @@ class LiveExecutor:
 
         result = await loop.run_in_executor(None, _post)
         order_id = result.get("orderID", result.get("id", ""))
-        fill.order_id = order_id
+        immediate = int(float(result.get("takingAmount", "0") or "0"))
+        return order_id, immediate
 
-        # Check immediate fill from response
-        immediate_fill = int(float(result.get("takingAmount", "0") or "0"))
+    async def _poll_fill(
+        self, clob: Any, order_id: str, immediate: int, timeout_s: int,
+    ) -> int:
+        """Poll order for fills. Returns total shares filled."""
+        if not order_id:
+            return immediate
 
-        # Wait briefly then check actual fill count
-        await asyncio.sleep(FILL_CHECK_DELAY_S)
+        loop = asyncio.get_event_loop()
+        deadline = time.monotonic() + timeout_s
+        best = immediate
 
-        size_matched = immediate_fill
-        if order_id:
-            oid_check = order_id  # Capture for lambda
+        while time.monotonic() < deadline:
+            await asyncio.sleep(FILL_POLL_INTERVAL_S)
             try:
-                order_info = await loop.run_in_executor(
-                    None, lambda: clob.get_order(oid_check)
-                )
-                if isinstance(order_info, dict):
-                    sm = order_info.get("size_matched", "0") or "0"
-                    size_matched = max(size_matched, int(float(sm)))
-            except Exception as e:
-                logger.debug("live_order_check_failed", error=str(e))
+                oid = order_id
+                info = await loop.run_in_executor(None, lambda: clob.get_order(oid))
+                if isinstance(info, dict):
+                    sm = int(float(info.get("size_matched", "0") or "0"))
+                    best = max(best, sm)
+                    status = info.get("status", "")
+                    if status in ("MATCHED", "matched", "filled"):
+                        return best  # Fully filled
+                    if status in ("CANCELLED", "cancelled", "expired"):
+                        return best
+            except Exception:
+                pass
 
-            # ALWAYS cancel order (removes unfilled remainder from book)
-            oid = order_id  # Capture in local variable for lambda
-            try:
-                await loop.run_in_executor(None, lambda: clob.cancel(oid))
-                logger.info("live_order_cancelled", order_id=oid[:16], filled=size_matched)
-            except Exception as e:
-                logger.debug("live_cancel_skip", order_id=oid[:16], error=str(e))
+        return best
 
-        return size_matched
+    async def _cancel(self, order_id: str, clob: Any) -> None:
+        if not order_id:
+            return
+        try:
+            oid = order_id
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: clob.cancel(oid))
+        except Exception:
+            pass
 
     def _fail(self, token_id: str, side: str, price: float, size: float, error: str) -> LiveFill:
-        logger.warning("live_order_rejected", side=side, error=error, token=token_id[:20])
+        logger.warning("live_order_skip", side=side, error=error, token=token_id[:20])
         return LiveFill(
             token_id=token_id, side=side, price=Decimal(str(price)),
             size=Decimal(str(size)), status="failed", error=error,
         )
+
+    async def _get_taker_price(self, token_id: str, side: str) -> float | None:
+        """Legacy — used by ExitManager."""
+        prices = await self._get_prices(token_id)
+        if side == "SELL":
+            return prices[0]  # BUY price = taker sell
+        return prices[1]  # SELL price = taker buy
 
     @property
     def shares_owned(self) -> dict[str, int]:
