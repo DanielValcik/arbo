@@ -2085,11 +2085,14 @@ async def api_city_performance_c2(
                 if city_name not in city_stats:
                     city_stats[city_name] = {"wins": 0, "losses": 0, "pnl": 0.0, "edges": []}
                 cs = city_stats[city_name]
-                if row[2] == "won":
+                pnl_val = float(row[3] or 0)
+                status = row[2]
+                # For "sold" (early exit), win/loss is determined by P&L sign
+                if status == "won" or (status == "sold" and pnl_val >= 0):
                     cs["wins"] += 1
                 else:
                     cs["losses"] += 1
-                cs["pnl"] += float(row[3] or 0)
+                cs["pnl"] += pnl_val
                 if row[4] is not None:
                     cs["edges"].append(float(row[4]))
 
@@ -2230,11 +2233,13 @@ async def api_city_performance(_user: str = Depends(_verify_credentials)) -> dic
                 if city_name not in city_stats:
                     city_stats[city_name] = {"wins": 0, "losses": 0, "pnl": 0.0, "edges": []}
                 cs = city_stats[city_name]
-                if row[2] == "won":
+                pnl_val = float(row[3] or 0)
+                status = row[2]
+                if status == "won" or (status == "sold" and pnl_val >= 0):
                     cs["wins"] += 1
                 else:
                     cs["losses"] += 1
-                cs["pnl"] += float(row[3] or 0)
+                cs["pnl"] += pnl_val
                 if row[4] is not None:
                     cs["edges"].append(float(row[4]))
 

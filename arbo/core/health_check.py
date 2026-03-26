@@ -343,7 +343,7 @@ async def get_expected_vs_reality() -> dict:
                 sa.select(
                     sa.func.count(PaperTrade.id),
                     sa.func.sum(
-                        sa.case((PaperTrade.status == "won", 1), else_=0)
+                        sa.case((PaperTrade.status == "won", 1), (sa.and_(PaperTrade.status == "sold", PaperTrade.actual_pnl >= 0), 1), else_=0)
                     ),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
@@ -391,7 +391,7 @@ async def get_expected_vs_reality() -> dict:
                     sa.func.sum(PaperTrade.actual_pnl),
                     sa.func.count(PaperTrade.id),
                     sa.func.sum(
-                        sa.case((PaperTrade.status == "won", 1), else_=0)
+                        sa.case((PaperTrade.status == "won", 1), (sa.and_(PaperTrade.status == "sold", PaperTrade.actual_pnl >= 0), 1), else_=0)
                     ),
                 )
                 .where(PaperTrade.strategy == "C")
@@ -607,7 +607,7 @@ async def get_expected_vs_reality_c2() -> dict:
             res_resolved = await session.execute(
                 sa.select(
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), (sa.and_(PaperTrade.status == "sold", PaperTrade.actual_pnl >= 0), 1), else_=0)),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     sa.func.coalesce(sa.func.avg(PaperTrade.edge_at_exec), 0),
                 )
@@ -644,7 +644,7 @@ async def get_expected_vs_reality_c2() -> dict:
                     sa.func.date_trunc("day", PaperTrade.resolved_at).label("day"),
                     sa.func.sum(PaperTrade.actual_pnl),
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), (sa.and_(PaperTrade.status == "sold", PaperTrade.actual_pnl >= 0), 1), else_=0)),
                 )
                 .where(PaperTrade.strategy == "C2")
                 .where(PaperTrade.status.in_(["won", "lost", "sold"]))
@@ -745,7 +745,7 @@ async def get_seasonality_analysis() -> dict:
                 sa.select(
                     sa.extract("month", PaperTrade.placed_at).label("month"),
                     sa.func.count(PaperTrade.id),
-                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), else_=0)),
+                    sa.func.sum(sa.case((PaperTrade.status == "won", 1), (sa.and_(PaperTrade.status == "sold", PaperTrade.actual_pnl >= 0), 1), else_=0)),
                     sa.func.sum(sa.case((PaperTrade.status == "lost", 1), else_=0)),
                     sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                 )
