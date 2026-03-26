@@ -120,15 +120,15 @@ class LiveExecutor:
         loop = asyncio.get_event_loop()
 
         # Fetch real taker price: SELL price = what we pay to buy as taker
-        if neg_risk:
+        taker_price = price  # Default to strategy price
+        logger.info("live_buy_start", paper_price=price, neg_risk=neg_risk, token=token_id[:20])
+        if neg_risk and self._poly_client:
             try:
-                taker_price = float(await self._poly_client.get_price(token_id, "SELL"))
+                sell_price = await self._poly_client.get_price(token_id, "SELL")
+                taker_price = float(sell_price)
                 logger.info("live_buy_taker_price", paper_price=price, taker_price=taker_price)
             except Exception as e:
-                logger.warning("live_buy_taker_price_failed", error=str(e))
-                taker_price = price
-        else:
-            taker_price = price
+                logger.warning("live_buy_taker_fetch_failed", error=str(e), fallback=price)
 
         taker_price = min(taker_price, 0.99)
         shares = int(size_usdc / taker_price)
