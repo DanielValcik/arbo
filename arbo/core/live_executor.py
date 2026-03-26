@@ -60,16 +60,34 @@ class LiveFill:
 class LiveExecutor:
     """Execute real trades on Polymarket CLOB.
 
-    Wraps PolymarketClient with trade-specific logic:
-    - BUY: submit limit order at CLOB ask price
-    - SELL: submit limit order at CLOB bid price
-    - FOK (Fill or Kill) for immediate execution
-    - Records all execution data for analysis
+    Creates its own ClobClient with derived L2 credentials to avoid
+    sharing state with the read-only orderbook client.
     """
 
     def __init__(self, poly_client: PolymarketClient) -> None:
         self._client = poly_client
+        self._clob: Any = None  # Own ClobClient for order signing
         self._fills: list[LiveFill] = []
+
+    async def _ensure_clob(self) -> Any:
+        """Create dedicated ClobClient with derived L2 creds."""
+        if self._clob is not None:
+            return self._clob
+
+        import os
+        from py_clob_client.client import ClobClient as _ClobClient
+
+        self._clob = _ClobClient(
+            host="https://clob.polymarket.com",
+            chain_id=137,
+            key=os.getenv("POLY_PRIVATE_KEY", ""),
+            signature_type=2,
+            funder=os.getenv("POLY_FUNDER_ADDRESS") or None,
+        )
+        creds = self._clob.create_or_derive_api_creds()
+        self._clob.set_api_creds(creds)
+        logger.info("live_executor_clob_ready", api_key=creds.api_key[:12] + "...")
+        return self._clob
 
     async def buy(
         self,
@@ -112,9 +130,11 @@ class LiveExecutor:
             from py_clob_client.clob_types import PartialCreateOrderOptions
             options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
+            clob = await self._ensure_clob()
+
             def _do_buy():
-                signed = self._client.client.create_order(order_args, options)
-                return self._client.client.post_order(signed, OrderType.FOK)
+                signed = clob.create_order(order_args, options)
+                return clob.post_order(signed, OrderType.FOK)
 
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_buy)
@@ -198,9 +218,11 @@ class LiveExecutor:
             from py_clob_client.clob_types import PartialCreateOrderOptions
             options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
+            clob = await self._ensure_clob()
+
             def _do_sell():
-                signed = self._client.client.create_order(order_args, options)
-                return self._client.client.post_order(signed, OrderType.FOK)
+                signed = clob.create_order(order_args, options)
+                return clob.post_order(signed, OrderType.FOK)
 
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_sell)
