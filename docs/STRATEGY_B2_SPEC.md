@@ -311,16 +311,75 @@ research/
 └── download_crypto_price_history.py # Data downloader
 ```
 
-## 13. Otevřené Otázky
+## 13. Detailní Analýza Crypto Price Markets (Live Research 2026-03-26)
 
-1. **Které kryptoměny?** BTC je nejlikvidnější. ETH a SOL mají taky dobrou likviditu. Začít jen s BTC?
-2. **Denní vs týdenní expirace?** Denní = víc obratů ale kratší edge window. Týdenní = delší hold ale větší nejistota.
-3. **Volatility model**: Realized vol (jednoduchý) vs GARCH (sofistikovanější) vs implied vol z options?
-4. **Korelace s DeFi**: Polymarket sám běží na Polygon → korelace s crypto sentimentem?
-5. **Competice**: Kdo jiný traduje crypto price markets? HFT firmy? Nebo retail?
+Kompletní analýza: `research/crypto_price_markets_analysis.md`
+
+### Typy Trhů
+
+| Typ | Formát | Resolution | Fee | Frekvence |
+|-----|--------|-----------|-----|-----------|
+| **Daily "Above"** | "BTC above $68K on March 27, 12PM ET?" | Binance 1m candle Close | Crypto (maker 0%) | Denní, 11 bucketů |
+| **Monthly "Hit"** | "What price will BTC hit in March?" | ANY Binance 1m candle touch | **0% fee** | Měsíční, 14-20 bucketů |
+| **5min Up/Down** | "BTC Up or Down 10:00-10:05 ET?" | Binance 1m candle | Crypto fees | Každých 5 min |
+| **15min Up/Down** | "ETH Up or Down 10:00-10:15 ET?" | Binance 1m candle | Crypto fees | Každých 15 min |
+
+### KRITICKÉ: NEJSOU NegRisk!
+Crypto price markets jsou **nezávislé binární** markety, NE multi-outcome NegRisk.
+- Každý bucket ("BTC above $68K?") je samostatný YES/NO market
+- Žádný NegRisk adapter, standardní CTF Exchange
+- **Pricing je přímočarý** — bid/ask přímo z orderbooku (ne /price endpoint)
+- Odpadá NegRisk confusion z C2 live (BUY@SELL price atd.)
+
+### Likvidita per Asset (Live Data)
+
+| Asset | Daily Volume | Liquidity | Spread (ATM) | Monthly Vol | Viable? |
+|-------|-------------|-----------|--------------|-------------|---------|
+| **BTC** | **$1.19M** | **$469K** | **1-2c** | **$81.5M** | **Hlavní target** |
+| **ETH** | **$518K** | ~$200K | 2-3c | $16.2M | Sekundární |
+| SOL | $36K | ~$10K | 50c+ | — | Excluded |
+| XRP | $33K | ~$8K | 50c+ | — | Excluded |
+
+### Fee Model
+```
+fee = price × (1 - price) × 0.25
+```
+- Max: 6.25c při price=0.50
+- **Maker (PostOnly): 0% fee + 20% rebate z taker fees!**
+- Taker: platí fee
+- **Strategie: PostOnly orders pro entry, taker jen pro urgentní exit**
+
+### BTC Daily Bucket Struktura (March 27)
+
+| Threshold | Prob | Spread | Volume | Sweet Spot? |
+|-----------|------|--------|--------|-------------|
+| $60,000 | ~100% | ~0 | $376K | Ne (no edge) |
+| $68,000 | 75% | ~1c | $54K | **Ano** |
+| $70,000 | 31% | ~1c | $46K | **Ano** |
+| $72,000 | 5% | ~1c | $53K | **Ano** |
+| $80,000 | <1% | ~0 | $69K | Ne (longshot) |
+
+**Sweet spot: buckety s prob 20-80%** — tight spread + dostatečná likvidita.
+
+### Monthly "Hit" — Zero Fee Opportunity
+- "What price will BTC hit in March?" — 14-20 thresholds
+- **$0 fee** na vše (entry i exit)
+- Volume: $81.5M (masivní)
+- Model: barrier option pricing — P(max(BTC_t) >= K)
+- **Potenciálně nejprofitabilnější** díky zero fee a obrovské likviditě
+
+## 14. Otevřené Otázky (Answered + New)
+
+1. ~~Které kryptoměny?~~ → **BTC primary, ETH secondary, SOL/XRP excluded**
+2. ~~Denní vs týdenní?~~ → **Daily "Above" (hlavní) + Monthly "Hit" (zero fee bonus)**
+3. **PostOnly vs taker**: PostOnly = 0% fee + rebate. Entry PostOnly (čekat na fill), exit taker (urgentní)?
+4. **Non-NegRisk execution**: Standardní orderbook — BUY at ask, SELL at bid. Jednodušší než C2.
+5. **Barrier option model** pro monthly "hit" — jiný přístup než simple CDF
+6. **5min/15min markets**: Potenciální HFT příležitost — vyžaduje sub-second execution
 
 ---
 
-*Tento dokument slouží jako referenční specifikace pro implementaci Strategy B2.
-Všechny poznatky z C2 live tradingu (NegRisk pricing, fill handling, exit logic)
-jsou přímo aplikovatelné a zdokumentované výše.*
+*Referenční specifikace pro implementaci Strategy B2.
+Poznatky z C2 live (fill handling, exit logic) přímo aplikovatelné.
+Crypto markets NEJSOU NegRisk — jednodušší execution model.
+V další session: `docs/STRATEGY_B2_SPEC.md` + `research/crypto_price_markets_analysis.md`*
