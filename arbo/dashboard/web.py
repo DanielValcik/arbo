@@ -354,6 +354,21 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     s["total_value"] = round(
                         realized_at_time + (s["unrealized_pnl"] or 0.0), 2
                     )
+
+                # Append live "now" point so chart always shows current P&L
+                now_realized = cumulative[-1] if cumulative else 0.0
+                now_unrealized = 0.0
+                if engine:
+                    pos_dict = getattr(engine, "_positions", None) or {}
+                    for pos in pos_dict.values():
+                        now_unrealized += _dec(getattr(pos, "unrealized_pnl", 0)) or 0.0
+                snapshots.append({
+                    "balance": 0.0,
+                    "total_value": round(now_realized + now_unrealized, 2),
+                    "unrealized_pnl": round(now_unrealized, 2),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                })
+
     except Exception as e:
         logger.warning("portfolio_query_error", error=str(e))
 
