@@ -104,9 +104,26 @@ class StrategyC2:
         self._open_positions: dict[str, dict[str, Any]] = {}
 
     async def init(self) -> None:
-        """Initialize C2 with own weather clients."""
+        """Initialize C2 with own weather clients + restore open positions."""
         self._noaa = NOAAWeatherClient()
         self._openmeteo = OpenMeteoWeatherClient()
+
+        # Restore open position tracking from paper engine (survives restarts)
+        if self._paper_engine:
+            for pos in self._paper_engine.open_positions:
+                if getattr(pos, "strategy", "") != "C2":
+                    continue
+                td = self._paper_engine.get_trade_details(pos.token_id)
+                if td:
+                    self._open_positions[pos.token_id] = {
+                        "entry_price": float(pos.avg_price),
+                        "entry_edge": float(td.get("edge_at_scan", 0)),
+                        "entry_prob": td.get("forecast_prob", 0),
+                        "city": td.get("city", ""),
+                        "entry_ts": str(pos.opened_at),
+                        "signal": None,  # Can't restore full signal, but exit checks work without it
+                    }
+
         logger.info(
             "strategy_c2_initialized",
             min_hold_edge=MIN_HOLD_EDGE,
@@ -114,6 +131,7 @@ class StrategyC2:
             emos_window=EMOS_TRAINING_WINDOW,
             emos_sigma_method=EMOS_SIGMA_METHOD,
             independent=True,
+            restored_positions=len(self._open_positions),
         )
 
     async def close(self) -> None:
@@ -433,13 +451,10 @@ class StrategyC2:
 
             entry_price = pos_data["entry_price"]
             city = pos_data["city"]
-            signal: WeatherSignal = pos_data.get("signal")
-            if signal is None:
-                continue
-
+            signal: WeatherSignal | None = pos_data.get("signal")
             price_f = float(current_price)
 
-            # Profit take: exit if price rose enough
+            # Profit take: exit if price rose enough (no signal needed)
             if price_f >= entry_price + PROFIT_TARGET_ABS:
                 logger.info(
                     "c2_exit_profit_take",
@@ -454,11 +469,12 @@ class StrategyC2:
                 continue
 
             # Edge-based exit: recompute probability with latest forecast
-            city_enum = signal.market.city
+            # (requires signal with market info; skip if restored from DB without signal)
+            city_enum = signal.market.city if signal else None
             if city_enum and city_enum in forecasts:
                 forecast = forecasts[city_enum]
-                daily = forecast.get_forecast_for_date(signal.market.target_date)
-                bucket = getattr(signal.market, "bucket", None)
+                daily = forecast.get_forecast_for_date(signal.market.target_date) if signal else None
+                bucket = getattr(signal.market, "bucket", None) if signal else None
                 if daily is not None and bucket is not None:
                     updated_prob = estimate_bucket_probability(
                         daily,
