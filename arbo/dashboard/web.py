@@ -345,17 +345,14 @@ async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, 
                     running += pnl
                     cumulative.append(running)
 
-                # For each snapshot, find cumulative realized P&L at that time
-                # C2 added on 2026-03-26: before that, init capital was $2000
-                init_before_c2 = (initial or 0.0) - 1000.0  # $3000 - $1000 C2
-                c2_start = "2026-03-26T00:00:00"
+                # For each snapshot, compute cumulative P&L (realized + unrealized)
+                # This is capital-agnostic — no jumps when adding strategies
                 for s in snapshots:
                     ts = s["timestamp"] or ""
-                    init = (initial or 0.0) if ts >= c2_start else init_before_c2
                     idx = bisect.bisect_right(trade_times, ts) - 1
                     realized_at_time = cumulative[idx] if idx >= 0 else 0.0
                     s["total_value"] = round(
-                        init + realized_at_time + (s["unrealized_pnl"] or 0.0), 2
+                        realized_at_time + (s["unrealized_pnl"] or 0.0), 2
                     )
     except Exception as e:
         logger.warning("portfolio_query_error", error=str(e))
