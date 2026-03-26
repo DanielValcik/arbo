@@ -1,7 +1,7 @@
 # C2 Live Trading Spec — EMOS Exit Fusion
 
-> Deployment plan for transitioning Strategy C2 from paper to live trading.
-> Initial phase: $100 capital, full monitoring, kill switch at 25% weekly DD.
+> LIVE since 2026-03-26. Dublin VPS (eu-west-1). $557 capital.
+> Updated with real-world observations from first live trading day.
 
 ## 1. Overview
 
@@ -227,38 +227,82 @@ Accessible via tab switch (Paper | Live). Shows ONLY C2 live data.
 2. Automated daily summary: trades, P&L, friction, fill rate
 3. Weekly comparison report: paper C2 vs live C2
 
-## 8. Go-Live Checklist
+## 8. Go-Live Checklist (COMPLETED 2026-03-26)
 
-- [ ] py-clob-client configured with L1+L2 auth keys
-- [ ] USDC.e funded on Polygon wallet ($100 + $5 gas reserve)
-- [ ] CTF Exchange approval (one-time approve tx)
-- [ ] NegRisk adapter approval (for weather markets)
-- [ ] Live executor tested with $1 test trade
-- [ ] Kill switch verified (manual /kill command)
-- [ ] Slack alerts configured
-- [ ] Dashboard live tab working
-- [ ] Gas monitoring in place
-- [ ] Paper C2 continues running alongside for comparison
+- [x] py-clob-client configured with L1+L2 auth keys (derive on startup)
+- [x] USDC.e funded ($557 on Polymarket proxy wallet)
+- [x] CTF Exchange + NegRisk approvals (done by Polymarket UI deposit)
+- [x] Live executor tested ($5 BUY→SELL cycle: BUY 13 shares matched, SELL 7 matched)
+- [x] Slack alerts to C0AP2QLLM2N (live entry + exit notifications)
+- [x] Dashboard LIVE C2 tab
+- [x] Gas: $0 (Polymarket gasless relay — confirmed)
+- [x] Paper C2 running alongside on same VPS
+- [x] Dublin VPS (eu-west-1) — no geo-block
 
-## 9. Success Criteria (First Week)
+## 9. Real-World Observations (First Day)
+
+### NegRisk Pricing (CRITICAL)
+- `/price?side=BUY` = maker bid (NOT what you pay to buy)
+- `/price?side=SELL` = maker ask (what you pay to buy as taker)
+- **BUY order**: submit at SELL price → instant match
+- **SELL order**: submit at BUY price → instant match
+- Inverted from intuition. Confirmed by live test.
+
+### Fill Rates
+- Full fill: rare on weather markets (only on liquid buckets)
+- Partial fill: typical 8-53% per order
+- Zero fill: common on illiquid buckets (Dallas, some Chicago)
+- GTC orders that don't fill → MUST cancel remainder immediately
+- Lambda closure bug caused orphan orders (fixed)
+
+### Liquidity Windows
+- **Peak 1: 8-10 UTC** — new daily markets, MMs replenish orderbooks
+- **Peak 2: 15-17 UTC** — US market open, American liquidity
+- **Dead: 18-07 UTC** — minimal fills expected
+
+### Spread (Paper vs Live)
+- Paper buys at BUY price ($0.03), live pays SELL price ($0.048) = 60% higher
+- This spread is the real cost of instant taker fills
+- Example: paper P&L +$5, live P&L +$2.35 on same trade (53% worse)
+
+### Bugs Found & Fixed
+1. prob_floor=0.10 triggered instant exit on all entries ($0.03-0.08 < $0.10) → disabled
+2. Buy+sell on same token simultaneously → entry checks pending_exits
+3. Lambda closure in cancel → stale order_id → orphan orders in book
+4. L2 creds from config → invalid signature → always derive on startup
+5. NegRisk pricing inverted → tested empirically, corrected
+
+### ExitManager (Persistent Sell-Down)
+- Phase 1 (0-5 min): taker sell every 60s at BUY price
+- Phase 2 (5+ min): maker sell at BUY + 1 tick, wait 5 min, reprice
+- Never holds to resolution — keeps trying until all shares sold
+- Tracks actual shares via Polymarket Data API
+
+## 10. Success Criteria (Updated for Reality)
 
 | Metric | Target | Abort If |
 |--------|--------|----------|
-| Fill rate | > 80% | < 50% |
-| Live vs paper P&L gap | < 30% | > 50% |
-| Avg slippage per trade | < $0.50 | > $2.00 |
-| Gas per round-trip | < $0.02 | > $0.10 |
-| Win rate | > 60% | < 30% |
-| Weekly P&L | > $0 | < -$25 |
+| Fill rate (entry) | > 30% | < 10% |
+| Fill rate (exit) | > 20% | < 5% |
+| Live vs paper P&L gap | < 60% | > 80% |
+| Gas per round-trip | $0 | > $0.01 |
+| Win rate | > 50% | < 20% |
+| Weekly P&L | > $0 | < -$140 (25% of $557) |
 
-## 10. Rollback Plan
+## 11. Rollback Plan
 
-If any abort criterion is hit:
-1. Stop C2 live execution (set `execution_mode = "paper"`)
-2. Close all open live positions at market
-3. Paper C2 continues unaffected
-4. Analyze: what went wrong? Slippage? Gas? Fill rate? Model?
-5. Fix and re-deploy when resolved
+```bash
+# Emergency stop:
+ssh arbo-dublin 'sudo sed -i "s/C2_EXECUTION_MODE=live/C2_EXECUTION_MODE=paper/" /opt/arbo/.env && sudo systemctl restart arbo'
 
-Live C2 is designed to be **additive** — paper C2 runs in parallel at all times.
-If live fails, paper data is unaffected and we lose max $25 (kill switch).
+# Cancel all open orders:
+ssh arbo-dublin 'cd /opt/arbo && sudo -u arbo .venv/bin/python3 -c "
+from py_clob_client.client import ClobClient; import os
+from dotenv import load_dotenv; load_dotenv()
+c = ClobClient(host=\"https://clob.polymarket.com\", chain_id=137, key=os.getenv(\"POLY_PRIVATE_KEY\"), signature_type=2, funder=os.getenv(\"POLY_FUNDER_ADDRESS\"))
+c.set_api_creds(c.create_or_derive_api_creds())
+print(c.cancel_all())
+"'
+```
+
+Paper C2 continues unaffected. Positions resolve via METAR if not sold.
