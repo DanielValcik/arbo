@@ -122,7 +122,8 @@ class LiveExecutor:
         # Fetch real taker price: SELL price = what we pay to buy as taker
         taker_price = price  # Default to strategy price
         logger.info("live_buy_start", paper_price=price, neg_risk=neg_risk, token=token_id[:20])
-        if neg_risk and self._poly_client:
+        # Always fetch taker price — weather markets are always NegRisk even if flag is wrong
+        if self._poly_client:
             try:
                 sell_price = await self._poly_client.get_price(token_id, "SELL")
                 taker_price = float(sell_price)
@@ -229,7 +230,7 @@ class LiveExecutor:
         loop = asyncio.get_event_loop()
 
         # Fetch real taker price: BUY price = what buyers bid = what we get as seller
-        if neg_risk:
+        if self._poly_client:
             try:
                 taker_price = float(await self._poly_client.get_price(token_id, "BUY"))
                 logger.info("live_sell_taker_price", paper_price=price, taker_price=taker_price)
