@@ -122,13 +122,11 @@ class LiveExecutor:
         # Fetch real taker price: SELL price = what we pay to buy as taker
         if neg_risk:
             try:
-                raw = await loop.run_in_executor(
-                    None, lambda: clob.get_price(token_id, "SELL")
-                )
-                taker_price = float(raw.get("price", price) if isinstance(raw, dict) else raw)
+                taker_price = float(await self._poly_client.get_price(token_id, "SELL"))
                 logger.info("live_buy_taker_price", paper_price=price, taker_price=taker_price)
-            except Exception:
-                taker_price = price  # Fallback to strategy price
+            except Exception as e:
+                logger.warning("live_buy_taker_price_failed", error=str(e))
+                taker_price = price
         else:
             taker_price = price
 
@@ -233,12 +231,10 @@ class LiveExecutor:
         # Fetch real taker price: BUY price = what buyers bid = what we get as seller
         if neg_risk:
             try:
-                raw = await loop.run_in_executor(
-                    None, lambda: clob.get_price(token_id, "BUY")
-                )
-                taker_price = float(raw.get("price", price) if isinstance(raw, dict) else raw)
+                taker_price = float(await self._poly_client.get_price(token_id, "BUY"))
                 logger.info("live_sell_taker_price", paper_price=price, taker_price=taker_price)
-            except Exception:
+            except Exception as e:
+                logger.warning("live_sell_taker_price_failed", error=str(e))
                 taker_price = price
         else:
             taker_price = price
