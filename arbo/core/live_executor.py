@@ -35,8 +35,8 @@ logger = get_logger("live_executor")
 
 UTC = timezone.utc
 MIN_ORDER_USD = 1.5
-MAKER_FILL_TIMEOUT_ENTRY_S = 180  # 3 min for entry (patient)
-MAKER_FILL_TIMEOUT_EXIT_S = 120  # 2 min for exit (then fallback to taker)
+MAKER_FILL_TIMEOUT_ENTRY_S = 30  # 30s for entry (keep poll loop fast)
+MAKER_FILL_TIMEOUT_EXIT_S = 30  # 30s for exit (then fallback to taker)
 FILL_POLL_INTERVAL_S = 5  # Check fill every 5s
 MAX_SPREAD_PCT = 0.20  # Skip if spread > 20% of mid
 DATA_API = "https://data-api.polymarket.com"
