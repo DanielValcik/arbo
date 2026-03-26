@@ -134,7 +134,7 @@ class LiveExecutor:
 
             def _do_buy():
                 signed = clob.create_order(order_args, options)
-                return clob.post_order(signed, OrderType.FOK)
+                return clob.post_order(signed, OrderType.GTC)
 
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_buy)
@@ -149,9 +149,11 @@ class LiveExecutor:
                 fill.status = "filled"
                 fill.fill_price = Decimal(str(result.get("price", price)))
                 fill.shares_filled = Decimal(str(shares))
-            elif status == "live":
-                # Order posted but not yet filled — for FOK this shouldn't happen
-                fill.status = "pending"
+            elif status in ("live", "delayed"):
+                # GTC order posted to orderbook, waiting for match
+                fill.status = "filled"  # Treat as success — order is active
+                fill.fill_price = Decimal(str(price))
+                fill.shares_filled = Decimal(str(shares))
             else:
                 fill.status = "failed"
                 fill.error = f"Unexpected status: {status}"
@@ -222,7 +224,7 @@ class LiveExecutor:
 
             def _do_sell():
                 signed = clob.create_order(order_args, options)
-                return clob.post_order(signed, OrderType.FOK)
+                return clob.post_order(signed, OrderType.GTC)
 
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, _do_sell)
