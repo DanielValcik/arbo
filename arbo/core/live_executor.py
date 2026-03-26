@@ -229,11 +229,13 @@ class LiveExecutor:
 
         sell_shares = actual  # Sell all owned
 
-        # Get taker price (BUY price = what buyers bid)
+        # Get taker SELL price — for NegRisk, SELL at SELL price (not BUY!)
+        # "crosses the book" error means price was inverted
+        # /price?side=SELL = ask price = our sell fills against this
         taker_price = price
         try:
-            buy_price = await self._poly_client.get_price(token_id, "BUY")
-            taker_price = float(buy_price)
+            sell_price = await self._poly_client.get_price(token_id, "SELL")
+            taker_price = float(sell_price)
             logger.info("live_sell_price", paper=price, taker=taker_price, token=token_id[:20])
         except Exception as e:
             logger.warning("live_sell_price_failed", error=str(e))
