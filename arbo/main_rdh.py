@@ -257,9 +257,6 @@ class RDHOrchestrator:
         # Strategy C: Compound Weather
         self._strategy_c = await self._init_optional("StrategyC", self._init_strategy_c)
 
-        # Strategy C2: EMOS + Edge Exit Fusion (weather variant)
-        self._strategy_c2 = await self._init_optional("StrategyC2", self._init_strategy_c2)
-
         # Reports
         self._report_generator = await self._init_optional(
             "ReportGenerator", self._init_report_generator
@@ -274,7 +271,7 @@ class RDHOrchestrator:
         # Web dashboard
         self._web_dashboard = await self._init_optional("WebDashboard", self._init_web_dashboard)
 
-        # Restore paper engine state from DB
+        # Restore paper engine state from DB (BEFORE C2 init — C2 needs open positions)
         if self._paper_engine is not None:
             try:
                 await self._paper_engine.load_state_from_db()
@@ -283,6 +280,9 @@ class RDHOrchestrator:
 
         # Sync risk manager state from restored positions
         self._sync_risk_from_positions()
+
+        # Strategy C2: EMOS + Edge Exit Fusion (AFTER load_state_from_db so it can restore positions)
+        self._strategy_c2 = await self._init_optional("StrategyC2", self._init_strategy_c2)
 
         # Restore realized P&L from DB into risk manager
         await self._restore_pnl_from_db()
