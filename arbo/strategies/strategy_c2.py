@@ -279,6 +279,11 @@ class StrategyC2:
             }:
                 continue
 
+            # Don't buy token that's being exited (ExitManager pending)
+            if hasattr(self, "_exit_manager_ref") and self._exit_manager_ref:
+                if token_id in self._exit_manager_ref.pending_exits:
+                    continue
+
             gamma_price = Decimal(str(sig.market.market_price))
             execution_price = gamma_price
             clob_fill: Decimal | None = None

@@ -456,6 +456,9 @@ class RDHOrchestrator:
             else:
                 logger.warning("c2_live_executor_no_client", msg="Falling back to paper mode")
                 execution_mode = "paper"
+                self._exit_manager = None
+        else:
+            self._exit_manager = None
 
         s = StrategyC2(
             risk_manager=self._risk_manager,
@@ -466,6 +469,11 @@ class RDHOrchestrator:
             live_executor=live_executor,
         )
         await s.init()
+
+        # Give C2 reference to exit manager (prevents buying tokens being exited)
+        if self._exit_manager:
+            s._exit_manager_ref = self._exit_manager
+
         return s
 
     async def _init_gefs_background(self) -> None:

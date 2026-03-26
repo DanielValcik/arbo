@@ -47,7 +47,7 @@ EMOS_EWMA_ALPHA = 0.15
 EXIT_ENABLED = True
 MIN_HOLD_EDGE = 0.05          # Exit when EMOS-computed edge < 5%
 EXIT_SLIPPAGE_PCT = 0.06      # 6% slippage on exit sell (real weather market median ~7%)
-PROB_EXIT_FLOOR = 0.10        # Also exit when prob < 10%
+PROB_EXIT_FLOOR = 0.0         # Disabled — C2 buys tokens at $0.03-0.08, all below old floor $0.10
 PROFIT_TAKE_ALSO = True       # Also trigger profit take at absolute target
 PROFIT_TARGET_ABS = 0.15      # +$0.15 above entry → take profit
 
