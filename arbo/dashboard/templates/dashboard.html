@@ -1774,7 +1774,10 @@
             return;
         }
         tbody.innerHTML = filtered.map(t => {
-            const statusColor = t.status === 'won' ? 'var(--green)' : 'var(--red)';
+            const isSold = t.status === 'sold';
+            const displayStatus = isSold ? ((t.actual_pnl || 0) >= 0 ? 'WON' : 'LOST') : t.status.toUpperCase();
+            const statusColor = (t.status === 'won' || (isSold && (t.actual_pnl || 0) >= 0)) ? 'var(--green)' : 'var(--red)';
+            const exitTag = isSold ? ` <span style="font-size:9px;color:var(--text-dim)">(exit)</span>` : '';
             return `
                 <tr>
                     <td>${t.id}</td>
@@ -1783,7 +1786,7 @@
                     <td>${t.side}</td>
                     <td>$${(t.size || 0).toFixed(2)}</td>
                     <td>${(t.price || 0).toFixed(4)}</td>
-                    <td style="color:${statusColor};font-weight:600">${t.status.toUpperCase()}</td>
+                    <td style="color:${statusColor};font-weight:600">${displayStatus}${exitTag}</td>
                     <td class="${pnlClass(t.actual_pnl)}">${fmtPnl(t.actual_pnl)}</td>
                     <td>${fmtTime(t.resolved_at)}</td>
                 </tr>`;
@@ -2090,8 +2093,9 @@
             return;
         }
         tbody.innerHTML = filtered.map(t => {
-            const statusColor = t.status === 'won' ? 'var(--green)' :
-                               t.status === 'lost' ? 'var(--red)' :
+            const isSold = t.status === 'sold';
+            const statusColor = (t.status === 'won' || (isSold && (t.actual_pnl || 0) >= 0)) ? 'var(--green)' :
+                               (t.status === 'lost' || (isSold && (t.actual_pnl || 0) < 0)) ? 'var(--red)' :
                                t.status === 'open' ? 'var(--blue)' : 'var(--text-dim)';
             return `
                 <tr>
@@ -2102,7 +2106,7 @@
                     <td>${(t.price || 0).toFixed(4)}</td>
                     <td>$${(t.size || 0).toFixed(2)}</td>
                     <td>${t.edge !== null ? (t.edge * 100).toFixed(1) + '%' : '--'}</td>
-                    <td style="color:${statusColor}">${t.status}</td>
+                    <td style="color:${statusColor}">${isSold ? ((t.actual_pnl || 0) >= 0 ? 'won' : 'lost') + ' (exit)' : t.status}</td>
                     <td class="${pnlClass(t.actual_pnl)}">${fmtPnl(t.actual_pnl)}</td>
                     <td>${fmtTime(t.placed_at)}</td>
                 </tr>`;
