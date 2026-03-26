@@ -1,0 +1,129 @@
+
+======================================================================
+EMOS AUTORESEARCH SWEEP
+
+======================================================================
+EMOS AUTORESEARCH SWEEP
+Events: 1716, Start: 2026-03-16T17:14:21.788099
+Training obs per city: ankara=51, atlanta=96, buenos_aires=98, chicago=51, dallas=99, london=400, lucknow=9, miami=51, munich=9, nyc=392, paris=27, sao_paulo=27, seattle=96, seoul=98, tel_aviv=4, tokyo=4, toronto=98, wellington=49
+======================================================================
+
+Running baseline (AR-0134 params) for comparison...
+  Baseline: score=0.00  trades=634  PnL=$123.48  Sharpe=0.03
+
+Phase 1: Random Search (600 trials)
+--------------------------------------------------
+  Trial   0: score=   -0.00  trades=549  WR= 12.2%  PnL=$ -980.42  DD=99.63%  sigma=1.59  ★ NEW BEST
+  Trial   1: score= 2083.10  trades= 76  WR= 46.1%  PnL=$16921.94  DD=22.38%  sigma=1.85  ★ NEW BEST
+  Trial   2: score= 9501.01  trades=328  WR= 26.5%  PnL=$407783.46  DD=40.92%  sigma=1.73  ★ NEW BEST
+  Trial  28: score=32049.46  trades=925  WR= 35.6%  PnL=$1661660.92  DD=39.67%  sigma=0.94  ★ NEW BEST
+  Trial  42: score=208096.10  trades=315  WR= 28.3%  PnL=$4170339.79  DD=34.46%  sigma=2.20  ★ NEW BEST
+  Trial  59: score=358493.57  trades=899  WR= 20.2%  PnL=$105719606.54  DD=46.87%  sigma=1.57  ★ NEW BEST
+  Trial  71: score=2694032.16  trades=242  WR= 35.5%  PnL=$83171750.88  DD=40.32%  sigma=2.08  ★ NEW BEST
+  ... 100/600 done, best score: 2694032.16
+  ... 200/600 done, best score: 2694032.16
+  ... 300/600 done, best score: 2694032.16
+  ... 400/600 done, best score: 2694032.16
+  Trial 443: score=27110025.86  trades=314  WR= 30.6%  PnL=$2210668752.59  DD=43.50%  sigma=1.82  ★ NEW BEST
+  ... 500/600 done, best score: 27110025.86
+  ... 600/600 done, best score: 27110025.86
+
+Phase 2: Fine-tuning (400 trials around top 10)
+--------------------------------------------------
+  Top 10 scores: [27110025.86, 2694032.16, 1936852.99, 1244389.04, 1013001.62, 892622.32, 830991.45, 491054.97, 442122.49, 436294.14]
+  ... 100/400 done, best score: 27110025.86
+  ... 200/400 done, best score: 27110025.86
+  Trial 860: score=63718872.38  trades=314  PnL=$5037591258.36  sigma=1.81  ★ NEW BEST
+  ... 300/400 done, best score: 63718872.38
+  ... 400/400 done, best score: 63718872.38
+
+Phase 3: City optimization (200 trials)
+--------------------------------------------------
+  Losing cities: ['tel_aviv', 'lucknow', 'ankara', 'wellington', 'chicago', 'miami']
+  Winning cities: ['munich', 'seattle', 'seoul', 'paris', 'toronto', 'london', 'nyc', 'buenos_aires', 'atlanta', 'dallas', 'sao_paulo']
+  Trial 1000: score=200095994.02  trades=291  PnL=$7271227390.03  excluded=['miami', 'tel_aviv', 'ankara', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1002: score=254132565.34  trades=277  PnL=$4952717283.10  excluded=['wellington', 'lucknow', 'miami', 'ankara']  ★ NEW BEST
+  Trial 1003: score=289760041.36  trades=273  PnL=$5427249925.10  excluded=['miami', 'wellington', 'ankara', 'tel_aviv', 'chicago']  ★ NEW BEST
+  Trial 1005: score=308319512.51  trades=272  PnL=$5712894710.86  excluded=['wellington', 'miami', 'ankara', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1012: score=387530893.02  trades=282  PnL=$6739506475.17  excluded=['wellington', 'chicago', 'miami', 'tel_aviv']  ★ NEW BEST
+  Trial 1016: score=436273138.23  trades=300  PnL=$9029339720.19  excluded=['miami', 'tel_aviv', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1049: score=493545728.73  trades=280  PnL=$7467597310.48  excluded=['miami', 'wellington', 'tel_aviv', 'chicago', 'lucknow']  ★ NEW BEST
+  ... 50/200 done, best score: 493545728.73
+  Trial 1061: score=525509470.59  trades=276  PnL=$6801811264.14  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1062: score=593267041.68  trades=273  PnL=$7643347461.66  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1063: score=604857786.43  trades=279  PnL=$7818028424.24  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1064: score=614515858.71  trades=278  PnL=$7925749941.45  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1065: score=655348561.11  trades=283  PnL=$8452309875.24  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1073: score=678242793.13  trades=278  PnL=$8747669867.09  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1075: score=702580817.00  trades=276  PnL=$8656366873.41  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1090: score=711536701.17  trades=284  PnL=$8813549974.11  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1094: score=729542665.09  trades=285  PnL=$9045998552.79  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  ... 100/200 done, best score: 729542665.09
+  Trial 1101: score=2461903934.95  trades=298  PnL=$30812753159.60  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1102: score=2694305287.97  trades=300  PnL=$33584858058.47  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1104: score=24560064501.22  trades=333  PnL=$1355652034684.31  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1106: score=27710333575.59  trades=327  PnL=$1324796530397.38  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1110: score=74473674259.97  trades=347  PnL=$1931416739301.38  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1111: score=88647669530.14  trades=351  PnL=$2279183840805.60  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  Trial 1139: score=188527373328.01  trades=385  PnL=$10504905892895.50  excluded=['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']  ★ NEW BEST
+  ... 150/200 done, best score: 188527373328.01
+  ... 200/200 done, best score: 188527373328.01
+
+======================================================================
+EMOS SWEEP COMPLETE — 7.0 minutes
+======================================================================
+
+  ┌─ BASELINE (fixed sigma, AR-0134 params) ─┐
+  │ Score: 0.00  Trades: 634  PnL: $123.48  │
+  └──────────────────────────────────────────┘
+
+  ┌─ BEST EMOS ─────────────────────────────┐
+  │ Score: 188527373328.01  Trades: 385  PnL: $10504905892895.50  │
+  └──────────────────────────────────────────┘
+
+  EMOS vs Baseline delta: score +188527373328.01, PnL +$10504905892772.02
+
+  Best EMOS parameters:
+    --- EMOS model ---
+    emos_training_window: 56
+    emos_sigma_method: rolling_mae
+    emos_bias_method: ewma
+    emos_sigma_floor: 0.6
+    emos_sigma_scale: 1.1
+    emos_ewma_alpha: 0.15
+    avg_sigma (fitted): 1.736
+    avg_n_obs (training): 42.8
+    --- Quality gate ---
+    min_edge: 0.08
+    max_price: 0.45
+    min_price: 0.01
+    min_prob: 0.25
+    min_volume: 0
+    kelly_raw_cap: 0.2
+    prob_sharpening: 1.2
+    shrinkage: 0
+    excluded_cities: ['tel_aviv', 'wellington', 'ankara', 'miami', 'chicago', 'lucknow']
+    city_overrides: {'atlanta': {'max_price': 0.8, 'min_edge': 0.03}, 'paris': {'max_price': 0.55, 'min_edge': 0.05}, 'seattle': {'max_price': 0.8, 'min_edge': 0.05}, 'sao_paulo': {'max_price': 0.7, 'min_edge': 0.01}, 'nyc': {'max_price': 0.7, 'min_edge': 0.01}, 'london': {'max_price': 0.7, 'min_edge': 0.01}, 'munich': {'max_price': 0.7, 'min_edge': 0.02}, 'toronto': {'max_price': 0.6, 'min_edge': 0.03}, 'dallas': {'max_price': 0.8, 'min_edge': 0.01}, 'buenos_aires': {'max_price': 0.55, 'min_edge': 0.01}, 'seoul': {'max_price': 0.55, 'min_edge': 0.03}}
+
+  Per-city PnL (EMOS best):
+    munich           $5411453942376.12  (7 trades)
+    seattle          $2023460915722.09  (38 trades)
+    seoul            $1808450422169.16  (34 trades)
+    paris            $973626065065.58  (7 trades)
+    toronto          $525102939780.04  (32 trades)
+    london           $173285086097.06  (102 trades)
+    buenos_aires     $76679589457.39  (11 trades)
+    atlanta          $39082441004.63  (27 trades)
+    sao_paulo        $1208529437.98  (3 trades)
+    dallas           $371326899.16  (18 trades)
+    nyc              $-527815365113.71  (106 trades)
+
+  Top 5 EMOS results:
+    #1: score=188527373328.01  trades=385  WR=34.5%  PnL=$10504905892895.50  sigma=1.74  (trial 1139, phase 3)
+    #2: score=188527373328.01  trades=385  WR=34.5%  PnL=$10504905892895.50  sigma=1.74  (trial 1141, phase 3)
+    #3: score=160820012931.80  trades=387  WR=34.4%  PnL=$10021999272562.89  sigma=1.73  (trial 1143, phase 3)
+    #4: score=88647669530.14  trades=351  WR=33.3%  PnL=$2279183840805.60  sigma=1.98  (trial 1111, phase 3)
+    #5: score=88647669530.14  trades=351  WR=33.3%  PnL=$2279183840805.60  sigma=1.98  (trial 1117, phase 3)
+
+  Results saved to: /Users/dnl.vlck/Arbo/research/data/sweep_emos_results.json
+  Log saved to: /Users/dnl.vlck/Arbo/research/sweep_emos_log.txt

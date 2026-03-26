@@ -1,0 +1,161 @@
+
+======================================================================
+EMOS V4 TARGETED — Shrinkage A/B Test
+Events: 1281, 2026-03-17T15:44:35.356700
+All params locked to V3 best. Only shrinkage varies.
+======================================================================
+
+==================================================
+V3 REFERENCE (no shrinkage, no exposure cap)
+
+  v3_reference:
+    Score: 130.9  Trades: 136  WR: 39.0%
+    PnL: $11,886.08  DD: 21.4%  Sharpe: 6.87
+    Util: 47.1%  Concurrent: 0.6
+    Turnover: 3.4  PnL/hour: $3.64
+    Max city: munich = 49.2% of PnL (13 trades)
+    WF OOS: score=77.4  PnL=$1132.04
+      Fold 1: PnL=$58.37  trades=34  WR=32.4%  util=54.5%
+      Fold 2: PnL=$1696.76  trades=28  WR=50.0%  util=76.6%
+      Fold 3: PnL=$1640.98  trades=23  WR=56.5%  util=60.8%
+    Per-city:
+      munich         $5,849.29  ( 13 tr, WR= 61.5%)   49.2%
+      seoul          $3,279.87  ( 31 tr, WR= 35.5%)   27.6%
+      atlanta        $1,925.95  ( 19 tr, WR= 57.9%)   16.2%
+      nyc            $  755.17  ( 51 tr, WR= 29.4%)    6.4%
+      toronto        $   75.79  ( 22 tr, WR= 36.4%)    0.6%
+
+==================================================
+V4a (k=10, soft shrinkage, NO exposure cap)
+
+  v4a_k10:
+    Score: 147.7  Trades: 177  WR: 38.4%
+    PnL: $111,529.81  DD: 28.9%  Sharpe: 5.26
+    Util: 55.5%  Concurrent: 0.8
+    Turnover: 7.0  PnL/hour: $26.25
+    Max city: munich = 50.5% of PnL (13 trades)
+    WF OOS: score=101.3  PnL=$3258.14
+      Fold 1: PnL=$169.68  trades=47  WR=34.0%  util=68.1%
+      Fold 2: PnL=$3890.29  trades=38  WR=39.5%  util=83.2%
+      Fold 3: PnL=$5714.45  trades=31  WR=54.8%  util=69.4%
+    Per-city:
+      munich         $56,326.58  ( 13 tr, WR= 61.5%)   50.5%
+      seoul          $28,284.55  ( 50 tr, WR= 28.0%)   25.4%
+      atlanta        $16,309.59  ( 29 tr, WR= 69.0%)   14.6%
+      toronto        $9,191.96  ( 26 tr, WR= 34.6%)    8.2%
+      nyc            $1,417.13  ( 59 tr, WR= 28.8%)    1.3%
+
+==================================================
+V4a (k=15, soft shrinkage, NO exposure cap)
+
+  v4a_k15:
+    Score: 147.7  Trades: 177  WR: 38.4%
+    PnL: $111,529.81  DD: 28.9%  Sharpe: 5.26
+    Util: 55.5%  Concurrent: 0.8
+    Turnover: 7.0  PnL/hour: $26.25
+    Max city: munich = 50.5% of PnL (13 trades)
+    WF OOS: score=102.8  PnL=$3348.56
+      Fold 1: PnL=$180.54  trades=46  WR=34.8%  util=68.1%
+      Fold 2: PnL=$3991.28  trades=36  WR=41.7%  util=83.2%
+      Fold 3: PnL=$5873.86  trades=29  WR=58.6%  util=69.4%
+    Per-city:
+      munich         $56,326.58  ( 13 tr, WR= 61.5%)   50.5%
+      seoul          $28,284.55  ( 50 tr, WR= 28.0%)   25.4%
+      atlanta        $16,309.59  ( 29 tr, WR= 69.0%)   14.6%
+      toronto        $9,191.96  ( 26 tr, WR= 34.6%)    8.2%
+      nyc            $1,417.13  ( 59 tr, WR= 28.8%)    1.3%
+
+==================================================
+V4a (k=20, soft shrinkage, NO exposure cap)
+
+  v4a_k20:
+    Score: 147.5  Trades: 175  WR: 37.7%
+    PnL: $101,363.11  DD: 28.9%  Sharpe: 5.25
+    Util: 55.1%  Concurrent: 0.8
+    Turnover: 7.0  PnL/hour: $24.13
+    Max city: munich = 51.8% of PnL (13 trades)
+    WF OOS: score=103.4  PnL=$3188.45
+      Fold 1: PnL=$161.04  trades=44  WR=34.1%  util=65.8%
+      Fold 2: PnL=$4161.22  trades=33  WR=45.5%  util=83.2%
+      Fold 3: PnL=$5243.10  trades=28  WR=57.1%  util=69.4%
+    Per-city:
+      munich         $52,508.09  ( 13 tr, WR= 61.5%)   51.8%
+      seoul          $23,147.83  ( 49 tr, WR= 26.5%)   22.8%
+      atlanta        $15,976.57  ( 28 tr, WR= 67.9%)   15.8%
+      toronto        $8,313.48  ( 26 tr, WR= 34.6%)    8.2%
+      nyc            $1,417.13  ( 59 tr, WR= 28.8%)    1.4%
+
+==================================================
+V4a (k=25, soft shrinkage, NO exposure cap)
+
+  v4a_k25:
+    Score: 147.5  Trades: 174  WR: 37.9%
+    PnL: $102,304.52  DD: 28.2%  Sharpe: 5.26
+    Util: 55.1%  Concurrent: 0.8
+    Turnover: 7.0  PnL/hour: $24.50
+    Max city: munich = 51.8% of PnL (13 trades)
+    WF OOS: score=103.4  PnL=$3188.45
+      Fold 1: PnL=$161.04  trades=44  WR=34.1%  util=65.8%
+      Fold 2: PnL=$4161.22  trades=33  WR=45.5%  util=83.2%
+      Fold 3: PnL=$5243.10  trades=28  WR=57.1%  util=69.4%
+    Per-city:
+      munich         $52,991.02  ( 13 tr, WR= 61.5%)   51.8%
+      seoul          $23,406.30  ( 48 tr, WR= 27.1%)   22.9%
+      atlanta        $16,107.18  ( 28 tr, WR= 67.9%)   15.7%
+      toronto        $8,382.90  ( 26 tr, WR= 34.6%)    8.2%
+      nyc            $1,417.13  ( 59 tr, WR= 28.8%)    1.4%
+
+==================================================
+V4a (k=30, soft shrinkage, NO exposure cap)
+
+  v4a_k30:
+    Score: 147.5  Trades: 174  WR: 37.9%
+    PnL: $102,304.52  DD: 28.2%  Sharpe: 5.26
+    Util: 55.1%  Concurrent: 0.8
+    Turnover: 7.0  PnL/hour: $24.50
+    Max city: munich = 51.8% of PnL (13 trades)
+    WF OOS: score=101.8  PnL=$3059.13
+      Fold 1: PnL=$161.04  trades=44  WR=34.1%  util=65.8%
+      Fold 2: PnL=$3773.24  trades=31  WR=45.2%  util=79.9%
+      Fold 3: PnL=$5243.10  trades=28  WR=57.1%  util=69.4%
+    Per-city:
+      munich         $52,991.02  ( 13 tr, WR= 61.5%)   51.8%
+      seoul          $23,406.30  ( 48 tr, WR= 27.1%)   22.9%
+      atlanta        $16,107.18  ( 28 tr, WR= 67.9%)   15.7%
+      toronto        $8,382.90  ( 26 tr, WR= 34.6%)    8.2%
+      nyc            $1,417.13  ( 59 tr, WR= 28.8%)    1.4%
+
+==================================================
+V4b (NO shrinkage, progressive exposure cap √(n/30) × 25%)
+
+  v4b_expcap:
+    Score: 85.5  Trades: 136  WR: 39.0%
+    PnL: $986.38  DD: 5.7%  Sharpe: 7.42
+    Util: 47.1%  Concurrent: 0.6
+    Turnover: 0.7  PnL/hour: $0.30
+    Max city: munich = 32.4% of PnL (13 trades)
+    WF OOS: score=66.0  PnL=$205.81
+      Fold 1: PnL=$18.69  trades=34  WR=32.4%  util=54.5%
+      Fold 2: PnL=$307.50  trades=28  WR=50.0%  util=76.6%
+      Fold 3: PnL=$291.24  trades=23  WR=56.5%  util=60.8%
+    Per-city:
+      munich         $  319.31  ( 13 tr, WR= 61.5%)   32.4%
+      seoul          $  246.15  ( 31 tr, WR= 35.5%)   25.0%
+      atlanta        $  241.17  ( 19 tr, WR= 57.9%)   24.5%
+      nyc            $  163.04  ( 51 tr, WR= 29.4%)   16.5%
+      toronto        $   16.70  ( 22 tr, WR= 36.4%)    1.7%
+
+======================================================================
+COMPARISON TABLE
+======================================================================
+Variant           Score  Trades     WR        PnL     DD  Sharpe   Util  MaxCity   OOS PnL OOS Score
+----------------------------------------------------------------------------------------------------
+v3                130.9     136  39.0% $11,886.08  21.4%    6.87  47.1%    49.2% $1,132.04      77.4
+v4a_k10           147.7     177  38.4% $111,529.81  28.9%    5.26  55.5%    50.5% $3,258.14     101.3
+v4a_k15           147.7     177  38.4% $111,529.81  28.9%    5.26  55.5%    50.5% $3,348.56     102.8
+v4a_k20           147.5     175  37.7% $101,363.11  28.9%    5.25  55.1%    51.8% $3,188.45     103.4
+v4a_k25           147.5     174  37.9% $102,304.52  28.2%    5.26  55.1%    51.8% $3,188.45     103.4
+v4a_k30           147.5     174  37.9% $102,304.52  28.2%    5.26  55.1%    51.8% $3,059.13     101.8
+v4b                85.5     136  39.0% $   986.38   5.7%    7.42  47.1%    32.4% $  205.81      66.0
+
+Done in 42s. Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_emos_v4_targeted.json

@@ -1,0 +1,109 @@
+[14:47:56] Early Exit Autoresearch — Loading data...
+[14:48:28] Data: 1281 events, 9957 buckets
+[14:48:28] Monkey-patched check_exit() and calc_exit_pnl()
+[14:48:28] 
+=== PHASE 0: BASELINE (hold to resolution) ===
+[14:48:28] Baseline: score=0.0  trades=1278  PnL=$-963  Sharpe=-2.18
+[14:48:28] 
+=== PHASE 1: RANDOM SEARCH (800 trials) ===
+[14:48:28]   ★ NEW BEST: score=61.0  trades=617  WR=40.5%  PnL=$271  Sharpe=1.01  DD=23.9%  exits=263  saves=197  regrets=66
+[14:48:28]     exit=combo tgt=0.08 tr=0.3 act=0.05 slip=0.025 edge≥0.02 p=[0.05,0.4] sharp=1.05 kelly=0.3
+[14:48:28]   ★ NEW BEST: score=70.7  trades=480  WR=44.8%  PnL=$811  Sharpe=1.96  DD=17.8%  exits=209  saves=151  regrets=58
+[14:48:28]     exit=combo tgt=0.04 tr=0.3 act=0.05 slip=0.025 edge≥0.1 p=[0.03,0.6] sharp=1.1 kelly=0.35
+[14:48:28]   ★ NEW BEST: score=95.2  trades=1933  WR=27.4%  PnL=$2321  Sharpe=4.45  DD=9.1%  exits=1497  saves=1381  regrets=116
+[14:48:28]     exit=edge mhe=0.15 slip=0.03 edge≥0.02 p=[0.04,0.5] sharp=0.8 kelly=0.2
+[14:48:30]   ★ NEW BEST: score=120.5  trades=2282  WR=28.4%  PnL=$5518  Sharpe=4.24  DD=14.7%  exits=1521  saves=1429  regrets=92
+[14:48:30]     exit=edge mhe=0.08 slip=0.005 edge≥0.02 p=[0.02,0.5] sharp=0.85 kelly=0.3
+[14:48:34]   Gen 0: 100/800  best=120.5  trials_with_score=43
+[14:48:41]   Gen 0: 200/800  best=120.5  trials_with_score=91
+[14:48:47]   Gen 0: 300/800  best=120.5  trials_with_score=141
+[14:48:54]   Gen 0: 400/800  best=120.5  trials_with_score=180
+[14:49:01]   Gen 0: 500/800  best=120.5  trials_with_score=223
+[14:49:08]   Gen 0: 600/800  best=120.5  trials_with_score=265
+[14:49:15]   Gen 0: 700/800  best=120.5  trials_with_score=315
+[14:49:21]   Gen 0: 800/800  best=120.5  trials_with_score=354
+[14:49:21] Gen 0 complete: best=120.5
+[14:49:21]   Testing entry_hours=48 for top-5...
+[14:49:22] 
+=== PHASE 2: FINE-TUNING (400 trials, top-10) ===
+[14:49:23]   ★ NEW BEST: score=120.8  trades=2173  WR=28.3%  PnL=$5598  Sharpe=4.31  DD=14.7%  exits=1449  saves=1359  regrets=90
+[14:49:23]     exit=edge mhe=0.08 slip=0.005 edge≥0.03 p=[0.02,0.55] sharp=0.85 kelly=0.3
+[14:49:24]   ★ NEW BEST: score=120.8  trades=2272  WR=28.7%  PnL=$5596  Sharpe=4.32  DD=14.7%  exits=1510  saves=1417  regrets=93
+[14:49:24]     exit=edge mhe=0.08 slip=0.005 edge≥0.02 p=[0.02,0.55] sharp=0.85 kelly=0.3
+[14:49:28]   ★ NEW BEST: score=121.0  trades=2417  WR=28.9%  PnL=$5594  Sharpe=4.31  DD=13.5%  exits=1657  saves=1560  regrets=97
+[14:49:28]     exit=edge mhe=0.08 slip=0.005 edge≥0.02 p=[0.02,0.5] sharp=0.85 kelly=0.3
+[14:49:30]   ★ NEW BEST: score=121.6  trades=2700  WR=26.8%  PnL=$7088  Sharpe=4.30  DD=12.1%  exits=2072  saves=1987  regrets=85
+[14:49:30]     exit=edge mhe=0.1 slip=0.01 edge≥0.01 p=[0.01,0.45] sharp=0.92 kelly=0.18
+[14:49:31]   Gen 1: 100/400  best=121.6
+[14:49:41]   Gen 1: 200/400  best=121.6
+[14:49:51]   Gen 1: 300/400  best=121.6
+[14:50:01]   Gen 1: 400/400  best=121.6
+[14:50:01] Gen 1 complete: best=121.6
+[14:50:01] 
+=== PHASE 3: CITY OPTIMIZATION (200 trials) ===
+[14:50:02]   ★ NEW BEST: score=121.9  trades=2520  WR=26.4%  PnL=$7195  Sharpe=4.37  DD=12.1%  exits=1943  saves=1862  regrets=81
+[14:50:02]     exit=edge mhe=0.1 slip=0.01 edge≥0.01 p=[0.01,0.45] sharp=0.92 kelly=0.18
+[14:50:07]   Gen 2: 50/200  best=121.9
+[14:50:12]   Gen 2: 100/200  best=121.9
+[14:50:18]   Gen 2: 150/200  best=121.9
+[14:50:20]   ★ NEW BEST: score=122.2  trades=2422  WR=26.5%  PnL=$7322  Sharpe=4.45  DD=12.1%  exits=1867  saves=1787  regrets=80
+[14:50:20]     exit=edge mhe=0.1 slip=0.01 edge≥0.01 p=[0.01,0.45] sharp=0.92 kelly=0.18
+[14:50:24]   Gen 2: 200/200  best=122.2
+[14:50:24] Gen 2 complete: best=122.2
+[14:50:24] 
+=== WALK-FORWARD VALIDATION ===
+[14:50:24] WF: OOS score=69.0  OOS PnL=$1403  folds=3  trades=1790
+[14:50:24]   Fold: PnL=$2033  trades=586  WR=23.9%  score=100.5
+[14:50:24]   Fold: PnL=$2175  trades=614  WR=36.8%  score=106.7
+[14:50:24]   Fold: PnL=$2  trades=590  WR=29.8%  score=0.0
+[14:50:24] 
+=== BEST PER EXIT TYPE ===
+[14:50:24]   none      score=79.5  trades=192  WR=27.6%  PnL=$1515  Sharpe=3.07  exits=0
+[14:50:24]   target    score=118.2  trades=1144  WR=41.1%  PnL=$5796  Sharpe=3.34  exits=461
+[14:50:24]   trail     score=72.6  trades=220  WR=41.8%  PnL=$819  Sharpe=2.48  exits=81
+[14:50:24]   combo     score=116.0  trades=1241  WR=38.8%  PnL=$6686  Sharpe=2.90  exits=473
+[14:50:24]   edge      score=122.2  trades=2422  WR=26.5%  PnL=$7322  Sharpe=4.45  exits=1867
+[14:50:24] 
+=== BEST MODEL — PER-CITY RESULTS ===
+[14:50:24]   City             Trades     WR        PnL
+[14:50:24]   ----------------------------------------
+[14:50:24]   london              569  23.7% $     3157
+[14:50:24]   dallas              177  32.8% $     1022
+[14:50:24]   buenos_aires        196  29.6% $      922
+[14:50:24]   seattle             224  22.8% $      718
+[14:50:24]   seoul               212  31.6% $      580
+[14:50:24]   atlanta             165  34.5% $      356
+[14:50:24]   chicago             154  30.5% $      344
+[14:50:24]   nyc                 274  17.9% $      303
+[14:50:24]   munich               31  25.8% $       27
+[14:50:24]   toronto             177  30.5% $       19
+[14:50:24]   wellington           43  39.5% $       12
+[14:50:24]   tel_aviv             14   7.1% $       -2
+[14:50:24]   lucknow               5   0.0% $       -2
+[14:50:24]   paris                80  23.8% $      -11
+[14:50:24]   tokyo                20  10.0% $      -48
+[14:50:24]   sao_paulo            81  23.5% $      -76
+[14:50:24] 
+================================================================================
+[14:50:24] FINAL SUMMARY
+[14:50:24] ================================================================================
+[14:50:24]   Best score:       122.2
+[14:50:24]   Exit type:        edge
+[14:50:24]   Trades:           2422
+[14:50:24]   Win rate:         26.5%
+[14:50:24]   Total PnL:        $7322
+[14:50:24]   ROI:              732.2%
+[14:50:24]   Sharpe:           4.45
+[14:50:24]   Max drawdown:     12.1%
+[14:50:24]   Capital util:     88.1%
+[14:50:24]   PnL/hour:         $0.43
+[14:50:24]   Exits:            1867
+[14:50:24]   Saves:            1787
+[14:50:24]   Regrets:          80
+[14:50:24]   OOS PnL:          $1403
+[14:50:24]   OOS score:        69.0
+[14:50:24]   Total trials:     1406
+[14:50:24]   Runtime:          148s (2.5min)
+[14:50:24]   Params: exit=edge mhe=0.1 slip=0.01 edge≥0.01 p=[0.01,0.45] sharp=0.92 kelly=0.18
+[14:50:24] 
+Results saved to /Users/dnl.vlck/Arbo/research/data/experiments/sweep_early_exit.json

@@ -1,0 +1,425 @@
+[05:54:17] Starting VOLUME-OPTIMIZED sweep at 2026-03-14T05:54:17.037919
+[05:54:17] Sizing FIXED: KELLY_FRACTION=0.25 (quarter-Kelly)
+[05:54:17] Min trades: 500 | Min win rate: 70.0% | Min Sharpe: 5.0
+[05:54:17] 
+[05:54:17] === PHASE 1: Random Search — VOLUME OPTIMIZED (600 trials) ===
+[05:54:17] Minimum trades: 500 | Min win rate: 70.0% | Min Sharpe: 5.0
+[05:54:17] Evaluating baseline...
+[05:54:17]   BASELINE: vol_score=194.10 sharpe=20.14 trades=1197 (79.8/mo) wr=84.5% dd=9.75%
+[05:54:18]   Trial 1/600: vol_score=326.02 sharpe=15.24 trades=2658 (177.2/mo) wr=77.6% dd=9.76% *** NEW BEST ***
+[05:54:19]   Trial 2/600: vol_score=341.47 sharpe=11.78 trades=4557 (303.8/mo) wr=70.2% dd=18.20% *** NEW BEST ***
+[05:54:26]   Trial 11/600: vol_score=388.58 sharpe=12.63 trades=4305 (287.0/mo) wr=72.0% dd=14.26% *** NEW BEST ***
+[05:54:38]   Trial 25/600: vol_score=476.63 sharpe=13.38 trades=4426 (295.1/mo) wr=74.2% dd=9.75% *** NEW BEST ***
+[05:54:59]   Trial 50/600: vol_score=222.15 sharpe=20.04 trades=1377 (91.8/mo) wr=85.0% dd=9.75%
+[05:55:19]   Trial 75/600: vol_score=214.97 sharpe=17.10 trades=1597 (106.5/mo) wr=80.8% dd=10.65%
+[05:55:39]   Trial 100/600: vol_score=345.30 sharpe=14.60 trades=2937 (195.8/mo) wr=76.6% dd=9.75%
+[05:55:59]   Trial 125/600: vol_score=388.77 sharpe=15.06 trades=3494 (232.9/mo) wr=76.7% dd=13.06%
+[05:56:20]   Trial 150/600: vol_score=0.00 sharpe=11.20 trades=5213 (347.5/mo) wr=68.0% dd=18.38%
+[05:56:40]   Trial 175/600: vol_score=253.53 sharpe=13.91 trades=2549 (169.9/mo) wr=75.5% dd=14.26%
+[05:57:00]   Trial 200/600: vol_score=170.68 sharpe=14.45 trades=2157 (143.8/mo) wr=76.6% dd=22.62%
+[05:57:21]   Trial 225/600: vol_score=406.75 sharpe=12.82 trades=4549 (303.3/mo) wr=71.9% dd=15.12%
+[05:57:41]   Trial 250/600: vol_score=0.00 sharpe=11.96 trades=4076 (271.7/mo) wr=69.5% dd=18.69%
+[05:58:01]   Trial 275/600: vol_score=349.48 sharpe=13.90 trades=3518 (234.5/mo) wr=74.8% dd=14.26%
+[05:58:21]   Trial 300/600: vol_score=196.83 sharpe=21.52 trades=1136 (75.7/mo) wr=86.2% dd=9.75%
+[05:58:41]   Trial 325/600: vol_score=206.55 sharpe=14.33 trades=1976 (131.7/mo) wr=76.6% dd=13.54%
+[05:59:01]   Trial 350/600: vol_score=332.03 sharpe=13.75 trades=3378 (225.2/mo) wr=74.2% dd=14.26%
+[05:59:21]   Trial 375/600: vol_score=318.21 sharpe=16.44 trades=2405 (160.3/mo) wr=79.4% dd=9.75%
+[05:59:42]   Trial 400/600: vol_score=269.05 sharpe=19.19 trades=1742 (116.1/mo) wr=82.8% dd=9.75%
+[06:00:02]   Trial 425/600: vol_score=372.80 sharpe=12.71 trades=4101 (273.4/mo) wr=71.9% dd=14.24%
+[06:00:22]   Trial 450/600: vol_score=212.44 sharpe=19.86 trades=1329 (88.6/mo) wr=84.8% dd=9.75%
+[06:00:42]   Trial 475/600: vol_score=228.11 sharpe=16.13 trades=1979 (131.9/mo) wr=79.0% dd=14.26%
+[06:01:03]   Trial 500/600: vol_score=264.43 sharpe=13.53 trades=3107 (207.1/mo) wr=73.9% dd=18.55%
+[06:01:23]   Trial 525/600: vol_score=328.35 sharpe=16.12 trades=2530 (168.7/mo) wr=78.0% dd=9.75%
+[06:01:43]   Trial 550/600: vol_score=212.29 sharpe=25.48 trades=1035 (69.0/mo) wr=89.2% dd=9.75%
+[06:02:03]   Trial 575/600: vol_score=236.56 sharpe=16.83 trades=1966 (131.1/mo) wr=80.2% dd=14.26%
+[06:02:23]   Trial 600/600: vol_score=240.67 sharpe=19.40 trades=1541 (102.7/mo) wr=83.8% dd=9.75%
+[06:02:23] Phase 1 done. Best vol_score: 476.63 (trial 25). 562/601 qualifying configs.
+[06:02:23] 
+=== PHASE 2: Fine-tuning top-10 (40 each) ===
+[06:02:23]   Top 1: trial=25 vol_score=476.63 trades=4426 wr=74.2%
+[06:02:23]   Top 2: trial=516 vol_score=435.71 trades=3822 wr=75.9%
+[06:02:23]   Top 3: trial=80 vol_score=429.64 trades=4845 wr=71.5%
+[06:02:23]   Top 4: trial=477 vol_score=425.69 trades=4479 wr=73.3%
+[06:02:23]   Top 5: trial=408 vol_score=415.98 trades=3651 wr=75.4%
+[06:02:23]   Top 6: trial=420 vol_score=414.15 trades=3485 wr=76.6%
+[06:02:23]   Top 7: trial=244 vol_score=412.13 trades=3756 wr=76.3%
+[06:02:23]   Top 8: trial=225 vol_score=406.75 trades=4549 wr=71.9%
+[06:02:23]   Top 9: trial=327 vol_score=404.82 trades=3825 wr=75.0%
+[06:02:23]   Top 10: trial=393 vol_score=403.54 trades=4480 wr=72.4%
+[06:02:30]   FT top1 #7: vol_score=486.20 trades=4425 wr=74.7% *** BEST ***
+[06:07:50] Phase 2 done. 1 improvements. Best: 486.20
+[06:07:50] 
+=== PHASE 3: Per-city Override Optimization ===
+[06:07:50] Starting from best: vol_score=486.20 trades=4425
+[06:07:51] No overrides: vol_score=0.00 trades=6145
+[06:07:51] Per-city PnL (no overrides):
+[06:07:51]           tel_aviv: $  88300.94
+[06:07:51]             london: $  83973.93
+[06:07:51]            seattle: $  78665.85
+[06:07:51]              miami: $  75741.27
+[06:07:51]            lucknow: $  72967.43
+[06:07:51]             munich: $  71512.44
+[06:07:51]             dallas: $  61797.29
+[06:07:51]             ankara: $  60452.25
+[06:07:51]            chicago: $  58030.33
+[06:07:51]              tokyo: $  57853.47
+[06:07:51]              paris: $  55655.71
+[06:07:51]              seoul: $  54284.11
+[06:07:51]            toronto: $  46612.91
+[06:07:51]         wellington: $  31046.63
+[06:07:51]            atlanta: $  28833.73
+[06:07:51]        los_angeles: $  24773.12
+[06:07:51]          sao_paulo: $  24220.94
+[06:07:51]                nyc: $  14665.54
+[06:07:51]                 dc: $   1475.04
+[06:07:51]       buenos_aires: $ -23605.61
+[06:07:51] Unprofitable: ['buenos_aires']
+[06:07:51] Marginal (< $200): []
+[06:07:51] Strong (> $2000): ['tel_aviv', 'london', 'seattle', 'miami', 'lucknow', 'munich', 'dallas', 'ankara', 'chicago', 'tokyo', 'paris', 'seoul', 'toronto', 'wellington', 'atlanta', 'los_angeles', 'sao_paulo', 'nyc']
+[06:07:51] 
+Testing exclusions (only unprofitable cities)...
+[06:07:52]   Exclude     buenos_aires: vol_score=0.00 trades=5952
+[06:07:52] 
+Testing widenings for strong cities...
+[06:07:53]   Widen [tel_aviv] to 0.55: vol_score=0.00 trades=6145
+[06:07:54]   Widen [london] to 0.55: vol_score=0.00 trades=6140
+[06:07:54]   Widen [seattle] to 0.55: vol_score=0.00 trades=6145
+[06:07:55]   Widen [miami] to 0.55: vol_score=0.00 trades=6145
+[06:07:56]   Widen [lucknow] to 0.55: vol_score=0.00 trades=6144
+[06:07:57]   Widen [munich] to 0.55: vol_score=0.00 trades=6142
+[06:07:58]   Widen [dallas] to 0.55: vol_score=0.00 trades=6139
+[06:07:59]   Widen [ankara] to 0.55: vol_score=0.00 trades=6140
+[06:07:59]   Widen [chicago] to 0.55: vol_score=0.00 trades=6133
+[06:08:00]   Widen [tokyo] to 0.55: vol_score=0.00 trades=6144
+[06:08:01]   Widen [paris] to 0.55: vol_score=0.00 trades=6144
+[06:08:02]   Widen [seoul] to 0.55: vol_score=0.00 trades=6138
+[06:08:03]   Widen [toronto] to 0.55: vol_score=0.00 trades=6138
+[06:08:04]   Widen [wellington] to 0.55: vol_score=0.00 trades=6145
+[06:08:04]   Widen [atlanta] to 0.55: vol_score=0.00 trades=6141
+[06:08:05]   Widen [los_angeles] to 0.55: vol_score=0.00 trades=6143
+[06:08:06]   Widen [sao_paulo] to 0.55: vol_score=0.00 trades=6137
+[06:08:07]   Widen [nyc] to 0.55: vol_score=0.00 trades=6136
+[06:08:08]   Widen [tel_aviv+london] to 0.55: vol_score=0.00 trades=6140
+[06:08:09]   Widen [tel_aviv+seattle] to 0.55: vol_score=0.00 trades=6145
+[06:08:09]   Widen [tel_aviv+miami] to 0.55: vol_score=0.00 trades=6145
+[06:08:10]   Widen [tel_aviv+lucknow] to 0.55: vol_score=0.00 trades=6144
+[06:08:11]   Widen [tel_aviv+munich] to 0.55: vol_score=0.00 trades=6142
+[06:08:12]   Widen [tel_aviv+dallas] to 0.55: vol_score=0.00 trades=6139
+[06:08:13]   Widen [tel_aviv+ankara] to 0.55: vol_score=0.00 trades=6140
+[06:08:13]   Widen [tel_aviv+chicago] to 0.55: vol_score=0.00 trades=6133
+[06:08:14]   Widen [tel_aviv+tokyo] to 0.55: vol_score=0.00 trades=6144
+[06:08:15]   Widen [tel_aviv+paris] to 0.55: vol_score=0.00 trades=6144
+[06:08:16]   Widen [tel_aviv+seoul] to 0.55: vol_score=0.00 trades=6138
+[06:08:17]   Widen [tel_aviv+toronto] to 0.55: vol_score=0.00 trades=6138
+[06:08:18]   Widen [tel_aviv+wellington] to 0.55: vol_score=0.00 trades=6145
+[06:08:18]   Widen [tel_aviv+atlanta] to 0.55: vol_score=0.00 trades=6141
+[06:08:19]   Widen [tel_aviv+los_angeles] to 0.55: vol_score=0.00 trades=6143
+[06:08:20]   Widen [tel_aviv+sao_paulo] to 0.55: vol_score=0.00 trades=6137
+[06:08:21]   Widen [tel_aviv+nyc] to 0.55: vol_score=0.00 trades=6136
+[06:08:22]   Widen [london+seattle] to 0.55: vol_score=0.00 trades=6140
+[06:08:23]   Widen [london+miami] to 0.55: vol_score=0.00 trades=6140
+[06:08:24]   Widen [london+lucknow] to 0.55: vol_score=0.00 trades=6139
+[06:08:25]   Widen [london+munich] to 0.55: vol_score=0.00 trades=6137
+[06:08:25]   Widen [london+dallas] to 0.55: vol_score=0.00 trades=6134
+[06:08:26]   Widen [london+ankara] to 0.55: vol_score=0.00 trades=6135
+[06:08:27]   Widen [london+chicago] to 0.55: vol_score=0.00 trades=6128
+[06:08:28]   Widen [london+tokyo] to 0.55: vol_score=0.00 trades=6139
+[06:08:29]   Widen [london+paris] to 0.55: vol_score=0.00 trades=6139
+[06:08:30]   Widen [london+seoul] to 0.55: vol_score=0.00 trades=6133
+[06:08:30]   Widen [london+toronto] to 0.55: vol_score=0.00 trades=6133
+[06:08:31]   Widen [london+wellington] to 0.55: vol_score=0.00 trades=6140
+[06:08:32]   Widen [london+atlanta] to 0.55: vol_score=0.00 trades=6136
+[06:08:33]   Widen [london+los_angeles] to 0.55: vol_score=0.00 trades=6138
+[06:08:34]   Widen [london+sao_paulo] to 0.55: vol_score=0.00 trades=6132
+[06:08:34]   Widen [london+nyc] to 0.55: vol_score=0.00 trades=6131
+[06:08:35]   Widen [seattle+miami] to 0.55: vol_score=0.00 trades=6145
+[06:08:36]   Widen [seattle+lucknow] to 0.55: vol_score=0.00 trades=6144
+[06:08:37]   Widen [seattle+munich] to 0.55: vol_score=0.00 trades=6142
+[06:08:38]   Widen [seattle+dallas] to 0.55: vol_score=0.00 trades=6139
+[06:08:39]   Widen [seattle+ankara] to 0.55: vol_score=0.00 trades=6140
+[06:08:39]   Widen [seattle+chicago] to 0.55: vol_score=0.00 trades=6133
+[06:08:40]   Widen [seattle+tokyo] to 0.55: vol_score=0.00 trades=6144
+[06:08:41]   Widen [seattle+paris] to 0.55: vol_score=0.00 trades=6144
+[06:08:42]   Widen [seattle+seoul] to 0.55: vol_score=0.00 trades=6138
+[06:08:43]   Widen [seattle+toronto] to 0.55: vol_score=0.00 trades=6138
+[06:08:44]   Widen [seattle+wellington] to 0.55: vol_score=0.00 trades=6145
+[06:08:44]   Widen [seattle+atlanta] to 0.55: vol_score=0.00 trades=6141
+[06:08:45]   Widen [seattle+los_angeles] to 0.55: vol_score=0.00 trades=6143
+[06:08:46]   Widen [seattle+sao_paulo] to 0.55: vol_score=0.00 trades=6137
+[06:08:47]   Widen [seattle+nyc] to 0.55: vol_score=0.00 trades=6136
+[06:08:48]   Widen [miami+lucknow] to 0.55: vol_score=0.00 trades=6144
+[06:08:49]   Widen [miami+munich] to 0.55: vol_score=0.00 trades=6142
+[06:08:49]   Widen [miami+dallas] to 0.55: vol_score=0.00 trades=6139
+[06:08:50]   Widen [miami+ankara] to 0.55: vol_score=0.00 trades=6140
+[06:08:51]   Widen [miami+chicago] to 0.55: vol_score=0.00 trades=6133
+[06:08:52]   Widen [miami+tokyo] to 0.55: vol_score=0.00 trades=6144
+[06:08:53]   Widen [miami+paris] to 0.55: vol_score=0.00 trades=6144
+[06:08:54]   Widen [miami+seoul] to 0.55: vol_score=0.00 trades=6138
+[06:08:54]   Widen [miami+toronto] to 0.55: vol_score=0.00 trades=6138
+[06:08:55]   Widen [miami+wellington] to 0.55: vol_score=0.00 trades=6145
+[06:08:56]   Widen [miami+atlanta] to 0.55: vol_score=0.00 trades=6141
+[06:08:57]   Widen [miami+los_angeles] to 0.55: vol_score=0.00 trades=6143
+[06:08:58]   Widen [miami+sao_paulo] to 0.55: vol_score=0.00 trades=6137
+[06:08:59]   Widen [miami+nyc] to 0.55: vol_score=0.00 trades=6136
+[06:08:59]   Widen [lucknow+munich] to 0.55: vol_score=0.00 trades=6141
+[06:09:00]   Widen [lucknow+dallas] to 0.55: vol_score=0.00 trades=6138
+[06:09:01]   Widen [lucknow+ankara] to 0.55: vol_score=0.00 trades=6139
+[06:09:02]   Widen [lucknow+chicago] to 0.55: vol_score=0.00 trades=6132
+[06:09:03]   Widen [lucknow+tokyo] to 0.55: vol_score=0.00 trades=6143
+[06:09:04]   Widen [lucknow+paris] to 0.55: vol_score=0.00 trades=6143
+[06:09:05]   Widen [lucknow+seoul] to 0.55: vol_score=0.00 trades=6137
+[06:09:05]   Widen [lucknow+toronto] to 0.55: vol_score=0.00 trades=6137
+[06:09:06]   Widen [lucknow+wellington] to 0.55: vol_score=0.00 trades=6144
+[06:09:07]   Widen [lucknow+atlanta] to 0.55: vol_score=0.00 trades=6140
+[06:09:08]   Widen [lucknow+los_angeles] to 0.55: vol_score=0.00 trades=6142
+[06:09:09]   Widen [lucknow+sao_paulo] to 0.55: vol_score=0.00 trades=6136
+[06:09:10]   Widen [lucknow+nyc] to 0.55: vol_score=0.00 trades=6135
+[06:09:10]   Widen [munich+dallas] to 0.55: vol_score=0.00 trades=6136
+[06:09:11]   Widen [munich+ankara] to 0.55: vol_score=0.00 trades=6137
+[06:09:12]   Widen [munich+chicago] to 0.55: vol_score=0.00 trades=6130
+[06:09:13]   Widen [munich+tokyo] to 0.55: vol_score=0.00 trades=6141
+[06:09:14]   Widen [munich+paris] to 0.55: vol_score=0.00 trades=6141
+[06:09:15]   Widen [munich+seoul] to 0.55: vol_score=0.00 trades=6135
+[06:09:15]   Widen [munich+toronto] to 0.55: vol_score=0.00 trades=6135
+[06:09:16]   Widen [munich+wellington] to 0.55: vol_score=0.00 trades=6142
+[06:09:17]   Widen [munich+atlanta] to 0.55: vol_score=0.00 trades=6138
+[06:09:18]   Widen [munich+los_angeles] to 0.55: vol_score=0.00 trades=6140
+[06:09:19]   Widen [munich+sao_paulo] to 0.55: vol_score=0.00 trades=6134
+[06:09:19]   Widen [munich+nyc] to 0.55: vol_score=0.00 trades=6133
+[06:09:20]   Widen [dallas+ankara] to 0.55: vol_score=0.00 trades=6134
+[06:09:21]   Widen [dallas+chicago] to 0.55: vol_score=0.00 trades=6127
+[06:09:22]   Widen [dallas+tokyo] to 0.55: vol_score=0.00 trades=6138
+[06:09:23]   Widen [dallas+paris] to 0.55: vol_score=0.00 trades=6138
+[06:09:24]   Widen [dallas+seoul] to 0.55: vol_score=0.00 trades=6132
+[06:09:25]   Widen [dallas+toronto] to 0.55: vol_score=0.00 trades=6132
+[06:09:25]   Widen [dallas+wellington] to 0.55: vol_score=0.00 trades=6139
+[06:09:26]   Widen [dallas+atlanta] to 0.55: vol_score=0.00 trades=6135
+[06:09:27]   Widen [dallas+los_angeles] to 0.55: vol_score=0.00 trades=6137
+[06:09:28]   Widen [dallas+sao_paulo] to 0.55: vol_score=0.00 trades=6131
+[06:09:29]   Widen [dallas+nyc] to 0.55: vol_score=0.00 trades=6130
+[06:09:30]   Widen [ankara+chicago] to 0.55: vol_score=0.00 trades=6128
+[06:09:30]   Widen [ankara+tokyo] to 0.55: vol_score=0.00 trades=6139
+[06:09:31]   Widen [ankara+paris] to 0.55: vol_score=0.00 trades=6139
+[06:09:32]   Widen [ankara+seoul] to 0.55: vol_score=0.00 trades=6133
+[06:09:33]   Widen [ankara+toronto] to 0.55: vol_score=0.00 trades=6133
+[06:09:34]   Widen [ankara+wellington] to 0.55: vol_score=0.00 trades=6140
+[06:09:34]   Widen [ankara+atlanta] to 0.55: vol_score=0.00 trades=6136
+[06:09:35]   Widen [ankara+los_angeles] to 0.55: vol_score=0.00 trades=6138
+[06:09:36]   Widen [ankara+sao_paulo] to 0.55: vol_score=0.00 trades=6132
+[06:09:37]   Widen [ankara+nyc] to 0.55: vol_score=0.00 trades=6131
+[06:09:38]   Widen [chicago+tokyo] to 0.55: vol_score=0.00 trades=6132
+[06:09:39]   Widen [chicago+paris] to 0.55: vol_score=0.00 trades=6132
+[06:09:39]   Widen [chicago+seoul] to 0.55: vol_score=0.00 trades=6126
+[06:09:40]   Widen [chicago+toronto] to 0.55: vol_score=0.00 trades=6126
+[06:09:41]   Widen [chicago+wellington] to 0.55: vol_score=0.00 trades=6133
+[06:09:42]   Widen [chicago+atlanta] to 0.55: vol_score=0.00 trades=6129
+[06:09:43]   Widen [chicago+los_angeles] to 0.55: vol_score=0.00 trades=6131
+[06:09:44]   Widen [chicago+sao_paulo] to 0.55: vol_score=0.00 trades=6125
+[06:09:44]   Widen [chicago+nyc] to 0.55: vol_score=0.00 trades=6124
+[06:09:45]   Widen [tokyo+paris] to 0.55: vol_score=0.00 trades=6143
+[06:09:46]   Widen [tokyo+seoul] to 0.55: vol_score=0.00 trades=6137
+[06:09:47]   Widen [tokyo+toronto] to 0.55: vol_score=0.00 trades=6137
+[06:09:48]   Widen [tokyo+wellington] to 0.55: vol_score=0.00 trades=6144
+[06:09:49]   Widen [tokyo+atlanta] to 0.55: vol_score=0.00 trades=6140
+[06:09:49]   Widen [tokyo+los_angeles] to 0.55: vol_score=0.00 trades=6142
+[06:09:50]   Widen [tokyo+sao_paulo] to 0.55: vol_score=0.00 trades=6136
+[06:09:51]   Widen [tokyo+nyc] to 0.55: vol_score=0.00 trades=6135
+[06:09:52]   Widen [paris+seoul] to 0.55: vol_score=0.00 trades=6137
+[06:09:53]   Widen [paris+toronto] to 0.55: vol_score=0.00 trades=6137
+[06:09:54]   Widen [paris+wellington] to 0.55: vol_score=0.00 trades=6144
+[06:09:54]   Widen [paris+atlanta] to 0.55: vol_score=0.00 trades=6140
+[06:09:55]   Widen [paris+los_angeles] to 0.55: vol_score=0.00 trades=6142
+[06:09:56]   Widen [paris+sao_paulo] to 0.55: vol_score=0.00 trades=6136
+[06:09:57]   Widen [paris+nyc] to 0.55: vol_score=0.00 trades=6135
+[06:09:58]   Widen [seoul+toronto] to 0.55: vol_score=0.00 trades=6131
+[06:09:59]   Widen [seoul+wellington] to 0.55: vol_score=0.00 trades=6138
+[06:09:59]   Widen [seoul+atlanta] to 0.55: vol_score=0.00 trades=6134
+[06:10:00]   Widen [seoul+los_angeles] to 0.55: vol_score=0.00 trades=6136
+[06:10:01]   Widen [seoul+sao_paulo] to 0.55: vol_score=0.00 trades=6130
+[06:10:02]   Widen [seoul+nyc] to 0.55: vol_score=0.00 trades=6129
+[06:10:03]   Widen [toronto+wellington] to 0.55: vol_score=0.00 trades=6138
+[06:10:04]   Widen [toronto+atlanta] to 0.55: vol_score=0.00 trades=6134
+[06:10:04]   Widen [toronto+los_angeles] to 0.55: vol_score=0.00 trades=6136
+[06:10:05]   Widen [toronto+sao_paulo] to 0.55: vol_score=0.00 trades=6130
+[06:10:06]   Widen [toronto+nyc] to 0.55: vol_score=0.00 trades=6129
+[06:10:07]   Widen [wellington+atlanta] to 0.55: vol_score=0.00 trades=6141
+[06:10:08]   Widen [wellington+los_angeles] to 0.55: vol_score=0.00 trades=6143
+[06:10:09]   Widen [wellington+sao_paulo] to 0.55: vol_score=0.00 trades=6137
+[06:10:09]   Widen [wellington+nyc] to 0.55: vol_score=0.00 trades=6136
+[06:10:10]   Widen [atlanta+los_angeles] to 0.55: vol_score=0.00 trades=6139
+[06:10:11]   Widen [atlanta+sao_paulo] to 0.55: vol_score=0.00 trades=6133
+[06:10:12]   Widen [atlanta+nyc] to 0.55: vol_score=0.00 trades=6132
+[06:10:13]   Widen [los_angeles+sao_paulo] to 0.55: vol_score=0.00 trades=6135
+[06:10:14]   Widen [los_angeles+nyc] to 0.55: vol_score=0.00 trades=6134
+[06:10:14]   Widen [sao_paulo+nyc] to 0.55: vol_score=0.00 trades=6128
+[09:04:57]   Widen [tel_aviv] to 0.6: vol_score=0.00 trades=6145
+[09:04:58]   Widen [london] to 0.6: vol_score=0.00 trades=6144
+[09:04:59]   Widen [seattle] to 0.6: vol_score=0.00 trades=6145
+[09:05:00]   Widen [miami] to 0.6: vol_score=0.00 trades=6145
+[09:05:01]   Widen [lucknow] to 0.6: vol_score=0.00 trades=6144
+[09:05:02]   Widen [munich] to 0.6: vol_score=0.00 trades=6144
+[09:05:03]   Widen [dallas] to 0.6: vol_score=0.00 trades=6144
+[09:05:03]   Widen [ankara] to 0.6: vol_score=0.00 trades=6141
+[09:05:04]   Widen [chicago] to 0.6: vol_score=0.00 trades=6138
+[09:05:05]   Widen [tokyo] to 0.6: vol_score=0.00 trades=6145
+[09:05:06]   Widen [paris] to 0.6: vol_score=0.00 trades=6145
+[09:05:07]   Widen [seoul] to 0.6: vol_score=0.00 trades=6139
+[09:05:08]   Widen [toronto] to 0.6: vol_score=0.00 trades=6140
+[09:05:09]   Widen [wellington] to 0.6: vol_score=0.00 trades=6145
+[09:05:10]   Widen [atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:05:10]   Widen [los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:05:11]   Widen [sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:05:12]   Widen [nyc] to 0.6: vol_score=0.00 trades=6140
+[09:05:13]   Widen [tel_aviv+london] to 0.6: vol_score=0.00 trades=6144
+[09:05:14]   Widen [tel_aviv+seattle] to 0.6: vol_score=0.00 trades=6145
+[09:05:15]   Widen [tel_aviv+miami] to 0.6: vol_score=0.00 trades=6145
+[09:05:15]   Widen [tel_aviv+lucknow] to 0.6: vol_score=0.00 trades=6144
+[09:05:16]   Widen [tel_aviv+munich] to 0.6: vol_score=0.00 trades=6144
+[09:05:17]   Widen [tel_aviv+dallas] to 0.6: vol_score=0.00 trades=6144
+[09:05:18]   Widen [tel_aviv+ankara] to 0.6: vol_score=0.00 trades=6141
+[09:05:19]   Widen [tel_aviv+chicago] to 0.6: vol_score=0.00 trades=6138
+[09:05:20]   Widen [tel_aviv+tokyo] to 0.6: vol_score=0.00 trades=6145
+[09:05:21]   Widen [tel_aviv+paris] to 0.6: vol_score=0.00 trades=6145
+[09:05:21]   Widen [tel_aviv+seoul] to 0.6: vol_score=0.00 trades=6139
+[09:05:22]   Widen [tel_aviv+toronto] to 0.6: vol_score=0.00 trades=6140
+[09:05:23]   Widen [tel_aviv+wellington] to 0.6: vol_score=0.00 trades=6145
+[09:05:24]   Widen [tel_aviv+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:05:25]   Widen [tel_aviv+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:05:26]   Widen [tel_aviv+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:05:27]   Widen [tel_aviv+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:05:27]   Widen [london+seattle] to 0.6: vol_score=0.00 trades=6144
+[09:05:28]   Widen [london+miami] to 0.6: vol_score=0.00 trades=6144
+[09:05:29]   Widen [london+lucknow] to 0.6: vol_score=0.00 trades=6143
+[09:05:30]   Widen [london+munich] to 0.6: vol_score=0.00 trades=6143
+[09:05:31]   Widen [london+dallas] to 0.6: vol_score=0.00 trades=6143
+[09:05:32]   Widen [london+ankara] to 0.6: vol_score=0.00 trades=6140
+[09:05:32]   Widen [london+chicago] to 0.6: vol_score=0.00 trades=6137
+[09:05:33]   Widen [london+tokyo] to 0.6: vol_score=0.00 trades=6144
+[09:05:34]   Widen [london+paris] to 0.6: vol_score=0.00 trades=6144
+[09:05:35]   Widen [london+seoul] to 0.6: vol_score=0.00 trades=6138
+[09:05:36]   Widen [london+toronto] to 0.6: vol_score=0.00 trades=6139
+[09:05:37]   Widen [london+wellington] to 0.6: vol_score=0.00 trades=6144
+[09:05:37]   Widen [london+atlanta] to 0.6: vol_score=0.00 trades=6141
+[09:05:38]   Widen [london+los_angeles] to 0.6: vol_score=0.00 trades=6142
+[09:05:39]   Widen [london+sao_paulo] to 0.6: vol_score=0.00 trades=6138
+[09:05:40]   Widen [london+nyc] to 0.6: vol_score=0.00 trades=6139
+[09:05:41]   Widen [seattle+miami] to 0.6: vol_score=0.00 trades=6145
+[09:05:42]   Widen [seattle+lucknow] to 0.6: vol_score=0.00 trades=6144
+[09:05:42]   Widen [seattle+munich] to 0.6: vol_score=0.00 trades=6144
+[09:05:43]   Widen [seattle+dallas] to 0.6: vol_score=0.00 trades=6144
+[09:05:44]   Widen [seattle+ankara] to 0.6: vol_score=0.00 trades=6141
+[09:05:45]   Widen [seattle+chicago] to 0.6: vol_score=0.00 trades=6138
+[09:05:46]   Widen [seattle+tokyo] to 0.6: vol_score=0.00 trades=6145
+[09:05:47]   Widen [seattle+paris] to 0.6: vol_score=0.00 trades=6145
+[09:05:48]   Widen [seattle+seoul] to 0.6: vol_score=0.00 trades=6139
+[09:05:48]   Widen [seattle+toronto] to 0.6: vol_score=0.00 trades=6140
+[09:05:49]   Widen [seattle+wellington] to 0.6: vol_score=0.00 trades=6145
+[09:05:50]   Widen [seattle+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:05:51]   Widen [seattle+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:05:52]   Widen [seattle+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:05:53]   Widen [seattle+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:05:53]   Widen [miami+lucknow] to 0.6: vol_score=0.00 trades=6144
+[09:05:54]   Widen [miami+munich] to 0.6: vol_score=0.00 trades=6144
+[09:05:55]   Widen [miami+dallas] to 0.6: vol_score=0.00 trades=6144
+[09:05:56]   Widen [miami+ankara] to 0.6: vol_score=0.00 trades=6141
+[09:05:57]   Widen [miami+chicago] to 0.6: vol_score=0.00 trades=6138
+[09:05:58]   Widen [miami+tokyo] to 0.6: vol_score=0.00 trades=6145
+[09:05:58]   Widen [miami+paris] to 0.6: vol_score=0.00 trades=6145
+[09:05:59]   Widen [miami+seoul] to 0.6: vol_score=0.00 trades=6139
+[09:06:00]   Widen [miami+toronto] to 0.6: vol_score=0.00 trades=6140
+[09:06:01]   Widen [miami+wellington] to 0.6: vol_score=0.00 trades=6145
+[09:06:02]   Widen [miami+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:06:03]   Widen [miami+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:06:03]   Widen [miami+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:06:04]   Widen [miami+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:06:05]   Widen [lucknow+munich] to 0.6: vol_score=0.00 trades=6143
+[09:06:06]   Widen [lucknow+dallas] to 0.6: vol_score=0.00 trades=6143
+[09:06:07]   Widen [lucknow+ankara] to 0.6: vol_score=0.00 trades=6140
+[09:06:08]   Widen [lucknow+chicago] to 0.6: vol_score=0.00 trades=6137
+[09:06:08]   Widen [lucknow+tokyo] to 0.6: vol_score=0.00 trades=6144
+[09:06:09]   Widen [lucknow+paris] to 0.6: vol_score=0.00 trades=6144
+[09:06:10]   Widen [lucknow+seoul] to 0.6: vol_score=0.00 trades=6138
+[09:06:11]   Widen [lucknow+toronto] to 0.6: vol_score=0.00 trades=6139
+[09:06:12]   Widen [lucknow+wellington] to 0.6: vol_score=0.00 trades=6144
+[09:06:13]   Widen [lucknow+atlanta] to 0.6: vol_score=0.00 trades=6141
+[09:06:14]   Widen [lucknow+los_angeles] to 0.6: vol_score=0.00 trades=6142
+[09:06:14]   Widen [lucknow+sao_paulo] to 0.6: vol_score=0.00 trades=6138
+[09:06:15]   Widen [lucknow+nyc] to 0.6: vol_score=0.00 trades=6139
+[09:06:16]   Widen [munich+dallas] to 0.6: vol_score=0.00 trades=6143
+[09:06:17]   Widen [munich+ankara] to 0.6: vol_score=0.00 trades=6140
+[09:06:18]   Widen [munich+chicago] to 0.6: vol_score=0.00 trades=6137
+[09:06:19]   Widen [munich+tokyo] to 0.6: vol_score=0.00 trades=6144
+[09:06:19]   Widen [munich+paris] to 0.6: vol_score=0.00 trades=6144
+[09:06:20]   Widen [munich+seoul] to 0.6: vol_score=0.00 trades=6138
+[09:06:21]   Widen [munich+toronto] to 0.6: vol_score=0.00 trades=6139
+[09:06:22]   Widen [munich+wellington] to 0.6: vol_score=0.00 trades=6144
+[09:06:23]   Widen [munich+atlanta] to 0.6: vol_score=0.00 trades=6141
+[09:06:24]   Widen [munich+los_angeles] to 0.6: vol_score=0.00 trades=6142
+[09:06:25]   Widen [munich+sao_paulo] to 0.6: vol_score=0.00 trades=6138
+[09:06:25]   Widen [munich+nyc] to 0.6: vol_score=0.00 trades=6139
+[09:06:26]   Widen [dallas+ankara] to 0.6: vol_score=0.00 trades=6140
+[09:06:27]   Widen [dallas+chicago] to 0.6: vol_score=0.00 trades=6137
+[09:06:28]   Widen [dallas+tokyo] to 0.6: vol_score=0.00 trades=6144
+[09:06:29]   Widen [dallas+paris] to 0.6: vol_score=0.00 trades=6144
+[09:06:30]   Widen [dallas+seoul] to 0.6: vol_score=0.00 trades=6138
+[09:06:30]   Widen [dallas+toronto] to 0.6: vol_score=0.00 trades=6139
+[09:06:31]   Widen [dallas+wellington] to 0.6: vol_score=0.00 trades=6144
+[09:06:32]   Widen [dallas+atlanta] to 0.6: vol_score=0.00 trades=6141
+[09:06:33]   Widen [dallas+los_angeles] to 0.6: vol_score=0.00 trades=6142
+[09:06:34]   Widen [dallas+sao_paulo] to 0.6: vol_score=0.00 trades=6138
+[09:06:35]   Widen [dallas+nyc] to 0.6: vol_score=0.00 trades=6139
+[09:06:35]   Widen [ankara+chicago] to 0.6: vol_score=0.00 trades=6134
+[09:06:36]   Widen [ankara+tokyo] to 0.6: vol_score=0.00 trades=6141
+[09:06:37]   Widen [ankara+paris] to 0.6: vol_score=0.00 trades=6141
+[09:06:38]   Widen [ankara+seoul] to 0.6: vol_score=0.00 trades=6135
+[09:06:39]   Widen [ankara+toronto] to 0.6: vol_score=0.00 trades=6136
+[09:06:40]   Widen [ankara+wellington] to 0.6: vol_score=0.00 trades=6141
+[09:06:40]   Widen [ankara+atlanta] to 0.6: vol_score=0.00 trades=6138
+[09:06:41]   Widen [ankara+los_angeles] to 0.6: vol_score=0.00 trades=6139
+[09:06:42]   Widen [ankara+sao_paulo] to 0.6: vol_score=0.00 trades=6135
+[09:06:43]   Widen [ankara+nyc] to 0.6: vol_score=0.00 trades=6136
+[09:06:44]   Widen [chicago+tokyo] to 0.6: vol_score=0.00 trades=6138
+[09:06:45]   Widen [chicago+paris] to 0.6: vol_score=0.00 trades=6138
+[09:06:46]   Widen [chicago+seoul] to 0.6: vol_score=0.00 trades=6132
+[09:06:46]   Widen [chicago+toronto] to 0.6: vol_score=0.00 trades=6133
+[09:06:47]   Widen [chicago+wellington] to 0.6: vol_score=0.00 trades=6138
+[09:06:48]   Widen [chicago+atlanta] to 0.6: vol_score=0.00 trades=6135
+[09:06:49]   Widen [chicago+los_angeles] to 0.6: vol_score=0.00 trades=6136
+[09:06:50]   Widen [chicago+sao_paulo] to 0.6: vol_score=0.00 trades=6132
+[09:06:51]   Widen [chicago+nyc] to 0.6: vol_score=0.00 trades=6133
+[09:06:51]   Widen [tokyo+paris] to 0.6: vol_score=0.00 trades=6145
+[09:06:52]   Widen [tokyo+seoul] to 0.6: vol_score=0.00 trades=6139
+[09:06:53]   Widen [tokyo+toronto] to 0.6: vol_score=0.00 trades=6140
+[09:06:54]   Widen [tokyo+wellington] to 0.6: vol_score=0.00 trades=6145
+[09:06:55]   Widen [tokyo+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:06:56]   Widen [tokyo+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:06:57]   Widen [tokyo+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:06:57]   Widen [tokyo+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:06:58]   Widen [paris+seoul] to 0.6: vol_score=0.00 trades=6139
+[09:06:59]   Widen [paris+toronto] to 0.6: vol_score=0.00 trades=6140
+[09:07:00]   Widen [paris+wellington] to 0.6: vol_score=0.00 trades=6145
+[09:07:01]   Widen [paris+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:07:02]   Widen [paris+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:07:02]   Widen [paris+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:07:03]   Widen [paris+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:07:04]   Widen [seoul+toronto] to 0.6: vol_score=0.00 trades=6134
+[09:07:05]   Widen [seoul+wellington] to 0.6: vol_score=0.00 trades=6139
+[09:07:06]   Widen [seoul+atlanta] to 0.6: vol_score=0.00 trades=6136
+[09:07:07]   Widen [seoul+los_angeles] to 0.6: vol_score=0.00 trades=6137
+[09:07:07]   Widen [seoul+sao_paulo] to 0.6: vol_score=0.00 trades=6133
+[09:07:08]   Widen [seoul+nyc] to 0.6: vol_score=0.00 trades=6134
+[09:07:09]   Widen [toronto+wellington] to 0.6: vol_score=0.00 trades=6140
+[09:07:10]   Widen [toronto+atlanta] to 0.6: vol_score=0.00 trades=6137
+[09:07:11]   Widen [toronto+los_angeles] to 0.6: vol_score=0.00 trades=6138
+[09:07:12]   Widen [toronto+sao_paulo] to 0.6: vol_score=0.00 trades=6134
+[09:07:12]   Widen [toronto+nyc] to 0.6: vol_score=0.00 trades=6135
+[09:07:13]   Widen [wellington+atlanta] to 0.6: vol_score=0.00 trades=6142
+[09:07:14]   Widen [wellington+los_angeles] to 0.6: vol_score=0.00 trades=6143
+[09:07:15]   Widen [wellington+sao_paulo] to 0.6: vol_score=0.00 trades=6139
+[09:07:16]   Widen [wellington+nyc] to 0.6: vol_score=0.00 trades=6140
+[09:07:17]   Widen [atlanta+los_angeles] to 0.6: vol_score=0.00 trades=6140
+[09:07:17]   Widen [atlanta+sao_paulo] to 0.6: vol_score=0.00 trades=6136
+[09:07:18]   Widen [atlanta+nyc] to 0.6: vol_score=0.00 trades=6137
+[09:07:19]   Widen [los_angeles+sao_paulo] to 0.6: vol_score=0.00 trades=6137
+[09:07:20]   Widen [los_angeles+nyc] to 0.6: vol_score=0.00 trades=6138
+[09:07:21]   Widen [sao_paulo+nyc] to 0.6: vol_score=0.00 trades=6134

@@ -1,0 +1,203 @@
+
+======================================================================
+V5 CAPITAL VELOCITY EXPANSION
+Events: 1281, 2026-03-17T16:14:00.343490
+V4a k=20 base. Three dimensions: multi-bucket, multi-day, city expansion.
+Each at agg30 and agg40. Decision: DD<20% → use agg40, else agg30.
+======================================================================
+
+==================================================
+V4a REFERENCE (single bucket, 24h, agg=30%)
+
+  v4a_agg30:
+    Score: 132.9  Trades: 175  WR: 37.7%
+    PnL: $14,266.04  DD: 17.3%  Sharpe: 6.21
+    Util: 55.1%  Concurrent: 0.8  Turnover: 3.9
+    Active cities: 5  Avg trades/city: 35.0
+    MaxCity: 40.4%  Top2: 66.2%  HHI: 2895.0
+    WF OOS: score=78.2  PnL=$1201.59
+      Fold 1: PnL=$88.02  trades=44  WR=34.1%  util=65.8%
+      Fold 2: PnL=$1754.85  trades=33  WR=45.5%  util=83.2%
+      Fold 3: PnL=$1761.89  trades=28  WR=57.1%  util=69.4%
+    Per-city:
+      munich         $5,765.06  ( 13 tr, WR= 61.5%)   40.4%
+      seoul          $3,673.22  ( 49 tr, WR= 26.5%)   25.7%
+      atlanta        $3,326.19  ( 28 tr, WR= 67.9%)   23.3%
+      toronto        $  806.80  ( 26 tr, WR= 34.6%)    5.7%
+      nyc            $  694.76  ( 59 tr, WR= 28.8%)    4.9%
+    Gates: DD<20% ✓  OOS>90 ✗
+
+==================================================
+V4a REFERENCE (single bucket, 24h, agg=40%)
+
+  v4a_agg40:
+    Score: 136.4  Trades: 175  WR: 37.7%
+    PnL: $20,672.49  DD: 20.6%  Sharpe: 6.1
+    Util: 55.1%  Concurrent: 0.8  Turnover: 4.5
+    Active cities: 5  Avg trades/city: 35.0
+    MaxCity: 38.3%  Top2: 65.6%  HHI: 2842.0
+    WF OOS: score=80.6  PnL=$1422.91
+      Fold 1: PnL=$102.63  trades=44  WR=34.1%  util=65.8%
+      Fold 2: PnL=$2261.85  trades=33  WR=45.5%  util=83.2%
+      Fold 3: PnL=$1904.24  trades=28  WR=57.1%  util=69.4%
+    Per-city:
+      munich         $7,924.11  ( 13 tr, WR= 61.5%)   38.3%
+      seoul          $5,641.67  ( 49 tr, WR= 26.5%)   27.3%
+      atlanta        $4,932.80  ( 28 tr, WR= 67.9%)   23.9%
+      toronto        $1,342.35  ( 26 tr, WR= 34.6%)    6.5%
+      nyc            $  831.55  ( 59 tr, WR= 28.8%)    4.0%
+    Gates: DD<20% ✗  OOS>90 ✗
+
+==================================================
+V5a MULTI-BUCKET (min_edge=0.05, 24h, agg=30%)
+
+  v5a_agg30:
+    Score: 133.1  Trades: 189  WR: 36.5%
+    PnL: $14,352.46  DD: 17.8%  Sharpe: 6.1
+    Util: 57.3%  Concurrent: 0.8  Turnover: 4.0
+    Active cities: 5  Avg trades/city: 37.8
+    MaxCity: 40.0%  Top2: 68.5%  HHI: 2924.0
+    WF OOS: score=62.5  PnL=$1229.16
+      Fold 1: PnL=$34.86  trades=52  WR=28.8%  util=74.9%
+      Fold 2: PnL=$1746.27  trades=42  WR=38.1%  util=86.5%
+      Fold 3: PnL=$1906.35  trades=37  WR=48.6%  util=69.4%
+    Per-city:
+      munich         $5,747.54  ( 14 tr, WR= 57.1%)   40.0%
+      seoul          $4,079.76  ( 51 tr, WR= 27.5%)   28.4%
+      atlanta        $3,084.21  ( 32 tr, WR= 59.4%)   21.5%
+      nyc            $  732.66  ( 63 tr, WR= 30.2%)    5.1%
+      toronto        $  708.29  ( 29 tr, WR= 31.0%)    4.9%
+    Gates: DD<20% ✓  OOS>90 ✗
+
+==================================================
+V5a MULTI-BUCKET (min_edge=0.05, 24h, agg=40%)
+
+  v5a_agg40:
+    Score: 136.4  Trades: 189  WR: 36.5%
+    PnL: $20,851.24  DD: 21.3%  Sharpe: 5.98
+    Util: 57.3%  Concurrent: 0.8  Turnover: 4.7
+    Active cities: 5  Avg trades/city: 37.8
+    MaxCity: 37.9%  Top2: 68.1%  HHI: 2876.0
+    WF OOS: score=65.2  PnL=$1461.12
+      Fold 1: PnL=$38.89  trades=52  WR=28.8%  util=74.9%
+      Fold 2: PnL=$2242.49  trades=42  WR=38.1%  util=86.5%
+      Fold 3: PnL=$2101.98  trades=37  WR=48.6%  util=69.4%
+    Per-city:
+      munich         $7,906.48  ( 14 tr, WR= 57.1%)   37.9%
+      seoul          $6,293.32  ( 51 tr, WR= 27.5%)   30.2%
+      atlanta        $4,543.84  ( 32 tr, WR= 59.4%)   21.8%
+      toronto        $1,228.68  ( 29 tr, WR= 31.0%)    5.9%
+      nyc            $  878.91  ( 63 tr, WR= 30.2%)    4.2%
+    Gates: DD<20% ✗  OOS>90 ✗
+
+==================================================
+V5b MULTI-DAY (min_edge=0.05, 24/48/72h, agg=30%)
+
+  v5b_agg30:
+    Score: 128.9  Trades: 207  WR: 35.3%
+    PnL: $12,168.05  DD: 17.8%  Sharpe: 5.59
+    Util: 66.1%  Concurrent: 1.2  Turnover: 4.0
+    Active cities: 5  Avg trades/city: 41.4
+    MaxCity: 48.3%  Top2: 74.8%  HHI: 3309.0
+    WF OOS: score=59.5  PnL=$1036.32
+      Fold 1: PnL=$34.86  trades=52  WR=28.8%  util=71.7%
+      Fold 2: PnL=$1746.27  trades=42  WR=38.1%  util=81.1%
+      Fold 3: PnL=$1327.82  trades=43  WR=46.5%  util=71.9%
+    Per-city:
+      seoul          $5,879.99  ( 56 tr, WR= 28.6%)   48.3%
+      atlanta        $3,217.48  ( 32 tr, WR= 59.4%)   26.4%
+      munich         $1,776.59  ( 15 tr, WR= 53.3%)   14.6%
+      nyc            $  846.07  ( 75 tr, WR= 28.0%)    7.0%
+      toronto        $  447.91  ( 29 tr, WR= 31.0%)    3.7%
+    Gates: DD<20% ✓  OOS>90 ✗
+
+==================================================
+V5b MULTI-DAY (min_edge=0.05, 24/48/72h, agg=40%)
+
+  v5b_agg40:
+    Score: 130.0  Trades: 207  WR: 35.3%
+    PnL: $18,965.08  DD: 21.3%  Sharpe: 5.11
+    Util: 66.1%  Concurrent: 1.2  Turnover: 4.7
+    Active cities: 5  Avg trades/city: 41.4
+    MaxCity: 52.1%  Top2: 77.2%  HHI: 3560.0
+    WF OOS: score=62.4  PnL=$1293.71
+      Fold 1: PnL=$38.89  trades=52  WR=28.8%  util=71.7%
+      Fold 2: PnL=$2242.49  trades=42  WR=38.1%  util=81.1%
+      Fold 3: PnL=$1599.74  trades=43  WR=46.5%  util=71.9%
+    Per-city:
+      seoul          $9,880.18  ( 56 tr, WR= 28.6%)   52.1%
+      atlanta        $4,757.44  ( 32 tr, WR= 59.4%)   25.1%
+      munich         $2,453.13  ( 15 tr, WR= 53.3%)   12.9%
+      nyc            $1,019.65  ( 75 tr, WR= 28.0%)    5.4%
+      toronto        $  854.68  ( 29 tr, WR= 31.0%)    4.5%
+    Gates: DD<20% ✗  OOS>90 ✗
+
+==================================================
+V5c CITY EXPANSION (all cities, min_edge=0.05, 24/48/72h, agg=30%)
+
+  v5c_agg30:
+    Score: 128.2  Trades: 229  WR: 34.5%
+    PnL: $11,642.41  DD: 17.8%  Sharpe: 5.64
+    Util: 66.9%  Concurrent: 1.3  Turnover: 4.6
+    Active cities: 7  Avg trades/city: 32.7
+    MaxCity: 46.1%  Top2: 73.0%  HHI: 3107.0
+    WF OOS: score=58.4  PnL=$991.76
+      Fold 1: PnL=$34.86  trades=52  WR=28.8%  util=71.7%
+      Fold 2: PnL=$1653.61  trades=46  WR=34.8%  util=84.3%
+      Fold 3: PnL=$1286.80  trades=62  WR=41.9%  util=79.9%
+    Per-city:
+      seoul          $5,362.41  ( 56 tr, WR= 28.6%)   46.1%
+      atlanta        $3,138.38  ( 32 tr, WR= 59.4%)   27.0%
+      munich         $1,613.36  ( 15 tr, WR= 53.3%)   13.9%
+      nyc            $  846.07  ( 75 tr, WR= 28.0%)    7.3%
+      toronto        $  361.11  ( 29 tr, WR= 31.0%)    3.1%
+      lucknow        $  242.57  (  6 tr, WR= 50.0%)    2.1%
+      wellington     $   78.51  ( 16 tr, WR= 18.8%)    0.7%
+    Gates: DD<20% ✓  OOS>90 ✗
+
+==================================================
+V5c CITY EXPANSION (all cities, min_edge=0.05, 24/48/72h, agg=40%)
+
+  v5c_agg40:
+    Score: 128.8  Trades: 229  WR: 34.5%
+    PnL: $18,216.04  DD: 21.3%  Sharpe: 5.2
+    Util: 66.9%  Concurrent: 1.3  Turnover: 5.5
+    Active cities: 7  Avg trades/city: 32.7
+    MaxCity: 49.5%  Top2: 75.0%  HHI: 3307.0
+    WF OOS: score=61.3  PnL=$1266.79
+      Fold 1: PnL=$38.89  trades=52  WR=28.8%  util=71.7%
+      Fold 2: PnL=$2126.68  trades=46  WR=34.8%  util=84.3%
+      Fold 3: PnL=$1634.81  trades=62  WR=41.9%  util=79.9%
+    Per-city:
+      seoul          $9,020.61  ( 56 tr, WR= 28.6%)   49.5%
+      atlanta        $4,642.00  ( 32 tr, WR= 59.4%)   25.5%
+      munich         $2,266.66  ( 15 tr, WR= 53.3%)   12.4%
+      nyc            $1,019.65  ( 75 tr, WR= 28.0%)    5.6%
+      toronto        $  660.97  ( 29 tr, WR= 31.0%)    3.6%
+      lucknow        $  327.75  (  6 tr, WR= 50.0%)    1.8%
+      wellington     $  278.39  ( 16 tr, WR= 18.8%)    1.5%
+    Gates: DD<20% ✗  OOS>90 ✗
+
+======================================================================
+COMPARISON TABLE
+======================================================================
+Variant           Score   Tr     WR        PnL     DD  Shrp  Util  Conc Cities  MaxC%    OOS DD<20 OOS>90
+---------------------------------------------------------------------------------------------------------
+v4a_agg30         132.9  175  37.7% $   14,266  17.3%  6.21   55%  0.8      5  40.4%  78.2     ✓      ✗
+v4a_agg40         136.4  175  37.7% $   20,672  20.6%  6.10   55%  0.8      5  38.3%  80.6     ✗      ✗
+v5a_agg30         133.1  189  36.5% $   14,352  17.8%  6.10   57%  0.8      5  40.0%  62.5     ✓      ✗
+v5a_agg40         136.4  189  36.5% $   20,851  21.3%  5.98   57%  0.8      5  37.9%  65.2     ✗      ✗
+v5b_agg30         128.9  207  35.3% $   12,168  17.8%  5.59   66%  1.2      5  48.3%  59.5     ✓      ✗
+v5b_agg40         130.0  207  35.3% $   18,965  21.3%  5.11   66%  1.2      5  52.1%  62.4     ✗      ✗
+v5c_agg30         128.2  229  34.5% $   11,642  17.8%  5.64   67%  1.3      7  46.1%  58.4     ✓      ✗
+v5c_agg40         128.8  229  34.5% $   18,216  21.3%  5.20   67%  1.3      7  49.5%  61.3     ✗      ✗
+
+======================================================================
+INCREMENTAL IMPACT (agg30)
+======================================================================
+  +Multi-bucket    Trades: 175→189 (+14)  Util: 55→57% (+2)  PnL: $+86  DD: +0.5pp
+  +Multi-day       Trades: 189→207 (+18)  Util: 57→66% (+9)  PnL: $-2,184  DD: +0.0pp
+  +Cities          Trades: 207→229 (+22)  Util: 66→67% (+1)  PnL: $-526  DD: +0.0pp
+
+Done in 48s. Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_v5_velocity.json
+Dashboard: /experiments → select 'v5_velocity'

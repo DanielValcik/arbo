@@ -1,0 +1,137 @@
+
+======================================================================
+EMOS PER-CITY AUTORESEARCH
+Events: 1281, Start: 2026-03-17T14:40:10.726233
+Global baseline: score=156.5, WR=39.6%, PnL=$32,918
+======================================================================
+
+Running global EMOS baseline...
+  Global: score=146.9  trades=88  WR=45.5%  PnL=$20878.39
+
+Tradeable cities (7): [('nyc', 128), ('atlanta', 99), ('seoul', 99), ('toronto', 99), ('wellington', 26), ('lucknow', 11), ('munich', 11)]
+
+--- NYC (128 events) ---
+  Global params: score=92.5  trades=18  WR=44.4%  PnL=$2745.94
+  Trial   9: score=  93.0  trades= 65  WR= 21.5%  PnL=$ 3718.84  ★
+  Trial  30: score= 106.2  trades=146  WR= 15.1%  PnL=$ 5415.77  ★
+  Trial  50: score= 106.8  trades=141  WR= 14.9%  PnL=$ 5905.21  ★
+  Trial  53: score= 107.6  trades=137  WR= 14.6%  PnL=$ 6065.20  ★
+  Trial  61: score= 107.9  trades=115  WR= 18.3%  PnL=$ 7088.22  ★
+  Trial  71: score= 109.4  trades=119  WR= 16.8%  PnL=$ 7251.16  ★
+  Trial  73: score= 109.9  trades=100  WR= 17.0%  PnL=$ 7473.36  ★
+  Trial 104: score= 111.0  trades= 68  WR= 17.6%  PnL=$ 5688.08  ★
+  Trial 106: score= 117.7  trades= 19  WR= 36.8%  PnL=$ 4870.80  ★
+  Fine 154: score= 117.9  PnL=$ 4885.92  ★
+  Fine 183: score= 122.1  PnL=$ 7618.80  ★
+  Fine 190: score= 122.4  PnL=$ 9665.24  ★
+  Fine 192: score= 123.1  PnL=$ 5931.03  ★
+  BEST: score=123.1  trades=28  WR=35.7%  PnL=$5931.03  (vs global: +30.6)
+  Override: {'max_price': 0.55, 'min_price': 0.05, 'min_prob': 0.08, 'kelly_raw_cap': 0.25}
+
+--- ATLANTA (99 events) ---
+  Global params: score=118.1  trades=18  WR=61.1%  PnL=$3965.46
+  Trial   0: score= 138.2  trades= 70  WR= 45.7%  PnL=$13017.03  ★
+  Trial  23: score= 144.3  trades= 46  WR= 47.8%  PnL=$11127.35  ★
+  Fine 122: score= 145.9  PnL=$13084.15  ★
+  BEST: score=145.9  trades=54  WR=46.3%  PnL=$13084.15  (vs global: +27.7)
+  Override: {'min_edge': 0.08, 'max_price': 0.6, 'min_prob': 0.02, 'kelly_raw_cap': 0.25, 'prob_sharpening': 0.85, 'shrinkage': 0.03}
+
+--- SEOUL (99 events) ---
+  Global params: score=45.1  trades=19  WR=31.6%  PnL=$769.57
+  Trial   7: score=  61.5  trades= 54  WR= 24.1%  PnL=$ 1037.18  ★
+  Trial  10: score=  63.0  trades= 30  WR= 33.3%  PnL=$ 1394.88  ★
+  Trial  12: score=  79.0  trades= 35  WR= 31.4%  PnL=$ 2703.04  ★
+  Trial  71: score=  79.4  trades= 35  WR= 31.4%  PnL=$ 2734.51  ★
+  Fine 144: score=  89.3  PnL=$ 2871.80  ★
+  Fine 155: score=  94.6  PnL=$ 3465.51  ★
+  Fine 170: score= 105.1  PnL=$ 4035.09  ★
+  BEST: score=105.1  trades=32  WR=37.5%  PnL=$4035.09  (vs global: +60.0)
+  Override: {'max_price': 0.7, 'min_prob': 0.1, 'kelly_raw_cap': 0.45, 'prob_sharpening': 0.9, 'shrinkage': 0}
+
+--- TORONTO (99 events) ---
+  Global params: score=41.6  trades=24  WR=37.5%  PnL=$540.28
+  Trial   8: score=  46.4  trades= 97  WR= 16.5%  PnL=$  219.49  ★
+  Trial  12: score=  48.0  trades= 21  WR= 42.9%  PnL=$  774.70  ★
+  Trial  22: score=  57.6  trades= 45  WR= 37.8%  PnL=$  669.39  ★
+  Fine 124: score=  57.8  PnL=$  674.58  ★
+  Fine 126: score=  59.2  PnL=$  825.92  ★
+  Fine 127: score=  61.1  PnL=$  871.16  ★
+  Fine 132: score=  61.5  PnL=$  877.84  ★
+  Fine 133: score=  62.2  PnL=$  974.11  ★
+  Fine 143: score=  63.1  PnL=$ 1030.33  ★
+  Fine 155: score=  63.5  PnL=$ 1048.92  ★
+  Fine 173: score=  63.7  PnL=$ 1065.74  ★
+  BEST: score=63.7  trades=50  WR=38.0%  PnL=$1065.74  (vs global: +22.1)
+  Override: {'min_edge': 0.04, 'max_price': 0.88, 'min_prob': 0.1, 'kelly_raw_cap': 0.55, 'prob_sharpening': 1.05}
+
+--- WELLINGTON (26 events) ---
+  Global params: score=0.0  trades=3  WR=66.7%  PnL=$123.78
+  BEST: score=0.0  trades=3  WR=66.7%  PnL=$123.78  (vs global: +0.0)
+
+--- LUCKNOW (11 events) ---
+  Global params: score=0.0  trades=1  WR=0.0%  PnL=$-45.06
+  BEST: score=0.0  trades=1  WR=0.0%  PnL=$-45.06  (vs global: +0.0)
+
+--- MUNICH (11 events) ---
+  Global params: score=0.0  trades=5  WR=80.0%  PnL=$1737.42
+  Trial   1: score=  75.0  trades= 13  WR= 53.8%  PnL=$ 1479.40  ★
+  Trial   2: score=  85.0  trades= 17  WR= 47.1%  PnL=$ 2180.65  ★
+  Trial   8: score=  85.5  trades= 17  WR= 47.1%  PnL=$ 2255.20  ★
+  Trial   9: score=  97.2  trades= 11  WR= 63.6%  PnL=$ 2381.37  ★
+  Trial  30: score= 102.7  trades= 10  WR= 70.0%  PnL=$ 2654.69  ★
+  Trial  57: score= 103.2  trades= 10  WR= 70.0%  PnL=$ 2720.43  ★
+  BEST: score=103.2  trades=10  WR=70.0%  PnL=$2720.43  (vs global: +103.2)
+  Override: {'max_price': 0.55, 'min_prob': 0.05, 'kelly_raw_cap': 0.3, 'prob_sharpening': 0.9, 'shrinkage': 0.03}
+
+======================================================================
+COMBINED: Global + All Per-City Overrides
+======================================================================
+
+  nyc: +30.6 score → override included
+  atlanta: +27.7 score → override included
+  seoul: +60.0 score → override included
+  toronto: +22.1 score → override included
+  wellington: no improvement → using global params
+  lucknow: no improvement → using global params
+  munich: +103.2 score → override included
+  lucknow: EXCLUDED (score=0, negative PnL)
+
+  Excluded: ['lucknow']
+  Overrides: 5 cities
+
+Running combined experiment...
+  Combined: score=159.6  trades=177  WR=42.4%  PnL=$47701.46  DD=25.32%  Sharpe=9.0
+
+Walk-forward validation...
+  WF OOS: score=118.4  PnL=$8433.95  folds=3
+    Fold 1: PnL=$731.15  trades=58  WR=32.8%  score=58.8
+    Fold 2: PnL=$9775.42  trades=51  WR=41.2%  score=143.2
+    Fold 3: PnL=$14795.27  trades=40  WR=60.0%  score=153.2
+
+Phase 3: Full combined sweep (200 trials)
+--------------------------------------------------
+  ... 50/200 done, best: 159.6
+  ... 100/200 done, best: 159.6
+  ... 150/200 done, best: 159.6
+  ... 200/200 done, best: 159.6
+
+======================================================================
+PER-CITY SWEEP COMPLETE — 1.1 minutes
+======================================================================
+
+  GLOBAL EMOS:   score=146.9  trades=88  WR=45.5%  PnL=$20878.39
+  PER-CITY EMOS: score=159.6  trades=177  WR=42.4%  PnL=$47701.46
+
+  Delta: score +12.7, PnL +$26823.07
+
+  Per-city improvements:
+    ★ munich           global=   0.0  best= 103.2  Δ=+103.2  WR=70.0%  PnL=$2720.43
+    ★ seoul            global=  45.1  best= 105.1  Δ= +60.0  WR=37.5%  PnL=$4035.09
+    ★ nyc              global=  92.5  best= 123.1  Δ= +30.6  WR=35.7%  PnL=$5931.03
+    ★ atlanta          global= 118.1  best= 145.9  Δ= +27.7  WR=46.3%  PnL=$13084.15
+    ★ toronto          global=  41.6  best=  63.7  Δ= +22.1  WR=38.0%  PnL=$1065.74
+       wellington       global=   0.0  best=   0.0  Δ=  +0.0  WR=66.7%  PnL=$123.78
+       lucknow          global=   0.0  best=   0.0  Δ=  +0.0  WR=0.0%  PnL=$-45.06
+
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_emos_percity.json
+  Dashboard: /experiments → select 'emos_percity'

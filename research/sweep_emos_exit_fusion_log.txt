@@ -1,0 +1,150 @@
+[15:01:40] EMOS + Edge Exit Fusion Autoresearch
+[15:01:40] Loading data...
+[15:02:15] Data: 1281 events, EMOS obs: 1213 across 18 cities
+[15:02:15] Patches installed: EMOS compute_prob + edge check_exit + custom exit_pnl
+[15:02:15] 
+=== BASELINE: Edge exit (no EMOS) ===
+[15:02:16]   ★ NEW BEST: score=122.1  trades=3148  WR=25.7%  PnL=$5283  Sharpe=4.40  DD=9.3%  exits=2524 saves=2441
+[15:02:16]     EMOS: win=None, σ_method=None, σ_floor=None, σ_scale=None
+[15:02:16]     EXIT: mhe=0.1, slip=0.01, edge≥0.01, p=[0.01,0.45], sharp=0.92, kelly=0.18
+[15:02:16] Baseline (edge, no EMOS): score=122.1  PnL=$5283
+[15:02:16] 
+=== GEN 0: RANDOM SEARCH (600 trials) ===
+[15:02:16]   ★ NEW BEST: score=124.4  trades=1130  WR=29.9%  PnL=$4589  Sharpe=6.85  DD=13.1%  exits=262 saves=178
+[15:02:16]     EMOS: win=7, σ_method=rolling_mae, σ_floor=1.0, σ_scale=1.0
+[15:02:16]     EXIT: mhe=-0.05, slip=0.02, edge≥0.08, p=[0.02,0.3], sharp=1.0, kelly=0.2
+[15:02:17]   ★ NEW BEST: score=127.3  trades=2474  WR=40.4%  PnL=$8891  Sharpe=6.42  DD=15.5%  exits=1777 saves=1350
+[15:02:17]     EMOS: win=45, σ_method=rolling_rmse, σ_floor=1.2, σ_scale=1.0
+[15:02:17]     EXIT: mhe=0.1, slip=0.03, edge≥0.01, p=[0.05,0.6], sharp=0.8, kelly=0.3
+[15:02:17]   ★ NEW BEST: score=127.8  trades=1119  WR=33.4%  PnL=$6942  Sharpe=6.36  DD=11.2%  exits=420 saves=323
+[15:02:17]     EMOS: win=21, σ_method=rolling_mae, σ_floor=1.2, σ_scale=0.8
+[15:02:17]     EXIT: mhe=-0.05, slip=0.03, edge≥0.05, p=[0.01,0.5], sharp=1.1, kelly=0.15
+[15:02:17]   ★ NEW BEST: score=132.3  trades=2442  WR=45.6%  PnL=$7125  Sharpe=7.80  DD=9.9%  exits=1691 saves=1242
+[15:02:17]     EMOS: win=21, σ_method=rolling_rmse, σ_floor=0.7, σ_scale=0.8
+[15:02:17]     EXIT: mhe=0.12, slip=0.005, edge≥0.015, p=[0.02,0.6], sharp=0.85, kelly=0.15
+[15:02:27]   Gen 0: 100/600  best=132.3  scored=88
+[15:02:41]   Gen 0: 200/600  best=132.3  scored=177
+[15:02:45]   ★ NEW BEST: score=133.6  trades=1267  WR=45.9%  PnL=$10029  Sharpe=8.58  DD=16.5%  exits=422 saves=238
+[15:02:45]     EMOS: win=60, σ_method=rolling_mae, σ_floor=0.7, σ_scale=1.0
+[15:02:45]     EXIT: mhe=0.0, slip=0.01, edge≥0.08, p=[0.05,0.6], sharp=0.9, kelly=0.3
+[15:02:54]   Gen 0: 300/600  best=133.6  scored=267
+[15:03:07]   Gen 0: 400/600  best=133.6  scored=344
+[15:03:11]   ★ NEW BEST: score=134.3  trades=1225  WR=46.1%  PnL=$5325  Sharpe=8.45  DD=8.4%  exits=411 saves=242
+[15:03:11]     EMOS: win=90, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.8
+[15:03:11]     EXIT: mhe=-0.05, slip=0.02, edge≥0.015, p=[0.05,0.4], sharp=1.1, kelly=0.15
+[15:03:19]   Gen 0: 500/600  best=134.3  scored=429
+[15:03:34]   Gen 0: 600/600  best=134.3  scored=522
+[15:03:34] Gen 0 done: best=134.3
+[15:03:34] 
+=== GEN 1: FINE-TUNE (400 trials, top-10) ===
+[15:03:34]   ★ NEW BEST: score=134.7  trades=1249  WR=45.6%  PnL=$5538  Sharpe=8.52  DD=7.8%  exits=406 saves=245
+[15:03:34]     EMOS: win=45, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.8
+[15:03:34]     EXIT: mhe=-0.05, slip=0.02, edge≥0.015, p=[0.05,0.4], sharp=1.1, kelly=0.15
+[15:03:36]   ★ NEW BEST: score=135.5  trades=1766  WR=55.5%  PnL=$7122  Sharpe=8.79  DD=7.8%  exits=896 saves=582
+[15:03:36]     EMOS: win=90, σ_method=rolling_mae, σ_floor=0.3, σ_scale=0.6
+[15:03:36]     EXIT: mhe=0.05, slip=0.005, edge≥0.03, p=[0.03,0.45], sharp=0.92, kelly=0.12
+[15:03:38]   ★ NEW BEST: score=135.5  trades=1157  WR=44.9%  PnL=$6433  Sharpe=8.67  DD=6.6%  exits=419 saves=270
+[15:03:38]     EMOS: win=90, σ_method=rolling_mae, σ_floor=0.3, σ_scale=0.8
+[15:03:38]     EXIT: mhe=0.02, slip=0.02, edge≥0.08, p=[0.03,0.35], sharp=0.95, kelly=0.3
+[15:03:48]   Gen 1: 100/400  best=135.5
+[15:04:01]   ★ NEW BEST: score=135.8  trades=1656  WR=47.4%  PnL=$9403  Sharpe=8.81  DD=7.7%  exits=597 saves=405
+[15:04:01]     EMOS: win=30, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.6
+[15:04:01]     EXIT: mhe=0.05, slip=0.005, edge≥0.05, p=[0.03,0.35], sharp=0.8, kelly=0.18
+[15:04:02]   Gen 1: 200/400  best=135.8
+[15:04:16]   Gen 1: 300/400  best=135.8
+[15:04:29]   Gen 1: 400/400  best=135.8
+[15:04:29] Gen 1 done: best=135.8
+[15:04:29] 
+=== GEN 2: CITY EXCLUSION (200 trials) ===
+[15:04:29]   Losing: ['tel_aviv', 'lucknow']
+[15:04:29]   Marginal: ['sao_paulo', 'tokyo']
+[15:04:29]   ★ NEW BEST: score=135.9  trades=1641  WR=47.5%  PnL=$9426  Sharpe=8.85  DD=7.4%  exits=592 saves=402
+[15:04:29]     EMOS: win=30, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.6
+[15:04:29]     EXIT: mhe=0.05, slip=0.005, edge≥0.05, p=[0.03,0.35], sharp=0.8, kelly=0.18
+[15:04:29]     EXCL: ['tel_aviv']
+[15:04:30]   ★ NEW BEST: score=136.7  trades=1582  WR=48.1%  PnL=$9398  Sharpe=9.08  DD=7.4%  exits=580 saves=391
+[15:04:30]     EMOS: win=30, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.6
+[15:04:30]     EXIT: mhe=0.05, slip=0.005, edge≥0.05, p=[0.03,0.35], sharp=0.8, kelly=0.18
+[15:04:30]     EXCL: ['sao_paulo']
+[15:04:31]   ★ NEW BEST: score=136.8  trades=1567  WR=48.2%  PnL=$9422  Sharpe=9.12  DD=7.4%  exits=575 saves=388
+[15:04:31]     EMOS: win=30, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.6
+[15:04:31]     EXIT: mhe=0.05, slip=0.005, edge≥0.05, p=[0.03,0.35], sharp=0.8, kelly=0.18
+[15:04:31]     EXCL: ['sao_paulo', 'tel_aviv']
+[15:04:32]   ★ NEW BEST: score=137.0  trades=1567  WR=48.4%  PnL=$9388  Sharpe=9.19  DD=7.4%  exits=577 saves=390
+[15:04:32]     EMOS: win=30, σ_method=ewma_rmse, σ_floor=0.7, σ_scale=0.6
+[15:04:32]     EXIT: mhe=0.05, slip=0.005, edge≥0.05, p=[0.03,0.35], sharp=0.8, kelly=0.18
+[15:04:32]     EXCL: ['sao_paulo', 'tokyo']
+[15:04:33]   ★ NEW BEST: score=137.1  trades=1659  WR=56.8%  PnL=$7192  Sharpe=9.20  DD=6.4%  exits=856 saves=552
+[15:04:33]     EMOS: win=90, σ_method=rolling_mae, σ_floor=0.3, σ_scale=0.6
+[15:04:33]     EXIT: mhe=0.05, slip=0.005, edge≥0.03, p=[0.03,0.45], sharp=0.92, kelly=0.12
+[15:04:33]     EXCL: ['sao_paulo', 'tel_aviv', 'tokyo']
+[15:04:52]   ★ NEW BEST: score=137.2  trades=1755  WR=51.2%  PnL=$7207  Sharpe=9.30  DD=6.8%  exits=731 saves=450
+[15:04:52]     EMOS: win=90, σ_method=rolling_mae, σ_floor=0.3, σ_scale=0.6
+[15:04:52]     EXIT: mhe=0.0, slip=0.005, edge≥0.03, p=[0.03,0.45], sharp=0.85, kelly=0.12
+[15:04:52]     EXCL: ['sao_paulo', 'tel_aviv', 'tokyo']
+[15:04:56] Gen 2 done: best=137.2
+[15:04:56] 
+=== GEN 3: PER-CITY OVERRIDES (200 trials) ===
+[15:04:57]   ★ NEW BEST: score=137.9  trades=1679  WR=51.5%  PnL=$6955  Sharpe=9.52  DD=6.5%  exits=701 saves=431
+[15:04:57]     EMOS: win=90, σ_method=rolling_mae, σ_floor=0.3, σ_scale=0.6
+[15:04:57]     EXIT: mhe=0.0, slip=0.005, edge≥0.03, p=[0.03,0.45], sharp=0.85, kelly=0.12
+[15:04:57]     EXCL: ['sao_paulo', 'tokyo']
+[15:04:58]   ★ NEW BEST: score=138.1  trades=1878  WR=54.1%  PnL=$15512  Sharpe=9.44  DD=8.3%  exits=946 saves=635
+[15:04:58]     EMOS: win=21, σ_method=rolling_mae, σ_floor=0.7, σ_scale=0.6
+[15:04:58]     EXIT: mhe=0.05, slip=0.005, edge≥0.03, p=[0.03,0.45], sharp=0.85, kelly=0.3
+[15:04:58]     EXCL: ['sao_paulo', 'tel_aviv', 'tokyo']
+[15:05:03]   Gen 3: 50/200  best=138.1
+[15:05:11]   Gen 3: 100/200  best=138.1
+[15:05:19]   Gen 3: 150/200  best=138.1
+[15:05:27]   Gen 3: 200/200  best=138.1
+[15:05:27] Gen 3 done: best=138.1
+[15:05:27] 
+=== WALK-FORWARD VALIDATION ===
+[15:05:27] WF: OOS score=121.0  OOS PnL=$3411  folds=3  trades=1487
+[15:05:27]   Fold: PnL=$5030  trades=455  WR=53.6%  score=140.6
+[15:05:27]   Fold: PnL=$3567  trades=541  WR=54.0%  score=123.8
+[15:05:27]   Fold: PnL=$1637  trades=491  WR=53.4%  score=98.6
+[15:05:27] 
+=== BEST MODEL — PER-CITY ===
+[15:05:27]   City             Trades     WR        PnL
+[15:05:27]   ------------------------------------------
+[15:05:27]   london              345  65.8% $     4157
+[15:05:27]   buenos_aires        143  48.3% $     1900
+[15:05:27]   dallas              165  47.3% $     1588
+[15:05:27]   nyc                 184  43.5% $     1371
+[15:05:27]   toronto             168  57.7% $     1355
+[15:05:27]   seattle             166  53.6% $     1342
+[15:05:27]   paris                64  70.3% $     1067
+[15:05:27]   chicago             106  37.7% $      727
+[15:05:27]   ankara               98  50.0% $      557
+[15:05:27]   seoul               162  54.3% $      536
+[15:05:27]   atlanta             135  48.9% $      438
+[15:05:27]   munich               22  68.2% $      231
+[15:05:27]   miami                74  56.8% $      153
+[15:05:27]   wellington           42  71.4% $      114
+[15:05:27]   lucknow               4  25.0% $      -22
+[15:05:27] 
+================================================================================
+[15:05:27] FINAL SUMMARY
+[15:05:27] ================================================================================
+[15:05:27]   Best score:       138.1
+[15:05:27]   Trades:           1878
+[15:05:27]   Win rate:         54.1%
+[15:05:27]   Total PnL:        $15512
+[15:05:27]   ROI:              1551.2%
+[15:05:27]   Sharpe:           9.44
+[15:05:27]   Max drawdown:     8.3%
+[15:05:27]   Capital util:     94.4%
+[15:05:27]   Exits:            946  (saves=635, regrets=311)
+[15:05:27]   OOS PnL:          $3411
+[15:05:27]   OOS score:        121.0
+[15:05:27]   Excluded cities:  ['sao_paulo', 'tel_aviv', 'tokyo']
+[15:05:27]   City overrides:   ['dallas', 'miami']
+[15:05:27]   Trials:           1401
+[15:05:27]   Runtime:          227s (3.8min)
+[15:05:27] 
+  vs baseline (edge, no EMOS):
+[15:05:27]     Score: 138.1 vs 122.1 (+16.0)
+[15:05:27]     PnL:   $15512 vs $5283
+[15:05:27] 
+Results saved to /Users/dnl.vlck/Arbo/research/data/experiments/sweep_emos_exit_fusion.json

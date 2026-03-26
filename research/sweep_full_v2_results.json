@@ -1,0 +1,1549 @@
+{
+  "sweep_date": "2026-03-14T00:16:58.027989",
+  "elapsed_seconds": 701.8,
+  "total_evaluations": 865,
+  "sizing": "FIXED quarter-Kelly 0.25",
+  "top_20": [
+    {
+      "rank": 1,
+      "trial": 806,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.487561,
+        "avg_sharpe": 80.4991,
+        "total_trades": 212,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1085.03,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15082.19,
+          "london": 13985.4,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 2,
+      "trial": 812,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.48
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.487561,
+        "avg_sharpe": 80.4991,
+        "total_trades": 212,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1085.03,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15082.19,
+          "london": 13985.4,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 3,
+      "trial": 813,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.48
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.487561,
+        "avg_sharpe": 80.4991,
+        "total_trades": 212,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1085.03,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15082.19,
+          "london": 13985.4,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 4,
+      "trial": 818,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.48
+          },
+          "lucknow": {
+            "max_price": 0.48
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.487561,
+        "avg_sharpe": 80.4991,
+        "total_trades": 212,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1085.03,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15082.19,
+          "london": 13985.4,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 5,
+      "trial": 809,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.48
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.208145,
+        "avg_sharpe": 80.4759,
+        "total_trades": 211,
+        "avg_win_rate": 98.1,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1079.9,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19233.26,
+          "seattle": 15081.46,
+          "london": 13947.89,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 6,
+      "trial": 815,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.48
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.48
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.208145,
+        "avg_sharpe": 80.4759,
+        "total_trades": 211,
+        "avg_win_rate": 98.1,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1079.9,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19233.26,
+          "seattle": 15081.46,
+          "london": 13947.89,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 7,
+      "trial": 816,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.48
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.48
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.208145,
+        "avg_sharpe": 80.4759,
+        "total_trades": 211,
+        "avg_win_rate": 98.1,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1079.9,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19233.26,
+          "seattle": 15081.46,
+          "london": 13947.89,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 8,
+      "trial": 819,
+      "label": "widen_0.48",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.48
+          },
+          "seattle": {
+            "max_price": 0.48
+          },
+          "london": {
+            "max_price": 0.48
+          },
+          "lucknow": {
+            "max_price": 0.48
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 105.208145,
+        "avg_sharpe": 80.4759,
+        "total_trades": 211,
+        "avg_win_rate": 98.1,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1079.9,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19233.26,
+          "seattle": 15081.46,
+          "london": 13947.89,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 9,
+      "trial": 840,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.692802,
+        "avg_sharpe": 76.5278,
+        "total_trades": 218,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1114.52,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15949.91,
+          "london": 14371.37,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 10,
+      "trial": 845,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.692802,
+        "avg_sharpe": 76.5278,
+        "total_trades": 218,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1114.52,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15949.91,
+          "london": 14371.37,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 11,
+      "trial": 847,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.692802,
+        "avg_sharpe": 76.5278,
+        "total_trades": 218,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1114.52,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15949.91,
+          "london": 14371.37,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 12,
+      "trial": 849,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.692802,
+        "avg_sharpe": 76.5278,
+        "total_trades": 218,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1114.52,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15949.91,
+          "london": 14371.37,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 13,
+      "trial": 837,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.530753,
+        "avg_sharpe": 76.5817,
+        "total_trades": 217,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1110.32,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15955.53,
+          "london": 14350.66,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 14,
+      "trial": 842,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.530753,
+        "avg_sharpe": 76.5817,
+        "total_trades": 217,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1110.32,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15955.53,
+          "london": 14350.66,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 15,
+      "trial": 844,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.530753,
+        "avg_sharpe": 76.5817,
+        "total_trades": 217,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1110.32,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15955.53,
+          "london": 14350.66,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 16,
+      "trial": 848,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.5
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.55
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.530753,
+        "avg_sharpe": 76.5817,
+        "total_trades": 217,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1110.32,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19451.55,
+          "seattle": 15955.53,
+          "london": 14350.66,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 348.76
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 17,
+      "trial": 835,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.494764,
+        "avg_sharpe": 76.7316,
+        "total_trades": 216,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1104.76,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15853.03,
+          "london": 14006.11,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 18,
+      "trial": 839,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.5
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.494764,
+        "avg_sharpe": 76.7316,
+        "total_trades": 216,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1104.76,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15853.03,
+          "london": 14006.11,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 19,
+      "trial": 841,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.5
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.494764,
+        "avg_sharpe": 76.7316,
+        "total_trades": 216,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1104.76,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15853.03,
+          "london": 14006.11,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    },
+    {
+      "rank": 20,
+      "trial": 846,
+      "label": "widen_0.55",
+      "params": {
+        "MIN_EDGE": 0.15,
+        "MAX_PRICE": 0.5,
+        "MIN_PRICE": 0.35,
+        "MIN_FORECAST_PROB": 0.7,
+        "MIN_VOLUME": 2000,
+        "MIN_LIQUIDITY": 200,
+        "PROB_SHARPENING": 1.143,
+        "SHRINKAGE_WEIGHT": 0.1,
+        "KELLY_RAW_CAP": 0.25,
+        "CONVICTION_RATIO": 0.0,
+        "CITY_OVERRIDES": {
+          "dc": {
+            "min_edge": 0.99
+          },
+          "toronto": {
+            "min_edge": 0.99
+          },
+          "buenos_aires": {
+            "min_edge": 0.99
+          },
+          "nyc": {
+            "min_edge": 0.99
+          },
+          "atlanta": {
+            "min_edge": 0.99
+          },
+          "wellington": {
+            "min_edge": 0.99
+          },
+          "paris": {
+            "max_price": 0.55
+          },
+          "seattle": {
+            "max_price": 0.55
+          },
+          "london": {
+            "max_price": 0.5
+          },
+          "lucknow": {
+            "max_price": 0.55
+          },
+          "miami": {
+            "max_price": 0.5
+          },
+          "tel_aviv": {
+            "max_price": 0.5
+          }
+        }
+      },
+      "result": {
+        "composite_score": 101.494764,
+        "avg_sharpe": 76.7316,
+        "total_trades": 216,
+        "avg_win_rate": 98.2,
+        "max_drawdown_pct": 5.0,
+        "avg_pnl_pct": 1104.76,
+        "profitable_windows": 5,
+        "total_windows": 5,
+        "city_pnl": {
+          "paris": 19646.4,
+          "seattle": 15853.03,
+          "london": 14006.11,
+          "lucknow": 4522.08,
+          "chicago": 501.56,
+          "los_angeles": 385.74,
+          "munich": 323.05
+        },
+        "unprofitable_cities": []
+      }
+    }
+  ],
+  "baseline": {
+    "params": {
+      "MIN_EDGE": 0.08,
+      "MAX_PRICE": 0.43,
+      "MIN_PRICE": 0.3,
+      "MIN_FORECAST_PROB": 0.62,
+      "MIN_VOLUME": 1000.0,
+      "MIN_LIQUIDITY": 200.0,
+      "PROB_SHARPENING": 1.05,
+      "SHRINKAGE_WEIGHT": 0.03,
+      "KELLY_RAW_CAP": 0.4,
+      "CONVICTION_RATIO": 0.0
+    },
+    "result": {
+      "composite_score": 56.100827,
+      "avg_sharpe": 20.1431,
+      "total_trades": 1197,
+      "avg_win_rate": 84.5,
+      "max_drawdown_pct": 9.75,
+      "avg_pnl_pct": 7026.89,
+      "profitable_windows": 5,
+      "total_windows": 5,
+      "city_pnl": {
+        "tel_aviv": 55555.02,
+        "miami": 54120.55,
+        "seattle": 52152.13,
+        "lucknow": 43473.8,
+        "london": 43366.63,
+        "dallas": 31685.07,
+        "paris": 28786.79,
+        "chicago": 27302.91,
+        "seoul": 10818.96,
+        "munich": 1222.73,
+        "ankara": 892.14,
+        "tokyo": 842.0,
+        "sao_paulo": 739.74,
+        "los_angeles": 385.74
+      },
+      "unprofitable_cities": []
+    }
+  }
+}

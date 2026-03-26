@@ -1,0 +1,103 @@
+
+======================================================================
+EMOS AUTORESEARCH V2 — Experiment Framework + PMD Data
+Events: 1281, Start: 2026-03-17T14:02:30.439970
+Scoring: 100-point composite (ROI+Sharpe+DD+Util+PnL/h+Trades)
+Position cap: $200, Quarter-Kelly, Realistic simulation
+======================================================================
+
+Running baseline (fixed sigma, no EMOS)...
+  Baseline: score=0.0  trades=169  WR=26.0%  PnL=$4158.21  DD=60.85%  Sharpe=2.73
+
+Phase 1: Random Search (600 trials)
+--------------------------------------------------
+  EMOS-0000: score= 127.8  trades=181  WR= 28.7%  PnL=$15315.01  DD= 36.5%  Util=49.8%  ★ NEW BEST
+  EMOS-0037: score= 132.3  trades=148  WR= 30.4%  PnL=$22909.38  DD= 32.6%  Util=47.5%  ★ NEW BEST
+  EMOS-0068: score= 132.8  trades=223  WR= 29.6%  PnL=$24263.56  DD= 33.6%  Util=58.6%  ★ NEW BEST
+  EMOS-0075: score= 136.6  trades=185  WR= 31.9%  PnL=$25533.58  DD= 41.3%  Util=54.6%  ★ NEW BEST
+  ... 100/600 done, best: 136.6
+  ... 200/600 done, best: 136.6
+  ... 300/600 done, best: 136.6
+  EMOS-0390: score= 137.1  trades=126  WR= 37.3%  PnL=$21520.41  DD= 41.2%  Util=42.7%  ★ NEW BEST
+  ... 400/600 done, best: 137.1
+  EMOS-0423: score= 141.3  trades=111  WR= 45.9%  PnL=$20493.46  DD= 31.7%  Util=36.9%  ★ NEW BEST
+  ... 500/600 done, best: 141.3
+  ... 600/600 done, best: 141.3
+
+Phase 2: Fine-tuning (400 trials around top 10)
+--------------------------------------------------
+  Top 10 scores: [141.35, 137.08, 136.6, 136.55, 136.42, 136.39, 135.96, 134.73, 134.1, 133.35]
+  EMOS-0620: score= 142.5  trades=111  PnL=$22138.12  ★ NEW BEST
+  EMOS-0697: score= 147.6  trades=101  PnL=$24875.49  ★ NEW BEST
+  ... 100/400 done, best: 147.6
+  ... 200/400 done, best: 147.6
+  ... 300/400 done, best: 147.6
+  ... 400/400 done, best: 147.6
+
+Phase 3: City optimization (200 trials)
+--------------------------------------------------
+  Losing: []
+  Winning: ['atlanta', 'seoul', 'munich', 'toronto', 'nyc', 'wellington']
+  EMOS-1000: score= 148.6  trades=219  PnL=$35216.18  excluded=[]  ★ NEW BEST
+  EMOS-1002: score= 149.3  trades=167  PnL=$34660.39  excluded=[]  ★ NEW BEST
+  ... 50/200 done, best: 149.3
+  ... 100/200 done, best: 149.3
+  EMOS-1118: score= 150.8  trades=163  PnL=$33421.70  excluded=[]  ★ NEW BEST
+  EMOS-1126: score= 151.6  trades=158  PnL=$33326.10  excluded=[]  ★ NEW BEST
+  EMOS-1127: score= 153.0  trades=156  PnL=$33671.83  excluded=[]  ★ NEW BEST
+  EMOS-1149: score= 154.2  trades=148  PnL=$32741.02  excluded=[]  ★ NEW BEST
+  ... 150/200 done, best: 154.2
+  EMOS-1166: score= 156.0  trades= 96  PnL=$26438.26  excluded=['chicago', 'dallas', 'tokyo', 'toronto']  ★ NEW BEST
+  EMOS-1170: score= 156.5  trades=139  PnL=$32917.63  excluded=[]  ★ NEW BEST
+  ... 200/200 done, best: 156.5
+
+Walk-forward validation on best params...
+  WF score: 113.9, OOS PnL: $5473.34, Folds: 3
+    Fold 1: PnL=$87.80  trades=41  WR=29.3%  score=42.0
+    Fold 2: PnL=$10490.78  trades=37  WR=43.2%  score=151.3
+    Fold 3: PnL=$5841.43  trades=28  WR=57.1%  score=148.3
+
+======================================================================
+EMOS V2 SWEEP COMPLETE — 2.4 minutes
+======================================================================
+
+  BASELINE: score=0.0  trades=169  WR=26.0%  PnL=$4158.21  Sharpe=2.73  DD=60.85%
+
+  BEST EMOS: score=156.5  trades=139  WR=39.6%  PnL=$32917.63  Sharpe=8.94  DD=19.33%
+
+  Delta: score +156.5, PnL +$28759.42
+
+  Best EMOS params:
+    emos_training_window: 45
+    emos_sigma_method: rolling_mae
+    emos_bias_method: rolling_mean
+    emos_sigma_floor: 0.5
+    emos_sigma_scale: 1.5
+    emos_ewma_alpha: 0.3
+    min_edge: 0.15
+    max_price: 0.66
+    min_price: 0.08
+    min_prob: 0.07
+    kelly_raw_cap: 0.35
+    prob_sharpening: 1.0
+    shrinkage: 0.1
+    excluded_cities: []
+
+  Per-city PnL:
+    atlanta          $13676.91  (39 trades, WR=48.7%)
+    toronto          $ 6801.89  (49 trades, WR=26.5%)
+    munich           $ 5835.11  (11 trades, WR=63.6%)
+    seoul            $ 3588.81  (18 trades, WR=33.3%)
+    nyc              $ 2703.91  (18 trades, WR=44.4%)
+    wellington       $  511.02  (3 trades, WR=66.7%)
+    lucknow          $ -200.01  (1 trades, WR=0.0%)
+
+  Top 5:
+    #1: score=156.5  trades=139  WR=39.6%  PnL=$32917.63  (trial 1170, phase 3)
+    #2: score=156.5  trades=139  WR=39.6%  PnL=$32917.63  (trial 1185, phase 3)
+    #3: score=156.5  trades=139  WR=39.6%  PnL=$32917.63  (trial 1193, phase 3)
+    #4: score=156.4  trades=136  WR=39.0%  PnL=$32406.62  (trial 1186, phase 3)
+    #5: score=156.0  trades=96  WR=46.9%  PnL=$26438.26  (trial 1166, phase 3)
+
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_emos_v2.json
+  Dashboard: /experiments → select 'emos_v2'

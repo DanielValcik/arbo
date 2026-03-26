@@ -1,0 +1,6511 @@
+[
+  {
+    "name": "shrink=0.93",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "_shrinkage": 0.93
+    },
+    "composite": 195.381435,
+    "trades": 4818,
+    "sharpe": 28.3238,
+    "win_rate": 91.4,
+    "pnl_pct": 395.0,
+    "dd_pct": 0.31,
+    "pf": 21.3519
+  },
+  {
+    "name": "shrink=0.95",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "_shrinkage": 0.95
+    },
+    "composite": 195.381435,
+    "trades": 4818,
+    "sharpe": 28.3238,
+    "win_rate": 91.4,
+    "pnl_pct": 395.0,
+    "dd_pct": 0.31,
+    "pf": 21.3519
+  },
+  {
+    "name": "kelly=0.015",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "KELLY_FRACTION": 0.015
+    },
+    "composite": 194.585499,
+    "trades": 5701,
+    "sharpe": 26.0473,
+    "win_rate": 90.0,
+    "pnl_pct": 950.98,
+    "dd_pct": 0.53,
+    "pf": 19.0148
+  },
+  {
+    "name": "kelly=0.02",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "KELLY_FRACTION": 0.02
+    },
+    "composite": 193.967252,
+    "trades": 5737,
+    "sharpe": 25.9722,
+    "win_rate": 90.0,
+    "pnl_pct": 1400.97,
+    "dd_pct": 0.7,
+    "pf": 19.25
+  },
+  {
+    "name": "kelly=0.03",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "KELLY_FRACTION": 0.03
+    },
+    "composite": 193.967252,
+    "trades": 5737,
+    "sharpe": 25.9722,
+    "win_rate": 90.0,
+    "pnl_pct": 1400.97,
+    "dd_pct": 0.7,
+    "pf": 19.25
+  },
+  {
+    "name": "lv_maxp=0.6",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      }
+    },
+    "composite": 192.999917,
+    "trades": 5340,
+    "sharpe": 26.5812,
+    "win_rate": 90.4,
+    "pnl_pct": 470.88,
+    "dd_pct": 0.32,
+    "pf": 18.9229
+  },
+  {
+    "name": "kelly=0.01",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "KELLY_FRACTION": 0.01
+    },
+    "composite": 192.999917,
+    "trades": 5340,
+    "sharpe": 26.5812,
+    "win_rate": 90.4,
+    "pnl_pct": 470.88,
+    "dd_pct": 0.32,
+    "pf": 18.9229
+  },
+  {
+    "name": "shrink=0.97",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "_shrinkage": 0.97
+    },
+    "composite": 192.999917,
+    "trades": 5340,
+    "sharpe": 26.5812,
+    "win_rate": 90.4,
+    "pnl_pct": 470.88,
+    "dd_pct": 0.32,
+    "pf": 18.9229
+  },
+  {
+    "name": "shrink=0.99",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "_shrinkage": 0.99
+    },
+    "composite": 192.999917,
+    "trades": 5340,
+    "sharpe": 26.5812,
+    "win_rate": 90.4,
+    "pnl_pct": 470.88,
+    "dd_pct": 0.32,
+    "pf": 18.9229
+  },
+  {
+    "name": "lv_maxp=0.55",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.55
+        },
+        "london": {
+          "max_price": 0.55
+        },
+        "seattle": {
+          "max_price": 0.55
+        },
+        "miami": {
+          "max_price": 0.55
+        },
+        "lucknow": {
+          "max_price": 0.55
+        }
+      }
+    },
+    "composite": 192.984436,
+    "trades": 5335,
+    "sharpe": 26.5915,
+    "win_rate": 90.4,
+    "pnl_pct": 470.49,
+    "dd_pct": 0.32,
+    "pf": 18.9156
+  },
+  {
+    "name": "minp=0.25",
+    "params": {
+      "MIN_PRICE": 0.25
+    },
+    "composite": 192.942229,
+    "trades": 5342,
+    "sharpe": 26.5683,
+    "win_rate": 90.4,
+    "pnl_pct": 470.94,
+    "dd_pct": 0.32,
+    "pf": 18.9257
+  },
+  {
+    "name": "lv_maxp=0.7",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.7
+        },
+        "london": {
+          "max_price": 0.7
+        },
+        "seattle": {
+          "max_price": 0.7
+        },
+        "miami": {
+          "max_price": 0.7
+        },
+        "lucknow": {
+          "max_price": 0.7
+        }
+      }
+    },
+    "composite": 192.942229,
+    "trades": 5342,
+    "sharpe": 26.5683,
+    "win_rate": 90.4,
+    "pnl_pct": 470.94,
+    "dd_pct": 0.32,
+    "pf": 18.9257
+  },
+  {
+    "name": "lv_edge=0.06",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "min_edge": 0.06
+        },
+        "london": {
+          "min_edge": 0.06
+        },
+        "seattle": {
+          "min_edge": 0.06
+        },
+        "miami": {
+          "min_edge": 0.06
+        },
+        "lucknow": {
+          "min_edge": 0.06
+        }
+      }
+    },
+    "composite": 192.815787,
+    "trades": 5344,
+    "sharpe": 26.5459,
+    "win_rate": 90.3,
+    "pnl_pct": 470.96,
+    "dd_pct": 0.32,
+    "pf": 18.9131
+  },
+  {
+    "name": "lv_edge=0.04",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "min_edge": 0.04
+        },
+        "london": {
+          "min_edge": 0.04
+        },
+        "seattle": {
+          "min_edge": 0.04
+        },
+        "miami": {
+          "min_edge": 0.04
+        },
+        "lucknow": {
+          "min_edge": 0.04
+        }
+      }
+    },
+    "composite": 192.673579,
+    "trades": 5345,
+    "sharpe": 26.5239,
+    "win_rate": 90.3,
+    "pnl_pct": 470.92,
+    "dd_pct": 0.32,
+    "pf": 18.9004
+  },
+  {
+    "name": "lv_edge=0.05",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "min_edge": 0.05
+        },
+        "london": {
+          "min_edge": 0.05
+        },
+        "seattle": {
+          "min_edge": 0.05
+        },
+        "miami": {
+          "min_edge": 0.05
+        },
+        "lucknow": {
+          "min_edge": 0.05
+        }
+      }
+    },
+    "composite": 192.673579,
+    "trades": 5345,
+    "sharpe": 26.5239,
+    "win_rate": 90.3,
+    "pnl_pct": 470.92,
+    "dd_pct": 0.32,
+    "pf": 18.9004
+  },
+  {
+    "name": "hv_edge=0.1",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.1
+        },
+        "dc": {
+          "min_edge": 0.1
+        },
+        "tokyo": {
+          "min_edge": 0.1
+        },
+        "los_angeles": {
+          "min_edge": 0.1
+        },
+        "munich": {
+          "min_edge": 0.1
+        }
+      }
+    },
+    "composite": 192.543854,
+    "trades": 5323,
+    "sharpe": 26.5607,
+    "win_rate": 90.3,
+    "pnl_pct": 469.93,
+    "dd_pct": 0.32,
+    "pf": 18.8976
+  },
+  {
+    "name": "split t=0.1 l=0.04",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.1
+        },
+        "dc": {
+          "min_edge": 0.1
+        },
+        "tokyo": {
+          "min_edge": 0.1
+        },
+        "los_angeles": {
+          "min_edge": 0.1
+        },
+        "munich": {
+          "min_edge": 0.1
+        },
+        "paris": {
+          "min_edge": 0.04
+        },
+        "london": {
+          "min_edge": 0.04
+        },
+        "seattle": {
+          "min_edge": 0.04
+        },
+        "miami": {
+          "min_edge": 0.04
+        },
+        "lucknow": {
+          "min_edge": 0.04
+        }
+      }
+    },
+    "composite": 192.275569,
+    "trades": 5326,
+    "sharpe": 26.5162,
+    "win_rate": 90.3,
+    "pnl_pct": 469.9,
+    "dd_pct": 0.32,
+    "pf": 18.8735
+  },
+  {
+    "name": "split t=0.1 l=0.05",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.1
+        },
+        "dc": {
+          "min_edge": 0.1
+        },
+        "tokyo": {
+          "min_edge": 0.1
+        },
+        "los_angeles": {
+          "min_edge": 0.1
+        },
+        "munich": {
+          "min_edge": 0.1
+        },
+        "paris": {
+          "min_edge": 0.05
+        },
+        "london": {
+          "min_edge": 0.05
+        },
+        "seattle": {
+          "min_edge": 0.05
+        },
+        "miami": {
+          "min_edge": 0.05
+        },
+        "lucknow": {
+          "min_edge": 0.05
+        }
+      }
+    },
+    "composite": 192.275569,
+    "trades": 5326,
+    "sharpe": 26.5162,
+    "win_rate": 90.3,
+    "pnl_pct": 469.9,
+    "dd_pct": 0.32,
+    "pf": 18.8735
+  },
+  {
+    "name": "split t=0.1 l=0.06",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.1
+        },
+        "dc": {
+          "min_edge": 0.1
+        },
+        "tokyo": {
+          "min_edge": 0.1
+        },
+        "los_angeles": {
+          "min_edge": 0.1
+        },
+        "munich": {
+          "min_edge": 0.1
+        },
+        "paris": {
+          "min_edge": 0.06
+        },
+        "london": {
+          "min_edge": 0.06
+        },
+        "seattle": {
+          "min_edge": 0.06
+        },
+        "miami": {
+          "min_edge": 0.06
+        },
+        "lucknow": {
+          "min_edge": 0.06
+        }
+      }
+    },
+    "composite": 192.275569,
+    "trades": 5326,
+    "sharpe": 26.5162,
+    "win_rate": 90.3,
+    "pnl_pct": 469.9,
+    "dd_pct": 0.32,
+    "pf": 18.8735
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 191.681109,
+    "trades": 4260,
+    "sharpe": 29.4978,
+    "win_rate": 93.0,
+    "pnl_pct": 441.21,
+    "dd_pct": 0.22,
+    "pf": 26.5719
+  },
+  {
+    "name": "hv_edge=0.12",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.12
+        },
+        "dc": {
+          "min_edge": 0.12
+        },
+        "tokyo": {
+          "min_edge": 0.12
+        },
+        "los_angeles": {
+          "min_edge": 0.12
+        },
+        "munich": {
+          "min_edge": 0.12
+        }
+      }
+    },
+    "composite": 191.676495,
+    "trades": 5280,
+    "sharpe": 26.5485,
+    "win_rate": 90.3,
+    "pnl_pct": 467.01,
+    "dd_pct": 0.32,
+    "pf": 18.8713
+  },
+  {
+    "name": "hv_edge=0.15",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.15
+        },
+        "dc": {
+          "min_edge": 0.15
+        },
+        "tokyo": {
+          "min_edge": 0.15
+        },
+        "los_angeles": {
+          "min_edge": 0.15
+        },
+        "munich": {
+          "min_edge": 0.15
+        }
+      }
+    },
+    "composite": 191.676495,
+    "trades": 5280,
+    "sharpe": 26.5485,
+    "win_rate": 90.3,
+    "pnl_pct": 467.01,
+    "dd_pct": 0.32,
+    "pf": 18.8713
+  },
+  {
+    "name": "split t=0.12 l=0.06",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.12
+        },
+        "dc": {
+          "min_edge": 0.12
+        },
+        "tokyo": {
+          "min_edge": 0.12
+        },
+        "los_angeles": {
+          "min_edge": 0.12
+        },
+        "munich": {
+          "min_edge": 0.12
+        },
+        "paris": {
+          "min_edge": 0.06
+        },
+        "london": {
+          "min_edge": 0.06
+        },
+        "seattle": {
+          "min_edge": 0.06
+        },
+        "miami": {
+          "min_edge": 0.06
+        },
+        "lucknow": {
+          "min_edge": 0.06
+        }
+      }
+    },
+    "composite": 191.550894,
+    "trades": 5282,
+    "sharpe": 26.5261,
+    "win_rate": 90.3,
+    "pnl_pct": 467.03,
+    "dd_pct": 0.32,
+    "pf": 18.859
+  },
+  {
+    "name": "split t=0.15 l=0.04",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.15
+        },
+        "dc": {
+          "min_edge": 0.15
+        },
+        "tokyo": {
+          "min_edge": 0.15
+        },
+        "los_angeles": {
+          "min_edge": 0.15
+        },
+        "munich": {
+          "min_edge": 0.15
+        },
+        "paris": {
+          "min_edge": 0.04
+        },
+        "london": {
+          "min_edge": 0.04
+        },
+        "seattle": {
+          "min_edge": 0.04
+        },
+        "miami": {
+          "min_edge": 0.04
+        },
+        "lucknow": {
+          "min_edge": 0.04
+        }
+      }
+    },
+    "composite": 191.550894,
+    "trades": 5282,
+    "sharpe": 26.5261,
+    "win_rate": 90.3,
+    "pnl_pct": 467.03,
+    "dd_pct": 0.32,
+    "pf": 18.859
+  },
+  {
+    "name": "split t=0.12 l=0.04",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.12
+        },
+        "dc": {
+          "min_edge": 0.12
+        },
+        "tokyo": {
+          "min_edge": 0.12
+        },
+        "los_angeles": {
+          "min_edge": 0.12
+        },
+        "munich": {
+          "min_edge": 0.12
+        },
+        "paris": {
+          "min_edge": 0.04
+        },
+        "london": {
+          "min_edge": 0.04
+        },
+        "seattle": {
+          "min_edge": 0.04
+        },
+        "miami": {
+          "min_edge": 0.04
+        },
+        "lucknow": {
+          "min_edge": 0.04
+        }
+      }
+    },
+    "composite": 191.409711,
+    "trades": 5283,
+    "sharpe": 26.504,
+    "win_rate": 90.2,
+    "pnl_pct": 466.99,
+    "dd_pct": 0.32,
+    "pf": 18.8463
+  },
+  {
+    "name": "split t=0.12 l=0.05",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.12
+        },
+        "dc": {
+          "min_edge": 0.12
+        },
+        "tokyo": {
+          "min_edge": 0.12
+        },
+        "los_angeles": {
+          "min_edge": 0.12
+        },
+        "munich": {
+          "min_edge": 0.12
+        },
+        "paris": {
+          "min_edge": 0.05
+        },
+        "london": {
+          "min_edge": 0.05
+        },
+        "seattle": {
+          "min_edge": 0.05
+        },
+        "miami": {
+          "min_edge": 0.05
+        },
+        "lucknow": {
+          "min_edge": 0.05
+        }
+      }
+    },
+    "composite": 191.409711,
+    "trades": 5283,
+    "sharpe": 26.504,
+    "win_rate": 90.2,
+    "pnl_pct": 466.99,
+    "dd_pct": 0.32,
+    "pf": 18.8463
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 191.166227,
+    "trades": 4299,
+    "sharpe": 29.2848,
+    "win_rate": 93.0,
+    "pnl_pct": 444.09,
+    "dd_pct": 0.22,
+    "pf": 26.4614
+  },
+  {
+    "name": "hv_maxp=0.4",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "max_price": 0.4
+        },
+        "dc": {
+          "max_price": 0.4
+        },
+        "tokyo": {
+          "max_price": 0.4
+        },
+        "los_angeles": {
+          "max_price": 0.4
+        },
+        "munich": {
+          "max_price": 0.4
+        }
+      }
+    },
+    "composite": 191.100923,
+    "trades": 5231,
+    "sharpe": 26.5925,
+    "win_rate": 90.2,
+    "pnl_pct": 462.6,
+    "dd_pct": 0.32,
+    "pf": 18.8
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 190.216428,
+    "trades": 4332,
+    "sharpe": 29.0281,
+    "win_rate": 93.0,
+    "pnl_pct": 445.83,
+    "dd_pct": 0.22,
+    "pf": 26.3134
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 190.213529,
+    "trades": 5583,
+    "sharpe": 25.6623,
+    "win_rate": 90.2,
+    "pnl_pct": 633.17,
+    "dd_pct": 0.4,
+    "pf": 19.3658
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 190.084443,
+    "trades": 5622,
+    "sharpe": 25.5558,
+    "win_rate": 90.2,
+    "pnl_pct": 635.95,
+    "dd_pct": 0.4,
+    "pf": 19.3421
+  },
+  {
+    "name": "split t=0.15 l=0.05",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.15
+        },
+        "dc": {
+          "min_edge": 0.15
+        },
+        "tokyo": {
+          "min_edge": 0.15
+        },
+        "los_angeles": {
+          "min_edge": 0.15
+        },
+        "munich": {
+          "min_edge": 0.15
+        },
+        "paris": {
+          "min_edge": 0.05
+        },
+        "london": {
+          "min_edge": 0.05
+        },
+        "seattle": {
+          "min_edge": 0.05
+        },
+        "miami": {
+          "min_edge": 0.05
+        },
+        "lucknow": {
+          "min_edge": 0.05
+        }
+      }
+    },
+    "composite": 189.968168,
+    "trades": 5204,
+    "sharpe": 26.5033,
+    "win_rate": 90.2,
+    "pnl_pct": 460.62,
+    "dd_pct": 0.32,
+    "pf": 18.855
+  },
+  {
+    "name": "split t=0.15 l=0.06",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "min_edge": 0.15
+        },
+        "dc": {
+          "min_edge": 0.15
+        },
+        "tokyo": {
+          "min_edge": 0.15
+        },
+        "los_angeles": {
+          "min_edge": 0.15
+        },
+        "munich": {
+          "min_edge": 0.15
+        },
+        "paris": {
+          "min_edge": 0.06
+        },
+        "london": {
+          "min_edge": 0.06
+        },
+        "seattle": {
+          "min_edge": 0.06
+        },
+        "miami": {
+          "min_edge": 0.06
+        },
+        "lucknow": {
+          "min_edge": 0.06
+        }
+      }
+    },
+    "composite": 189.968168,
+    "trades": 5204,
+    "sharpe": 26.5033,
+    "win_rate": 90.2,
+    "pnl_pct": 460.62,
+    "dd_pct": 0.32,
+    "pf": 18.855
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 189.952692,
+    "trades": 5881,
+    "sharpe": 24.9744,
+    "win_rate": 89.7,
+    "pnl_pct": 674.28,
+    "dd_pct": 0.41,
+    "pf": 18.2845
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 189.919189,
+    "trades": 5843,
+    "sharpe": 25.0511,
+    "win_rate": 89.7,
+    "pnl_pct": 671.42,
+    "dd_pct": 0.41,
+    "pf": 18.2952
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 189.660776,
+    "trades": 5654,
+    "sharpe": 25.4266,
+    "win_rate": 90.2,
+    "pnl_pct": 637.67,
+    "dd_pct": 0.4,
+    "pf": 19.2962
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 189.598922,
+    "trades": 5915,
+    "sharpe": 24.8562,
+    "win_rate": 89.7,
+    "pnl_pct": 676.19,
+    "dd_pct": 0.41,
+    "pf": 18.2437
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 189.48638,
+    "trades": 3915,
+    "sharpe": 30.4178,
+    "win_rate": 92.9,
+    "pnl_pct": 403.66,
+    "dd_pct": 0.22,
+    "pf": 27.1817
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 189.400716,
+    "trades": 5422,
+    "sharpe": 25.8823,
+    "win_rate": 90.3,
+    "pnl_pct": 564.04,
+    "dd_pct": 0.31,
+    "pf": 19.8713
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 189.271094,
+    "trades": 5450,
+    "sharpe": 25.7981,
+    "win_rate": 90.2,
+    "pnl_pct": 566.19,
+    "dd_pct": 0.31,
+    "pf": 19.8653
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 189.220359,
+    "trades": 5690,
+    "sharpe": 25.2872,
+    "win_rate": 90.3,
+    "pnl_pct": 639.63,
+    "dd_pct": 0.4,
+    "pf": 19.3402
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 189.088664,
+    "trades": 5953,
+    "sharpe": 24.71,
+    "win_rate": 89.8,
+    "pnl_pct": 678.15,
+    "dd_pct": 0.41,
+    "pf": 18.2516
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 189.063651,
+    "trades": 5473,
+    "sharpe": 25.7156,
+    "win_rate": 90.3,
+    "pnl_pct": 567.59,
+    "dd_pct": 0.31,
+    "pf": 19.8486
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 189.063651,
+    "trades": 5473,
+    "sharpe": 25.7156,
+    "win_rate": 90.3,
+    "pnl_pct": 567.59,
+    "dd_pct": 0.31,
+    "pf": 19.8486
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 188.910481,
+    "trades": 4372,
+    "sharpe": 28.7197,
+    "win_rate": 93.0,
+    "pnl_pct": 447.88,
+    "dd_pct": 0.26,
+    "pf": 26.2938
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 188.805715,
+    "trades": 5150,
+    "sharpe": 26.4789,
+    "win_rate": 90.8,
+    "pnl_pct": 563.45,
+    "dd_pct": 0.32,
+    "pf": 20.7329
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 188.654242,
+    "trades": 5184,
+    "sharpe": 26.3761,
+    "win_rate": 90.8,
+    "pnl_pct": 566.1,
+    "dd_pct": 0.33,
+    "pf": 20.709
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 188.619923,
+    "trades": 4180,
+    "sharpe": 29.3562,
+    "win_rate": 92.8,
+    "pnl_pct": 402.52,
+    "dd_pct": 0.31,
+    "pf": 26.2954
+  },
+  {
+    "name": "sharp=1.05",
+    "params": {
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 188.579904,
+    "trades": 5507,
+    "sharpe": 25.5705,
+    "win_rate": 90.3,
+    "pnl_pct": 569.41,
+    "dd_pct": 0.31,
+    "pf": 19.8917
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 188.579904,
+    "trades": 5507,
+    "sharpe": 25.5705,
+    "win_rate": 90.3,
+    "pnl_pct": 569.41,
+    "dd_pct": 0.31,
+    "pf": 19.8917
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 188.354371,
+    "trades": 5214,
+    "sharpe": 26.253,
+    "win_rate": 90.9,
+    "pnl_pct": 567.82,
+    "dd_pct": 0.32,
+    "pf": 20.6823
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 188.320732,
+    "trades": 4547,
+    "sharpe": 28.1076,
+    "win_rate": 92.0,
+    "pnl_pct": 465.74,
+    "dd_pct": 0.32,
+    "pf": 23.7567
+  },
+  {
+    "name": "maxp=0.5",
+    "params": {
+      "MAX_PRICE": 0.5
+    },
+    "composite": 188.317392,
+    "trades": 5932,
+    "sharpe": 24.5933,
+    "win_rate": 89.2,
+    "pnl_pct": 643.15,
+    "dd_pct": 0.29,
+    "pf": 17.9154
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 188.317392,
+    "trades": 5932,
+    "sharpe": 24.5933,
+    "win_rate": 89.2,
+    "pnl_pct": 643.15,
+    "dd_pct": 0.29,
+    "pf": 17.9154
+  },
+  {
+    "name": "maxp=0.55",
+    "params": {
+      "MAX_PRICE": 0.55
+    },
+    "composite": 188.28479,
+    "trades": 5962,
+    "sharpe": 24.5271,
+    "win_rate": 89.2,
+    "pnl_pct": 645.44,
+    "dd_pct": 0.29,
+    "pf": 17.9098
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 188.28479,
+    "trades": 5962,
+    "sharpe": 24.5271,
+    "win_rate": 89.2,
+    "pnl_pct": 645.44,
+    "dd_pct": 0.29,
+    "pf": 17.9098
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 188.281801,
+    "trades": 4208,
+    "sharpe": 29.206,
+    "win_rate": 92.8,
+    "pnl_pct": 404.55,
+    "dd_pct": 0.31,
+    "pf": 26.2632
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 188.251822,
+    "trades": 4682,
+    "sharpe": 27.7507,
+    "win_rate": 91.8,
+    "pnl_pct": 508.94,
+    "dd_pct": 0.43,
+    "pf": 22.8456
+  },
+  {
+    "name": "min_edge=0.1",
+    "params": {
+      "MIN_EDGE": 0.1
+    },
+    "composite": 188.186151,
+    "trades": 5964,
+    "sharpe": 24.5101,
+    "win_rate": 89.4,
+    "pnl_pct": 646.79,
+    "dd_pct": 0.29,
+    "pf": 18.0825
+  },
+  {
+    "name": "maxp=0.6",
+    "params": {
+      "MAX_PRICE": 0.6
+    },
+    "composite": 188.147128,
+    "trades": 5988,
+    "sharpe": 24.4559,
+    "win_rate": 89.2,
+    "pnl_pct": 647.01,
+    "dd_pct": 0.29,
+    "pf": 17.9012
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 188.147128,
+    "trades": 5988,
+    "sharpe": 24.4559,
+    "win_rate": 89.2,
+    "pnl_pct": 647.01,
+    "dd_pct": 0.29,
+    "pf": 17.9012
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.924464,
+    "trades": 4722,
+    "sharpe": 27.5849,
+    "win_rate": 91.8,
+    "pnl_pct": 511.96,
+    "dd_pct": 0.43,
+    "pf": 22.7556
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 187.920321,
+    "trades": 4579,
+    "sharpe": 27.9497,
+    "win_rate": 92.0,
+    "pnl_pct": 468.2,
+    "dd_pct": 0.32,
+    "pf": 23.6937
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 187.847989,
+    "trades": 4231,
+    "sharpe": 29.0594,
+    "win_rate": 92.8,
+    "pnl_pct": 405.89,
+    "dd_pct": 0.31,
+    "pf": 26.2207
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.847989,
+    "trades": 4231,
+    "sharpe": 29.0594,
+    "win_rate": 92.8,
+    "pnl_pct": 405.89,
+    "dd_pct": 0.31,
+    "pf": 26.2207
+  },
+  {
+    "name": "mfp=0.55 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.832344,
+    "trades": 6411,
+    "sharpe": 23.7102,
+    "win_rate": 88.6,
+    "pnl_pct": 753.96,
+    "dd_pct": 0.53,
+    "pf": 16.3758
+  },
+  {
+    "name": "baseline",
+    "params": {},
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "maxp=0.7",
+    "params": {
+      "MAX_PRICE": 0.7
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "maxp=0.8",
+    "params": {
+      "MAX_PRICE": 0.8
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "mfp=0.5",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "sharp=1.0",
+    "params": {
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "min_edge=0.08",
+    "params": {
+      "MIN_EDGE": 0.08
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "min_edge=0.09",
+    "params": {
+      "MIN_EDGE": 0.09
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "minp=0.2",
+    "params": {
+      "MIN_PRICE": 0.2
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "max_edge_cap=0.7",
+    "params": {
+      "_max_edge_cap": 0.7
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "max_edge_cap=0.8",
+    "params": {
+      "_max_edge_cap": 0.8
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 187.7794,
+    "trades": 6023,
+    "sharpe": 24.337,
+    "win_rate": 89.3,
+    "pnl_pct": 648.9,
+    "dd_pct": 0.29,
+    "pf": 17.9377
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 187.774495,
+    "trades": 5250,
+    "sharpe": 26.0875,
+    "win_rate": 90.9,
+    "pnl_pct": 569.82,
+    "dd_pct": 0.33,
+    "pf": 20.7305
+  },
+  {
+    "name": "mfp=0.55 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.742712,
+    "trades": 6372,
+    "sharpe": 23.7713,
+    "win_rate": 88.6,
+    "pnl_pct": 750.98,
+    "dd_pct": 0.53,
+    "pf": 16.3805
+  },
+  {
+    "name": "min_edge=0.12",
+    "params": {
+      "MIN_EDGE": 0.12
+    },
+    "composite": 187.607788,
+    "trades": 5862,
+    "sharpe": 24.6464,
+    "win_rate": 89.4,
+    "pnl_pct": 641.03,
+    "dd_pct": 0.29,
+    "pf": 18.2026
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.576859,
+    "trades": 6446,
+    "sharpe": 23.6136,
+    "win_rate": 88.7,
+    "pnl_pct": 755.87,
+    "dd_pct": 0.53,
+    "pf": 16.3447
+  },
+  {
+    "name": "mfp=0.55 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 187.566829,
+    "trades": 4604,
+    "sharpe": 27.8213,
+    "win_rate": 92.0,
+    "pnl_pct": 469.7,
+    "dd_pct": 0.32,
+    "pf": 23.6563
+  },
+  {
+    "name": "min_edge=0.06",
+    "params": {
+      "MIN_EDGE": 0.06
+    },
+    "composite": 187.537688,
+    "trades": 6056,
+    "sharpe": 24.2394,
+    "win_rate": 89.3,
+    "pnl_pct": 649.81,
+    "dd_pct": 0.29,
+    "pf": 17.8772
+  },
+  {
+    "name": "min_edge=0.07",
+    "params": {
+      "MIN_EDGE": 0.07
+    },
+    "composite": 187.537688,
+    "trades": 6056,
+    "sharpe": 24.2394,
+    "win_rate": 89.3,
+    "pnl_pct": 649.81,
+    "dd_pct": 0.29,
+    "pf": 17.8772
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 187.516642,
+    "trades": 4056,
+    "sharpe": 29.5737,
+    "win_rate": 93.1,
+    "pnl_pct": 401.37,
+    "dd_pct": 0.22,
+    "pf": 26.9853
+  },
+  {
+    "name": "maxp=0.45",
+    "params": {
+      "MAX_PRICE": 0.45
+    },
+    "composite": 187.256774,
+    "trades": 5755,
+    "sharpe": 24.833,
+    "win_rate": 89.1,
+    "pnl_pct": 627.83,
+    "dd_pct": 0.3,
+    "pf": 18.046
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 187.231303,
+    "trades": 4756,
+    "sharpe": 27.3847,
+    "win_rate": 91.8,
+    "pnl_pct": 513.88,
+    "dd_pct": 0.43,
+    "pf": 22.657
+  },
+  {
+    "name": "min_edge=0.05",
+    "params": {
+      "MIN_EDGE": 0.05
+    },
+    "composite": 187.108331,
+    "trades": 6070,
+    "sharpe": 24.156,
+    "win_rate": 89.2,
+    "pnl_pct": 649.93,
+    "dd_pct": 0.29,
+    "pf": 17.8157
+  },
+  {
+    "name": "sharp=1.1",
+    "params": {
+      "PROB_SHARPENING": 1.1
+    },
+    "composite": 187.083741,
+    "trades": 4884,
+    "sharpe": 26.9316,
+    "win_rate": 91.4,
+    "pnl_pct": 476.13,
+    "dd_pct": 0.3,
+    "pf": 22.1399
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 187.039716,
+    "trades": 3864,
+    "sharpe": 30.2772,
+    "win_rate": 92.7,
+    "pnl_pct": 372.14,
+    "dd_pct": 0.31,
+    "pf": 26.8559
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 186.973956,
+    "trades": 4094,
+    "sharpe": 29.351,
+    "win_rate": 93.0,
+    "pnl_pct": 404.03,
+    "dd_pct": 0.22,
+    "pf": 26.8674
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 186.935832,
+    "trades": 4266,
+    "sharpe": 28.7994,
+    "win_rate": 92.9,
+    "pnl_pct": 407.71,
+    "dd_pct": 0.31,
+    "pf": 26.2865
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 186.935832,
+    "trades": 4266,
+    "sharpe": 28.7994,
+    "win_rate": 92.9,
+    "pnl_pct": 407.71,
+    "dd_pct": 0.31,
+    "pf": 26.2865
+  },
+  {
+    "name": "min_edge=0.15",
+    "params": {
+      "MIN_EDGE": 0.15
+    },
+    "composite": 186.855426,
+    "trades": 5597,
+    "sharpe": 25.1271,
+    "win_rate": 89.7,
+    "pnl_pct": 623.27,
+    "dd_pct": 0.3,
+    "pf": 18.6369
+  },
+  {
+    "name": "mfp=0.55",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55
+    },
+    "composite": 186.835715,
+    "trades": 4640,
+    "sharpe": 27.6051,
+    "win_rate": 92.1,
+    "pnl_pct": 471.64,
+    "dd_pct": 0.32,
+    "pf": 23.7175
+  },
+  {
+    "name": "mfp=0.55 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 186.835715,
+    "trades": 4640,
+    "sharpe": 27.6051,
+    "win_rate": 92.1,
+    "pnl_pct": 471.64,
+    "dd_pct": 0.32,
+    "pf": 23.7175
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 186.819115,
+    "trades": 5178,
+    "sharpe": 26.1715,
+    "win_rate": 90.0,
+    "pnl_pct": 592.59,
+    "dd_pct": 0.4,
+    "pf": 19.4896
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 186.603279,
+    "trades": 5079,
+    "sharpe": 26.347,
+    "win_rate": 90.0,
+    "pnl_pct": 530.9,
+    "dd_pct": 0.31,
+    "pf": 19.9937
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 186.315727,
+    "trades": 4797,
+    "sharpe": 27.1341,
+    "win_rate": 91.9,
+    "pnl_pct": 515.96,
+    "dd_pct": 0.43,
+    "pf": 22.6415
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 186.215153,
+    "trades": 5420,
+    "sharpe": 25.503,
+    "win_rate": 89.5,
+    "pnl_pct": 629.09,
+    "dd_pct": 0.41,
+    "pf": 18.4017
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 186.011362,
+    "trades": 4126,
+    "sharpe": 29.0864,
+    "win_rate": 93.0,
+    "pnl_pct": 405.69,
+    "dd_pct": 0.22,
+    "pf": 26.718
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.781438,
+    "trades": 6504,
+    "sharpe": 23.2549,
+    "win_rate": 88.1,
+    "pnl_pct": 722.79,
+    "dd_pct": 0.47,
+    "pf": 16.0359
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.742561,
+    "trades": 4768,
+    "sharpe": 27.0782,
+    "win_rate": 90.7,
+    "pnl_pct": 525.0,
+    "dd_pct": 0.33,
+    "pf": 20.9454
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.706519,
+    "trades": 6470,
+    "sharpe": 23.3065,
+    "win_rate": 88.0,
+    "pnl_pct": 720.2,
+    "dd_pct": 0.47,
+    "pf": 16.0365
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.62572,
+    "trades": 6533,
+    "sharpe": 23.1837,
+    "win_rate": 88.1,
+    "pnl_pct": 724.43,
+    "dd_pct": 0.47,
+    "pf": 16.025
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 185.583884,
+    "trades": 4207,
+    "sharpe": 28.7967,
+    "win_rate": 91.8,
+    "pnl_pct": 431.08,
+    "dd_pct": 0.32,
+    "pf": 24.0608
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.387236,
+    "trades": 6568,
+    "sharpe": 23.0922,
+    "win_rate": 88.1,
+    "pnl_pct": 726.34,
+    "dd_pct": 0.47,
+    "pf": 16.0562
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 185.26295,
+    "trades": 3722,
+    "sharpe": 30.5011,
+    "win_rate": 92.9,
+    "pnl_pct": 366.22,
+    "dd_pct": 0.22,
+    "pf": 27.5701
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 185.034856,
+    "trades": 4164,
+    "sharpe": 28.8014,
+    "win_rate": 93.1,
+    "pnl_pct": 407.69,
+    "dd_pct": 0.22,
+    "pf": 26.7933
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 185.034856,
+    "trades": 4164,
+    "sharpe": 28.8014,
+    "win_rate": 93.1,
+    "pnl_pct": 407.69,
+    "dd_pct": 0.22,
+    "pf": 26.7933
+  },
+  {
+    "name": "sharp=1.15",
+    "params": {
+      "PROB_SHARPENING": 1.15
+    },
+    "composite": 184.881427,
+    "trades": 4348,
+    "sharpe": 28.2073,
+    "win_rate": 92.3,
+    "pnl_pct": 391.61,
+    "dd_pct": 0.3,
+    "pf": 24.5821
+  },
+  {
+    "name": "maxp=0.43",
+    "params": {
+      "MAX_PRICE": 0.43
+    },
+    "composite": 184.717197,
+    "trades": 5550,
+    "sharpe": 24.9495,
+    "win_rate": 88.9,
+    "pnl_pct": 606.37,
+    "dd_pct": 0.31,
+    "pf": 17.963
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 184.717197,
+    "trades": 5550,
+    "sharpe": 24.9495,
+    "win_rate": 88.9,
+    "pnl_pct": 606.37,
+    "dd_pct": 0.31,
+    "pf": 17.963
+  },
+  {
+    "name": "hv_maxp=0.35",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "nyc": {
+          "max_price": 0.35
+        },
+        "dc": {
+          "max_price": 0.35
+        },
+        "tokyo": {
+          "max_price": 0.35
+        },
+        "los_angeles": {
+          "max_price": 0.35
+        },
+        "munich": {
+          "max_price": 0.35
+        }
+      }
+    },
+    "composite": 184.657353,
+    "trades": 5012,
+    "sharpe": 26.2512,
+    "win_rate": 90.0,
+    "pnl_pct": 437.08,
+    "dd_pct": 0.32,
+    "pf": 18.4924
+  },
+  {
+    "name": "mfp=0.55 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.55,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 183.905003,
+    "trades": 5902,
+    "sharpe": 24.1948,
+    "win_rate": 88.4,
+    "pnl_pct": 704.59,
+    "dd_pct": 0.53,
+    "pf": 16.4916
+  },
+  {
+    "name": "minp=0.3",
+    "params": {
+      "MIN_PRICE": 0.3
+    },
+    "composite": 182.263785,
+    "trades": 4130,
+    "sharpe": 28.498,
+    "win_rate": 91.3,
+    "pnl_pct": 244.91,
+    "dd_pct": 0.24,
+    "pf": 19.2343
+  },
+  {
+    "name": "sharp=1.2",
+    "params": {
+      "PROB_SHARPENING": 1.2
+    },
+    "composite": 182.258047,
+    "trades": 4010,
+    "sharpe": 28.9495,
+    "win_rate": 92.8,
+    "pnl_pct": 335.86,
+    "dd_pct": 0.29,
+    "pf": 26.6946
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 181.375266,
+    "trades": 6042,
+    "sharpe": 23.5553,
+    "win_rate": 87.7,
+    "pnl_pct": 678.81,
+    "dd_pct": 0.47,
+    "pf": 16.0181
+  },
+  {
+    "name": "max_edge_cap=0.5",
+    "params": {
+      "_max_edge_cap": 0.5
+    },
+    "composite": 181.369764,
+    "trades": 5777,
+    "sharpe": 24.0161,
+    "win_rate": 89.1,
+    "pnl_pct": 581.19,
+    "dd_pct": 0.32,
+    "pf": 17.1562
+  },
+  {
+    "name": "max_edge_cap=0.6",
+    "params": {
+      "_max_edge_cap": 0.6
+    },
+    "composite": 181.369764,
+    "trades": 5777,
+    "sharpe": 24.0161,
+    "win_rate": 89.1,
+    "pnl_pct": 581.19,
+    "dd_pct": 0.32,
+    "pf": 17.1562
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 181.241621,
+    "trades": 6809,
+    "sharpe": 22.222,
+    "win_rate": 87.1,
+    "pnl_pct": 762.87,
+    "dd_pct": 0.58,
+    "pf": 14.6282
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 181.07888,
+    "trades": 6771,
+    "sharpe": 22.2643,
+    "win_rate": 87.0,
+    "pnl_pct": 760.0,
+    "dd_pct": 0.58,
+    "pf": 14.6222
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 180.990258,
+    "trades": 6842,
+    "sharpe": 22.1376,
+    "win_rate": 87.0,
+    "pnl_pct": 764.51,
+    "dd_pct": 0.58,
+    "pf": 14.602
+  },
+  {
+    "name": "sharp=0.92",
+    "params": {
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 180.830309,
+    "trades": 6877,
+    "sharpe": 22.0617,
+    "win_rate": 87.1,
+    "pnl_pct": 766.38,
+    "dd_pct": 0.58,
+    "pf": 14.6283
+  },
+  {
+    "name": "sharp=0.95",
+    "params": {
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 180.830309,
+    "trades": 6877,
+    "sharpe": 22.0617,
+    "win_rate": 87.1,
+    "pnl_pct": 766.38,
+    "dd_pct": 0.58,
+    "pf": 14.6283
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 180.830309,
+    "trades": 6877,
+    "sharpe": 22.0617,
+    "win_rate": 87.1,
+    "pnl_pct": 766.38,
+    "dd_pct": 0.58,
+    "pf": 14.6283
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 180.341342,
+    "trades": 3708,
+    "sharpe": 29.7468,
+    "win_rate": 93.2,
+    "pnl_pct": 337.98,
+    "dd_pct": 0.22,
+    "pf": 27.4163
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 180.175544,
+    "trades": 3599,
+    "sharpe": 30.1662,
+    "win_rate": 93.2,
+    "pnl_pct": 329.88,
+    "dd_pct": 0.22,
+    "pf": 27.6448
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 180.175544,
+    "trades": 3599,
+    "sharpe": 30.1662,
+    "win_rate": 93.2,
+    "pnl_pct": 329.88,
+    "dd_pct": 0.22,
+    "pf": 27.6448
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 180.175544,
+    "trades": 3599,
+    "sharpe": 30.1662,
+    "win_rate": 93.2,
+    "pnl_pct": 329.88,
+    "dd_pct": 0.22,
+    "pf": 27.6448
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 179.715627,
+    "trades": 3740,
+    "sharpe": 29.5165,
+    "win_rate": 93.2,
+    "pnl_pct": 340.04,
+    "dd_pct": 0.22,
+    "pf": 27.2819
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 179.253042,
+    "trades": 6253,
+    "sharpe": 22.8007,
+    "win_rate": 87.4,
+    "pnl_pct": 638.17,
+    "dd_pct": 0.29,
+    "pf": 15.7724
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 179.21946,
+    "trades": 6225,
+    "sharpe": 22.8477,
+    "win_rate": 87.4,
+    "pnl_pct": 636.08,
+    "dd_pct": 0.29,
+    "pf": 15.7702
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 179.197104,
+    "trades": 6276,
+    "sharpe": 22.7518,
+    "win_rate": 87.4,
+    "pnl_pct": 639.56,
+    "dd_pct": 0.29,
+    "pf": 15.7692
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 179.197104,
+    "trades": 6276,
+    "sharpe": 22.7518,
+    "win_rate": 87.4,
+    "pnl_pct": 639.56,
+    "dd_pct": 0.29,
+    "pf": 15.7692
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 179.043727,
+    "trades": 6310,
+    "sharpe": 22.6664,
+    "win_rate": 87.5,
+    "pnl_pct": 641.5,
+    "dd_pct": 0.28,
+    "pf": 15.8001
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 179.043727,
+    "trades": 6310,
+    "sharpe": 22.6664,
+    "win_rate": 87.5,
+    "pnl_pct": 641.5,
+    "dd_pct": 0.28,
+    "pf": 15.8001
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 178.948267,
+    "trades": 3769,
+    "sharpe": 29.2772,
+    "win_rate": 93.2,
+    "pnl_pct": 341.44,
+    "dd_pct": 0.22,
+    "pf": 27.2
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 178.471033,
+    "trades": 3399,
+    "sharpe": 30.7473,
+    "win_rate": 93.1,
+    "pnl_pct": 309.13,
+    "dd_pct": 0.22,
+    "pf": 28.1081
+  },
+  {
+    "name": "maxp=0.4",
+    "params": {
+      "MAX_PRICE": 0.4
+    },
+    "composite": 177.935893,
+    "trades": 4921,
+    "sharpe": 25.5285,
+    "win_rate": 88.8,
+    "pnl_pct": 538.54,
+    "dd_pct": 0.32,
+    "pf": 18.2334
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 177.874956,
+    "trades": 7003,
+    "sharpe": 21.5094,
+    "win_rate": 86.3,
+    "pnl_pct": 785.39,
+    "dd_pct": 0.59,
+    "pf": 13.7287
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 177.775026,
+    "trades": 7037,
+    "sharpe": 21.4453,
+    "win_rate": 86.3,
+    "pnl_pct": 787.28,
+    "dd_pct": 0.59,
+    "pf": 13.7108
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 177.666279,
+    "trades": 6964,
+    "sharpe": 21.5442,
+    "win_rate": 86.2,
+    "pnl_pct": 782.45,
+    "dd_pct": 0.59,
+    "pf": 13.7211
+  },
+  {
+    "name": "sharp=0.9",
+    "params": {
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 177.607698,
+    "trades": 7075,
+    "sharpe": 21.3675,
+    "win_rate": 86.4,
+    "pnl_pct": 789.21,
+    "dd_pct": 0.59,
+    "pf": 13.7232
+  },
+  {
+    "name": "mfp=0.5 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 177.607698,
+    "trades": 7075,
+    "sharpe": 21.3675,
+    "win_rate": 86.4,
+    "pnl_pct": 789.21,
+    "dd_pct": 0.59,
+    "pf": 13.7232
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 177.406155,
+    "trades": 3385,
+    "sharpe": 30.627,
+    "win_rate": 93.1,
+    "pnl_pct": 307.83,
+    "dd_pct": 0.22,
+    "pf": 27.7109
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 177.406155,
+    "trades": 3385,
+    "sharpe": 30.627,
+    "win_rate": 93.1,
+    "pnl_pct": 307.83,
+    "dd_pct": 0.22,
+    "pf": 27.7109
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 177.406155,
+    "trades": 3385,
+    "sharpe": 30.627,
+    "win_rate": 93.1,
+    "pnl_pct": 307.83,
+    "dd_pct": 0.22,
+    "pf": 27.7109
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 177.349176,
+    "trades": 3291,
+    "sharpe": 31.0513,
+    "win_rate": 93.8,
+    "pnl_pct": 284.18,
+    "dd_pct": 0.22,
+    "pf": 30.133
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 177.349176,
+    "trades": 3291,
+    "sharpe": 31.0513,
+    "win_rate": 93.8,
+    "pnl_pct": 284.18,
+    "dd_pct": 0.22,
+    "pf": 30.133
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 177.349176,
+    "trades": 3291,
+    "sharpe": 31.0513,
+    "win_rate": 93.8,
+    "pnl_pct": 284.18,
+    "dd_pct": 0.22,
+    "pf": 30.133
+  },
+  {
+    "name": "minp=0.15",
+    "params": {
+      "MIN_PRICE": 0.15
+    },
+    "composite": 177.003225,
+    "trades": 6462,
+    "sharpe": 22.1698,
+    "win_rate": 88.6,
+    "pnl_pct": 799.25,
+    "dd_pct": 0.34,
+    "pf": 17.7495
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 176.884248,
+    "trades": 6324,
+    "sharpe": 22.504,
+    "win_rate": 86.6,
+    "pnl_pct": 717.31,
+    "dd_pct": 0.58,
+    "pf": 14.5928
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 175.677221,
+    "trades": 5878,
+    "sharpe": 23.0569,
+    "win_rate": 87.1,
+    "pnl_pct": 602.62,
+    "dd_pct": 0.31,
+    "pf": 15.735
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 175.033528,
+    "trades": 3087,
+    "sharpe": 31.6423,
+    "win_rate": 93.6,
+    "pnl_pct": 265.52,
+    "dd_pct": 0.22,
+    "pf": 30.4171
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 175.033528,
+    "trades": 3087,
+    "sharpe": 31.6423,
+    "win_rate": 93.6,
+    "pnl_pct": 265.52,
+    "dd_pct": 0.22,
+    "pf": 30.4171
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 175.033528,
+    "trades": 3087,
+    "sharpe": 31.6423,
+    "win_rate": 93.6,
+    "pnl_pct": 265.52,
+    "dd_pct": 0.22,
+    "pf": 30.4171
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 174.501981,
+    "trades": 6783,
+    "sharpe": 21.3202,
+    "win_rate": 86.0,
+    "pnl_pct": 706.57,
+    "dd_pct": 0.31,
+    "pf": 14.0065
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 174.462282,
+    "trades": 6756,
+    "sharpe": 21.3579,
+    "win_rate": 85.9,
+    "pnl_pct": 704.94,
+    "dd_pct": 0.31,
+    "pf": 14.0059
+  },
+  {
+    "name": "mfp=0.45",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45
+    },
+    "composite": 174.380152,
+    "trades": 6818,
+    "sharpe": 21.2505,
+    "win_rate": 86.0,
+    "pnl_pct": 708.47,
+    "dd_pct": 0.31,
+    "pf": 14.0327
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 174.380152,
+    "trades": 6818,
+    "sharpe": 21.2505,
+    "win_rate": 86.0,
+    "pnl_pct": 708.47,
+    "dd_pct": 0.31,
+    "pf": 14.0327
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 174.338163,
+    "trades": 6725,
+    "sharpe": 21.3918,
+    "win_rate": 85.9,
+    "pnl_pct": 702.6,
+    "dd_pct": 0.31,
+    "pf": 14.0006
+  },
+  {
+    "name": "mfp=0.5 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 173.266294,
+    "trades": 6509,
+    "sharpe": 21.737,
+    "win_rate": 85.8,
+    "pnl_pct": 739.01,
+    "dd_pct": 0.6,
+    "pf": 13.6756
+  },
+  {
+    "name": "mfp=0.5 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 173.101983,
+    "trades": 7621,
+    "sharpe": 20.0412,
+    "win_rate": 84.5,
+    "pnl_pct": 856.31,
+    "dd_pct": 0.53,
+    "pf": 12.0514
+  },
+  {
+    "name": "mfp=0.5 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 173.062181,
+    "trades": 7656,
+    "sharpe": 19.9908,
+    "win_rate": 84.5,
+    "pnl_pct": 858.24,
+    "dd_pct": 0.53,
+    "pf": 12.0386
+  },
+  {
+    "name": "sharp=0.85",
+    "params": {
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 172.960316,
+    "trades": 7695,
+    "sharpe": 19.9283,
+    "win_rate": 84.6,
+    "pnl_pct": 860.21,
+    "dd_pct": 0.53,
+    "pf": 12.0506
+  },
+  {
+    "name": "mfp=0.5 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.5,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 172.868188,
+    "trades": 7582,
+    "sharpe": 20.0656,
+    "win_rate": 84.4,
+    "pnl_pct": 853.3,
+    "dd_pct": 0.53,
+    "pf": 12.0425
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 171.802717,
+    "trades": 7377,
+    "sharpe": 20.1926,
+    "win_rate": 84.5,
+    "pnl_pct": 781.64,
+    "dd_pct": 0.47,
+    "pf": 12.6652
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 171.783734,
+    "trades": 7406,
+    "sharpe": 20.1508,
+    "win_rate": 84.5,
+    "pnl_pct": 783.27,
+    "dd_pct": 0.47,
+    "pf": 12.6618
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 171.753977,
+    "trades": 7442,
+    "sharpe": 20.0985,
+    "win_rate": 84.6,
+    "pnl_pct": 785.24,
+    "dd_pct": 0.47,
+    "pf": 12.6849
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 171.594279,
+    "trades": 2952,
+    "sharpe": 31.7219,
+    "win_rate": 93.0,
+    "pnl_pct": 262.26,
+    "dd_pct": 0.22,
+    "pf": 28.6572
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 171.594279,
+    "trades": 2952,
+    "sharpe": 31.7219,
+    "win_rate": 93.0,
+    "pnl_pct": 262.26,
+    "dd_pct": 0.22,
+    "pf": 28.6572
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 171.594279,
+    "trades": 2952,
+    "sharpe": 31.7219,
+    "win_rate": 93.0,
+    "pnl_pct": 262.26,
+    "dd_pct": 0.22,
+    "pf": 28.6572
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 171.58939,
+    "trades": 7342,
+    "sharpe": 20.2155,
+    "win_rate": 84.5,
+    "pnl_pct": 778.94,
+    "dd_pct": 0.47,
+    "pf": 12.6561
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 170.683876,
+    "trades": 3148,
+    "sharpe": 30.5556,
+    "win_rate": 93.7,
+    "pnl_pct": 254.88,
+    "dd_pct": 0.22,
+    "pf": 30.087
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 170.216491,
+    "trades": 2695,
+    "sharpe": 32.9335,
+    "win_rate": 93.6,
+    "pnl_pct": 228.18,
+    "dd_pct": 0.22,
+    "pf": 31.9322
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 170.216491,
+    "trades": 2695,
+    "sharpe": 32.9335,
+    "win_rate": 93.6,
+    "pnl_pct": 228.18,
+    "dd_pct": 0.22,
+    "pf": 31.9322
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 170.216491,
+    "trades": 2695,
+    "sharpe": 32.9335,
+    "win_rate": 93.6,
+    "pnl_pct": 228.18,
+    "dd_pct": 0.22,
+    "pf": 31.9322
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 170.193893,
+    "trades": 6332,
+    "sharpe": 21.5346,
+    "win_rate": 85.5,
+    "pnl_pct": 665.15,
+    "dd_pct": 0.34,
+    "pf": 13.9252
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 170.003099,
+    "trades": 2871,
+    "sharpe": 31.868,
+    "win_rate": 93.7,
+    "pnl_pct": 234.07,
+    "dd_pct": 0.22,
+    "pf": 31.2672
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 169.941925,
+    "trades": 3179,
+    "sharpe": 30.274,
+    "win_rate": 93.7,
+    "pnl_pct": 256.48,
+    "dd_pct": 0.22,
+    "pf": 29.9413
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 169.469015,
+    "trades": 3090,
+    "sharpe": 30.6215,
+    "win_rate": 93.8,
+    "pnl_pct": 251.18,
+    "dd_pct": 0.22,
+    "pf": 30.3656
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 169.351899,
+    "trades": 3204,
+    "sharpe": 30.051,
+    "win_rate": 93.7,
+    "pnl_pct": 257.54,
+    "dd_pct": 0.22,
+    "pf": 29.8646
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 169.281364,
+    "trades": 2924,
+    "sharpe": 31.4438,
+    "win_rate": 94.0,
+    "pnl_pct": 233.27,
+    "dd_pct": 0.22,
+    "pf": 31.519
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 169.281364,
+    "trades": 2924,
+    "sharpe": 31.4438,
+    "win_rate": 94.0,
+    "pnl_pct": 233.27,
+    "dd_pct": 0.22,
+    "pf": 31.519
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.46 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 169.281364,
+    "trades": 2924,
+    "sharpe": 31.4438,
+    "win_rate": 94.0,
+    "pnl_pct": 233.27,
+    "dd_pct": 0.22,
+    "pf": 31.519
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 169.281364,
+    "trades": 2924,
+    "sharpe": 31.4438,
+    "win_rate": 94.0,
+    "pnl_pct": 233.27,
+    "dd_pct": 0.22,
+    "pf": 31.519
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 168.881377,
+    "trades": 2887,
+    "sharpe": 31.5699,
+    "win_rate": 94.0,
+    "pnl_pct": 229.52,
+    "dd_pct": 0.22,
+    "pf": 31.8232
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 168.881377,
+    "trades": 2887,
+    "sharpe": 31.5699,
+    "win_rate": 94.0,
+    "pnl_pct": 229.52,
+    "dd_pct": 0.22,
+    "pf": 31.8232
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 168.881377,
+    "trades": 2887,
+    "sharpe": 31.5699,
+    "win_rate": 94.0,
+    "pnl_pct": 229.52,
+    "dd_pct": 0.22,
+    "pf": 31.8232
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 168.789555,
+    "trades": 2810,
+    "sharpe": 31.9821,
+    "win_rate": 93.8,
+    "pnl_pct": 229.06,
+    "dd_pct": 0.22,
+    "pf": 31.7764
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 168.694419,
+    "trades": 3122,
+    "sharpe": 30.3249,
+    "win_rate": 93.7,
+    "pnl_pct": 252.93,
+    "dd_pct": 0.22,
+    "pf": 30.1035
+  },
+  {
+    "name": "mfp=0.6",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6
+    },
+    "composite": 168.131379,
+    "trades": 3242,
+    "sharpe": 29.6591,
+    "win_rate": 93.8,
+    "pnl_pct": 258.99,
+    "dd_pct": 0.22,
+    "pf": 29.9732
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 168.131379,
+    "trades": 3242,
+    "sharpe": 29.6591,
+    "win_rate": 93.8,
+    "pnl_pct": 258.99,
+    "dd_pct": 0.22,
+    "pf": 29.9732
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 167.714148,
+    "trades": 7734,
+    "sharpe": 19.2946,
+    "win_rate": 83.3,
+    "pnl_pct": 818.0,
+    "dd_pct": 0.58,
+    "pf": 11.6491
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 167.679593,
+    "trades": 7766,
+    "sharpe": 19.2508,
+    "win_rate": 83.4,
+    "pnl_pct": 819.73,
+    "dd_pct": 0.58,
+    "pf": 11.6388
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 167.677794,
+    "trades": 7801,
+    "sharpe": 19.2074,
+    "win_rate": 83.5,
+    "pnl_pct": 821.61,
+    "dd_pct": 0.58,
+    "pf": 11.6579
+  },
+  {
+    "name": "max_edge_cap=0.42",
+    "params": {
+      "_max_edge_cap": 0.42
+    },
+    "composite": 167.490728,
+    "trades": 5197,
+    "sharpe": 23.3831,
+    "win_rate": 88.5,
+    "pnl_pct": 450.9,
+    "dd_pct": 0.32,
+    "pf": 15.8048
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 167.462899,
+    "trades": 7696,
+    "sharpe": 19.3132,
+    "win_rate": 83.3,
+    "pnl_pct": 815.19,
+    "dd_pct": 0.58,
+    "pf": 11.6395
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 167.44553,
+    "trades": 3156,
+    "sharpe": 29.9378,
+    "win_rate": 93.7,
+    "pnl_pct": 254.26,
+    "dd_pct": 0.22,
+    "pf": 29.8149
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 167.148634,
+    "trades": 2737,
+    "sharpe": 32.0908,
+    "win_rate": 93.8,
+    "pnl_pct": 218.26,
+    "dd_pct": 0.22,
+    "pf": 31.8211
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 167.148634,
+    "trades": 2737,
+    "sharpe": 32.0908,
+    "win_rate": 93.8,
+    "pnl_pct": 218.26,
+    "dd_pct": 0.22,
+    "pf": 31.8211
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.43 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 167.148634,
+    "trades": 2737,
+    "sharpe": 32.0908,
+    "win_rate": 93.8,
+    "pnl_pct": 218.26,
+    "dd_pct": 0.22,
+    "pf": 31.8211
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 166.5293,
+    "trades": 2702,
+    "sharpe": 32.1783,
+    "win_rate": 93.9,
+    "pnl_pct": 214.39,
+    "dd_pct": 0.22,
+    "pf": 31.9585
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 166.5293,
+    "trades": 2702,
+    "sharpe": 32.1783,
+    "win_rate": 93.9,
+    "pnl_pct": 214.39,
+    "dd_pct": 0.22,
+    "pf": 31.9585
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 166.5293,
+    "trades": 2702,
+    "sharpe": 32.1783,
+    "win_rate": 93.9,
+    "pnl_pct": 214.39,
+    "dd_pct": 0.22,
+    "pf": 31.9585
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 165.187206,
+    "trades": 7960,
+    "sharpe": 18.7359,
+    "win_rate": 82.6,
+    "pnl_pct": 842.22,
+    "dd_pct": 0.59,
+    "pf": 11.0567
+  },
+  {
+    "name": "sharp=0.8",
+    "params": {
+      "PROB_SHARPENING": 0.8
+    },
+    "composite": 165.167937,
+    "trades": 8366,
+    "sharpe": 18.292,
+    "win_rate": 82.4,
+    "pnl_pct": 918.08,
+    "dd_pct": 0.64,
+    "pf": 10.3519
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 165.152882,
+    "trades": 7995,
+    "sharpe": 18.691,
+    "win_rate": 82.6,
+    "pnl_pct": 844.06,
+    "dd_pct": 0.59,
+    "pf": 11.046
+  },
+  {
+    "name": "mfp=0.45 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 165.122951,
+    "trades": 8032,
+    "sharpe": 18.6445,
+    "win_rate": 82.7,
+    "pnl_pct": 845.94,
+    "dd_pct": 0.59,
+    "pf": 11.0585
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 164.885616,
+    "trades": 7920,
+    "sharpe": 18.7489,
+    "win_rate": 82.5,
+    "pnl_pct": 839.1,
+    "dd_pct": 0.59,
+    "pf": 11.0453
+  },
+  {
+    "name": "mfp=0.4",
+    "params": {
+      "MIN_FORECAST_PROB": 0.4
+    },
+    "composite": 164.096218,
+    "trades": 7383,
+    "sharpe": 19.2208,
+    "win_rate": 83.3,
+    "pnl_pct": 733.11,
+    "dd_pct": 0.32,
+    "pf": 12.0337
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 163.311998,
+    "trades": 2588,
+    "sharpe": 32.2442,
+    "win_rate": 94.4,
+    "pnl_pct": 192.73,
+    "dd_pct": 0.22,
+    "pf": 33.9543
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 163.311998,
+    "trades": 2588,
+    "sharpe": 32.2442,
+    "win_rate": 94.4,
+    "pnl_pct": 192.73,
+    "dd_pct": 0.22,
+    "pf": 33.9543
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 163.311998,
+    "trades": 2588,
+    "sharpe": 32.2442,
+    "win_rate": 94.4,
+    "pnl_pct": 192.73,
+    "dd_pct": 0.22,
+    "pf": 33.9543
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 163.234981,
+    "trades": 2564,
+    "sharpe": 32.3794,
+    "win_rate": 94.5,
+    "pnl_pct": 190.3,
+    "dd_pct": 0.22,
+    "pf": 34.3593
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 163.234981,
+    "trades": 2564,
+    "sharpe": 32.3794,
+    "win_rate": 94.5,
+    "pnl_pct": 190.3,
+    "dd_pct": 0.22,
+    "pf": 34.3593
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 163.234981,
+    "trades": 2564,
+    "sharpe": 32.3794,
+    "win_rate": 94.5,
+    "pnl_pct": 190.3,
+    "dd_pct": 0.22,
+    "pf": 34.3593
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 162.980094,
+    "trades": 2389,
+    "sharpe": 33.492,
+    "win_rate": 93.9,
+    "pnl_pct": 189.21,
+    "dd_pct": 0.22,
+    "pf": 33.2876
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 162.980094,
+    "trades": 2389,
+    "sharpe": 33.492,
+    "win_rate": 93.9,
+    "pnl_pct": 189.21,
+    "dd_pct": 0.22,
+    "pf": 33.2876
+  },
+  {
+    "name": "fine mfp=0.62 mp=0.40 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.62,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 162.980094,
+    "trades": 2389,
+    "sharpe": 33.492,
+    "win_rate": 93.9,
+    "pnl_pct": 189.21,
+    "dd_pct": 0.22,
+    "pf": 33.2876
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 162.750843,
+    "trades": 7246,
+    "sharpe": 19.3438,
+    "win_rate": 82.7,
+    "pnl_pct": 772.3,
+    "dd_pct": 0.58,
+    "pf": 11.531
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 162.750843,
+    "trades": 7246,
+    "sharpe": 19.3438,
+    "win_rate": 82.7,
+    "pnl_pct": 772.3,
+    "dd_pct": 0.58,
+    "pf": 11.531
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 162.652141,
+    "trades": 2361,
+    "sharpe": 33.6223,
+    "win_rate": 94.0,
+    "pnl_pct": 185.9,
+    "dd_pct": 0.22,
+    "pf": 33.623
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 162.652141,
+    "trades": 2361,
+    "sharpe": 33.6223,
+    "win_rate": 94.0,
+    "pnl_pct": 185.9,
+    "dd_pct": 0.22,
+    "pf": 33.623
+  },
+  {
+    "name": "mfp=0.6 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 162.185962,
+    "trades": 2672,
+    "sharpe": 31.5145,
+    "win_rate": 94.2,
+    "pnl_pct": 195.76,
+    "dd_pct": 0.22,
+    "pf": 33.0406
+  },
+  {
+    "name": "mfp=0.6 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 161.823923,
+    "trades": 2696,
+    "sharpe": 31.3039,
+    "win_rate": 94.3,
+    "pnl_pct": 196.96,
+    "dd_pct": 0.22,
+    "pf": 33.0173
+  },
+  {
+    "name": "mfp=0.6 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 161.569332,
+    "trades": 2427,
+    "sharpe": 32.9412,
+    "win_rate": 94.3,
+    "pnl_pct": 180.08,
+    "dd_pct": 0.22,
+    "pf": 34.3251
+  },
+  {
+    "name": "mfp=0.6 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 161.113942,
+    "trades": 2719,
+    "sharpe": 31.0344,
+    "win_rate": 94.3,
+    "pnl_pct": 197.8,
+    "dd_pct": 0.22,
+    "pf": 32.939
+  },
+  {
+    "name": "minp=0.1",
+    "params": {
+      "MIN_PRICE": 0.1
+    },
+    "composite": 160.895013,
+    "trades": 6715,
+    "sharpe": 19.7451,
+    "win_rate": 88.0,
+    "pnl_pct": 918.04,
+    "dd_pct": 0.28,
+    "pf": 17.6827
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 160.604335,
+    "trades": 2395,
+    "sharpe": 32.9625,
+    "win_rate": 94.3,
+    "pnl_pct": 177.83,
+    "dd_pct": 0.22,
+    "pf": 34.43
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 160.604335,
+    "trades": 2395,
+    "sharpe": 32.9625,
+    "win_rate": 94.3,
+    "pnl_pct": 177.83,
+    "dd_pct": 0.22,
+    "pf": 34.43
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 160.604335,
+    "trades": 2395,
+    "sharpe": 32.9625,
+    "win_rate": 94.3,
+    "pnl_pct": 177.83,
+    "dd_pct": 0.22,
+    "pf": 34.43
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 160.58529,
+    "trades": 2416,
+    "sharpe": 32.815,
+    "win_rate": 94.2,
+    "pnl_pct": 180.02,
+    "dd_pct": 0.22,
+    "pf": 33.983
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 160.58529,
+    "trades": 2416,
+    "sharpe": 32.815,
+    "win_rate": 94.2,
+    "pnl_pct": 180.02,
+    "dd_pct": 0.22,
+    "pf": 33.983
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 160.58529,
+    "trades": 2416,
+    "sharpe": 32.815,
+    "win_rate": 94.2,
+    "pnl_pct": 180.02,
+    "dd_pct": 0.22,
+    "pf": 33.983
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 160.180723,
+    "trades": 7450,
+    "sharpe": 18.7796,
+    "win_rate": 81.9,
+    "pnl_pct": 794.63,
+    "dd_pct": 0.59,
+    "pf": 10.943
+  },
+  {
+    "name": "mfp=0.6 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.6,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 159.671779,
+    "trades": 2754,
+    "sharpe": 30.5606,
+    "win_rate": 94.4,
+    "pnl_pct": 198.92,
+    "dd_pct": 0.22,
+    "pf": 33.0642
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 157.912298,
+    "trades": 2106,
+    "sharpe": 34.5622,
+    "win_rate": 94.4,
+    "pnl_pct": 156.96,
+    "dd_pct": 0.22,
+    "pf": 36.3599
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 157.912298,
+    "trades": 2106,
+    "sharpe": 34.5622,
+    "win_rate": 94.4,
+    "pnl_pct": 156.96,
+    "dd_pct": 0.22,
+    "pf": 36.3599
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 157.912298,
+    "trades": 2106,
+    "sharpe": 34.5622,
+    "win_rate": 94.4,
+    "pnl_pct": 156.96,
+    "dd_pct": 0.22,
+    "pf": 36.3599
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 157.669019,
+    "trades": 2088,
+    "sharpe": 34.6574,
+    "win_rate": 94.4,
+    "pnl_pct": 155.04,
+    "dd_pct": 0.22,
+    "pf": 36.7245
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 157.669019,
+    "trades": 2088,
+    "sharpe": 34.6574,
+    "win_rate": 94.4,
+    "pnl_pct": 155.04,
+    "dd_pct": 0.22,
+    "pf": 36.7245
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 157.669019,
+    "trades": 2088,
+    "sharpe": 34.6574,
+    "win_rate": 94.4,
+    "pnl_pct": 155.04,
+    "dd_pct": 0.22,
+    "pf": 36.7245
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 157.408046,
+    "trades": 2330,
+    "sharpe": 32.754,
+    "win_rate": 94.6,
+    "pnl_pct": 163.94,
+    "dd_pct": 0.22,
+    "pf": 36.1836
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 157.408046,
+    "trades": 2330,
+    "sharpe": 32.754,
+    "win_rate": 94.6,
+    "pnl_pct": 163.94,
+    "dd_pct": 0.22,
+    "pf": 36.1836
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.46 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 157.408046,
+    "trades": 2330,
+    "sharpe": 32.754,
+    "win_rate": 94.6,
+    "pnl_pct": 163.94,
+    "dd_pct": 0.22,
+    "pf": 36.1836
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 157.142682,
+    "trades": 2546,
+    "sharpe": 31.281,
+    "win_rate": 94.2,
+    "pnl_pct": 182.03,
+    "dd_pct": 0.22,
+    "pf": 32.3499
+  },
+  {
+    "name": "mfp=0.45 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 157.101065,
+    "trades": 8614,
+    "sharpe": 17.1394,
+    "win_rate": 80.3,
+    "pnl_pct": 892.53,
+    "dd_pct": 0.62,
+    "pf": 9.4832
+  },
+  {
+    "name": "mfp=0.45 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 156.99508,
+    "trades": 8580,
+    "sharpe": 17.1617,
+    "win_rate": 80.2,
+    "pnl_pct": 890.56,
+    "dd_pct": 0.62,
+    "pf": 9.483
+  },
+  {
+    "name": "mfp=0.45 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 156.711067,
+    "trades": 8541,
+    "sharpe": 17.1698,
+    "win_rate": 80.2,
+    "pnl_pct": 887.57,
+    "dd_pct": 0.62,
+    "pf": 9.4725
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 156.570202,
+    "trades": 2301,
+    "sharpe": 32.7843,
+    "win_rate": 94.7,
+    "pnl_pct": 161.04,
+    "dd_pct": 0.22,
+    "pf": 36.2226
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 156.570202,
+    "trades": 2301,
+    "sharpe": 32.7843,
+    "win_rate": 94.7,
+    "pnl_pct": 161.04,
+    "dd_pct": 0.22,
+    "pf": 36.2226
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 156.570202,
+    "trades": 2301,
+    "sharpe": 32.7843,
+    "win_rate": 94.7,
+    "pnl_pct": 161.04,
+    "dd_pct": 0.22,
+    "pf": 36.2226
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 156.553934,
+    "trades": 2574,
+    "sharpe": 30.9938,
+    "win_rate": 94.2,
+    "pnl_pct": 183.31,
+    "dd_pct": 0.22,
+    "pf": 32.188
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 156.380433,
+    "trades": 2305,
+    "sharpe": 32.7161,
+    "win_rate": 94.2,
+    "pnl_pct": 166.47,
+    "dd_pct": 0.22,
+    "pf": 33.8341
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 155.193818,
+    "trades": 2174,
+    "sharpe": 33.4318,
+    "win_rate": 94.5,
+    "pnl_pct": 153.53,
+    "dd_pct": 0.22,
+    "pf": 36.4455
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 155.193818,
+    "trades": 2174,
+    "sharpe": 33.4318,
+    "win_rate": 94.5,
+    "pnl_pct": 153.53,
+    "dd_pct": 0.22,
+    "pf": 36.4455
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.43 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 155.193818,
+    "trades": 2174,
+    "sharpe": 33.4318,
+    "win_rate": 94.5,
+    "pnl_pct": 153.53,
+    "dd_pct": 0.22,
+    "pf": 36.4455
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 155.067006,
+    "trades": 2261,
+    "sharpe": 32.7555,
+    "win_rate": 94.6,
+    "pnl_pct": 156.87,
+    "dd_pct": 0.22,
+    "pf": 36.1838
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 155.067006,
+    "trades": 2261,
+    "sharpe": 32.7555,
+    "win_rate": 94.6,
+    "pnl_pct": 156.87,
+    "dd_pct": 0.22,
+    "pf": 36.1838
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 155.067006,
+    "trades": 2261,
+    "sharpe": 32.7555,
+    "win_rate": 94.6,
+    "pnl_pct": 156.87,
+    "dd_pct": 0.22,
+    "pf": 36.1838
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 155.018763,
+    "trades": 2605,
+    "sharpe": 30.5067,
+    "win_rate": 94.1,
+    "pnl_pct": 184.28,
+    "dd_pct": 0.22,
+    "pf": 31.7244
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 154.407966,
+    "trades": 2377,
+    "sharpe": 31.8105,
+    "win_rate": 94.4,
+    "pnl_pct": 164.72,
+    "dd_pct": 0.22,
+    "pf": 34.4737
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 154.407966,
+    "trades": 2377,
+    "sharpe": 31.8105,
+    "win_rate": 94.4,
+    "pnl_pct": 164.72,
+    "dd_pct": 0.22,
+    "pf": 34.4737
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 154.407571,
+    "trades": 2146,
+    "sharpe": 33.4787,
+    "win_rate": 94.5,
+    "pnl_pct": 150.75,
+    "dd_pct": 0.22,
+    "pf": 36.5419
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 154.407571,
+    "trades": 2146,
+    "sharpe": 33.4787,
+    "win_rate": 94.5,
+    "pnl_pct": 150.75,
+    "dd_pct": 0.22,
+    "pf": 36.5419
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 154.407571,
+    "trades": 2146,
+    "sharpe": 33.4787,
+    "win_rate": 94.5,
+    "pnl_pct": 150.75,
+    "dd_pct": 0.22,
+    "pf": 36.5419
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 154.407571,
+    "trades": 2146,
+    "sharpe": 33.4787,
+    "win_rate": 94.5,
+    "pnl_pct": 150.75,
+    "dd_pct": 0.22,
+    "pf": 36.5419
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 154.407571,
+    "trades": 2146,
+    "sharpe": 33.4787,
+    "win_rate": 94.5,
+    "pnl_pct": 150.75,
+    "dd_pct": 0.22,
+    "pf": 36.5419
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 154.136903,
+    "trades": 2403,
+    "sharpe": 31.5824,
+    "win_rate": 94.5,
+    "pnl_pct": 165.92,
+    "dd_pct": 0.22,
+    "pf": 34.4988
+  },
+  {
+    "name": "minp=0.08",
+    "params": {
+      "MIN_PRICE": 0.08
+    },
+    "composite": 153.362354,
+    "trades": 6778,
+    "sharpe": 18.733,
+    "win_rate": 87.9,
+    "pnl_pct": 959.94,
+    "dd_pct": 0.28,
+    "pf": 17.8902
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 153.301638,
+    "trades": 2115,
+    "sharpe": 33.4816,
+    "win_rate": 95.0,
+    "pnl_pct": 142.56,
+    "dd_pct": 0.22,
+    "pf": 38.9401
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 153.301638,
+    "trades": 2115,
+    "sharpe": 33.4816,
+    "win_rate": 95.0,
+    "pnl_pct": 142.56,
+    "dd_pct": 0.22,
+    "pf": 38.9401
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.46 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 153.301638,
+    "trades": 2115,
+    "sharpe": 33.4816,
+    "win_rate": 95.0,
+    "pnl_pct": 142.56,
+    "dd_pct": 0.22,
+    "pf": 38.9401
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 153.279238,
+    "trades": 2646,
+    "sharpe": 29.9298,
+    "win_rate": 94.1,
+    "pnl_pct": 185.45,
+    "dd_pct": 0.22,
+    "pf": 31.7277
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 153.00709,
+    "trades": 2110,
+    "sharpe": 33.4569,
+    "win_rate": 94.5,
+    "pnl_pct": 146.98,
+    "dd_pct": 0.22,
+    "pf": 36.5827
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 153.00709,
+    "trades": 2110,
+    "sharpe": 33.4569,
+    "win_rate": 94.5,
+    "pnl_pct": 146.98,
+    "dd_pct": 0.22,
+    "pf": 36.5827
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 153.00709,
+    "trades": 2110,
+    "sharpe": 33.4569,
+    "win_rate": 94.5,
+    "pnl_pct": 146.98,
+    "dd_pct": 0.22,
+    "pf": 36.5827
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 152.920294,
+    "trades": 2430,
+    "sharpe": 31.1585,
+    "win_rate": 94.4,
+    "pnl_pct": 166.75,
+    "dd_pct": 0.22,
+    "pf": 34.146
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 152.28404,
+    "trades": 2091,
+    "sharpe": 33.4497,
+    "win_rate": 95.0,
+    "pnl_pct": 139.89,
+    "dd_pct": 0.22,
+    "pf": 38.8511
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 152.28404,
+    "trades": 2091,
+    "sharpe": 33.4497,
+    "win_rate": 95.0,
+    "pnl_pct": 139.89,
+    "dd_pct": 0.22,
+    "pf": 38.8511
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 152.28404,
+    "trades": 2091,
+    "sharpe": 33.4497,
+    "win_rate": 95.0,
+    "pnl_pct": 139.89,
+    "dd_pct": 0.22,
+    "pf": 38.8511
+  },
+  {
+    "name": "mfp=0.45 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.45,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 151.914396,
+    "trades": 8026,
+    "sharpe": 17.1699,
+    "win_rate": 79.5,
+    "pnl_pct": 839.37,
+    "dd_pct": 0.62,
+    "pf": 9.3712
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 151.809709,
+    "trades": 1898,
+    "sharpe": 34.9999,
+    "win_rate": 94.6,
+    "pnl_pct": 134.65,
+    "dd_pct": 0.22,
+    "pf": 38.0515
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 151.809709,
+    "trades": 1898,
+    "sharpe": 34.9999,
+    "win_rate": 94.6,
+    "pnl_pct": 134.65,
+    "dd_pct": 0.22,
+    "pf": 38.0515
+  },
+  {
+    "name": "fine mfp=0.64 mp=0.40 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.64,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 151.809709,
+    "trades": 1898,
+    "sharpe": 34.9999,
+    "win_rate": 94.6,
+    "pnl_pct": 134.65,
+    "dd_pct": 0.22,
+    "pf": 38.0515
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 151.665443,
+    "trades": 1971,
+    "sharpe": 34.313,
+    "win_rate": 94.9,
+    "pnl_pct": 133.78,
+    "dd_pct": 0.22,
+    "pf": 39.509
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 151.591347,
+    "trades": 1970,
+    "sharpe": 34.3049,
+    "win_rate": 94.9,
+    "pnl_pct": 133.64,
+    "dd_pct": 0.22,
+    "pf": 39.4951
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 151.591347,
+    "trades": 1970,
+    "sharpe": 34.3049,
+    "win_rate": 94.9,
+    "pnl_pct": 133.64,
+    "dd_pct": 0.22,
+    "pf": 39.4951
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.43 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 151.591347,
+    "trades": 1970,
+    "sharpe": 34.3049,
+    "win_rate": 94.9,
+    "pnl_pct": 133.64,
+    "dd_pct": 0.22,
+    "pf": 39.4951
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 151.402976,
+    "trades": 2469,
+    "sharpe": 30.6048,
+    "win_rate": 94.5,
+    "pnl_pct": 167.91,
+    "dd_pct": 0.22,
+    "pf": 34.2971
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 150.749267,
+    "trades": 2186,
+    "sharpe": 32.3851,
+    "win_rate": 94.7,
+    "pnl_pct": 145.87,
+    "dd_pct": 0.22,
+    "pf": 36.508
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 150.608508,
+    "trades": 1874,
+    "sharpe": 34.9446,
+    "win_rate": 94.6,
+    "pnl_pct": 132.21,
+    "dd_pct": 0.22,
+    "pf": 37.9977
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 150.608508,
+    "trades": 1874,
+    "sharpe": 34.9446,
+    "win_rate": 94.6,
+    "pnl_pct": 132.21,
+    "dd_pct": 0.22,
+    "pf": 37.9977
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 150.608508,
+    "trades": 1874,
+    "sharpe": 34.9446,
+    "win_rate": 94.6,
+    "pnl_pct": 132.21,
+    "dd_pct": 0.22,
+    "pf": 37.9977
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 150.539436,
+    "trades": 1947,
+    "sharpe": 34.2675,
+    "win_rate": 94.9,
+    "pnl_pct": 131.12,
+    "dd_pct": 0.22,
+    "pf": 39.3951
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 150.539436,
+    "trades": 1947,
+    "sharpe": 34.2675,
+    "win_rate": 94.9,
+    "pnl_pct": 131.12,
+    "dd_pct": 0.22,
+    "pf": 39.3951
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 150.539436,
+    "trades": 1947,
+    "sharpe": 34.2675,
+    "win_rate": 94.9,
+    "pnl_pct": 131.12,
+    "dd_pct": 0.22,
+    "pf": 39.3951
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 150.367783,
+    "trades": 2211,
+    "sharpe": 32.12,
+    "win_rate": 94.8,
+    "pnl_pct": 146.98,
+    "dd_pct": 0.22,
+    "pf": 36.4906
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 150.32615,
+    "trades": 2209,
+    "sharpe": 32.1256,
+    "win_rate": 94.7,
+    "pnl_pct": 146.69,
+    "dd_pct": 0.22,
+    "pf": 36.6731
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 149.438084,
+    "trades": 2234,
+    "sharpe": 31.7567,
+    "win_rate": 94.8,
+    "pnl_pct": 147.43,
+    "dd_pct": 0.22,
+    "pf": 36.5372
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 148.941159,
+    "trades": 2242,
+    "sharpe": 31.5945,
+    "win_rate": 94.7,
+    "pnl_pct": 147.89,
+    "dd_pct": 0.22,
+    "pf": 35.9956
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 148.909366,
+    "trades": 1842,
+    "sharpe": 34.8492,
+    "win_rate": 94.5,
+    "pnl_pct": 128.88,
+    "dd_pct": 0.22,
+    "pf": 37.6191
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 148.909366,
+    "trades": 1842,
+    "sharpe": 34.8492,
+    "win_rate": 94.5,
+    "pnl_pct": 128.88,
+    "dd_pct": 0.22,
+    "pf": 37.6191
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 148.909366,
+    "trades": 1842,
+    "sharpe": 34.8492,
+    "win_rate": 94.5,
+    "pnl_pct": 128.88,
+    "dd_pct": 0.22,
+    "pf": 37.6191
+  },
+  {
+    "name": "maxp=0.35",
+    "params": {
+      "MAX_PRICE": 0.35
+    },
+    "composite": 148.463636,
+    "trades": 3309,
+    "sharpe": 25.9439,
+    "win_rate": 87.6,
+    "pnl_pct": 320.03,
+    "dd_pct": 0.26,
+    "pf": 17.9166
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 147.701382,
+    "trades": 2273,
+    "sharpe": 31.1172,
+    "win_rate": 94.9,
+    "pnl_pct": 148.5,
+    "dd_pct": 0.22,
+    "pf": 36.7157
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 147.145406,
+    "trades": 1716,
+    "sharpe": 35.6782,
+    "win_rate": 94.8,
+    "pnl_pct": 117.09,
+    "dd_pct": 0.22,
+    "pf": 40.1538
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 147.145406,
+    "trades": 1716,
+    "sharpe": 35.6782,
+    "win_rate": 94.8,
+    "pnl_pct": 117.09,
+    "dd_pct": 0.22,
+    "pf": 40.1538
+  },
+  {
+    "name": "fine mfp=0.65 mp=0.40 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 147.145406,
+    "trades": 1716,
+    "sharpe": 35.6782,
+    "win_rate": 94.8,
+    "pnl_pct": 117.09,
+    "dd_pct": 0.22,
+    "pf": 40.1538
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 146.87133,
+    "trades": 1879,
+    "sharpe": 34.0321,
+    "win_rate": 95.2,
+    "pnl_pct": 120.08,
+    "dd_pct": 0.22,
+    "pf": 40.9081
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 146.87133,
+    "trades": 1879,
+    "sharpe": 34.0321,
+    "win_rate": 95.2,
+    "pnl_pct": 120.08,
+    "dd_pct": 0.22,
+    "pf": 40.9081
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 146.87133,
+    "trades": 1879,
+    "sharpe": 34.0321,
+    "win_rate": 95.2,
+    "pnl_pct": 120.08,
+    "dd_pct": 0.22,
+    "pf": 40.9081
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 146.722714,
+    "trades": 1903,
+    "sharpe": 33.7826,
+    "win_rate": 95.1,
+    "pnl_pct": 122.14,
+    "dd_pct": 0.22,
+    "pf": 40.1262
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 146.722714,
+    "trades": 1903,
+    "sharpe": 33.7826,
+    "win_rate": 95.1,
+    "pnl_pct": 122.14,
+    "dd_pct": 0.22,
+    "pf": 40.1262
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.46 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 146.722714,
+    "trades": 1903,
+    "sharpe": 33.7826,
+    "win_rate": 95.1,
+    "pnl_pct": 122.14,
+    "dd_pct": 0.22,
+    "pf": 40.1262
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 146.722714,
+    "trades": 1903,
+    "sharpe": 33.7826,
+    "win_rate": 95.1,
+    "pnl_pct": 122.14,
+    "dd_pct": 0.22,
+    "pf": 40.1262
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 146.035543,
+    "trades": 1694,
+    "sharpe": 35.6383,
+    "win_rate": 94.8,
+    "pnl_pct": 114.83,
+    "dd_pct": 0.22,
+    "pf": 40.0322
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 146.035543,
+    "trades": 1694,
+    "sharpe": 35.6383,
+    "win_rate": 94.8,
+    "pnl_pct": 114.83,
+    "dd_pct": 0.22,
+    "pf": 40.0322
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 146.035543,
+    "trades": 1694,
+    "sharpe": 35.6383,
+    "win_rate": 94.8,
+    "pnl_pct": 114.83,
+    "dd_pct": 0.22,
+    "pf": 40.0322
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.89 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 144.870853,
+    "trades": 1748,
+    "sharpe": 34.8037,
+    "win_rate": 95.1,
+    "pnl_pct": 112.63,
+    "dd_pct": 0.22,
+    "pf": 40.6829
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 144.870853,
+    "trades": 1748,
+    "sharpe": 34.8037,
+    "win_rate": 95.1,
+    "pnl_pct": 112.63,
+    "dd_pct": 0.22,
+    "pf": 40.6829
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 144.870853,
+    "trades": 1748,
+    "sharpe": 34.8037,
+    "win_rate": 95.1,
+    "pnl_pct": 112.63,
+    "dd_pct": 0.22,
+    "pf": 40.6829
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 144.704783,
+    "trades": 1772,
+    "sharpe": 34.5276,
+    "win_rate": 95.0,
+    "pnl_pct": 114.62,
+    "dd_pct": 0.22,
+    "pf": 39.9777
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 144.704783,
+    "trades": 1772,
+    "sharpe": 34.5276,
+    "win_rate": 95.0,
+    "pnl_pct": 114.62,
+    "dd_pct": 0.22,
+    "pf": 39.9777
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.43 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 144.704783,
+    "trades": 1772,
+    "sharpe": 34.5276,
+    "win_rate": 95.0,
+    "pnl_pct": 114.62,
+    "dd_pct": 0.22,
+    "pf": 39.9777
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 144.643994,
+    "trades": 1914,
+    "sharpe": 33.2081,
+    "win_rate": 95.1,
+    "pnl_pct": 120.41,
+    "dd_pct": 0.22,
+    "pf": 39.7193
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 144.612748,
+    "trades": 1897,
+    "sharpe": 33.3494,
+    "win_rate": 95.1,
+    "pnl_pct": 119.17,
+    "dd_pct": 0.22,
+    "pf": 40.0143
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 144.401349,
+    "trades": 1724,
+    "sharpe": 34.9315,
+    "win_rate": 95.1,
+    "pnl_pct": 110.59,
+    "dd_pct": 0.22,
+    "pf": 41.0954
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 144.210307,
+    "trades": 1710,
+    "sharpe": 35.0278,
+    "win_rate": 95.2,
+    "pnl_pct": 109.43,
+    "dd_pct": 0.22,
+    "pf": 41.2671
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 144.097789,
+    "trades": 1937,
+    "sharpe": 32.8857,
+    "win_rate": 95.1,
+    "pnl_pct": 121.32,
+    "dd_pct": 0.22,
+    "pf": 39.5659
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 144.003497,
+    "trades": 1921,
+    "sharpe": 33.0008,
+    "win_rate": 95.2,
+    "pnl_pct": 120.11,
+    "dd_pct": 0.22,
+    "pf": 39.8116
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 143.596866,
+    "trades": 1765,
+    "sharpe": 34.3311,
+    "win_rate": 95.3,
+    "pnl_pct": 110.38,
+    "dd_pct": 0.22,
+    "pf": 42.2633
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 143.596866,
+    "trades": 1765,
+    "sharpe": 34.3311,
+    "win_rate": 95.3,
+    "pnl_pct": 110.38,
+    "dd_pct": 0.22,
+    "pf": 42.2633
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 143.596866,
+    "trades": 1765,
+    "sharpe": 34.3311,
+    "win_rate": 95.3,
+    "pnl_pct": 110.38,
+    "dd_pct": 0.22,
+    "pf": 42.2633
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 143.039598,
+    "trades": 1669,
+    "sharpe": 35.1676,
+    "win_rate": 95.6,
+    "pnl_pct": 103.16,
+    "dd_pct": 0.22,
+    "pf": 46.3234
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 143.039598,
+    "trades": 1669,
+    "sharpe": 35.1676,
+    "win_rate": 95.6,
+    "pnl_pct": 103.16,
+    "dd_pct": 0.22,
+    "pf": 46.3234
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.46 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.46,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 143.039598,
+    "trades": 1669,
+    "sharpe": 35.1676,
+    "win_rate": 95.6,
+    "pnl_pct": 103.16,
+    "dd_pct": 0.22,
+    "pf": 46.3234
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 142.956422,
+    "trades": 1961,
+    "sharpe": 32.425,
+    "win_rate": 95.1,
+    "pnl_pct": 121.97,
+    "dd_pct": 0.22,
+    "pf": 39.1504
+  },
+  {
+    "name": "minp=0.05",
+    "params": {
+      "MIN_PRICE": 0.05
+    },
+    "composite": 142.331228,
+    "trades": 6835,
+    "sharpe": 17.3129,
+    "win_rate": 87.7,
+    "pnl_pct": 1001.5,
+    "dd_pct": 0.28,
+    "pf": 17.8464
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 142.260698,
+    "trades": 1949,
+    "sharpe": 32.3664,
+    "win_rate": 95.1,
+    "pnl_pct": 120.84,
+    "dd_pct": 0.22,
+    "pf": 38.8916
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 142.241016,
+    "trades": 1824,
+    "sharpe": 33.4524,
+    "win_rate": 95.2,
+    "pnl_pct": 112.92,
+    "dd_pct": 0.22,
+    "pf": 40.7611
+  },
+  {
+    "name": "mfp=0.65 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 142.18131,
+    "trades": 1760,
+    "sharpe": 34.0409,
+    "win_rate": 95.5,
+    "pnl_pct": 108.43,
+    "dd_pct": 0.22,
+    "pf": 42.8309
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 142.149725,
+    "trades": 1844,
+    "sharpe": 33.2492,
+    "win_rate": 95.2,
+    "pnl_pct": 113.78,
+    "dd_pct": 0.22,
+    "pf": 40.9632
+  },
+  {
+    "name": "mfp=0.65 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 142.04936,
+    "trades": 1778,
+    "sharpe": 33.8367,
+    "win_rate": 95.5,
+    "pnl_pct": 109.16,
+    "dd_pct": 0.22,
+    "pf": 43.028
+  },
+  {
+    "name": "mfp=0.65 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 141.727038,
+    "trades": 1588,
+    "sharpe": 35.7226,
+    "win_rate": 95.4,
+    "pnl_pct": 99.8,
+    "dd_pct": 0.22,
+    "pf": 43.9204
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 141.721169,
+    "trades": 1726,
+    "sharpe": 34.2633,
+    "win_rate": 95.6,
+    "pnl_pct": 105.59,
+    "dd_pct": 0.22,
+    "pf": 44.7205
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 141.57421,
+    "trades": 1745,
+    "sharpe": 34.0409,
+    "win_rate": 95.6,
+    "pnl_pct": 106.38,
+    "dd_pct": 0.22,
+    "pf": 44.9141
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 141.531112,
+    "trades": 1644,
+    "sharpe": 35.0603,
+    "win_rate": 95.1,
+    "pnl_pct": 103.72,
+    "dd_pct": 0.22,
+    "pf": 41.7381
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 141.531112,
+    "trades": 1644,
+    "sharpe": 35.0603,
+    "win_rate": 95.1,
+    "pnl_pct": 103.72,
+    "dd_pct": 0.22,
+    "pf": 41.7381
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 141.531112,
+    "trades": 1644,
+    "sharpe": 35.0603,
+    "win_rate": 95.1,
+    "pnl_pct": 103.72,
+    "dd_pct": 0.22,
+    "pf": 41.7381
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 141.531112,
+    "trades": 1644,
+    "sharpe": 35.0603,
+    "win_rate": 95.1,
+    "pnl_pct": 103.72,
+    "dd_pct": 0.22,
+    "pf": 41.7381
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 141.452298,
+    "trades": 1555,
+    "sharpe": 36.0296,
+    "win_rate": 95.5,
+    "pnl_pct": 97.09,
+    "dd_pct": 0.22,
+    "pf": 45.9628
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 141.452298,
+    "trades": 1555,
+    "sharpe": 36.0296,
+    "win_rate": 95.5,
+    "pnl_pct": 97.09,
+    "dd_pct": 0.22,
+    "pf": 45.9628
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 141.452298,
+    "trades": 1555,
+    "sharpe": 36.0296,
+    "win_rate": 95.5,
+    "pnl_pct": 97.09,
+    "dd_pct": 0.22,
+    "pf": 45.9628
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.43 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 141.452298,
+    "trades": 1555,
+    "sharpe": 36.0296,
+    "win_rate": 95.5,
+    "pnl_pct": 97.09,
+    "dd_pct": 0.22,
+    "pf": 45.9628
+  },
+  {
+    "name": "mfp=0.65",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65
+    },
+    "composite": 141.15665,
+    "trades": 2000,
+    "sharpe": 31.7031,
+    "win_rate": 95.2,
+    "pnl_pct": 122.93,
+    "dd_pct": 0.22,
+    "pf": 39.3601
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 141.15665,
+    "trades": 2000,
+    "sharpe": 31.7031,
+    "win_rate": 95.2,
+    "pnl_pct": 122.93,
+    "dd_pct": 0.22,
+    "pf": 39.3601
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 140.893171,
+    "trades": 1869,
+    "sharpe": 32.7341,
+    "win_rate": 95.2,
+    "pnl_pct": 114.45,
+    "dd_pct": 0.22,
+    "pf": 40.4402
+  },
+  {
+    "name": "mfp=0.65 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 140.804354,
+    "trades": 1799,
+    "sharpe": 33.3438,
+    "win_rate": 95.5,
+    "pnl_pct": 109.7,
+    "dd_pct": 0.22,
+    "pf": 42.4622
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 140.804354,
+    "trades": 1799,
+    "sharpe": 33.3438,
+    "win_rate": 95.5,
+    "pnl_pct": 109.7,
+    "dd_pct": 0.22,
+    "pf": 42.4622
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.89 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 140.427723,
+    "trades": 1521,
+    "sharpe": 36.1662,
+    "win_rate": 95.0,
+    "pnl_pct": 99.07,
+    "dd_pct": 0.22,
+    "pf": 41.1276
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.89 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.89,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 140.427723,
+    "trades": 1521,
+    "sharpe": 36.1662,
+    "win_rate": 95.0,
+    "pnl_pct": 99.07,
+    "dd_pct": 0.22,
+    "pf": 41.1276
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 140.16238,
+    "trades": 1770,
+    "sharpe": 33.4626,
+    "win_rate": 95.6,
+    "pnl_pct": 107.02,
+    "dd_pct": 0.22,
+    "pf": 44.2834
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 140.08334,
+    "trades": 1542,
+    "sharpe": 35.831,
+    "win_rate": 94.9,
+    "pnl_pct": 100.74,
+    "dd_pct": 0.22,
+    "pf": 40.3983
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 140.08334,
+    "trades": 1542,
+    "sharpe": 35.831,
+    "win_rate": 94.9,
+    "pnl_pct": 100.74,
+    "dd_pct": 0.22,
+    "pf": 40.3983
+  },
+  {
+    "name": "fine mfp=0.66 mp=0.40 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.66,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 140.08334,
+    "trades": 1542,
+    "sharpe": 35.831,
+    "win_rate": 94.9,
+    "pnl_pct": 100.74,
+    "dd_pct": 0.22,
+    "pf": 40.3983
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=0.9",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.9
+    },
+    "composite": 139.849283,
+    "trades": 1992,
+    "sharpe": 31.4725,
+    "win_rate": 95.2,
+    "pnl_pct": 121.86,
+    "dd_pct": 0.22,
+    "pf": 38.7478
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.95 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 139.13403,
+    "trades": 1355,
+    "sharpe": 37.9646,
+    "win_rate": 95.6,
+    "pnl_pct": 86.06,
+    "dd_pct": 0.22,
+    "pf": 47.8455
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.95 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 139.13403,
+    "trades": 1355,
+    "sharpe": 37.9646,
+    "win_rate": 95.6,
+    "pnl_pct": 86.06,
+    "dd_pct": 0.22,
+    "pf": 47.8455
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.95 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.95,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 139.13403,
+    "trades": 1355,
+    "sharpe": 37.9646,
+    "win_rate": 95.6,
+    "pnl_pct": 86.06,
+    "dd_pct": 0.22,
+    "pf": 47.8455
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=0.92",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.92
+    },
+    "composite": 138.871822,
+    "trades": 1909,
+    "sharpe": 31.9247,
+    "win_rate": 95.4,
+    "pnl_pct": 115.44,
+    "dd_pct": 0.22,
+    "pf": 40.688
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=0.95",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.95
+    },
+    "composite": 138.871822,
+    "trades": 1909,
+    "sharpe": 31.9247,
+    "win_rate": 95.4,
+    "pnl_pct": 115.44,
+    "dd_pct": 0.22,
+    "pf": 40.688
+  },
+  {
+    "name": "mfp=0.65 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.65,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 138.743323,
+    "trades": 1836,
+    "sharpe": 32.523,
+    "win_rate": 95.6,
+    "pnl_pct": 110.58,
+    "dd_pct": 0.22,
+    "pf": 42.6866
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.92 me=0.06",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.06
+    },
+    "composite": 138.041845,
+    "trades": 1433,
+    "sharpe": 36.6271,
+    "win_rate": 95.1,
+    "pnl_pct": 91.66,
+    "dd_pct": 0.22,
+    "pf": 42.6041
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.92 me=0.08",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.08
+    },
+    "composite": 138.041845,
+    "trades": 1433,
+    "sharpe": 36.6271,
+    "win_rate": 95.1,
+    "pnl_pct": 91.66,
+    "dd_pct": 0.22,
+    "pf": 42.6041
+  },
+  {
+    "name": "fine mfp=0.68 mp=0.40 s=0.92 me=0.1",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.4,
+      "PROB_SHARPENING": 0.92,
+      "MIN_EDGE": 0.1
+    },
+    "composite": 138.041845,
+    "trades": 1433,
+    "sharpe": 36.6271,
+    "win_rate": 95.1,
+    "pnl_pct": 91.66,
+    "dd_pct": 0.22,
+    "pf": 42.6041
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 137.780716,
+    "trades": 1404,
+    "sharpe": 36.9335,
+    "win_rate": 95.7,
+    "pnl_pct": 84.56,
+    "dd_pct": 0.22,
+    "pf": 50.2249
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 137.671621,
+    "trades": 1559,
+    "sharpe": 35.0216,
+    "win_rate": 95.8,
+    "pnl_pct": 91.77,
+    "dd_pct": 0.22,
+    "pf": 48.2639
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 137.433924,
+    "trades": 1578,
+    "sharpe": 34.7501,
+    "win_rate": 95.8,
+    "pnl_pct": 92.49,
+    "dd_pct": 0.22,
+    "pf": 48.5433
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 135.971083,
+    "trades": 1600,
+    "sharpe": 34.143,
+    "win_rate": 95.8,
+    "pnl_pct": 93.03,
+    "dd_pct": 0.22,
+    "pf": 47.8729
+  },
+  {
+    "name": "mfp=0.68 maxp=0.5 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.5,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 133.821617,
+    "trades": 1435,
+    "sharpe": 35.4826,
+    "win_rate": 95.9,
+    "pnl_pct": 82.14,
+    "dd_pct": 0.22,
+    "pf": 51.2073
+  },
+  {
+    "name": "mfp=0.68 maxp=0.43 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.43,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 133.750295,
+    "trades": 1295,
+    "sharpe": 37.3315,
+    "win_rate": 95.9,
+    "pnl_pct": 75.93,
+    "dd_pct": 0.22,
+    "pf": 52.5151
+  },
+  {
+    "name": "mfp=0.68 maxp=0.55 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.55,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 133.56822,
+    "trades": 1452,
+    "sharpe": 35.2075,
+    "win_rate": 95.9,
+    "pnl_pct": 82.77,
+    "dd_pct": 0.22,
+    "pf": 51.4689
+  },
+  {
+    "name": "mfp=0.68",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68
+    },
+    "composite": 133.515664,
+    "trades": 1638,
+    "sharpe": 33.1353,
+    "win_rate": 95.9,
+    "pnl_pct": 93.86,
+    "dd_pct": 0.22,
+    "pf": 48.1774
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=1.0",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.0
+    },
+    "composite": 133.515664,
+    "trades": 1638,
+    "sharpe": 33.1353,
+    "win_rate": 95.9,
+    "pnl_pct": 93.86,
+    "dd_pct": 0.22,
+    "pf": 48.1774
+  },
+  {
+    "name": "mfp=0.68 maxp=0.6 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.6,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 132.065896,
+    "trades": 1472,
+    "sharpe": 34.5742,
+    "win_rate": 96.0,
+    "pnl_pct": 83.24,
+    "dd_pct": 0.22,
+    "pf": 50.8034
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=0.85",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 0.85
+    },
+    "composite": 132.065896,
+    "trades": 1472,
+    "sharpe": 34.5742,
+    "win_rate": 96.0,
+    "pnl_pct": 83.24,
+    "dd_pct": 0.22,
+    "pf": 50.8034
+  },
+  {
+    "name": "mfp=0.68 maxp=0.7 s=1.05",
+    "params": {
+      "MIN_FORECAST_PROB": 0.68,
+      "MAX_PRICE": 0.7,
+      "PROB_SHARPENING": 1.05
+    },
+    "composite": 129.47832,
+    "trades": 1509,
+    "sharpe": 33.4786,
+    "win_rate": 96.1,
+    "pnl_pct": 84.0,
+    "dd_pct": 0.22,
+    "pf": 51.1394
+  },
+  {
+    "name": "mfp=0.7",
+    "params": {
+      "MIN_FORECAST_PROB": 0.7
+    },
+    "composite": 125.320564,
+    "trades": 1440,
+    "sharpe": 33.1708,
+    "win_rate": 96.0,
+    "pnl_pct": 78.51,
+    "dd_pct": 0.22,
+    "pf": 50.2374
+  },
+  {
+    "name": "mfp=0.75",
+    "params": {
+      "MIN_FORECAST_PROB": 0.75
+    },
+    "composite": 102.685502,
+    "trades": 859,
+    "sharpe": 35.1907,
+    "win_rate": 97.4,
+    "pnl_pct": 40.76,
+    "dd_pct": 0.22,
+    "pf": 84.3622
+  },
+  {
+    "name": "kelly=0.005",
+    "params": {
+      "MIN_PRICE": 0.25,
+      "_city_overrides": {
+        "paris": {
+          "max_price": 0.6
+        },
+        "london": {
+          "max_price": 0.6
+        },
+        "seattle": {
+          "max_price": 0.6
+        },
+        "miami": {
+          "max_price": 0.6
+        },
+        "lucknow": {
+          "max_price": 0.6
+        }
+      },
+      "KELLY_FRACTION": 0.005
+    },
+    "composite": 0.0,
+    "trades": 0,
+    "sharpe": 0.0,
+    "win_rate": 0.0,
+    "pnl_pct": 0.0,
+    "dd_pct": 0.0,
+    "pf": 0.0
+  }
+]

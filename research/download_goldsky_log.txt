@@ -1,0 +1,305 @@
+
+======================================================================
+GOLDSKY TRADE DOWNLOAD — Weather Markets
+Start: 2026-03-14T10:56:37.497349
+======================================================================
+
+Loaded 1716 events from cache
+Weather market YES tokens: 12845
+Already fetched: 0
+Tokens to fetch: 12845
+Estimated time: ~128 minutes
+
+  [  0.4%] 50/12845 | 48 data, 2 empty, 0 err | 3748 trades → 766 prices | ETA: 326min
+  [  0.8%] 100/12845 | 98 data, 2 empty, 0 err | 7529 trades → 1427 prices | ETA: 325min
+  [  1.2%] 150/12845 | 148 data, 2 empty, 0 err | 12961 trades → 2436 prices | ETA: 330min
+  [  1.6%] 200/12845 | 198 data, 2 empty, 0 err | 19834 trades → 3373 prices | ETA: 332min
+  [  1.9%] 250/12845 | 248 data, 2 empty, 0 err | 25433 trades → 4275 prices | ETA: 332min
+  [  2.3%] 300/12845 | 298 data, 2 empty, 0 err | 32912 trades → 5418 prices | ETA: 333min
+  [  2.7%] 350/12845 | 348 data, 2 empty, 0 err | 44321 trades → 7243 prices | ETA: 338min
+  [  3.1%] 400/12845 | 398 data, 2 empty, 0 err | 53998 trades → 8768 prices | ETA: 340min
+  [  3.5%] 450/12845 | 448 data, 2 empty, 0 err | 64473 trades → 10596 prices | ETA: 342min
+  [  3.9%] 500/12845 | 498 data, 2 empty, 0 err | 75469 trades → 12204 prices | ETA: 344min
+  [  4.3%] 550/12845 | 548 data, 2 empty, 0 err | 85674 trades → 13741 prices | ETA: 344min
+  [  4.7%] 600/12845 | 598 data, 2 empty, 0 err | 98930 trades → 15207 prices | ETA: 345min
+  [  5.1%] 650/12845 | 648 data, 2 empty, 0 err | 110127 trades → 16810 prices | ETA: 346min
+  [  5.4%] 700/12845 | 698 data, 2 empty, 0 err | 121265 trades → 18417 prices | ETA: 346min
+  [  5.8%] 750/12845 | 748 data, 2 empty, 0 err | 130879 trades → 19800 prices | ETA: 345min
+  [  6.2%] 800/12845 | 798 data, 2 empty, 0 err | 139981 trades → 21250 prices | ETA: 344min
+  [  6.6%] 850/12845 | 848 data, 2 empty, 0 err | 152321 trades → 22848 prices | ETA: 343min
+  [  7.0%] 900/12845 | 898 data, 2 empty, 0 err | 161852 trades → 24354 prices | ETA: 342min
+  [  7.4%] 950/12845 | 948 data, 2 empty, 0 err | 171120 trades → 25712 prices | ETA: 341min
+  [  7.8%] 1000/12845 | 998 data, 2 empty, 0 err | 178504 trades → 26977 prices | ETA: 339min
+  [  8.2%] 1050/12845 | 1048 data, 2 empty, 0 err | 184703 trades → 28247 prices | ETA: 337min
+  [  8.6%] 1100/12845 | 1098 data, 2 empty, 0 err | 192127 trades → 29446 prices | ETA: 335min
+  [  9.0%] 1150/12845 | 1148 data, 2 empty, 0 err | 197965 trades → 30660 prices | ETA: 333min
+  [  9.3%] 1200/12845 | 1198 data, 2 empty, 0 err | 204231 trades → 31845 prices | ETA: 331min
+  [  9.7%] 1250/12845 | 1248 data, 2 empty, 0 err | 208611 trades → 32782 prices | ETA: 328min
+  [ 10.1%] 1300/12845 | 1298 data, 2 empty, 0 err | 214099 trades → 33860 prices | ETA: 326min
+  [ 10.5%] 1350/12845 | 1348 data, 2 empty, 0 err | 220038 trades → 35070 prices | ETA: 324min
+  [ 10.9%] 1400/12845 | 1398 data, 2 empty, 0 err | 226374 trades → 36186 prices | ETA: 323min
+  [ 11.3%] 1450/12845 | 1448 data, 2 empty, 0 err | 233830 trades → 37421 prices | ETA: 322min
+  [ 11.7%] 1500/12845 | 1498 data, 2 empty, 0 err | 242219 trades → 38674 prices | ETA: 320min
+  [ 12.1%] 1550/12845 | 1548 data, 2 empty, 0 err | 253235 trades → 40073 prices | ETA: 320min
+  [ 12.5%] 1600/12845 | 1598 data, 2 empty, 0 err | 265826 trades → 41519 prices | ETA: 319min
+  [ 12.8%] 1650/12845 | 1648 data, 2 empty, 0 err | 280556 trades → 42904 prices | ETA: 319min
+  [ 13.2%] 1700/12845 | 1695 data, 5 empty, 0 err | 290507 trades → 44171 prices | ETA: 318min
+  [ 13.6%] 1750/12845 | 1745 data, 5 empty, 0 err | 300034 trades → 45577 prices | ETA: 316min
+  [ 14.0%] 1800/12845 | 1795 data, 5 empty, 0 err | 305204 trades → 46548 prices | ETA: 314min
+  [ 14.4%] 1850/12845 | 1845 data, 5 empty, 0 err | 313049 trades → 47761 prices | ETA: 313min
+  [ 14.8%] 1900/12845 | 1895 data, 5 empty, 0 err | 317991 trades → 48714 prices | ETA: 311min
+  [ 15.2%] 1950/12845 | 1945 data, 5 empty, 0 err | 324581 trades → 49857 prices | ETA: 310min
+  [ 15.6%] 2000/12845 | 1995 data, 5 empty, 0 err | 329572 trades → 50793 prices | ETA: 308min
+  [ 16.0%] 2050/12845 | 2045 data, 5 empty, 0 err | 335361 trades → 51778 prices | ETA: 306min
+  [ 16.3%] 2100/12845 | 2095 data, 5 empty, 0 err | 340768 trades → 52628 prices | ETA: 304min
+  [ 16.7%] 2150/12845 | 2145 data, 5 empty, 0 err | 347269 trades → 53530 prices | ETA: 303min
+  [ 17.1%] 2200/12845 | 2195 data, 5 empty, 0 err | 351289 trades → 54308 prices | ETA: 301min
+  [ 17.5%] 2250/12845 | 2245 data, 5 empty, 0 err | 357157 trades → 55130 prices | ETA: 299min
+  [ 17.9%] 2300/12845 | 2295 data, 5 empty, 0 err | 361763 trades → 55984 prices | ETA: 297min
+  [ 18.3%] 2350/12845 | 2345 data, 5 empty, 0 err | 367898 trades → 56968 prices | ETA: 295min
+  [ 18.7%] 2400/12845 | 2395 data, 5 empty, 0 err | 373561 trades → 57982 prices | ETA: 294min
+  [ 19.1%] 2450/12845 | 2445 data, 5 empty, 0 err | 379127 trades → 59024 prices | ETA: 292min
+  [ 19.5%] 2500/12845 | 2495 data, 5 empty, 0 err | 384907 trades → 60114 prices | ETA: 290min
+  [ 19.9%] 2550/12845 | 2545 data, 5 empty, 0 err | 390832 trades → 61288 prices | ETA: 288min
+  [ 20.2%] 2600/12845 | 2595 data, 5 empty, 0 err | 398867 trades → 62309 prices | ETA: 287min
+  [ 20.6%] 2650/12845 | 2645 data, 5 empty, 0 err | 402624 trades → 63079 prices | ETA: 285min
+  [ 21.0%] 2700/12845 | 2695 data, 5 empty, 0 err | 408806 trades → 64056 prices | ETA: 283min
+  [ 21.4%] 2750/12845 | 2745 data, 5 empty, 0 err | 415248 trades → 65210 prices | ETA: 282min
+  [ 21.8%] 2800/12845 | 2795 data, 5 empty, 0 err | 421324 trades → 66373 prices | ETA: 280min
+  [ 22.2%] 2850/12845 | 2845 data, 5 empty, 0 err | 426538 trades → 67530 prices | ETA: 278min
+  [ 22.6%] 2900/12845 | 2895 data, 5 empty, 0 err | 430853 trades → 68455 prices | ETA: 277min
+  [ 23.0%] 2950/12845 | 2945 data, 5 empty, 0 err | 436162 trades → 69573 prices | ETA: 275min
+  [ 23.4%] 3000/12845 | 2995 data, 5 empty, 0 err | 440125 trades → 70526 prices | ETA: 273min
+  [ 23.7%] 3050/12845 | 3045 data, 5 empty, 0 err | 445269 trades → 71537 prices | ETA: 272min
+  [ 24.1%] 3100/12845 | 3095 data, 5 empty, 0 err | 449294 trades → 72473 prices | ETA: 270min
+  [ 24.5%] 3150/12845 | 3145 data, 5 empty, 0 err | 453442 trades → 73519 prices | ETA: 269min
+  [ 24.9%] 3200/12845 | 3195 data, 5 empty, 0 err | 457387 trades → 74581 prices | ETA: 267min
+  [ 25.3%] 3250/12845 | 3245 data, 5 empty, 0 err | 461092 trades → 75587 prices | ETA: 265min
+  [ 25.7%] 3300/12845 | 3295 data, 5 empty, 0 err | 464423 trades → 76469 prices | ETA: 263min
+  [ 26.1%] 3350/12845 | 3345 data, 5 empty, 0 err | 468670 trades → 77502 prices | ETA: 262min
+  [ 26.5%] 3400/12845 | 3395 data, 5 empty, 0 err | 472458 trades → 78468 prices | ETA: 260min
+  [ 26.9%] 3450/12845 | 3445 data, 5 empty, 0 err | 477134 trades → 79487 prices | ETA: 258min
+  [ 27.2%] 3500/12845 | 3495 data, 5 empty, 0 err | 480707 trades → 80504 prices | ETA: 257min
+  [ 27.6%] 3550/12845 | 3545 data, 5 empty, 0 err | 484974 trades → 81410 prices | ETA: 255min
+  [ 28.0%] 3600/12845 | 3595 data, 5 empty, 0 err | 490042 trades → 82544 prices | ETA: 254min
+  [ 28.4%] 3650/12845 | 3645 data, 5 empty, 0 err | 494558 trades → 83600 prices | ETA: 252min
+  [ 28.8%] 3700/12845 | 3695 data, 5 empty, 0 err | 500164 trades → 84787 prices | ETA: 251min
+  [ 29.2%] 3750/12845 | 3745 data, 5 empty, 0 err | 505369 trades → 85877 prices | ETA: 249min
+  [ 29.6%] 3800/12845 | 3795 data, 5 empty, 0 err | 515476 trades → 87246 prices | ETA: 248min
+  [ 30.0%] 3850/12845 | 3845 data, 5 empty, 0 err | 522792 trades → 88607 prices | ETA: 247min
+  [ 30.4%] 3900/12845 | 3895 data, 5 empty, 0 err | 529902 trades → 89980 prices | ETA: 245min
+  [ 30.8%] 3950/12845 | 3945 data, 5 empty, 0 err | 539743 trades → 91410 prices | ETA: 244min
+  [ 31.1%] 4000/12845 | 3995 data, 5 empty, 0 err | 548885 trades → 92813 prices | ETA: 243min
+  [ 31.5%] 4050/12845 | 4045 data, 5 empty, 0 err | 567085 trades → 94700 prices | ETA: 242min
+  [ 31.9%] 4100/12845 | 4095 data, 5 empty, 0 err | 590630 trades → 96869 prices | ETA: 241min
+  [ 32.3%] 4150/12845 | 4145 data, 5 empty, 0 err | 613090 trades → 98804 prices | ETA: 241min
+  [ 32.7%] 4200/12845 | 4195 data, 5 empty, 0 err | 632718 trades → 100668 prices | ETA: 240min
+  [ 33.1%] 4250/12845 | 4245 data, 5 empty, 0 err | 653209 trades → 102592 prices | ETA: 239min
+  [ 33.5%] 4300/12845 | 4295 data, 5 empty, 0 err | 677342 trades → 104699 prices | ETA: 238min
+  [ 33.9%] 4350/12845 | 4345 data, 5 empty, 0 err | 696764 trades → 106664 prices | ETA: 237min
+  [ 34.3%] 4400/12845 | 4395 data, 5 empty, 0 err | 716946 trades → 108609 prices | ETA: 237min
+  [ 34.6%] 4450/12845 | 4445 data, 5 empty, 0 err | 728296 trades → 109752 prices | ETA: 235min
+  [ 35.0%] 4500/12845 | 4495 data, 5 empty, 0 err | 729886 trades → 110184 prices | ETA: 233min
+  [ 35.4%] 4550/12845 | 4545 data, 5 empty, 0 err | 734683 trades → 110894 prices | ETA: 232min
+  [ 35.8%] 4600/12845 | 4595 data, 5 empty, 0 err | 750105 trades → 112579 prices | ETA: 231min
+  [ 36.2%] 4650/12845 | 4645 data, 5 empty, 0 err | 751765 trades → 113036 prices | ETA: 229min
+  [ 36.6%] 4700/12845 | 4695 data, 5 empty, 0 err | 756126 trades → 113811 prices | ETA: 227min
+  [ 37.0%] 4750/12845 | 4745 data, 5 empty, 0 err | 760068 trades → 114694 prices | ETA: 226min
+  [ 37.4%] 4800/12845 | 4795 data, 5 empty, 0 err | 765440 trades → 115563 prices | ETA: 224min
+  [ 37.8%] 4850/12845 | 4845 data, 5 empty, 0 err | 768468 trades → 116223 prices | ETA: 223min
+  [ 38.1%] 4900/12845 | 4895 data, 5 empty, 0 err | 773529 trades → 117134 prices | ETA: 221min
+  [ 38.5%] 4950/12845 | 4945 data, 5 empty, 0 err | 776043 trades → 117868 prices | ETA: 220min
+  [ 38.9%] 5000/12845 | 4995 data, 5 empty, 0 err | 781111 trades → 118641 prices | ETA: 218min
+  [ 39.3%] 5050/12845 | 5045 data, 5 empty, 0 err | 785127 trades → 119235 prices | ETA: 217min
+  [ 39.7%] 5100/12845 | 5095 data, 5 empty, 0 err | 789333 trades → 119945 prices | ETA: 215min
+  [ 40.1%] 5150/12845 | 5145 data, 5 empty, 0 err | 792781 trades → 120661 prices | ETA: 213min
+  [ 40.5%] 5200/12845 | 5195 data, 5 empty, 0 err | 798207 trades → 121578 prices | ETA: 212min
+  [ 40.9%] 5250/12845 | 5245 data, 5 empty, 0 err | 801211 trades → 122300 prices | ETA: 210min
+  [ 41.3%] 5300/12845 | 5295 data, 5 empty, 0 err | 805547 trades → 123162 prices | ETA: 209min
+  [ 41.7%] 5350/12845 | 5345 data, 5 empty, 0 err | 808559 trades → 123935 prices | ETA: 207min
+  [ 42.0%] 5400/12845 | 5395 data, 5 empty, 0 err | 811474 trades → 124667 prices | ETA: 206min
+  [ 42.4%] 5450/12845 | 5445 data, 5 empty, 0 err | 815046 trades → 125406 prices | ETA: 204min
+  [ 42.8%] 5500/12845 | 5495 data, 5 empty, 0 err | 818314 trades → 126105 prices | ETA: 202min
+  [ 43.2%] 5550/12845 | 5545 data, 5 empty, 0 err | 821777 trades → 126937 prices | ETA: 201min
+  [ 43.6%] 5600/12845 | 5595 data, 5 empty, 0 err | 825962 trades → 127682 prices | ETA: 199min
+  [ 44.0%] 5650/12845 | 5645 data, 5 empty, 0 err | 829339 trades → 128587 prices | ETA: 198min
+  [ 44.4%] 5700/12845 | 5695 data, 5 empty, 0 err | 833302 trades → 129425 prices | ETA: 196min
+  [ 44.8%] 5750/12845 | 5745 data, 5 empty, 0 err | 838606 trades → 130270 prices | ETA: 195min
+  [ 45.2%] 5800/12845 | 5795 data, 5 empty, 0 err | 844182 trades → 131251 prices | ETA: 193min
+  [ 45.5%] 5850/12845 | 5845 data, 5 empty, 0 err | 849609 trades → 132131 prices | ETA: 192min
+  [ 45.9%] 5900/12845 | 5895 data, 5 empty, 0 err | 854530 trades → 132852 prices | ETA: 190min
+  [ 46.3%] 5950/12845 | 5945 data, 5 empty, 0 err | 861318 trades → 133716 prices | ETA: 189min
+  [ 46.7%] 6000/12845 | 5995 data, 5 empty, 0 err | 865581 trades → 134550 prices | ETA: 187min
+  [ 47.1%] 6050/12845 | 6045 data, 5 empty, 0 err | 869835 trades → 135342 prices | ETA: 186min
+  [ 47.5%] 6100/12845 | 6095 data, 5 empty, 0 err | 875914 trades → 136296 prices | ETA: 184min
+  [ 47.9%] 6150/12845 | 6145 data, 5 empty, 0 err | 883796 trades → 137212 prices | ETA: 183min
+  [ 48.3%] 6200/12845 | 6195 data, 5 empty, 0 err | 888780 trades → 138063 prices | ETA: 182min
+  [ 48.7%] 6250/12845 | 6245 data, 5 empty, 0 err | 894939 trades → 139013 prices | ETA: 180min
+  [ 49.0%] 6300/12845 | 6295 data, 5 empty, 0 err | 903510 trades → 140219 prices | ETA: 179min
+  [ 49.4%] 6350/12845 | 6345 data, 5 empty, 0 err | 909611 trades → 141268 prices | ETA: 177min
+  [ 49.8%] 6400/12845 | 6395 data, 5 empty, 0 err | 919252 trades → 142506 prices | ETA: 176min
+  [ 50.2%] 6450/12845 | 6445 data, 5 empty, 0 err | 926027 trades → 143636 prices | ETA: 175min
+  [ 50.6%] 6500/12845 | 6495 data, 5 empty, 0 err | 932378 trades → 144716 prices | ETA: 173min
+  [ 51.0%] 6550/12845 | 6545 data, 5 empty, 0 err | 938987 trades → 145804 prices | ETA: 172min
+  [ 51.4%] 6600/12845 | 6595 data, 5 empty, 0 err | 948751 trades → 147091 prices | ETA: 171min
+  [ 51.8%] 6650/12845 | 6645 data, 5 empty, 0 err | 957832 trades → 148412 prices | ETA: 169min
+  [ 52.2%] 6700/12845 | 6695 data, 5 empty, 0 err | 966178 trades → 149507 prices | ETA: 168min
+  [ 52.5%] 6750/12845 | 6745 data, 5 empty, 0 err | 977049 trades → 150843 prices | ETA: 167min
+  [ 52.9%] 6800/12845 | 6795 data, 5 empty, 0 err | 988832 trades → 152163 prices | ETA: 165min
+  [ 53.3%] 6850/12845 | 6845 data, 5 empty, 0 err | 1002128 trades → 153818 prices | ETA: 164min
+  [ 53.7%] 6900/12845 | 6895 data, 5 empty, 0 err | 1014852 trades → 155236 prices | ETA: 163min
+  [ 54.1%] 6950/12845 | 6945 data, 5 empty, 0 err | 1028392 trades → 156792 prices | ETA: 162min
+  [ 54.5%] 7000/12845 | 6995 data, 5 empty, 0 err | 1042183 trades → 158327 prices | ETA: 160min
+  [ 54.9%] 7050/12845 | 7045 data, 5 empty, 0 err | 1055875 trades → 159990 prices | ETA: 159min
+  [ 55.3%] 7100/12845 | 7095 data, 5 empty, 0 err | 1071258 trades → 161592 prices | ETA: 158min
+  [ 55.7%] 7150/12845 | 7145 data, 5 empty, 0 err | 1082750 trades → 163252 prices | ETA: 156min
+  [ 56.1%] 7200/12845 | 7195 data, 5 empty, 0 err | 1100944 trades → 165059 prices | ETA: 155min
+  [ 56.4%] 7250/12845 | 7245 data, 5 empty, 0 err | 1112711 trades → 166341 prices | ETA: 154min
+  [ 56.8%] 7300/12845 | 7295 data, 5 empty, 0 err | 1123981 trades → 167757 prices | ETA: 153min
+  [ 57.2%] 7350/12845 | 7345 data, 5 empty, 0 err | 1138515 trades → 169376 prices | ETA: 151min
+  [ 57.6%] 7400/12845 | 7395 data, 5 empty, 0 err | 1149745 trades → 170926 prices | ETA: 150min
+  [ 58.0%] 7450/12845 | 7445 data, 5 empty, 0 err | 1165603 trades → 172793 prices | ETA: 149min
+  [ 58.4%] 7500/12845 | 7495 data, 5 empty, 0 err | 1180509 trades → 174300 prices | ETA: 148min
+  [ 58.8%] 7550/12845 | 7545 data, 5 empty, 0 err | 1197420 trades → 176309 prices | ETA: 146min
+  [ 59.2%] 7600/12845 | 7595 data, 5 empty, 0 err | 1209540 trades → 177885 prices | ETA: 145min
+  [ 59.6%] 7650/12845 | 7645 data, 5 empty, 0 err | 1224026 trades → 179572 prices | ETA: 144min
+  [ 59.9%] 7700/12845 | 7695 data, 5 empty, 0 err | 1244808 trades → 181626 prices | ETA: 143min
+  [ 60.3%] 7750/12845 | 7745 data, 5 empty, 0 err | 1258768 trades → 183338 prices | ETA: 141min
+  [ 60.7%] 7800/12845 | 7795 data, 5 empty, 0 err | 1273289 trades → 185188 prices | ETA: 140min
+  [ 61.1%] 7850/12845 | 7845 data, 5 empty, 0 err | 1292560 trades → 187004 prices | ETA: 139min
+  [ 61.5%] 7900/12845 | 7895 data, 5 empty, 0 err | 1306629 trades → 188649 prices | ETA: 137min
+  [ 61.9%] 7950/12845 | 7945 data, 5 empty, 0 err | 1326988 trades → 190537 prices | ETA: 136min
+  [ 62.3%] 8000/12845 | 7995 data, 5 empty, 0 err | 1339119 trades → 192041 prices | ETA: 135min
+  [ 62.7%] 8050/12845 | 8045 data, 5 empty, 0 err | 1350220 trades → 193745 prices | ETA: 134min
+  [ 63.1%] 8100/12845 | 8095 data, 5 empty, 0 err | 1362348 trades → 195375 prices | ETA: 132min
+  [ 63.4%] 8150/12845 | 8145 data, 5 empty, 0 err | 1376609 trades → 196654 prices | ETA: 131min
+  [ 63.8%] 8200/12845 | 8195 data, 5 empty, 0 err | 1397515 trades → 198497 prices | ETA: 130min
+  [ 64.2%] 8250/12845 | 8245 data, 5 empty, 0 err | 1413060 trades → 200197 prices | ETA: 128min
+  [ 64.6%] 8300/12845 | 8295 data, 5 empty, 0 err | 1429713 trades → 202069 prices | ETA: 127min
+  [ 65.0%] 8350/12845 | 8345 data, 5 empty, 0 err | 1446906 trades → 203772 prices | ETA: 126min
+  [ 65.4%] 8400/12845 | 8395 data, 5 empty, 0 err | 1458904 trades → 205505 prices | ETA: 124min
+  [ 65.8%] 8450/12845 | 8445 data, 5 empty, 0 err | 1478085 trades → 207441 prices | ETA: 123min
+  [ 66.2%] 8500/12845 | 8495 data, 5 empty, 0 err | 1493021 trades → 209200 prices | ETA: 122min
+  [ 66.6%] 8550/12845 | 8545 data, 5 empty, 0 err | 1508330 trades → 210988 prices | ETA: 120min
+  [ 67.0%] 8600/12845 | 8595 data, 5 empty, 0 err | 1523847 trades → 212680 prices | ETA: 119min
+  [ 67.3%] 8650/12845 | 8645 data, 5 empty, 0 err | 1535143 trades → 214394 prices | ETA: 118min
+  [ 67.7%] 8700/12845 | 8695 data, 5 empty, 0 err | 1558613 trades → 216406 prices | ETA: 117min
+  [ 68.1%] 8750/12845 | 8745 data, 5 empty, 0 err | 1578014 trades → 218337 prices | ETA: 115min
+  [ 68.5%] 8800/12845 | 8795 data, 5 empty, 0 err | 1600701 trades → 220459 prices | ETA: 114min
+  [ 68.9%] 8850/12845 | 8845 data, 5 empty, 0 err | 1626138 trades → 222357 prices | ETA: 113min
+  [ 69.3%] 8900/12845 | 8895 data, 5 empty, 0 err | 1649607 trades → 224405 prices | ETA: 111min
+  [ 69.7%] 8950/12845 | 8945 data, 5 empty, 0 err | 1679295 trades → 226502 prices | ETA: 110min
+  [ 70.1%] 9000/12845 | 8995 data, 5 empty, 0 err | 1710998 trades → 228799 prices | ETA: 109min
+  [ 70.5%] 9050/12845 | 9045 data, 5 empty, 0 err | 1742130 trades → 230976 prices | ETA: 108min
+  [ 70.8%] 9100/12845 | 9095 data, 5 empty, 0 err | 1762728 trades → 232478 prices | ETA: 106min
+  [ 71.2%] 9150/12845 | 9145 data, 5 empty, 0 err | 1790449 trades → 234705 prices | ETA: 105min
+  [ 71.6%] 9200/12845 | 9195 data, 5 empty, 0 err | 1810728 trades → 236768 prices | ETA: 104min
+  [ 72.0%] 9250/12845 | 9245 data, 5 empty, 0 err | 1840924 trades → 238624 prices | ETA: 103min
+  [ 72.4%] 9300/12845 | 9295 data, 5 empty, 0 err | 1867238 trades → 240879 prices | ETA: 101min
+  [ 72.8%] 9350/12845 | 9345 data, 5 empty, 0 err | 1887917 trades → 242515 prices | ETA: 100min
+  [ 73.2%] 9400/12845 | 9395 data, 5 empty, 0 err | 1913347 trades → 244665 prices | ETA: 99min
+  [ 73.6%] 9450/12845 | 9445 data, 5 empty, 0 err | 1934097 trades → 246699 prices | ETA: 97min
+  [ 74.0%] 9500/12845 | 9495 data, 5 empty, 0 err | 1953607 trades → 248417 prices | ETA: 96min
+  [ 74.3%] 9550/12845 | 9545 data, 5 empty, 0 err | 1980080 trades → 250791 prices | ETA: 95min
+  [ 74.7%] 9600/12845 | 9595 data, 5 empty, 0 err | 1999336 trades → 252477 prices | ETA: 93min
+  [ 75.1%] 9650/12845 | 9645 data, 5 empty, 0 err | 2026104 trades → 254381 prices | ETA: 92min
+  [ 75.5%] 9700/12845 | 9695 data, 5 empty, 0 err | 2046999 trades → 256292 prices | ETA: 91min
+  [ 75.9%] 9750/12845 | 9745 data, 5 empty, 0 err | 2065886 trades → 258048 prices | ETA: 89min
+  [ 76.3%] 9800/12845 | 9795 data, 5 empty, 0 err | 2086635 trades → 260124 prices | ETA: 88min
+  [ 76.7%] 9850/12845 | 9845 data, 5 empty, 0 err | 2107738 trades → 261979 prices | ETA: 87min
+  [ 77.1%] 9900/12845 | 9895 data, 5 empty, 0 err | 2128246 trades → 263992 prices | ETA: 85min
+  [ 77.5%] 9950/12845 | 9945 data, 5 empty, 0 err | 2150315 trades → 266072 prices | ETA: 84min
+  [ 77.9%] 10000/12845 | 9995 data, 5 empty, 0 err | 2167790 trades → 267800 prices | ETA: 82min
+  [ 78.2%] 10050/12845 | 10045 data, 5 empty, 0 err | 2187242 trades → 269897 prices | ETA: 81min
+  [ 78.6%] 10100/12845 | 10095 data, 5 empty, 0 err | 2206164 trades → 271735 prices | ETA: 80min
+  [ 79.0%] 10150/12845 | 10145 data, 5 empty, 0 err | 2223761 trades → 273423 prices | ETA: 78min
+  [ 79.4%] 10200/12845 | 10195 data, 5 empty, 0 err | 2244769 trades → 275530 prices | ETA: 77min
+  [ 79.8%] 10250/12845 | 10245 data, 5 empty, 0 err | 2266043 trades → 277354 prices | ETA: 75min
+  [ 80.2%] 10300/12845 | 10295 data, 5 empty, 0 err | 2291251 trades → 279534 prices | ETA: 74min
+  [ 80.6%] 10350/12845 | 10345 data, 5 empty, 0 err | 2314546 trades → 281487 prices | ETA: 73min
+  [ 81.0%] 10400/12845 | 10395 data, 5 empty, 0 err | 2335877 trades → 283472 prices | ETA: 71min
+  [ 81.4%] 10450/12845 | 10445 data, 5 empty, 0 err | 2367389 trades → 285914 prices | ETA: 70min
+  [ 81.7%] 10500/12845 | 10495 data, 5 empty, 0 err | 2392149 trades → 287824 prices | ETA: 69min
+  [ 82.1%] 10550/12845 | 10545 data, 5 empty, 0 err | 2419335 trades → 290096 prices | ETA: 67min
+  [ 82.5%] 10600/12845 | 10595 data, 5 empty, 0 err | 2445734 trades → 291823 prices | ETA: 66min
+  [ 82.9%] 10650/12845 | 10645 data, 5 empty, 0 err | 2460105 trades → 293031 prices | ETA: 64min
+  [ 83.3%] 10700/12845 | 10695 data, 5 empty, 0 err | 2474250 trades → 294198 prices | ETA: 63min
+  [ 83.7%] 10750/12845 | 10745 data, 5 empty, 0 err | 2495463 trades → 295884 prices | ETA: 61min
+  [ 84.1%] 10800/12845 | 10795 data, 5 empty, 0 err | 2526029 trades → 298159 prices | ETA: 60min
+  [ 84.5%] 10850/12845 | 10845 data, 5 empty, 0 err | 2550513 trades → 300222 prices | ETA: 59min
+  [ 84.9%] 10900/12845 | 10895 data, 5 empty, 0 err | 2572300 trades → 302113 prices | ETA: 57min
+  [ 85.2%] 10950/12845 | 10945 data, 5 empty, 0 err | 2599206 trades → 304383 prices | ETA: 56min
+  [ 85.6%] 11000/12845 | 10995 data, 5 empty, 0 err | 2621840 trades → 306369 prices | ETA: 54min
+  [ 86.0%] 11050/12845 | 11045 data, 5 empty, 0 err | 2648405 trades → 308382 prices | ETA: 53min
+  [ 86.4%] 11100/12845 | 11095 data, 5 empty, 0 err | 2675419 trades → 310474 prices | ETA: 52min
+  [ 86.8%] 11150/12845 | 11145 data, 5 empty, 0 err | 2697448 trades → 312572 prices | ETA: 50min
+  [ 87.2%] 11200/12845 | 11195 data, 5 empty, 0 err | 2723257 trades → 314707 prices | ETA: 49min
+  [ 87.6%] 11250/12845 | 11245 data, 5 empty, 0 err | 2754424 trades → 316817 prices | ETA: 47min
+  [ 88.0%] 11300/12845 | 11295 data, 5 empty, 0 err | 2785887 trades → 319085 prices | ETA: 46min
+  [ 88.4%] 11350/12845 | 11345 data, 5 empty, 0 err | 2817862 trades → 321175 prices | ETA: 44min
+  [ 88.8%] 11400/12845 | 11395 data, 5 empty, 0 err | 2838104 trades → 323189 prices | ETA: 43min
+  [ 89.1%] 11450/12845 | 11445 data, 5 empty, 0 err | 2864617 trades → 325204 prices | ETA: 41min
+  [ 89.5%] 11500/12845 | 11495 data, 5 empty, 0 err | 2891679 trades → 327198 prices | ETA: 40min
+  [ 89.9%] 11550/12845 | 11545 data, 5 empty, 0 err | 2921834 trades → 329508 prices | ETA: 39min
+  [ 90.3%] 11600/12845 | 11595 data, 5 empty, 0 err | 2952722 trades → 331665 prices | ETA: 37min
+  [ 90.7%] 11650/12845 | 11645 data, 5 empty, 0 err | 2976810 trades → 333692 prices | ETA: 36min
+  [ 91.1%] 11700/12845 | 11695 data, 5 empty, 0 err | 3012040 trades → 336117 prices | ETA: 34min
+  [ 91.5%] 11750/12845 | 11745 data, 5 empty, 0 err | 3039957 trades → 338222 prices | ETA: 33min
+  [ 91.9%] 11800/12845 | 11795 data, 5 empty, 0 err | 3081025 trades → 340562 prices | ETA: 31min
+  [ 92.3%] 11850/12845 | 11845 data, 5 empty, 0 err | 3119899 trades → 342938 prices | ETA: 30min
+  [ 92.6%] 11900/12845 | 11895 data, 5 empty, 0 err | 3139522 trades → 344719 prices | ETA: 28min
+  [ 93.0%] 11950/12845 | 11945 data, 5 empty, 0 err | 3179815 trades → 347187 prices | ETA: 27min
+  [ 93.4%] 12000/12845 | 11995 data, 5 empty, 0 err | 3212274 trades → 349563 prices | ETA: 25min
+  [ 93.8%] 12050/12845 | 12045 data, 5 empty, 0 err | 3247836 trades → 351718 prices | ETA: 24min
+  [ 94.2%] 12100/12845 | 12095 data, 5 empty, 0 err | 3288935 trades → 354033 prices | ETA: 22min
+  [ 94.6%] 12150/12845 | 12145 data, 5 empty, 0 err | 3327933 trades → 356643 prices | ETA: 21min
+  [ 95.0%] 12200/12845 | 12195 data, 5 empty, 0 err | 3353298 trades → 358606 prices | ETA: 19min
+  [ 95.4%] 12250/12845 | 12245 data, 5 empty, 0 err | 3389878 trades → 360931 prices | ETA: 18min
+  [ 95.8%] 12300/12845 | 12295 data, 5 empty, 0 err | 3421257 trades → 363203 prices | ETA: 17min
+  [ 96.1%] 12350/12845 | 12345 data, 5 empty, 0 err | 3438613 trades → 364821 prices | ETA: 15min
+  [ 96.5%] 12400/12845 | 12395 data, 5 empty, 0 err | 3463675 trades → 365833 prices | ETA: 13min
+  [ 96.9%] 12450/12845 | 12445 data, 5 empty, 0 err | 3484799 trades → 366887 prices | ETA: 12min
+  [ 97.3%] 12500/12845 | 12495 data, 5 empty, 0 err | 3497332 trades → 367686 prices | ETA: 10min
+  [ 97.7%] 12550/12845 | 12545 data, 5 empty, 0 err | 3523931 trades → 369603 prices | ETA: 9min
+  [ 98.1%] 12600/12845 | 12595 data, 5 empty, 0 err | 3569547 trades → 372081 prices | ETA: 7min
+  [ 98.5%] 12650/12845 | 12645 data, 5 empty, 0 err | 3603874 trades → 374323 prices | ETA: 6min
+  [ 98.9%] 12700/12845 | 12695 data, 5 empty, 0 err | 3626979 trades → 376105 prices | ETA: 4min
+  [ 99.3%] 12750/12845 | 12745 data, 5 empty, 0 err | 3682839 trades → 378802 prices | ETA: 3min
+  [ 99.6%] 12800/12845 | 12795 data, 5 empty, 0 err | 3707250 trades → 380691 prices | ETA: 1min
+
+======================================================================
+DOWNLOAD COMPLETE — 392.1 minutes
+======================================================================
+  Tokens with trades: 12840
+  Tokens empty: 5
+  Errors: 0
+  Total raw trades: 3,733,035
+  Total hourly prices: 382,028
+  Date range: 2025-01-18 → 2026-03-14 (420 days)
+
+  City              Tokens   Prices
+  nyc                 2934    84448
+  london              2954    84010
+  seattle              733    22880
+  buenos_aires         742    22009
+  atlanta              749    21945
+  dallas               747    21693
+  seoul                751    20722
+  toronto              742    20420
+  miami                427    17400
+  chicago              418    16019
+  ankara               413    14358
+  wellington           413    10375
+  paris                250     9034
+  sao_paulo            250     8505
+  munich                81     2755
+  lucknow               81     2481
+  tokyo                 36      899
+  tel_aviv              36      732
+  dc                     7      241
+  los_angeles           14       83
+
+Done. Database: /Users/dnl.vlck/Arbo/research/data/price_history.sqlite
+eles           14       83
+
+Done. Database: /Users/dnl.vlck/Arbo/research/data/price_history.sqlite

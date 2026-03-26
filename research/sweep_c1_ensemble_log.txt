@@ -1,0 +1,182 @@
+
+======================================================================
+C1 vs C — EMOS Ensemble Backtest (v2)
+  GEFS: 31 members, 75 days, 19 cities
+  C  = V4a agg30 (rolling MAE sigma, backward-looking)
+  C1 = Full replacement: sigma = c + d*ensemble_std
+  C1b = Hybrid: sigma = rolling_sigma * (1 + alpha*(ens/mean - 1))
+  C1c = Hybrid + confidence sizing
+======================================================================
+
+==================================================
+C (V4a baseline — rolling MAE sigma)
+  Score: 132.9  Trades: 175  WR: 37.7%
+  PnL: $14,266.04  DD: 17.3%  Sharpe: 6.21
+  WF OOS: score=78.2  PnL=$1201.59
+    Fold 1: PnL=$88.02  trades=44  WR=34.1%
+    Fold 2: PnL=$1754.85  trades=33  WR=45.5%
+    Fold 3: PnL=$1761.89  trades=28  WR=57.1%
+  Per-city:
+    munich         $5,765.06  (13 tr, WR=61.5%)
+    seoul          $3,673.22  (49 tr, WR=26.5%)
+    atlanta        $3,326.19  (28 tr, WR=67.9%)
+    toronto        $  806.80  (26 tr, WR=34.6%)
+    nyc            $  694.76  (59 tr, WR=28.8%)
+
+==================================================
+C1 (ensemble EMOS — sigma = c + d*ens_std)
+  Score: 134.4  Trades: 179  WR: 36.9%
+  PnL: $14,919.95  DD: 15.6%  Sharpe: 6.41
+  WF OOS: score=85.1  PnL=$1849.22
+    Fold 1: PnL=$105.48  trades=62  WR=30.6%
+    Fold 2: PnL=$1860.08  trades=54  WR=35.2%
+    Fold 3: PnL=$3582.09  trades=41  WR=53.7%
+  Per-city:
+    munich         $5,523.53  (13 tr, WR=61.5%)
+    seoul          $4,353.22  (59 tr, WR=32.2%)
+    atlanta        $3,733.63  (45 tr, WR=48.9%)
+    toronto        $1,192.15  (46 tr, WR=28.3%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+
+==================================================
+C1f (ensemble + EMOS-lite fallback for low-n cities)
+  Score: 139.7  Trades: 219  WR: 36.5%
+  PnL: $27,904.94  DD: 15.6%  Sharpe: 5.62
+  WF OOS: score=86.4  PnL=$1877.46
+    Fold 1: PnL=$190.21  trades=58  WR=32.8%
+    Fold 2: PnL=$1860.08  trades=54  WR=35.2%
+    Fold 3: PnL=$3582.09  trades=41  WR=53.7%
+  Per-city:
+    munich         $10,028.83  (13 tr, WR=61.5%)
+    seoul          $7,850.88  (62 tr, WR=30.6%)
+    atlanta        $6,996.98  (43 tr, WR=53.5%)
+    toronto        $2,333.49  (42 tr, WR=31.0%)
+    nyc            $  694.76  (59 tr, WR=28.8%)
+
+==================================================
+C_flat (V4a baseline — NO compounding)
+  Score: 107.7  Trades: 175  WR: 37.7%
+  PnL: $3,001.22  DD: 14.2%  Sharpe: 6.95
+  WF OOS: score=73.9  PnL=$775.82
+    Fold 1: PnL=$109.32  trades=44  WR=34.1%
+    Fold 2: PnL=$1126.36  trades=33  WR=45.5%
+    Fold 3: PnL=$1091.78  trades=28  WR=57.1%
+  Per-city:
+    atlanta        $1,028.78  (28 tr, WR=67.9%)
+    munich         $  646.53  (13 tr, WR=61.5%)
+    seoul          $  625.01  (49 tr, WR=26.5%)
+    nyc            $  585.36  (59 tr, WR=28.8%)
+    toronto        $  115.54  (26 tr, WR=34.6%)
+
+==================================================
+C1f_flat (ensemble + fallback — NO compounding)
+  Score: 118.3  Trades: 219  WR: 36.5%
+  PnL: $3,737.89  DD: 14.2%  Sharpe: 7.22
+  WF OOS: score=78.1  PnL=$1019.32
+    Fold 1: PnL=$202.30  trades=58  WR=32.8%
+    Fold 2: PnL=$1174.14  trades=54  WR=35.2%
+    Fold 3: PnL=$1681.51  trades=41  WR=53.7%
+  Per-city:
+    atlanta        $1,359.76  (43 tr, WR=53.5%)
+    seoul          $  912.34  (62 tr, WR=30.6%)
+    munich         $  674.90  (13 tr, WR=61.5%)
+    nyc            $  585.36  (59 tr, WR=28.8%)
+    toronto        $  205.53  (42 tr, WR=31.0%)
+
+==================================================
+C1b (hybrid alpha=0.15)
+  Score: 84.2  Trades: 111  WR: 30.6%
+  PnL: $2,235.67  DD: 28.0%  Sharpe: 4.62
+  WF OOS: score=52.3  PnL=$716.53
+    Fold 1: PnL=$-115.13  trades=38  WR=23.7%
+    Fold 2: PnL=$2127.82  trades=42  WR=40.5%
+    Fold 3: PnL=$136.91  trades=14  WR=28.6%
+  Per-city:
+    seoul          $1,037.54  (26 tr, WR=34.6%)
+    atlanta        $  940.18  (29 tr, WR=41.4%)
+    toronto        $  169.25  (39 tr, WR=23.1%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+    munich         $  -28.72  (1 tr, WR=0.0%)
+
+==================================================
+C1b (hybrid alpha=0.3)
+  Score: 86.2  Trades: 113  WR: 31.0%
+  PnL: $2,338.40  DD: 27.8%  Sharpe: 4.84
+  WF OOS: score=51.6  PnL=$702.91
+    Fold 1: PnL=$-112.82  trades=38  WR=23.7%
+    Fold 2: PnL=$2094.88  trades=42  WR=40.5%
+    Fold 3: PnL=$126.66  trades=14  WR=28.6%
+  Per-city:
+    seoul          $1,188.08  (28 tr, WR=35.7%)
+    atlanta        $  917.50  (30 tr, WR=40.0%)
+    toronto        $  150.34  (38 tr, WR=23.7%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+    munich         $  -34.94  (1 tr, WR=0.0%)
+
+==================================================
+C1b (hybrid alpha=0.5)
+  Score: 85.5  Trades: 113  WR: 31.0%
+  PnL: $2,280.21  DD: 27.6%  Sharpe: 4.78
+  WF OOS: score=50.7  PnL=$682.78
+    Fold 1: PnL=$-108.19  trades=38  WR=23.7%
+    Fold 2: PnL=$2045.82  trades=42  WR=40.5%
+    Fold 3: PnL=$110.72  trades=14  WR=28.6%
+  Per-city:
+    seoul          $1,234.28  (28 tr, WR=35.7%)
+    atlanta        $  909.65  (30 tr, WR=40.0%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+    toronto        $   58.75  (38 tr, WR=23.7%)
+    munich         $  -39.89  (1 tr, WR=0.0%)
+
+==================================================
+C1b (hybrid alpha=0.75)
+  Score: 82.5  Trades: 111  WR: 30.6%
+  PnL: $2,112.09  DD: 26.6%  Sharpe: 4.41
+  WF OOS: score=52.0  PnL=$650.17
+    Fold 1: PnL=$-92.61  trades=37  WR=24.3%
+    Fold 2: PnL=$1872.86  trades=40  WR=40.0%
+    Fold 3: PnL=$170.25  trades=16  WR=31.2%
+  Per-city:
+    seoul          $1,278.73  (30 tr, WR=33.3%)
+    atlanta        $  928.18  (29 tr, WR=41.4%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+    munich         $  -42.93  (1 tr, WR=0.0%)
+    toronto        $ -169.32  (35 tr, WR=22.9%)
+
+==================================================
+C1c (hybrid + confidence sizing, alpha=0.15)
+  Score: 92.1  Trades: 111  WR: 30.6%
+  PnL: $2,819.09  DD: 27.7%  Sharpe: 5.04
+  WF OOS: score=56.1  PnL=$865.19
+    Fold 1: PnL=$-129.75  trades=38  WR=23.7%
+    Fold 2: PnL=$2529.69  trades=42  WR=40.5%
+    Fold 3: PnL=$195.63  trades=14  WR=28.6%
+  Per-city:
+    seoul          $1,313.29  (26 tr, WR=34.6%)
+    atlanta        $1,044.82  (29 tr, WR=41.4%)
+    toronto        $  360.48  (39 tr, WR=23.1%)
+    nyc            $  117.42  (16 tr, WR=25.0%)
+    munich         $  -16.92  (1 tr, WR=0.0%)
+
+================================================================================
+SUMMARY — All Variants
+================================================================================
+Variant                 Score    OOS  Trades   WR%        PnL   DD%  Shrp  Util%
+--------------------------------------------------------------------------------
+C1f_fallback            139.7   86.4     219  36.5 $   27,905  15.6  5.62   58.2
+C1_ensemble             134.4   85.1     179  36.9 $   14,920  15.6  6.41   43.1
+C_baseline              132.9   78.2     175  37.7 $   14,266  17.3  6.21   55.1
+C1f_flat                118.3   78.1     219  36.5 $    3,738  14.2  7.22   58.2
+C_flat                  107.7   73.9     175  37.7 $    3,001  14.2  6.95   55.1
+C1c_best                 92.1   56.1     111  30.6 $    2,819  27.7  5.04   36.0
+C1b_a0.15                84.2   52.3     111  30.6 $    2,236  28.0  4.62   36.0
+C1b_a0.75                82.5   52.0     111  30.6 $    2,112  26.6  4.41   36.0
+C1b_a0.3                 86.2   51.6     113  31.0 $    2,338  27.8  4.84   36.4
+C1b_a0.5                 85.5   50.7     113  31.0 $    2,280  27.6  4.78   36.4
+
+======================================================================
+VERDICT: C1f_fallback improves OOS by 11%.
+Recommendation: Consider deploying C1f_fallback.
+======================================================================
+
+Done in 53s. Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_c1_ensemble.json

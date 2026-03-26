@@ -1,0 +1,96 @@
+
+======================================================================
+EMOS V3 — Dynamic Sizing + Aggregate Cap
+Events: 1281, Start: 2026-03-17T15:17:34.686845
+No flat $200 cap. Sizing = min(quarter-Kelly, 5% capital).
+Aggregate exposure cap (tunable, default 40%).
+======================================================================
+
+Running V2 reference (old $200 cap)...
+  V2 ($200 cap): score=146.9  trades=88  WR=45.5%  PnL=$20878.39  Util=32.9%  Concurrent=0.4
+
+Phase 1: Random Search (600 trials)
+--------------------------------------------------
+  V3-0000: score=   0.0  trades=463  WR= 11.2%  PnL=$ -219.71  Util=76.0%  Conc=2.1  Agg=50%  ★
+  V3-0001: score= 127.8  trades= 91  WR= 41.8%  PnL=$ 6367.23  Util=32.4%  Conc=0.4  Agg=40%  ★
+  V3-0003: score= 132.2  trades= 87  WR= 40.2%  PnL=$13602.95  Util=32.0%  Conc=0.4  Agg=50%  ★
+  ... 100/600 done, best: 132.2
+  V3-0164: score= 143.9  trades=252  WR= 28.2%  PnL=$103472.48  Util=62.6%  Conc=1.1  Agg=60%  ★
+  ... 200/600 done, best: 143.9
+  ... 300/600 done, best: 143.9
+  V3-0326: score= 145.4  trades=141  WR= 41.8%  PnL=$129710.74  Util=44.9%  Conc=0.6  Agg=50%  ★
+  ... 400/600 done, best: 145.4
+  V3-0407: score= 148.0  trades=266  WR= 30.5%  PnL=$61477.00  Util=67.5%  Conc=1.2  Agg=40%  ★
+  ... 500/600 done, best: 148.0
+  ... 600/600 done, best: 148.0
+
+Phase 2: Fine-tuning (400 trials)
+--------------------------------------------------
+  Top 10: [148.04, 146.87, 146.74, 146.0, 145.55, 145.4, 144.26, 143.92, 142.26, 137.81]
+  V3-0610: score= 148.2  PnL=$100589.46  Util=68.4%  ★
+  V3-0612: score= 148.6  PnL=$83835.57  Util=60.4%  ★
+  V3-0620: score= 149.8  PnL=$75819.36  Util=60.0%  ★
+  ... 100/400 done, best: 149.8
+  V3-0741: score= 149.9  PnL=$93764.67  Util=51.5%  ★
+  ... 200/400 done, best: 149.9
+  ... 300/400 done, best: 149.9
+  V3-0914: score= 150.3  PnL=$56965.26  Util=59.1%  ★
+  V3-0960: score= 150.7  PnL=$60353.28  Util=62.2%  ★
+  ... 400/400 done, best: 150.7
+
+Phase 3: City optimization (200 trials)
+--------------------------------------------------
+  Losing: ['lucknow', 'wellington']
+  Winning: ['munich', 'seoul', 'atlanta', 'toronto', 'nyc']
+  V3-1000: score= 151.3  PnL=$65846.50  excluded=['lucknow', 'wellington']  ★
+  ... 50/200 done, best: 151.3
+  V3-1057: score= 152.2  PnL=$69368.70  excluded=['lucknow', 'wellington']  ★
+  ... 100/200 done, best: 152.2
+  V3-1110: score= 152.5  PnL=$67990.72  excluded=['lucknow', 'wellington']  ★
+  V3-1114: score= 152.8  PnL=$116342.17  excluded=['lucknow', 'wellington']  ★
+  V3-1117: score= 152.8  PnL=$110474.85  excluded=['lucknow', 'wellington']  ★
+  V3-1148: score= 153.0  PnL=$123882.53  excluded=['lucknow', 'wellington']  ★
+  ... 150/200 done, best: 153.0
+  V3-1153: score= 153.5  PnL=$101843.23  excluded=['lucknow', 'wellington']  ★
+  V3-1171: score= 153.8  PnL=$90184.50  excluded=['lucknow', 'wellington']  ★
+  ... 200/200 done, best: 153.8
+
+Walk-forward validation...
+  WF: score=96.5  OOS PnL=$2822.61
+    Fold 1: PnL=$209.11  trades=60  WR=33.3%  util=79.5%
+    Fold 2: PnL=$4160.69  trades=47  WR=36.2%  util=93.2%
+    Fold 3: PnL=$4098.02  trades=38  WR=50.0%  util=65.1%
+
+======================================================================
+V3 SWEEP COMPLETE — 1.4 minutes
+======================================================================
+
+  V2 ($200 cap):  score=146.9  trades=88  Util=32.9%  PnL=$20878.39
+  V3 (dynamic):   score=153.8  trades=195  Util=55.1%  PnL=$90184.50
+
+  Delta: score +6.9, util +22.2%, PnL $+69,306.11
+
+  Best V3 params:
+    emos_training_window: 66
+    emos_sigma_method: rolling_rmse
+    emos_bias_method: rolling_mean
+    emos_sigma_floor: 0.6
+    emos_sigma_scale: 1.1
+    kelly_raw_cap: 0.4
+    max_aggregate_pct: 0.55
+    min_edge: 0.1
+    max_price: 0.56
+    min_price: 0.08
+    prob_sharpening: 1.1
+    shrinkage: 0.03
+    excluded_cities: ['lucknow', 'wellington']
+
+  Per-city:
+    munich           $44667.05  (16 trades, WR=50.0%)
+    seoul            $27845.77  (65 trades, WR=27.7%)
+    atlanta          $16133.20  (41 trades, WR=56.1%)
+    nyc              $ 1572.57  (51 trades, WR=29.4%)
+    toronto          $  -34.08  (22 trades, WR=36.4%)
+
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_emos_v3.json
+  Dashboard: /experiments → select 'emos_v3'

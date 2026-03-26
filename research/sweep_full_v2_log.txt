@@ -1,0 +1,159 @@
+[00:05:16] Starting full parameter sweep at 2026-03-14T00:05:16.272475
+[00:05:16] Sizing FIXED: KELLY_FRACTION=0.25 (quarter-Kelly)
+[00:05:16] Initial capital: $1000.0
+[00:05:16] Walk-forward: 5 windows
+[00:05:16] 
+[00:05:16] === PHASE 1: Random Search (500 trials) ===
+[00:05:16] Evaluating baseline...
+[00:05:17]   BASELINE: score=56.1008 sharpe=20.1431 trades=1197 wr=84.5% dd=9.75%
+[00:05:19]   Trial 3/500: score=56.6202 sharpe=22.3994 trades=986 wr=86.2% dd=9.75% *** NEW BEST ***
+[00:05:22]   Trial 6/500: score=59.6671 sharpe=14.4762 trades=3325 wr=75.8% dd=14.26% *** NEW BEST ***
+[00:05:28]   Trial 14/500: score=64.1077 sharpe=16.6891 trades=2277 wr=79.5% dd=9.75% *** NEW BEST ***
+[00:05:37]   Trial 25/500: score=58.0744 sharpe=17.0706 trades=1786 wr=81.2% dd=9.75%
+[00:05:37]   Trial 26/500: score=66.7642 sharpe=38.7962 trades=457 wr=94.3% dd=9.75% *** NEW BEST ***
+[00:05:39]   Trial 28/500: score=67.5630 sharpe=15.0090 trades=3290 wr=76.6% dd=10.76% *** NEW BEST ***
+[00:05:57]   Trial 50/500: score=49.2668 sharpe=31.6563 trades=468 wr=92.2% dd=14.03%
+[00:06:02]   Trial 56/500: score=86.4994 sharpe=48.4453 trades=410 wr=95.5% dd=5.91% *** NEW BEST ***
+[00:06:17]   Trial 75/500: score=99.0539 sharpe=75.9486 trades=210 wr=98.1% dd=5.00% *** NEW BEST ***
+[00:06:37]   Trial 100/500: score=65.1615 sharpe=30.1878 trades=719 wr=91.9% dd=9.75%
+[00:06:57]   Trial 125/500: score=58.6019 sharpe=31.1936 trades=499 wr=92.3% dd=7.95%
+[00:07:16]   Trial 150/500: score=57.4960 sharpe=19.2266 trades=1380 wr=83.5% dd=9.75%
+[00:07:36]   Trial 175/500: score=51.7617 sharpe=15.6923 trades=1679 wr=77.3% dd=9.75%
+[00:07:56]   Trial 200/500: score=55.6698 sharpe=27.1248 trades=650 wr=90.3% dd=9.75%
+[00:08:16]   Trial 225/500: score=49.7981 sharpe=22.1640 trades=779 wr=86.6% dd=9.75%
+[00:08:36]   Trial 250/500: score=60.4756 sharpe=31.1939 trades=580 wr=92.5% dd=9.75%
+[00:08:56]   Trial 275/500: score=51.2953 sharpe=14.4689 trades=2453 wr=75.8% dd=14.21%
+[00:09:16]   Trial 300/500: score=50.5215 sharpe=18.1172 trades=1200 wr=82.3% dd=9.75%
+[00:09:36]   Trial 325/500: score=60.4791 sharpe=25.5743 trades=863 wr=88.8% dd=9.75%
+[00:09:56]   Trial 350/500: score=52.9399 sharpe=16.7040 trades=1550 wr=79.8% dd=9.75%
+[00:10:17]   Trial 375/500: score=46.7958 sharpe=14.5879 trades=2014 wr=75.4% dd=14.26%
+[00:10:38]   Trial 400/500: score=47.7254 sharpe=20.6283 trades=826 wr=85.1% dd=9.75%
+[00:10:58]   Trial 425/500: score=40.9872 sharpe=13.7589 trades=2243 wr=73.8% dd=18.55%
+[00:11:20]   Trial 450/500: score=46.9932 sharpe=17.1588 trades=1468 wr=81.0% dd=14.26%
+[00:11:40]   Trial 475/500: score=44.7949 sharpe=19.5519 trades=810 wr=84.4% dd=9.75%
+[00:12:00]   Trial 500/500: score=39.6998 sharpe=23.6455 trades=435 wr=88.3% dd=9.75%
+[00:12:00] Phase 1 complete. Best score: 99.0539 (trial 75)
+[00:12:00] 
+=== PHASE 2: Fine-tuning top-10 (30 perturbations each) ===
+[00:12:00]   Top 1: trial=75 score=99.0539
+[00:12:00]   Top 2: trial=56 score=86.4994
+[00:12:00]   Top 3: trial=448 score=78.6307
+[00:12:00]   Top 4: trial=393 score=76.2953
+[00:12:00]   Top 5: trial=286 score=76.0624
+[00:12:00]   Top 6: trial=162 score=71.9156
+[00:12:00]   Top 7: trial=441 score=70.7613
+[00:12:00]   Top 8: trial=290 score=70.2890
+[00:12:00]   Top 9: trial=236 score=69.4225
+[00:12:00]   Top 10: trial=273 score=68.3472
+[00:12:03]   Fine-tune top1 #2: score=101.2002 *** NEW BEST ***
+[00:12:04]   Fine-tune top1 #4: score=101.3307 *** NEW BEST ***
+[00:16:05] Phase 2 complete. 2 improvements found. Best: 101.3307
+[00:16:05] 
+=== PHASE 3: Per-city Override Optimization ===
+[00:16:05] Starting from best: trial=505 score=101.3307
+[00:16:05] No overrides: score=70.1379 trades=226
+[00:16:05] Per-city PnL (no overrides):
+[00:16:05]              paris: $  19485.36
+[00:16:05]            seattle: $  15883.07
+[00:16:05]             london: $  14021.32
+[00:16:05]            lucknow: $   4538.35
+[00:16:05]                 dc: $    827.95
+[00:16:05]            chicago: $    532.78
+[00:16:05]        los_angeles: $    385.74
+[00:16:05]            atlanta: $    370.86
+[00:16:05]             munich: $    340.67
+[00:16:05]            toronto: $    -63.97
+[00:16:05] Unprofitable: ['toronto']
+[00:16:05] Marginal (< $500): ['los_angeles', 'atlanta', 'munich']
+[00:16:05] Strong (> $2000): ['paris', 'seattle', 'london', 'lucknow']
+[00:16:05] 
+Testing individual exclusions...
+[00:16:06]   Exclude          toronto: score=101.3307 trades=215
+[00:16:07]   Exclude      los_angeles: score=100.9135 trades=214
+[00:16:08]   Exclude          atlanta: score=101.3307 trades=215
+[00:16:09]   Exclude           munich: score=100.9386 trades=214
+[00:16:09] Helpful exclusions: []
+[00:16:09] 
+Testing price widening for strong cities...
+[00:16:09]   Widen [paris] to 0.48: score=101.0642 trades=214
+[00:16:10]   Widen [seattle] to 0.48: score=105.4876 trades=212 *** NEW BEST ***
+[00:16:11]   Widen [london] to 0.48: score=101.3307 trades=215
+[00:16:12]   Widen [lucknow] to 0.48: score=101.3307 trades=215
+[00:16:13]   Widen [paris+seattle] to 0.48: score=105.2081 trades=211
+[00:16:13]   Widen [paris+london] to 0.48: score=101.0642 trades=214
+[00:16:14]   Widen [paris+lucknow] to 0.48: score=101.0642 trades=214
+[00:16:15]   Widen [seattle+london] to 0.48: score=105.4876 trades=212
+[00:16:16]   Widen [seattle+lucknow] to 0.48: score=105.4876 trades=212
+[00:16:17]   Widen [london+lucknow] to 0.48: score=101.3307 trades=215
+[00:16:21]   Widen [paris] to 0.5: score=101.3307 trades=215
+[00:16:22]   Widen [seattle] to 0.5: score=101.3307 trades=215
+[00:16:23]   Widen [london] to 0.5: score=101.3307 trades=215
+[00:16:24]   Widen [lucknow] to 0.5: score=101.3307 trades=215
+[00:16:25]   Widen [paris+seattle] to 0.5: score=101.3307 trades=215
+[00:16:25]   Widen [paris+london] to 0.5: score=101.3307 trades=215
+[00:16:26]   Widen [paris+lucknow] to 0.5: score=101.3307 trades=215
+[00:16:27]   Widen [seattle+london] to 0.5: score=101.3307 trades=215
+[00:16:28]   Widen [seattle+lucknow] to 0.5: score=101.3307 trades=215
+[00:16:29]   Widen [london+lucknow] to 0.5: score=101.3307 trades=215
+[00:16:33]   Widen [paris] to 0.55: score=101.4948 trades=216
+[00:16:34]   Widen [seattle] to 0.55: score=101.3307 trades=215
+[00:16:35]   Widen [london] to 0.55: score=101.5308 trades=217
+[00:16:36]   Widen [lucknow] to 0.55: score=101.3307 trades=215
+[00:16:37]   Widen [paris+seattle] to 0.55: score=101.4948 trades=216
+[00:16:37]   Widen [paris+london] to 0.55: score=101.6928 trades=218
+[00:16:38]   Widen [paris+lucknow] to 0.55: score=101.4948 trades=216
+[00:16:39]   Widen [seattle+london] to 0.55: score=101.5308 trades=217
+[00:16:40]   Widen [seattle+lucknow] to 0.55: score=101.3307 trades=215
+[00:16:41]   Widen [london+lucknow] to 0.55: score=101.5308 trades=217
+[00:16:46]   Widen [paris] to 0.6: score=101.4948 trades=216
+[00:16:46]   Widen [seattle] to 0.6: score=101.3307 trades=215
+[00:16:47]   Widen [london] to 0.6: score=101.2907 trades=219
+[00:16:48]   Widen [lucknow] to 0.6: score=101.3307 trades=215
+[00:16:49]   Widen [paris+seattle] to 0.6: score=101.4948 trades=216
+[00:16:50]   Widen [paris+london] to 0.6: score=101.4497 trades=220
+[00:16:50]   Widen [paris+lucknow] to 0.6: score=101.4948 trades=216
+[00:16:51]   Widen [seattle+london] to 0.6: score=101.2907 trades=219
+[00:16:52]   Widen [seattle+lucknow] to 0.6: score=101.3307 trades=215
+[00:16:53]   Widen [london+lucknow] to 0.6: score=101.2907 trades=219
+[00:16:58] Phase 3 complete. Best score: 105.4876
+[00:16:58] 
+==============================================================================
+[00:16:58] SWEEP COMPLETE — 865 total evaluations in 702s
+[00:16:58] ==============================================================================
+[00:16:58] 
+Top 1: score=105.4876 sharpe=80.4991 trades=212 wr=98.2% dd=5.00% pnl=1085.0%
+[00:16:58]   Params: {"MIN_EDGE": 0.15, "MAX_PRICE": 0.5, "MIN_PRICE": 0.35, "MIN_FORECAST_PROB": 0.7, "MIN_VOLUME": 2000, "MIN_LIQUIDITY": 200, "PROB_SHARPENING": 1.143, "SHRINKAGE_WEIGHT": 0.1, "KELLY_RAW_CAP": 0.25, "CONVICTION_RATIO": 0.0, "CITY_OVERRIDES": {"dc": {"min_edge": 0.99}, "toronto": {"min_edge": 0.99}, "buenos_aires": {"min_edge": 0.99}, "nyc": {"min_edge": 0.99}, "atlanta": {"min_edge": 0.99}, "wellington": {"min_edge": 0.99}, "paris": {"max_price": 0.5}, "seattle": {"max_price": 0.48}, "london": {"max_price": 0.5}, "lucknow": {"max_price": 0.5}, "miami": {"max_price": 0.5}, "tel_aviv": {"max_price": 0.5}}}
+[00:16:58]   Label: widen_0.48
+[00:16:58] 
+Top 2: score=105.4876 sharpe=80.4991 trades=212 wr=98.2% dd=5.00% pnl=1085.0%
+[00:16:58]   Params: {"MIN_EDGE": 0.15, "MAX_PRICE": 0.5, "MIN_PRICE": 0.35, "MIN_FORECAST_PROB": 0.7, "MIN_VOLUME": 2000, "MIN_LIQUIDITY": 200, "PROB_SHARPENING": 1.143, "SHRINKAGE_WEIGHT": 0.1, "KELLY_RAW_CAP": 0.25, "CONVICTION_RATIO": 0.0, "CITY_OVERRIDES": {"dc": {"min_edge": 0.99}, "toronto": {"min_edge": 0.99}, "buenos_aires": {"min_edge": 0.99}, "nyc": {"min_edge": 0.99}, "atlanta": {"min_edge": 0.99}, "wellington": {"min_edge": 0.99}, "paris": {"max_price": 0.5}, "seattle": {"max_price": 0.48}, "london": {"max_price": 0.48}, "lucknow": {"max_price": 0.5}, "miami": {"max_price": 0.5}, "tel_aviv": {"max_price": 0.5}}}
+[00:16:58]   Label: widen_0.48
+[00:16:58] 
+Top 3: score=105.4876 sharpe=80.4991 trades=212 wr=98.2% dd=5.00% pnl=1085.0%
+[00:16:58]   Params: {"MIN_EDGE": 0.15, "MAX_PRICE": 0.5, "MIN_PRICE": 0.35, "MIN_FORECAST_PROB": 0.7, "MIN_VOLUME": 2000, "MIN_LIQUIDITY": 200, "PROB_SHARPENING": 1.143, "SHRINKAGE_WEIGHT": 0.1, "KELLY_RAW_CAP": 0.25, "CONVICTION_RATIO": 0.0, "CITY_OVERRIDES": {"dc": {"min_edge": 0.99}, "toronto": {"min_edge": 0.99}, "buenos_aires": {"min_edge": 0.99}, "nyc": {"min_edge": 0.99}, "atlanta": {"min_edge": 0.99}, "wellington": {"min_edge": 0.99}, "paris": {"max_price": 0.5}, "seattle": {"max_price": 0.48}, "london": {"max_price": 0.5}, "lucknow": {"max_price": 0.48}, "miami": {"max_price": 0.5}, "tel_aviv": {"max_price": 0.5}}}
+[00:16:58]   Label: widen_0.48
+[00:16:58] 
+Top 4: score=105.4876 sharpe=80.4991 trades=212 wr=98.2% dd=5.00% pnl=1085.0%
+[00:16:58]   Params: {"MIN_EDGE": 0.15, "MAX_PRICE": 0.5, "MIN_PRICE": 0.35, "MIN_FORECAST_PROB": 0.7, "MIN_VOLUME": 2000, "MIN_LIQUIDITY": 200, "PROB_SHARPENING": 1.143, "SHRINKAGE_WEIGHT": 0.1, "KELLY_RAW_CAP": 0.25, "CONVICTION_RATIO": 0.0, "CITY_OVERRIDES": {"dc": {"min_edge": 0.99}, "toronto": {"min_edge": 0.99}, "buenos_aires": {"min_edge": 0.99}, "nyc": {"min_edge": 0.99}, "atlanta": {"min_edge": 0.99}, "wellington": {"min_edge": 0.99}, "paris": {"max_price": 0.5}, "seattle": {"max_price": 0.48}, "london": {"max_price": 0.48}, "lucknow": {"max_price": 0.48}, "miami": {"max_price": 0.5}, "tel_aviv": {"max_price": 0.5}}}
+[00:16:58]   Label: widen_0.48
+[00:16:58] 
+Top 5: score=105.2081 sharpe=80.4759 trades=211 wr=98.1% dd=5.00% pnl=1079.9%
+[00:16:58]   Params: {"MIN_EDGE": 0.15, "MAX_PRICE": 0.5, "MIN_PRICE": 0.35, "MIN_FORECAST_PROB": 0.7, "MIN_VOLUME": 2000, "MIN_LIQUIDITY": 200, "PROB_SHARPENING": 1.143, "SHRINKAGE_WEIGHT": 0.1, "KELLY_RAW_CAP": 0.25, "CONVICTION_RATIO": 0.0, "CITY_OVERRIDES": {"dc": {"min_edge": 0.99}, "toronto": {"min_edge": 0.99}, "buenos_aires": {"min_edge": 0.99}, "nyc": {"min_edge": 0.99}, "atlanta": {"min_edge": 0.99}, "wellington": {"min_edge": 0.99}, "paris": {"max_price": 0.48}, "seattle": {"max_price": 0.48}, "london": {"max_price": 0.5}, "lucknow": {"max_price": 0.5}, "miami": {"max_price": 0.5}, "tel_aviv": {"max_price": 0.5}}}
+[00:16:58]   Label: widen_0.48
+[00:16:58] 
+Results saved to /Users/dnl.vlck/Arbo/research/sweep_full_v2_results.json
+[00:16:58] 
+==============================================================================
+[00:16:58] BEST PARAMS (ready for production):
+[00:16:58] ==============================================================================
+[00:16:58]   CITY_OVERRIDES = {'dc': {'min_edge': 0.99}, 'toronto': {'min_edge': 0.99}, 'buenos_aires': {'min_edge': 0.99}, 'nyc': {'min_edge': 0.99}, 'atlanta': {'min_edge': 0.99}, 'wellington': {'min_edge': 0.99}, 'paris': {'max_price': 0.5}, 'seattle': {'max_price': 0.48}, 'london': {'max_price': 0.5}, 'lucknow': {'max_price': 0.5}, 'miami': {'max_price': 0.5}, 'tel_aviv': {'max_price': 0.5}}
+[00:16:58]   CONVICTION_RATIO = 0.0
+[00:16:58]   KELLY_RAW_CAP = 0.25
+[00:16:58]   MAX_PRICE = 0.5
+[00:16:58]   MIN_EDGE = 0.15
+[00:16:58]   MIN_FORECAST_PROB = 0.7
+[00:16:58]   MIN_LIQUIDITY = 200
+[00:16:58]   MIN_PRICE = 0.35
+[00:16:58]   MIN_VOLUME = 2000
+[00:16:58]   PROB_SHARPENING = 1.143
+[00:16:58]   SHRINKAGE_WEIGHT = 0.1

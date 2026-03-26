@@ -1,0 +1,175 @@
+
+======================================================================
+COMPREHENSIVE SWEEP — Real Polymarket + Goldsky Data
+======================================================================
+Events with prices: 769
+Database stats: {
+  "events": 1716,
+  "buckets": 12845,
+  "price_points": 248268,
+  "clob_prices": 189244,
+  "goldsky_prices": 59024,
+  "tokens_with_prices": 3737,
+  "goldsky_tokens": 2445,
+  "price_range": {
+    "start": "2025-01-18T02:00:00",
+    "end": "2026-03-14T08:00:40",
+    "days": 420.25046296296296
+  }
+}
+Start: 2026-03-14T12:06:08.714646
+======================================================================
+
+Phase 1: Broad Random Search (2000 trials)
+--------------------------------------------------
+  Trial    0: score=   17.93  trades= 17  WR= 47.1%  PnL=$  522.96  DD=10.00%  Sharpe=  5.50  ★ NEW BEST
+  Trial   17: score=   23.67  trades= 68  WR= 26.5%  PnL=$ 1152.29  DD=41.56%  Sharpe=  2.46  ★ NEW BEST
+  Trial  110: score=   29.62  trades= 31  WR= 32.3%  PnL=$  759.68  DD=26.14%  Sharpe=  4.41  ★ NEW BEST
+  ... 200/2000 done, best score: 29.62 (0.5min)
+  Trial  207: score=   60.19  trades= 56  WR= 26.8%  PnL=$ 1218.15  DD=31.12%  Sharpe=  3.35  ★ NEW BEST
+  ... 400/2000 done, best score: 60.19 (0.9min)
+  ... 600/2000 done, best score: 60.19 (1.4min)
+  ... 800/2000 done, best score: 60.19 (1.8min)
+  Trial  846: score=  130.75  trades= 95  WR= 30.5%  PnL=$ 2060.68  DD=30.66%  Sharpe=  3.64  ★ NEW BEST
+  ... 1000/2000 done, best score: 130.75 (2.3min)
+  Trial 1060: score=  131.44  trades= 32  WR= 53.1%  PnL=$ 1911.05  DD=13.91%  Sharpe=  7.41  ★ NEW BEST
+  ... 1200/2000 done, best score: 131.44 (2.7min)
+  ... 1400/2000 done, best score: 131.44 (3.2min)
+  ... 1600/2000 done, best score: 131.44 (3.6min)
+  ... 1800/2000 done, best score: 131.44 (4.1min)
+  ... 2000/2000 done, best score: 131.44 (4.5min)
+
+Phase 2: Fine-tuning (1000 trials around top 20)
+--------------------------------------------------
+  Top 5 scores from P1: [131.44, 130.75, 91.36, 71.74, 67.72]
+  Trial 2005: score=  172.71  trades= 60  WR= 36.7%  PnL=$ 2604.61  DD=23.98%  Sharpe=  5.62  ★ NEW BEST
+  Trial 2080: score=  179.47  trades= 31  WR= 54.8%  PnL=$ 2024.54  DD=10.56%  Sharpe=  7.95  ★ NEW BEST
+  Trial 2160: score=  199.92  trades= 33  WR= 54.5%  PnL=$ 2216.95  DD=13.15%  Sharpe=  8.24  ★ NEW BEST
+  ... 200/1000 done, best score: 199.92 (4.9min)
+  ... 400/1000 done, best score: 199.92 (5.4min)
+  ... 600/1000 done, best score: 199.92 (5.8min)
+  ... 800/1000 done, best score: 199.92 (6.3min)
+  ... 1000/1000 done, best score: 199.92 (6.7min)
+
+Phase 3: City optimization (500 trials)
+--------------------------------------------------
+  Losing cities: ['dallas', 'buenos_aires', 'seattle']
+  Winning cities: ['london', 'paris', 'seoul', 'nyc', 'chicago']
+  Trial 3000: score=  263.75  trades= 32  WR= 56.2%  PnL=$ 2342.37  DD= 9.77%  Sharpe=  8.67  ★ NEW BEST
+  Trial 3001: score=  319.62  trades= 31  WR= 58.1%  PnL=$ 2456.60  DD= 9.39%  Sharpe=  9.35  ★ NEW BEST
+  Trial 3002: score=  393.06  trades= 30  WR= 60.0%  PnL=$ 2591.42  DD= 7.36%  Sharpe=  9.82  ★ NEW BEST
+  Trial 3092: score=  483.63  trades=158  WR= 18.4%  PnL=$ 5656.35  DD=34.14%  Sharpe=  2.49  ★ NEW BEST
+  ... 100/500 done, best score: 483.63 (6.9min)
+  Trial 3132: score=  626.03  trades=180  WR= 17.2%  PnL=$ 8395.36  DD=35.83%  Sharpe=  2.31  ★ NEW BEST
+  Trial 3133: score=  910.40  trades=176  WR= 18.8%  PnL=$11462.85  DD=35.48%  Sharpe=  2.60  ★ NEW BEST
+  Trial 3147: score= 3360.53  trades=175  WR= 17.7%  PnL=$82828.02  DD=42.68%  Sharpe=  2.70  ★ NEW BEST
+  Trial 3150: score= 4957.14  trades=159  WR= 18.2%  PnL=$92038.48  DD=40.45%  Sharpe=  2.83  ★ NEW BEST
+  Trial 3175: score= 7057.84  trades=229  WR= 15.7%  PnL=$119100.09  DD=38.90%  Sharpe=  2.42  ★ NEW BEST
+  ... 200/500 done, best score: 7057.84 (7.1min)
+  Trial 3200: score= 7449.22  trades=213  WR= 15.5%  PnL=$108300.31  DD=35.83%  Sharpe=  2.58  ★ NEW BEST
+  Trial 3203: score=12019.58  trades=212  WR= 15.6%  PnL=$152639.57  DD=35.51%  Sharpe=  2.55  ★ NEW BEST
+  Trial 3207: score=12707.67  trades=170  WR= 17.6%  PnL=$96743.22  DD=29.83%  Sharpe=  3.14  ★ NEW BEST
+  Trial 3208: score=14559.27  trades=156  WR= 19.2%  PnL=$107205.79  DD=29.34%  Sharpe=  3.22  ★ NEW BEST
+  Trial 3221: score=15169.57  trades=152  WR= 19.7%  PnL=$111222.91  DD=29.34%  Sharpe=  3.25  ★ NEW BEST
+  Trial 3266: score=15978.52  trades=151  WR= 19.9%  PnL=$117125.88  DD=29.34%  Sharpe=  3.25  ★ NEW BEST
+  ... 300/500 done, best score: 15978.52 (7.3min)
+  ... 400/500 done, best score: 15978.52 (7.5min)
+  ... 500/500 done, best score: 15978.52 (7.7min)
+
+Phase 4: Multi-entry-timing robustness (500 trials)
+--------------------------------------------------
+  ... 10/50 multi-entry done
+  ... 20/50 multi-entry done
+  ... 30/50 multi-entry done
+  ... 40/50 multi-entry done
+  ... 50/50 multi-entry done
+  Top 5 multi-entry scores: [7603.37, 5130.73, 4834.57, 4834.57, 4576.66]
+  ... 150/500 done, best multi-score: 7603.37 (9.1min)
+  ... 250/500 done, best multi-score: 7701.35 (10.1min)
+  ... 350/500 done, best multi-score: 7821.92 (11.0min)
+  ... 450/500 done, best multi-score: 7821.92 (12.0min)
+
+Phase 5: Walk-forward validation (top 10 + perturbations)
+--------------------------------------------------
+  WF #1: multi_score=7821.92  oos_pnl=$4072.87  oos_score=282.20  trades=75
+  WF #2: multi_score=7701.35  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #3: multi_score=7701.35  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #4: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #5: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #6: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #7: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #8: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #9: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+  WF #10: multi_score=7603.37  oos_pnl=$4147.16  oos_score=293.32  trades=74
+
+======================================================================
+COMPREHENSIVE SWEEP COMPLETE — 12.7 minutes
+======================================================================
+
+─── Best Single-Entry (24h) ───
+  Score: 15978.52
+  Trades: 151
+  Win rate: 19.9%
+  PnL: $117,125.88 (11712.6%)
+  Max DD: 29.34%
+  Sharpe: 3.25
+
+  Parameters:
+    min_edge: 0.03
+    max_edge: 0.5
+    max_price: 0.71
+    min_price: 0.15
+    min_prob: 0.08
+    min_volume: 0
+    kelly_raw_cap: 0.45
+    prob_sharpening: 1.65
+    shrinkage: 0.1
+    excluded_cities: ['buenos_aires', 'dallas', 'seattle']
+    city_overrides: {'seoul': {'max_price': 0.55, 'min_edge': 0.03, 'min_price': 0.01}, 'chicago': {'max_price': 0.8, 'min_edge': 0.05, 'min_price': 0.08}, 'paris': {'max_price': 0.8, 'min_edge': 0.01, 'min_price': 0.01}, 'london': {'max_price': 0.5, 'min_edge': 0.02, 'min_price': 0.02}, 'nyc': {'max_price': 0.4, 'min_edge': 0.02, 'min_price': 0.05}}
+
+  Per-city PnL:
+    london           $  45034.56  (77 trades)
+    nyc              $  40740.62  (42 trades)
+    paris            $  18124.05  (19 trades)
+    seoul            $  12817.88  (7 trades)
+    chicago          $    408.75  (6 trades)
+
+─── Best Multi-Entry (robust) ───
+  Robust score: 7821.92
+  Avg PnL: $292216.64
+  Total trades (5 timings): 524
+    12h: score=7.15  trades=83  PnL=$209.38
+    24h: score=12930.96  trades=153  PnL=$105611.77
+    36h: score=29161.17  trades=139  PnL=$282677.67
+    48h: score=23073.27  trades=128  PnL=$1072480.23
+    6h: score=2.33  trades=21  PnL=$104.13
+
+─── Walk-Forward Validation ───
+  OOS score: 330.98
+  OOS PnL: $5007.82
+  Folds: 2
+    Fold 1: PnL=$2282.21  trades=50  WR=16.0%
+    Fold 2: PnL=$7733.42  trades=44  WR=22.7%
+
+  Walk-forward best parameters:
+    min_edge: 0.03
+    max_edge: 0.55
+    max_price: 0.75
+    min_price: 0.19
+    min_prob: 0.08
+    min_volume: 0
+    kelly_raw_cap: 0.4
+    prob_sharpening: 1.5
+    shrinkage: 0.1
+    excluded_cities: ['buenos_aires', 'dallas', 'seattle']
+    city_overrides: {'seoul': {'max_price': 0.55, 'min_edge': 0.03, 'min_price': 0.01}, 'chicago': {'max_price': 0.8, 'min_edge': 0.05, 'min_price': 0.08}, 'paris': {'max_price': 0.8, 'min_edge': 0.01, 'min_price': 0.01}, 'london': {'max_price': 0.5, 'min_edge': 0.02, 'min_price': 0.02}, 'nyc': {'max_price': 0.4, 'min_edge': 0.02, 'min_price': 0.05}}
+
+  Top 5 single-entry results:
+    #1: score=15978.52  trades=151  WR=19.9%  PnL=$117125.88  DD=29.34%  (trial 3266, phase 3)
+    #2: score=15978.52  trades=151  WR=19.9%  PnL=$117125.88  DD=29.34%  (trial 3267, phase 3)
+    #3: score=15978.52  trades=151  WR=19.9%  PnL=$117125.88  DD=29.34%  (trial 3271, phase 3)
+    #4: score=15978.52  trades=151  WR=19.9%  PnL=$117125.88  DD=29.34%  (trial 3272, phase 3)
+    #5: score=15978.52  trades=151  WR=19.9%  PnL=$117125.88  DD=29.34%  (trial 3274, phase 3)
+
+  Results saved to: /Users/dnl.vlck/Arbo/research/data/sweep_comprehensive_results.json
+  Total time: 12.7 minutes

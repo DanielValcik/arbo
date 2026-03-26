@@ -1,0 +1,104 @@
+
+======================================================================
+SWEEP ON REAL POLYMARKET PRICES
+Events: 418, Start: 2026-03-14T10:20:31.818537
+======================================================================
+
+Phase 1: Random Search (500 trials)
+--------------------------------------------------
+  Trial   0: score=   -0.00  trades=140  WR= 18.6%  PnL=$ -326.25  DD=75.77%  Sharpe= -1.56  ★ NEW BEST
+  Trial   2: score=    2.42  trades= 22  WR= 27.3%  PnL=$  130.84  DD=29.97%  Sharpe=  1.56  ★ NEW BEST
+  Trial   7: score=   13.29  trades= 43  WR= 27.9%  PnL=$  396.48  DD=30.70%  Sharpe=  3.42  ★ NEW BEST
+  ... 50/500 done, best score: 13.29
+  Trial  56: score=   19.90  trades= 47  WR= 29.8%  PnL=$  406.87  DD=29.05%  Sharpe=  3.87  ★ NEW BEST
+  Trial  69: score=   23.98  trades=  7  WR= 57.1%  PnL=$  709.27  DD= 9.75%  Sharpe= 12.75  ★ NEW BEST
+  ... 100/500 done, best score: 23.98
+  Trial 135: score=   24.25  trades= 59  WR= 30.5%  PnL=$  479.18  DD=27.80%  Sharpe=  3.05  ★ NEW BEST
+  ... 150/500 done, best score: 24.25
+  ... 200/500 done, best score: 24.25
+  Trial 201: score=   25.85  trades=114  WR= 21.9%  PnL=$  942.63  DD=43.19%  Sharpe=  3.39  ★ NEW BEST
+  ... 250/500 done, best score: 25.85
+  ... 300/500 done, best score: 25.85
+  ... 350/500 done, best score: 25.85
+  ... 400/500 done, best score: 25.85
+  ... 450/500 done, best score: 25.85
+  Trial 478: score=   27.70  trades= 31  WR= 38.7%  PnL=$  500.67  DD=21.87%  Sharpe=  4.91  ★ NEW BEST
+  ... 500/500 done, best score: 27.70
+
+Phase 2: Fine-tuning (300 trials around top 10)
+--------------------------------------------------
+  Top 10 scores: [27.7, 25.85, 24.25, 23.98, 22.76, 19.9, 19.26, 18.2, 17.61, 16.36]
+  Trial 501: score=   51.46  trades=119  WR= 21.8%  PnL=$  785.27  DD=34.14%  ★ NEW BEST
+  ... 50/300 done, best score: 51.46
+  ... 100/300 done, best score: 51.46
+  ... 150/300 done, best score: 51.46
+  Trial 661: score=   58.62  trades=114  WR= 21.9%  PnL=$  815.18  DD=32.88%  ★ NEW BEST
+  ... 200/300 done, best score: 58.62
+  ... 250/300 done, best score: 58.62
+  ... 300/300 done, best score: 58.62
+
+Phase 3: City optimization (200 trials)
+--------------------------------------------------
+  Losing cities: ['paris', 'london', 'chicago', 'tel_aviv']
+  Winning cities: ['dallas', 'tokyo', 'seattle', 'miami', 'ankara', 'sao_paulo', 'seoul']
+  Trial 800: score=  222.14  trades= 86  WR= 23.3%  PnL=$ 1302.07  excluded=['chicago', 'tel_aviv', 'london']  ★ NEW BEST
+  Trial 801: score=  381.92  trades= 72  WR= 26.4%  PnL=$ 1865.50  excluded=['chicago', 'paris', 'london']  ★ NEW BEST
+  Trial 802: score=  431.74  trades= 71  WR= 26.8%  PnL=$ 1938.99  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  ... 50/200 done, best score: 431.74
+  Trial 850: score=  447.49  trades= 69  WR= 27.5%  PnL=$ 2017.51  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 852: score=  470.48  trades= 72  WR= 27.8%  PnL=$ 2040.73  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 853: score=  479.35  trades= 71  WR= 28.2%  PnL=$ 2063.66  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  ... 100/200 done, best score: 479.35
+  Trial 915: score=  485.09  trades= 71  WR= 28.2%  PnL=$ 2087.65  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 922: score=  554.43  trades= 86  WR= 25.6%  PnL=$ 3568.93  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 926: score=  555.46  trades= 87  WR= 25.3%  PnL=$ 3538.64  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 928: score=  665.83  trades= 80  WR= 26.2%  PnL=$ 3553.08  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 930: score=  675.72  trades= 75  WR= 28.0%  PnL=$ 3414.06  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 934: score=  731.65  trades= 75  WR= 28.0%  PnL=$ 4180.29  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  Trial 936: score=  767.46  trades= 81  WR= 25.9%  PnL=$ 4778.49  excluded=['chicago', 'tel_aviv', 'paris', 'london']  ★ NEW BEST
+  ... 150/200 done, best score: 767.46
+  ... 200/200 done, best score: 767.46
+
+======================================================================
+SWEEP COMPLETE — 0.5 minutes
+======================================================================
+
+  Best score: 767.46
+  Trades: 81
+  Win rate: 25.9%
+  PnL: $4,778.49 (477.8%)
+  Max DD: 29.22%
+  Sharpe: 6.93
+  Final capital: $5,778.49
+
+  Best parameters:
+    min_edge: 0.01
+    max_price: 0.55
+    min_price: 0.08
+    min_prob: 0.02
+    min_volume: 100
+    kelly_raw_cap: 0.25
+    prob_sharpening: 1.05
+    shrinkage: 0
+    excluded_cities: ['chicago', 'tel_aviv', 'paris', 'london']
+    city_overrides: {'sao_paulo': {'max_price': 0.6, 'min_edge': 0.03}, 'seoul': {'max_price': 0.6, 'min_edge': 0.05}, 'seattle': {'max_price': 0.55, 'min_edge': 0.05}, 'ankara': {'max_price': 0.5, 'min_edge': 0.01}, 'miami': {'max_price': 0.5, 'min_edge': 0.03}, 'tokyo': {'max_price': 0.6, 'min_edge': 0.02}}
+
+  Per-city PnL:
+    tokyo            $   1389.80  (1 trades)
+    dallas           $   1273.30  (11 trades)
+    seoul            $    619.60  (12 trades)
+    seattle          $    606.36  (11 trades)
+    sao_paulo        $    484.96  (16 trades)
+    munich           $    216.36  (1 trades)
+    ankara           $    100.19  (14 trades)
+    miami            $     87.91  (15 trades)
+
+  Top 5 results:
+    #1: score=767.46  trades=81  WR=25.9%  PnL=$4778.49  DD=29.22%  (trial 936, phase 3)
+    #2: score=767.46  trades=81  WR=25.9%  PnL=$4778.49  DD=29.22%  (trial 939, phase 3)
+    #3: score=767.46  trades=81  WR=25.9%  PnL=$4778.49  DD=29.22%  (trial 945, phase 3)
+    #4: score=767.46  trades=81  WR=25.9%  PnL=$4778.49  DD=29.22%  (trial 946, phase 3)
+    #5: score=767.46  trades=81  WR=25.9%  PnL=$4778.49  DD=29.22%  (trial 949, phase 3)
+
+  Results saved to: /Users/dnl.vlck/Arbo/research/data/sweep_real_results.json
+  Log saved to: /Users/dnl.vlck/Arbo/research/sweep_real_log.txt

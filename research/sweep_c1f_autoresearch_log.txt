@@ -1,0 +1,188 @@
+Loading data...
+Data ready: 1281 events, 19 cities with ensemble
+
+======================================================================
+C1f Autoresearch — 150 trials
+  Gen 1 (random): trials 1-50
+  Gen 2 (perturb best): trials 51-100
+  Gen 3 (fine-tune top 3): trials 101-150
+======================================================================
+  [G1]   1/150 score= 139.7 trades=219 WR=36.5% PnL=$   27,905 DD=15.6%
+  [G1]   2/150 score= 127.7 trades=161 WR=33.5% PnL=$    5,730 DD=13.5%
+  [G1]   3/150 score= 124.8 trades=319 WR=23.8% PnL=$   16,606 DD=29.3%
+  [G1]   4/150 score=  83.0 trades=261 WR=24.9% PnL=$    1,427 DD=16.1%
+  [G1]   5/150 score= 127.3 trades=169 WR=36.1% PnL=$    6,319 DD=16.5%
+  [G1]   6/150 score= 128.2 trades=354 WR=36.7% PnL=$   16,456 DD=22.4%
+  [G1]   7/150 score= 127.4 trades=334 WR=27.2% PnL=$   19,093 DD=23.6%
+  [G1]   8/150 score= 122.5 trades=417 WR=24.5% PnL=$   11,581 DD=21.9%
+  [G1]   9/150 score= 112.1 trades=163 WR=30.7% PnL=$    4,057 DD=14.7%
+  [G1]  10/150 score= 131.4 trades=170 WR=37.1% PnL=$    7,281 DD=13.4%
+  [G1]  11/150 score= 128.0 trades=169 WR=31.4% PnL=$   12,606 DD=23.2%
+  [G1]  12/150 score= 126.4 trades=131 WR=35.1% PnL=$    8,994 DD=19.5%
+  [G1]  13/150 score= 127.4 trades=272 WR=30.9% PnL=$   13,389 DD=21.4%
+  [G1]  14/150 score= 125.7 trades=180 WR=30.0% PnL=$    8,665 DD=23.7%
+  [G1]  15/150 score= 127.9 trades=165 WR=32.1% PnL=$    8,800 DD=15.8%
+  [G1]  16/150 score= 122.8 trades=260 WR=28.8% PnL=$    6,695 DD=24.2%
+  [G1]  17/150 score= 124.5 trades=184 WR=31.0% PnL=$    5,279 DD=18.5%
+  [G1]  18/150 score= 101.6 trades= 87 WR=41.4% PnL=$    2,931 DD=13.5%
+  [G1]  19/150 score= 134.2 trades=203 WR=36.5% PnL=$   20,179 DD=19.6%
+  [G1]  20/150 score= 130.5 trades=351 WR=28.2% PnL=$   28,662 DD=22.4%
+  [G1]  21/150 score= 125.6 trades=151 WR=34.4% PnL=$    6,491 DD=16.7%
+  [G1]  22/150 score=  90.3 trades=172 WR=30.8% PnL=$    2,181 DD=16.0%
+  [G1]  23/150 score= 126.7 trades=164 WR=34.8% PnL=$    8,305 DD=18.3%
+  [G1]  24/150 score= 127.5 trades=189 WR=29.1% PnL=$   14,933 DD=28.3%
+  [G1]  25/150 score= 134.7 trades=230 WR=35.7% PnL=$   23,940 DD=20.2%
+  [G1]  26/150 score= 128.6 trades=213 WR=29.1% PnL=$   15,484 DD=23.9%
+  [G1]  27/150 score= 130.8 trades=190 WR=30.5% PnL=$   15,778 DD=22.3%
+  [G1]  28/150 score= 130.0 trades=116 WR=45.7% PnL=$    7,056 DD=11.4%
+  [G1]  29/150 score= 137.9 trades=301 WR=30.6% PnL=$   44,428 DD=27.3%
+  [G1]  30/150 score= 125.8 trades=258 WR=31.0% PnL=$    6,032 DD=15.7%
+  [G1]  31/150 score= 127.9 trades=192 WR=33.3% PnL=$   10,148 DD=17.6%
+  [G1]  32/150 score= 126.4 trades=130 WR=36.9% PnL=$    5,492 DD=10.2%
+  [G1]  33/150 score= 122.8 trades=294 WR=27.6% PnL=$    5,496 DD=17.8%
+  [G1]  34/150 score= 149.5 trades=261 WR=33.7% PnL=$   76,430 DD=27.0% ★
+  [G1]  35/150 score= 115.8 trades=113 WR=38.1% PnL=$    4,367 DD=14.0%
+  [G1]  36/150 score= 128.1 trades=125 WR=40.8% PnL=$    7,672 DD=16.0%
+  [G1]  37/150 score= 135.7 trades=178 WR=36.0% PnL=$   19,883 DD=23.6%
+  [G1]  38/150 score= 127.8 trades=296 WR=35.1% PnL=$   17,046 DD=27.4%
+  [G1]  39/150 score= 120.1 trades=346 WR=30.1% PnL=$    6,393 DD=27.4%
+  [G1]  40/150 score= 125.9 trades=184 WR=32.6% PnL=$    7,698 DD=14.2%
+  [G1]  41/150 score= 140.0 trades=163 WR=37.4% PnL=$   26,540 DD=21.9%
+  [G1]  42/150 score= 133.5 trades=227 WR=33.9% PnL=$   16,027 DD=20.0%
+  [G1]  43/150 score= 132.3 trades=300 WR=33.3% PnL=$   32,961 DD=28.1%
+  [G1]  44/150 score= 129.1 trades=135 WR=36.3% PnL=$    7,707 DD=15.7%
+  [G1]  45/150 score= 130.2 trades=184 WR=38.6% PnL=$    6,302 DD=11.9%
+  [G1]  46/150 score= 124.7 trades=235 WR=27.7% PnL=$    6,697 DD=15.2%
+  [G1]  47/150 score= 135.4 trades=152 WR=34.2% PnL=$   18,947 DD=17.1%
+  [G1]  48/150 score= 131.7 trades=213 WR=31.5% PnL=$   13,073 DD=20.3%
+  [G1]  49/150 score= 124.0 trades=164 WR=31.7% PnL=$    5,049 DD=17.9%
+  [G1]  50/150 score= 123.0 trades=210 WR=28.6% PnL=$    5,078 DD=17.3%
+  [G2]  51/150 score= 141.1 trades=219 WR=34.2% PnL=$   33,372 DD=19.7%
+  [G2]  52/150 score= 127.8 trades=312 WR=30.4% PnL=$   32,698 DD=43.5%
+  [G2]  53/150 score= 147.8 trades=304 WR=32.2% PnL=$   75,952 DD=30.6%
+  [G2]  54/150 score= 139.6 trades=280 WR=31.4% PnL=$   48,725 DD=33.4%
+  [G2]  55/150 score= 150.9 trades=224 WR=35.3% PnL=$   57,937 DD=23.4% ★
+  [G2]  56/150 score= 149.8 trades=268 WR=34.0% PnL=$   97,605 DD=26.1%
+  [G2]  57/150 score= 150.9 trades=224 WR=35.3% PnL=$   57,937 DD=23.4% ★
+  [G2]  58/150 score= 132.0 trades=217 WR=34.1% PnL=$   19,747 DD=24.8%
+  [G2]  59/150 score= 140.1 trades=201 WR=35.8% PnL=$   28,462 DD=18.7%
+  [G2]  60/150 score= 135.0 trades=249 WR=30.5% PnL=$   31,725 DD=32.1%
+  [G2]  61/150 score= 145.0 trades=215 WR=35.3% PnL=$   44,754 DD=27.3%
+  [G2]  62/150 score= 139.0 trades=223 WR=33.2% PnL=$   33,518 DD=25.8%
+  [G2]  63/150 score= 148.7 trades=254 WR=32.3% PnL=$   57,612 DD=23.4%
+  [G2]  64/150 score= 150.9 trades=224 WR=35.3% PnL=$   57,937 DD=23.4% ★
+  [G2]  65/150 score= 133.3 trades=233 WR=31.8% PnL=$   26,835 DD=31.1%
+  [G2]  66/150 score= 147.1 trades=203 WR=37.4% PnL=$   38,063 DD=18.7%
+  [G2]  67/150 score= 148.9 trades=167 WR=39.5% PnL=$   39,037 DD=21.4%
+  [G2]  68/150 score= 150.3 trades=258 WR=34.9% PnL=$   70,067 DD=24.6%
+  [G2]  69/150 score= 149.7 trades=261 WR=33.7% PnL=$   78,442 DD=27.0%
+  [G2]  70/150 score= 151.8 trades=214 WR=36.0% PnL=$   64,377 DD=22.5% ★
+  [G2]  71/150 score= 151.8 trades=214 WR=36.0% PnL=$   64,377 DD=22.5% ★
+  [G2]  72/150 score= 151.8 trades=214 WR=36.0% PnL=$   64,377 DD=22.5% ★
+  [G2]  73/150 score= 149.3 trades=190 WR=38.9% PnL=$   41,306 DD=19.7%
+  [G2]  74/150 score= 151.8 trades=195 WR=36.9% PnL=$   52,717 DD=21.1%
+  [G2]  75/150 score= 142.4 trades=251 WR=32.7% PnL=$   46,404 DD=24.8%
+  [G2]  76/150 score= 150.6 trades=190 WR=36.3% PnL=$   51,966 DD=21.6%
+  [G2]  77/150 score= 147.4 trades=276 WR=31.2% PnL=$   60,072 DD=24.0%
+  [G2]  78/150 score= 138.1 trades=190 WR=38.9% PnL=$   22,052 DD=16.3%
+  [G2]  79/150 score= 151.8 trades=214 WR=36.0% PnL=$   64,377 DD=22.5% ★
+  [G2]  80/150 score= 153.0 trades=196 WR=36.7% PnL=$   49,416 DD=20.0% ★
+  [G2]  81/150 score= 152.6 trades=194 WR=36.6% PnL=$   53,468 DD=21.5%
+  [G2]  82/150 score= 138.4 trades=211 WR=33.2% PnL=$   28,882 DD=24.4%
+  [G2]  83/150 score= 143.7 trades=230 WR=32.2% PnL=$   42,580 DD=22.1%
+  [G2]  84/150 score= 135.5 trades=298 WR=30.5% PnL=$   38,567 DD=23.5%
+  [G2]  85/150 score= 150.6 trades=159 WR=39.6% PnL=$   38,981 DD=18.5%
+  [G2]  86/150 score= 150.6 trades=162 WR=38.9% PnL=$   39,756 DD=18.8%
+  [G2]  87/150 score= 150.6 trades=213 WR=35.2% PnL=$   49,031 DD=23.8%
+  [G2]  88/150 score= 153.0 trades=196 WR=36.7% PnL=$   51,478 DD=20.1%
+  [G2]  89/150 score= 153.0 trades=196 WR=36.7% PnL=$   51,478 DD=20.1%
+  [G2]  90/150 score= 139.7 trades=228 WR=31.6% PnL=$   38,254 DD=35.7%
+  [G2]  91/150 score= 141.3 trades=200 WR=35.0% PnL=$   31,566 DD=18.6%
+  [G2]  92/150 score= 151.5 trades=202 WR=36.1% PnL=$   45,934 DD=20.0%
+  [G2]  93/150 score= 147.5 trades=205 WR=35.6% PnL=$   41,490 DD=23.4%
+  [G2]  94/150 score= 152.8 trades=204 WR=35.8% PnL=$   52,106 DD=20.4%
+  [G2]  95/150 score= 144.0 trades=289 WR=32.5% PnL=$   58,704 DD=26.6%
+  [G2]  96/150 score= 145.9 trades=229 WR=31.0% PnL=$   47,289 DD=24.7%
+  [G2]  97/150 score= 132.5 trades=223 WR=31.4% PnL=$   22,872 DD=30.1%
+  [G2]  98/150 score= 131.5 trades=313 WR=31.3% PnL=$   28,144 DD=19.9%
+  [G2]  99/150 score= 144.0 trades=257 WR=32.3% PnL=$   47,198 DD=22.6%
+  [G2] 100/150 score= 151.9 trades=196 WR=36.7% PnL=$   86,112 DD=23.1%
+  [G3] 101/150 score= 151.1 trades=201 WR=35.3% PnL=$   45,207 DD=19.6%
+  [G3] 102/150 score= 146.8 trades=173 WR=37.6% PnL=$   35,396 DD=19.3%
+  [G3] 103/150 score= 149.3 trades=191 WR=36.1% PnL=$   40,825 DD=19.5%
+  [G3] 104/150 score= 142.2 trades=196 WR=36.7% PnL=$   28,351 DD=16.9%
+  [G3] 105/150 score= 152.8 trades=196 WR=36.7% PnL=$   50,529 DD=20.2%
+  [G3] 106/150 score= 152.0 trades=190 WR=36.8% PnL=$   45,967 DD=19.7%
+  [G3] 107/150 score= 148.9 trades=170 WR=37.6% PnL=$   38,193 DD=20.0%
+  [G3] 108/150 score= 152.6 trades=188 WR=37.2% PnL=$   49,430 DD=20.1%
+  [G3] 109/150 score= 153.0 trades=196 WR=36.7% PnL=$   51,473 DD=20.1%
+  [G3] 110/150 score= 145.3 trades=167 WR=40.1% PnL=$   31,205 DD=17.7%
+  [G3] 111/150 score= 145.7 trades=173 WR=37.6% PnL=$   33,838 DD=19.2%
+  [G3] 112/150 score= 153.0 trades=196 WR=36.7% PnL=$   50,719 DD=19.9% ★
+  [G3] 113/150 score= 148.8 trades=187 WR=36.4% PnL=$   40,815 DD=19.5%
+  [G3] 114/150 score= 145.7 trades=173 WR=37.6% PnL=$   33,838 DD=19.2%
+  [G3] 115/150 score= 134.0 trades=224 WR=31.7% PnL=$   26,166 DD=23.3%
+  [G3] 116/150 score= 149.1 trades=191 WR=36.1% PnL=$   40,454 DD=19.4%
+  [G3] 117/150 score= 149.3 trades=231 WR=35.5% PnL=$   54,073 DD=27.2%
+  [G3] 118/150 score= 150.2 trades=163 WR=38.7% PnL=$   38,531 DD=18.8%
+  [G3] 119/150 score= 147.6 trades=194 WR=37.6% PnL=$   41,657 DD=21.7%
+  [G3] 120/150 score= 150.9 trades=210 WR=36.2% PnL=$   55,982 DD=23.4%
+  [G3] 121/150 score= 146.8 trades=173 WR=37.6% PnL=$   35,396 DD=19.3%
+  [G3] 122/150 score= 137.4 trades=187 WR=33.7% PnL=$   25,684 DD=27.8%
+  [G3] 123/150 score= 144.3 trades=167 WR=40.1% PnL=$   29,793 DD=17.2%
+  [G3] 124/150 score= 147.7 trades=237 WR=31.2% PnL=$   53,048 DD=22.7%
+  [G3] 125/150 score= 143.8 trades=161 WR=37.9% PnL=$   31,366 DD=20.8%
+  [G3] 126/150 score= 142.2 trades=196 WR=36.7% PnL=$   28,351 DD=16.9%
+  [G3] 127/150 score= 144.9 trades=257 WR=32.3% PnL=$   49,185 DD=22.6%
+  [G3] 128/150 score= 149.5 trades=182 WR=36.3% PnL=$   51,365 DD=21.6%
+  [G3] 129/150 score= 153.0 trades=196 WR=36.7% PnL=$   49,416 DD=20.0%
+  [G3] 130/150 score= 149.6 trades=249 WR=34.1% PnL=$   61,449 DD=25.1%
+  [G3] 131/150 score= 140.5 trades=196 WR=36.7% PnL=$   25,382 DD=16.7%
+  [G3] 132/150 score= 145.3 trades=188 WR=37.8% PnL=$   36,938 DD=21.6%
+  [G3] 133/150 score= 152.2 trades=225 WR=34.2% PnL=$   54,190 DD=21.7%
+  [G3] 134/150 score= 142.1 trades=188 WR=35.6% PnL=$   30,956 DD=19.0%
+  [G3] 135/150 score= 151.3 trades=225 WR=34.2% PnL=$   52,471 DD=21.8%
+  [G3] 136/150 score= 142.0 trades=214 WR=33.2% PnL=$   34,601 DD=25.2%
+  [G3] 137/150 score= 152.9 trades=196 WR=36.7% PnL=$   49,727 DD=20.1%
+  [G3] 138/150 score= 152.8 trades=190 WR=37.4% PnL=$   55,336 DD=20.2%
+  [G3] 139/150 score= 153.0 trades=196 WR=36.7% PnL=$   51,478 DD=20.1%
+  [G3] 140/150 score= 151.9 trades=196 WR=36.7% PnL=$   88,866 DD=23.0%
+  [G3] 141/150 score= 147.7 trades=226 WR=31.9% PnL=$   49,389 DD=23.8%
+  [G3] 142/150 score= 151.7 trades=190 WR=36.8% PnL=$   57,485 DD=20.4%
+  [G3] 143/150 score= 153.0 trades=196 WR=36.7% PnL=$   51,478 DD=20.1%
+  [G3] 144/150 score= 152.0 trades=190 WR=36.8% PnL=$   45,967 DD=19.7%
+  [G3] 145/150 score= 150.4 trades=228 WR=35.5% PnL=$  105,801 DD=27.8%
+  [G3] 146/150 score= 143.6 trades=165 WR=37.0% PnL=$   33,630 DD=27.1%
+  [G3] 147/150 score= 132.5 trades=196 WR=31.6% PnL=$   19,625 DD=30.2%
+  [G3] 148/150 score= 151.0 trades=224 WR=33.9% PnL=$   61,839 DD=23.5%
+  [G3] 149/150 score= 152.1 trades=187 WR=36.9% PnL=$   50,912 DD=21.3%
+  [G3] 150/150 score= 142.2 trades=262 WR=32.8% PnL=$   44,572 DD=22.4%
+
+======================================================================
+Walk-Forward Validation — Top 5
+======================================================================
+  #1 (IS=153.0) → OOS=84.7 PnL=$1813
+    Fold 1: PnL=$272 trades=57 WR=32%
+    Fold 2: PnL=$2210 trades=40 WR=40%
+    Fold 3: PnL=$2956 trades=33 WR=54%
+  #2 (IS=153.0) → OOS=84.6 PnL=$1808
+    Fold 1: PnL=$238 trades=57 WR=32%
+    Fold 2: PnL=$2248 trades=40 WR=40%
+    Fold 3: PnL=$2938 trades=33 WR=54%
+  #3 (IS=153.0) → OOS=84.6 PnL=$1808
+    Fold 1: PnL=$238 trades=57 WR=32%
+    Fold 2: PnL=$2248 trades=40 WR=40%
+    Fold 3: PnL=$2938 trades=33 WR=54%
+  #4 (IS=153.0) → OOS=84.8 PnL=$1837
+    Fold 1: PnL=$267 trades=57 WR=32%
+    Fold 2: PnL=$2292 trades=40 WR=40%
+    Fold 3: PnL=$2953 trades=33 WR=54%
+  #5 (IS=153.0) → OOS=84.8 PnL=$1837
+    Fold 1: PnL=$267 trades=57 WR=32%
+    Fold 2: PnL=$2292 trades=40 WR=40%
+    Fold 3: PnL=$2953 trades=33 WR=54%
+
+Done in 47s (0.8min)
+Best IS score: 153.0
+Best OOS score: 84.66
+Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_c1f_autoresearch.json

@@ -1,0 +1,295 @@
+================================================================================================================================================================
+STRATEGY C OPTIMIZATION v6 — 20 CITIES + METAR CALIBRATION
+================================================================================================================================================================
+
+--- Phase 1: Baseline ---
+  [  1] baseline_20cities                                                 | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 1s
+
+--- Phase 2: Single-param sweeps ---
+  [  2] maxp=0.35                                                         | comp=   57.1516 | trades=2509 | sharpe=  11.59 | win= 65.1% | pnl= 121.1% | dd= 0.78% | 1s
+  [  3] maxp=0.38                                                         | comp=   57.1516 | trades=2509 | sharpe=  11.59 | win= 65.1% | pnl= 121.1% | dd= 0.78% | 1s
+  [  4] maxp=0.4                                                          | comp=   69.0450 | trades=3450 | sharpe=  12.00 | win= 68.9% | pnl= 170.8% | dd= 1.01% | 2s
+  [  5] maxp=0.43                                                         | comp=   72.5666 | trades=3780 | sharpe=  11.96 | win= 69.6% | pnl= 186.0% | dd= 0.65% | 2s
+  [  6] maxp=0.46                                                         | comp=   74.2074 | trades=3923 | sharpe=  12.00 | win= 70.3% | pnl= 193.4% | dd= 0.65% | 3s
+  [  7] maxp=0.5                                                          | comp=   74.7234 | trades=3996 | sharpe=  11.98 | win= 70.5% | pnl= 196.5% | dd= 0.65% | 3s
+  [  8] maxp=0.55                                                         | comp=   74.8939 | trades=4021 | sharpe=  11.97 | win= 70.5% | pnl= 197.5% | dd= 0.65% | 4s
+  [  9] maxp=0.6                                                          | comp=   75.0377 | trades=4046 | sharpe=  11.95 | win= 70.7% | pnl= 198.3% | dd= 0.65% | 4s
+  [ 10] mfp=0.5                                                           | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 5s
+  [ 11] mfp=0.55                                                          | comp=   65.4940 | trades=2415 | sharpe=  13.54 | win= 73.3% | pnl= 113.0% | dd= 0.78% | 5s
+  [ 12] mfp=0.6                                                           | comp=   57.8898 | trades=1483 | sharpe=  15.17 | win= 76.2% | pnl=  60.9% | dd= 0.45% | 6s
+  [ 13] mfp=0.62                                                          | comp=   52.5893 | trades=1268 | sharpe=  14.90 | win= 75.5% | pnl=  47.6% | dd= 0.44% | 6s
+  [ 14] mfp=0.65                                                          | comp=   50.7025 | trades=1024 | sharpe=  15.95 | win= 77.4% | pnl=  38.0% | dd= 0.34% | 7s
+  [ 15] mfp=0.68                                                          | comp=   50.7025 | trades=1024 | sharpe=  15.95 | win= 77.4% | pnl=  38.0% | dd= 0.34% | 7s
+  [ 16] mfp=0.7                                                           | comp=   56.9037 | trades= 584 | sharpe=  23.65 | win= 86.9% | pnl=  23.6% | dd= 0.22% | 8s
+  [ 17] mfp=0.75                                                          | comp=   65.6552 | trades= 220 | sharpe=  44.46 | win= 95.1% | pnl=   8.8% | dd= 0.22% | 8s
+  [ 18] sharp=0.95                                                        | comp=   76.9466 | trades=5713 | sharpe=  10.35 | win= 64.8% | pnl= 309.3% | dd= 0.81% | 9s
+  [ 19] sharp=1.0                                                         | comp=   76.5090 | trades=5284 | sharpe=  10.70 | win= 65.8% | pnl= 285.7% | dd= 0.80% | 9s
+  [ 20] sharp=1.05                                                        | comp=   75.7506 | trades=4827 | sharpe=  11.06 | win= 66.8% | pnl= 255.7% | dd= 0.73% | 10s
+  [ 21] sharp=1.1                                                         | comp=   73.4392 | trades=4335 | sharpe=  11.31 | win= 67.5% | pnl= 220.9% | dd= 0.70% | 10s
+  [ 22] sharp=1.15                                                        | comp=   71.7033 | trades=3888 | sharpe=  11.70 | win= 68.6% | pnl= 194.7% | dd= 0.86% | 11s
+  [ 23] sharp=1.2                                                         | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 11s
+  [ 24] sharp=1.25                                                        | comp=   67.9462 | trades=3207 | sharpe=  12.15 | win= 69.8% | pnl= 154.9% | dd= 0.64% | 12s
+  [ 25] sharp=1.3                                                         | comp=   65.3324 | trades=2837 | sharpe=  12.40 | win= 70.3% | pnl= 132.5% | dd= 0.53% | 12s
+  [ 26] min_edge=0.05                                                     | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 13s
+  [ 27] min_edge=0.06                                                     | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 13s
+  [ 28] min_edge=0.07                                                     | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 14s
+  [ 29] min_edge=0.08                                                     | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 14s
+  [ 30] min_edge=0.09                                                     | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 15s
+  [ 31] min_edge=0.1                                                      | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 15s
+  [ 32] min_edge=0.12                                                     | comp=   70.5279 | trades=3576 | sharpe=  11.97 | win= 69.1% | pnl= 176.8% | dd= 0.75% | 16s
+  [ 33] min_edge=0.15                                                     | comp=   69.5628 | trades=3486 | sharpe=  11.96 | win= 68.9% | pnl= 173.8% | dd= 0.75% | 16s
+  [ 34] minp=0.05                                                         | comp=   67.3068 | trades=3667 | sharpe=  11.33 | win= 68.3% | pnl= 184.7% | dd= 0.97% | 17s
+  [ 35] minp=0.08                                                         | comp=   69.5096 | trades=3634 | sharpe=  11.71 | win= 68.8% | pnl= 181.3% | dd= 0.75% | 17s
+  [ 36] minp=0.1                                                          | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 18s
+  [ 37] minp=0.12                                                         | comp=   72.3381 | trades=3529 | sharpe=  12.36 | win= 69.9% | pnl= 172.1% | dd= 0.75% | 18s
+  [ 38] minp=0.15                                                         | comp=   72.3381 | trades=3529 | sharpe=  12.36 | win= 69.9% | pnl= 172.1% | dd= 0.75% | 19s
+  [ 39] minp=0.2                                                          | comp=   74.9353 | trades=3063 | sharpe=  13.69 | win= 72.3% | pnl= 128.6% | dd= 0.54% | 19s
+  [ 40] d1_mult=1.5                                                       | comp=   73.0949 | trades=4259 | sharpe=  11.34 | win= 66.8% | pnl= 253.7% | dd= 0.62% | 20s
+  [ 41] d1_mult=1.8                                                       | comp=   71.8383 | trades=3762 | sharpe=  11.89 | win= 68.8% | pnl= 195.1% | dd= 0.75% | 20s
+  [ 42] d1_mult=2.0                                                       | comp=   71.2576 | trades=3687 | sharpe=  11.91 | win= 68.9% | pnl= 186.7% | dd= 0.75% | 20s
+  [ 43] d1_mult=2.2                                                       | comp=   70.4916 | trades=3603 | sharpe=  11.92 | win= 69.0% | pnl= 177.7% | dd= 0.75% | 21s
+  [ 44] d1_mult=2.5                                                       | comp=   70.6285 | trades=3603 | sharpe=  11.95 | win= 69.1% | pnl= 178.1% | dd= 0.75% | 21s
+  [ 45] d1_mult=3.0                                                       | comp=   70.7933 | trades=3596 | sharpe=  11.99 | win= 69.2% | pnl= 178.0% | dd= 0.75% | 22s
+
+--- Phase 3: Combined sweeps ---
+  Best Phase 2: sharp=0.95 = 76.9466
+  [ 46] mfp=0.55 maxp=0.4 s=1.05                                          | comp=   70.2994 | trades=3418 | sharpe=  12.20 | win= 69.7% | pnl= 172.6% | dd= 0.71% | 22s
+  [ 47] mfp=0.55 maxp=0.4 s=1.1                                           | comp=   66.9876 | trades=3072 | sharpe=  12.26 | win= 69.9% | pnl= 146.6% | dd= 0.69% | 23s
+  [ 48] mfp=0.55 maxp=0.4 s=1.15                                          | comp=   64.7028 | trades=2684 | sharpe=  12.64 | win= 70.8% | pnl= 124.7% | dd= 0.59% | 23s
+  [ 49] mfp=0.55 maxp=0.4 s=1.2                                           | comp=   64.3757 | trades=2304 | sharpe=  13.60 | win= 73.1% | pnl= 108.6% | dd= 0.70% | 24s
+  [ 50] mfp=0.55 maxp=0.43 s=1.05                                         | comp=   74.0585 | trades=3800 | sharpe=  12.17 | win= 70.6% | pnl= 191.9% | dd= 0.64% | 24s
+  [ 51] mfp=0.55 maxp=0.43 s=1.1                                          | comp=   70.6135 | trades=3414 | sharpe=  12.25 | win= 70.9% | pnl= 162.3% | dd= 0.66% | 25s
+  [ 52] mfp=0.55 maxp=0.43 s=1.15                                         | comp=   68.2813 | trades=2992 | sharpe=  12.63 | win= 71.7% | pnl= 137.8% | dd= 0.58% | 26s
+  [ 53] mfp=0.55 maxp=0.43 s=1.2                                          | comp=   67.1783 | trades=2567 | sharpe=  13.50 | win= 73.8% | pnl= 119.0% | dd= 0.89% | 26s
+  [ 54] mfp=0.55 maxp=0.46 s=1.05                                         | comp=   76.0614 | trades=3987 | sharpe=  12.18 | win= 71.2% | pnl= 201.2% | dd= 0.56% | 27s
+  [ 55] mfp=0.55 maxp=0.46 s=1.1                                          | comp=   72.4469 | trades=3571 | sharpe=  12.29 | win= 71.5% | pnl= 169.8% | dd= 0.66% | 27s
+  [ 56] mfp=0.55 maxp=0.46 s=1.15                                         | comp=   70.0631 | trades=3128 | sharpe=  12.65 | win= 72.3% | pnl= 143.7% | dd= 0.50% | 28s
+  [ 57] mfp=0.55 maxp=0.46 s=1.2                                          | comp=   68.9738 | trades=2685 | sharpe=  13.52 | win= 74.4% | pnl= 124.0% | dd= 0.76% | 28s
+  [ 58] mfp=0.55 maxp=0.5 s=1.05                                          | comp=   76.4383 | trades=4074 | sharpe=  12.11 | win= 71.3% | pnl= 204.4% | dd= 0.56% | 29s
+  [ 59] mfp=0.55 maxp=0.5 s=1.1                                           | comp=   72.9325 | trades=3651 | sharpe=  12.23 | win= 71.6% | pnl= 172.7% | dd= 0.66% | 29s
+  [ 60] mfp=0.55 maxp=0.5 s=1.15                                          | comp=   70.6744 | trades=3201 | sharpe=  12.62 | win= 72.5% | pnl= 146.3% | dd= 0.50% | 30s
+  [ 61] mfp=0.55 maxp=0.5 s=1.2                                           | comp=   69.5413 | trades=2750 | sharpe=  13.47 | win= 74.6% | pnl= 126.2% | dd= 0.76% | 30s
+  [ 62] mfp=0.55 maxp=0.55 s=1.05                                         | comp=   76.5395 | trades=4098 | sharpe=  12.09 | win= 71.4% | pnl= 205.2% | dd= 0.56% | 31s
+  [ 63] mfp=0.55 maxp=0.55 s=1.1                                          | comp=   73.0060 | trades=3673 | sharpe=  12.21 | win= 71.7% | pnl= 173.3% | dd= 0.66% | 31s
+  [ 64] mfp=0.55 maxp=0.55 s=1.15                                         | comp=   70.7275 | trades=3219 | sharpe=  12.59 | win= 72.6% | pnl= 146.8% | dd= 0.50% | 32s
+  [ 65] mfp=0.55 maxp=0.55 s=1.2                                          | comp=   69.5935 | trades=2766 | sharpe=  13.44 | win= 74.6% | pnl= 126.7% | dd= 0.76% | 32s
+  [ 66] mfp=0.6 maxp=0.4 s=1.05                                           | comp=   61.3821 | trades=2013 | sharpe=  13.85 | win= 73.6% | pnl=  87.4% | dd= 0.60% | 33s
+  [ 67] mfp=0.6 maxp=0.4 s=1.1                                            | comp=   58.3213 | trades=1733 | sharpe=  14.14 | win= 74.2% | pnl=  72.2% | dd= 0.45% | 33s
+  [ 68] mfp=0.6 maxp=0.4 s=1.15                                           | comp=   57.3827 | trades=1477 | sharpe=  15.07 | win= 75.8% | pnl=  60.8% | dd= 0.45% | 34s
+  [ 69] mfp=0.6 maxp=0.4 s=1.2                                            | comp=   56.3982 | trades=1402 | sharpe=  15.20 | win= 75.9% | pnl=  58.0% | dd= 0.45% | 34s
+  [ 70] mfp=0.6 maxp=0.43 s=1.05                                          | comp=   65.0028 | trades=2292 | sharpe=  13.77 | win= 74.4% | pnl=  98.0% | dd= 0.69% | 35s
+  [ 71] mfp=0.6 maxp=0.43 s=1.1                                           | comp=   61.9995 | trades=1973 | sharpe=  14.08 | win= 75.0% | pnl=  80.8% | dd= 0.45% | 35s
+  [ 72] mfp=0.6 maxp=0.43 s=1.15                                          | comp=   60.6679 | trades=1682 | sharpe=  14.93 | win= 76.4% | pnl=  67.7% | dd= 0.46% | 36s
+  [ 73] mfp=0.6 maxp=0.43 s=1.2                                           | comp=   59.6016 | trades=1593 | sharpe=  15.07 | win= 76.5% | pnl=  64.5% | dd= 0.45% | 36s
+  [ 74] mfp=0.6 maxp=0.46 s=1.05                                          | comp=   67.1996 | trades=2427 | sharpe=  13.80 | win= 75.0% | pnl= 103.4% | dd= 0.56% | 37s
+  [ 75] mfp=0.6 maxp=0.46 s=1.1                                           | comp=   64.1613 | trades=2094 | sharpe=  14.15 | win= 75.7% | pnl=  85.3% | dd= 0.45% | 37s
+  [ 76] mfp=0.6 maxp=0.46 s=1.15                                          | comp=   62.7582 | trades=1781 | sharpe=  15.01 | win= 77.1% | pnl=  71.3% | dd= 0.45% | 38s
+  [ 77] mfp=0.6 maxp=0.46 s=1.2                                           | comp=   61.7422 | trades=1686 | sharpe=  15.17 | win= 77.3% | pnl=  67.9% | dd= 0.45% | 38s
+  [ 78] mfp=0.6 maxp=0.5 s=1.05                                           | comp=   67.6308 | trades=2500 | sharpe=  13.68 | win= 75.1% | pnl= 105.4% | dd= 0.56% | 39s
+  [ 79] mfp=0.6 maxp=0.5 s=1.1                                            | comp=   64.8092 | trades=2162 | sharpe=  14.06 | win= 75.9% | pnl=  87.3% | dd= 0.45% | 39s
+  [ 80] mfp=0.6 maxp=0.5 s=1.15                                           | comp=   63.4550 | trades=1843 | sharpe=  14.92 | win= 77.3% | pnl=  73.0% | dd= 0.45% | 40s
+  [ 81] mfp=0.6 maxp=0.5 s=1.2                                            | comp=   62.4133 | trades=1747 | sharpe=  15.07 | win= 77.5% | pnl=  69.5% | dd= 0.45% | 40s
+  [ 82] mfp=0.6 maxp=0.55 s=1.05                                          | comp=   67.7641 | trades=2522 | sharpe=  13.65 | win= 75.2% | pnl= 106.0% | dd= 0.56% | 41s
+  [ 83] mfp=0.6 maxp=0.55 s=1.1                                           | comp=   64.8671 | trades=2181 | sharpe=  14.02 | win= 76.0% | pnl=  87.6% | dd= 0.45% | 41s
+  [ 84] mfp=0.6 maxp=0.55 s=1.15                                          | comp=   63.5519 | trades=1861 | sharpe=  14.87 | win= 77.4% | pnl=  73.4% | dd= 0.45% | 42s
+  [ 85] mfp=0.6 maxp=0.55 s=1.2                                           | comp=   62.4969 | trades=1765 | sharpe=  15.01 | win= 77.6% | pnl=  69.9% | dd= 0.45% | 42s
+  [ 86] mfp=0.65 maxp=0.4 s=1.05                                          | comp=   52.4039 | trades=1168 | sharpe=  15.47 | win= 76.4% | pnl=  43.7% | dd= 0.45% | 43s
+  [ 87] mfp=0.65 maxp=0.4 s=1.1                                           | comp=   48.7370 | trades=1072 | sharpe=  14.99 | win= 75.3% | pnl=  37.8% | dd= 0.34% | 43s
+  [ 88] mfp=0.65 maxp=0.4 s=1.15                                          | comp=   50.0887 | trades=1023 | sharpe=  15.77 | win= 76.6% | pnl=  37.4% | dd= 0.34% | 44s
+  [ 89] mfp=0.65 maxp=0.4 s=1.2                                           | comp=   49.3718 | trades= 964 | sharpe=  16.01 | win= 77.1% | pnl=  36.2% | dd= 0.34% | 44s
+  [ 90] mfp=0.65 maxp=0.43 s=1.05                                         | comp=   56.0188 | trades=1354 | sharpe=  15.36 | win= 77.1% | pnl=  49.6% | dd= 0.45% | 45s
+  [ 91] mfp=0.65 maxp=0.43 s=1.1                                          | comp=   52.2370 | trades=1239 | sharpe=  14.98 | win= 76.1% | pnl=  42.8% | dd= 0.45% | 45s
+  [ 92] mfp=0.65 maxp=0.43 s=1.15                                         | comp=   53.7554 | trades=1178 | sharpe=  15.77 | win= 77.5% | pnl=  42.3% | dd= 0.35% | 45s
+  [ 93] mfp=0.65 maxp=0.43 s=1.2                                          | comp=   52.7441 | trades=1107 | sharpe=  15.96 | win= 77.9% | pnl=  40.6% | dd= 0.35% | 46s
+  [ 94] mfp=0.65 maxp=0.46 s=1.05                                         | comp=   58.2651 | trades=1444 | sharpe=  15.47 | win= 77.8% | pnl=  52.6% | dd= 0.45% | 46s
+  [ 95] mfp=0.65 maxp=0.46 s=1.1                                          | comp=   54.6005 | trades=1324 | sharpe=  15.14 | win= 77.0% | pnl=  45.5% | dd= 0.45% | 47s
+  [ 96] mfp=0.65 maxp=0.46 s=1.15                                         | comp=   56.3073 | trades=1260 | sharpe=  15.97 | win= 78.4% | pnl=  45.1% | dd= 0.34% | 47s
+  [ 97] mfp=0.65 maxp=0.46 s=1.2                                          | comp=   55.0487 | trades=1183 | sharpe=  16.11 | win= 78.8% | pnl=  43.1% | dd= 0.34% | 48s
+  [ 98] mfp=0.65 maxp=0.5 s=1.05                                          | comp=   55.0487 | trades=1183 | sharpe=  16.11 | win= 78.8% | pnl=  43.1% | dd= 0.34% | 48s
+  [ 99] mfp=0.65 maxp=0.5 s=1.1                                           | comp=   55.3582 | trades=1383 | sharpe=  15.02 | win= 77.3% | pnl=  47.0% | dd= 0.45% | 49s
+  [100] mfp=0.65 maxp=0.5 s=1.15                                          | comp=   56.9490 | trades=1318 | sharpe=  15.79 | win= 78.5% | pnl=  46.5% | dd= 0.34% | 49s
+  [101] mfp=0.65 maxp=0.5 s=1.2                                           | comp=   55.8532 | trades=1238 | sharpe=  15.98 | win= 79.0% | pnl=  44.5% | dd= 0.34% | 50s
+  [102] mfp=0.65 maxp=0.55 s=1.05                                         | comp=   59.2445 | trades=1526 | sharpe=  15.27 | win= 78.1% | pnl=  54.5% | dd= 0.34% | 50s
+  [103] mfp=0.65 maxp=0.55 s=1.1                                          | comp=   55.3933 | trades=1402 | sharpe=  14.93 | win= 77.3% | pnl=  47.3% | dd= 0.45% | 51s
+  [104] mfp=0.65 maxp=0.55 s=1.15                                         | comp=   57.0460 | trades=1336 | sharpe=  15.71 | win= 78.6% | pnl=  46.8% | dd= 0.34% | 51s
+  [105] mfp=0.65 maxp=0.55 s=1.2                                          | comp=   55.9768 | trades=1256 | sharpe=  15.90 | win= 79.1% | pnl=  44.8% | dd= 0.34% | 52s
+  [106] mfp=0.7 maxp=0.4 s=1.05                                           | comp=   46.2710 | trades= 703 | sharpe=  17.57 | win= 79.4% | pnl=  24.3% | dd= 0.34% | 52s
+  [107] mfp=0.7 maxp=0.4 s=1.1                                            | comp=   46.3873 | trades= 657 | sharpe=  18.22 | win= 80.5% | pnl=  23.4% | dd= 0.34% | 53s
+  [108] mfp=0.7 maxp=0.4 s=1.15                                           | comp=   50.8943 | trades= 608 | sharpe=  20.73 | win= 83.8% | pnl=  23.3% | dd= 0.22% | 53s
+  [109] mfp=0.7 maxp=0.4 s=1.2                                            | comp=   55.6507 | trades= 543 | sharpe=  23.99 | win= 87.0% | pnl=  22.4% | dd= 0.22% | 54s
+  [110] mfp=0.7 maxp=0.43 s=1.05                                          | comp=   49.7017 | trades= 826 | sharpe=  17.41 | win= 80.1% | pnl=  27.9% | dd= 0.34% | 54s
+  [111] mfp=0.7 maxp=0.43 s=1.1                                           | comp=   49.9563 | trades= 776 | sharpe=  18.06 | win= 81.1% | pnl=  26.8% | dd= 0.34% | 55s
+  [112] mfp=0.7 maxp=0.43 s=1.15                                          | comp=   54.0120 | trades= 717 | sharpe=  20.31 | win= 83.9% | pnl=  26.5% | dd= 0.33% | 55s
+  [113] mfp=0.7 maxp=0.43 s=1.2                                           | comp=   58.3030 | trades= 640 | sharpe=  23.20 | win= 87.0% | pnl=  25.3% | dd= 0.33% | 56s
+  [114] mfp=0.7 maxp=0.46 s=1.05                                          | comp=   52.3864 | trades= 895 | sharpe=  17.63 | win= 80.9% | pnl=  29.9% | dd= 0.34% | 56s
+  [115] mfp=0.7 maxp=0.46 s=1.1                                           | comp=   52.8074 | trades= 840 | sharpe=  18.34 | win= 82.1% | pnl=  28.8% | dd= 0.34% | 57s
+  [116] mfp=0.7 maxp=0.46 s=1.15                                          | comp=   56.8512 | trades= 779 | sharpe=  20.51 | win= 84.7% | pnl=  28.4% | dd= 0.34% | 57s
+  [117] mfp=0.7 maxp=0.46 s=1.2                                           | comp=   60.5825 | trades= 695 | sharpe=  23.14 | win= 87.5% | pnl=  26.9% | dd= 0.34% | 58s
+  [118] mfp=0.7 maxp=0.5 s=1.05                                           | comp=   52.9552 | trades= 943 | sharpe=  17.36 | win= 81.0% | pnl=  31.0% | dd= 0.34% | 58s
+  [119] mfp=0.7 maxp=0.5 s=1.1                                            | comp=   53.3825 | trades= 884 | sharpe=  18.08 | win= 82.2% | pnl=  29.8% | dd= 0.34% | 59s
+  [120] mfp=0.7 maxp=0.5 s=1.15                                           | comp=   57.3662 | trades= 820 | sharpe=  20.17 | win= 84.8% | pnl=  29.3% | dd= 0.33% | 59s
+  [121] mfp=0.7 maxp=0.5 s=1.2                                            | comp=   60.4532 | trades= 734 | sharpe=  22.46 | win= 87.3% | pnl=  27.8% | dd= 0.33% | 60s
+  [122] mfp=0.7 maxp=0.55 s=1.05                                          | comp=   53.1003 | trades= 960 | sharpe=  17.26 | win= 81.2% | pnl=  31.3% | dd= 0.34% | 60s
+  [123] mfp=0.7 maxp=0.55 s=1.1                                           | comp=   53.5090 | trades= 900 | sharpe=  17.96 | win= 82.3% | pnl=  30.1% | dd= 0.34% | 61s
+  [124] mfp=0.7 maxp=0.55 s=1.15                                          | comp=   57.3662 | trades= 835 | sharpe=  19.98 | win= 84.8% | pnl=  29.6% | dd= 0.33% | 61s
+  [125] mfp=0.7 maxp=0.55 s=1.2                                           | comp=   60.2626 | trades= 749 | sharpe=  22.17 | win= 87.3% | pnl=  28.1% | dd= 0.33% | 61s
+
+--- Phase 4: Fine-tuning ---
+  Best Phase 3: sharp=0.95 = 76.9466
+  [126] fine mfp=0.62 mp=0.41 s=0.92 me=0.06                              | comp=   65.5445 | trades=2610 | sharpe=  13.02 | win= 71.9% | pnl= 109.6% | dd= 0.74% | 62s
+  [127] fine mfp=0.62 mp=0.41 s=0.92 me=0.08                              | comp=   65.5445 | trades=2610 | sharpe=  13.02 | win= 71.9% | pnl= 109.6% | dd= 0.74% | 62s
+  [128] fine mfp=0.62 mp=0.41 s=0.92 me=0.1                               | comp=   65.5445 | trades=2610 | sharpe=  13.02 | win= 71.9% | pnl= 109.6% | dd= 0.74% | 63s
+  [129] fine mfp=0.62 mp=0.41 s=0.95 me=0.06                              | comp=   65.3983 | trades=2291 | sharpe=  13.89 | win= 73.9% | pnl=  98.1% | dd= 0.83% | 63s
+  [130] fine mfp=0.62 mp=0.41 s=0.95 me=0.08                              | comp=   65.3983 | trades=2291 | sharpe=  13.89 | win= 73.9% | pnl=  98.1% | dd= 0.83% | 64s
+  [131] fine mfp=0.62 mp=0.41 s=0.95 me=0.1                               | comp=   65.3983 | trades=2291 | sharpe=  13.89 | win= 73.9% | pnl=  98.1% | dd= 0.83% | 64s
+  [132] fine mfp=0.62 mp=0.41 s=0.98 me=0.06                              | comp=   62.4220 | trades=2072 | sharpe=  13.91 | win= 73.8% | pnl=  85.3% | dd= 0.71% | 65s
+  [133] fine mfp=0.62 mp=0.41 s=0.98 me=0.08                              | comp=   62.4220 | trades=2072 | sharpe=  13.91 | win= 73.8% | pnl=  85.3% | dd= 0.71% | 65s
+  [134] fine mfp=0.62 mp=0.41 s=0.98 me=0.1                               | comp=   62.4220 | trades=2072 | sharpe=  13.91 | win= 73.8% | pnl=  85.3% | dd= 0.71% | 66s
+  [135] fine mfp=0.62 mp=0.43 s=0.92 me=0.06                              | comp=   68.1610 | trades=2810 | sharpe=  13.03 | win= 72.5% | pnl= 118.2% | dd= 0.67% | 66s
+  [136] fine mfp=0.62 mp=0.43 s=0.92 me=0.08                              | comp=   68.1610 | trades=2810 | sharpe=  13.03 | win= 72.5% | pnl= 118.2% | dd= 0.67% | 67s
+  [137] fine mfp=0.62 mp=0.43 s=0.92 me=0.1                               | comp=   68.1610 | trades=2810 | sharpe=  13.03 | win= 72.5% | pnl= 118.2% | dd= 0.67% | 67s
+  [138] fine mfp=0.62 mp=0.43 s=0.95 me=0.06                              | comp=   68.0075 | trades=2481 | sharpe=  13.87 | win= 74.4% | pnl= 105.8% | dd= 0.79% | 68s
+  [139] fine mfp=0.62 mp=0.43 s=0.95 me=0.08                              | comp=   68.0075 | trades=2481 | sharpe=  13.87 | win= 74.4% | pnl= 105.8% | dd= 0.79% | 68s
+  [140] fine mfp=0.62 mp=0.43 s=0.95 me=0.1                               | comp=   68.0075 | trades=2481 | sharpe=  13.87 | win= 74.4% | pnl= 105.8% | dd= 0.79% | 69s
+  [141] fine mfp=0.62 mp=0.43 s=0.98 me=0.06                              | comp=   64.8548 | trades=2238 | sharpe=  13.91 | win= 74.4% | pnl=  91.6% | dd= 0.71% | 69s
+  [142] fine mfp=0.62 mp=0.43 s=0.98 me=0.08                              | comp=   64.8548 | trades=2238 | sharpe=  13.91 | win= 74.4% | pnl=  91.6% | dd= 0.71% | 70s
+  [143] fine mfp=0.62 mp=0.43 s=0.98 me=0.1                               | comp=   64.8548 | trades=2238 | sharpe=  13.91 | win= 74.4% | pnl=  91.6% | dd= 0.71% | 70s
+  [144] fine mfp=0.62 mp=0.45 s=0.92 me=0.06                              | comp=   69.9611 | trades=2926 | sharpe=  13.11 | win= 73.1% | pnl= 123.5% | dd= 0.67% | 71s
+  [145] fine mfp=0.62 mp=0.45 s=0.92 me=0.08                              | comp=   69.9611 | trades=2926 | sharpe=  13.11 | win= 73.1% | pnl= 123.5% | dd= 0.67% | 71s
+  [146] fine mfp=0.62 mp=0.45 s=0.92 me=0.1                               | comp=   69.9611 | trades=2926 | sharpe=  13.11 | win= 73.1% | pnl= 123.5% | dd= 0.67% | 72s
+  [147] fine mfp=0.62 mp=0.45 s=0.95 me=0.06                              | comp=   69.6960 | trades=2586 | sharpe=  13.93 | win= 74.9% | pnl= 110.3% | dd= 0.79% | 72s
+  [148] fine mfp=0.62 mp=0.45 s=0.95 me=0.08                              | comp=   69.6960 | trades=2586 | sharpe=  13.93 | win= 74.9% | pnl= 110.3% | dd= 0.79% | 73s
+  [149] fine mfp=0.62 mp=0.45 s=0.95 me=0.1                               | comp=   69.6960 | trades=2586 | sharpe=  13.93 | win= 74.9% | pnl= 110.3% | dd= 0.79% | 73s
+  [150] fine mfp=0.62 mp=0.45 s=0.98 me=0.06                              | comp=   66.5828 | trades=2335 | sharpe=  13.98 | win= 74.9% | pnl=  95.6% | dd= 0.71% | 74s
+  [151] fine mfp=0.62 mp=0.45 s=0.98 me=0.08                              | comp=   66.5828 | trades=2335 | sharpe=  13.98 | win= 74.9% | pnl=  95.6% | dd= 0.71% | 74s
+  [152] fine mfp=0.62 mp=0.45 s=0.98 me=0.1                               | comp=   66.5828 | trades=2335 | sharpe=  13.98 | win= 74.9% | pnl=  95.6% | dd= 0.71% | 75s
+  [153] fine mfp=0.65 mp=0.41 s=0.92 me=0.06                              | comp=   59.0359 | trades=1688 | sharpe=  14.50 | win= 74.9% | pnl=  63.5% | dd= 0.45% | 75s
+  [154] fine mfp=0.65 mp=0.41 s=0.92 me=0.08                              | comp=   59.0359 | trades=1688 | sharpe=  14.50 | win= 74.9% | pnl=  63.5% | dd= 0.45% | 76s
+  [155] fine mfp=0.65 mp=0.41 s=0.92 me=0.1                               | comp=   59.0359 | trades=1688 | sharpe=  14.50 | win= 74.9% | pnl=  63.5% | dd= 0.45% | 76s
+  [156] fine mfp=0.65 mp=0.41 s=0.95 me=0.06                              | comp=   57.8339 | trades=1537 | sharpe=  14.89 | win= 75.6% | pnl=  57.8% | dd= 0.45% | 77s
+  [157] fine mfp=0.65 mp=0.41 s=0.95 me=0.08                              | comp=   57.8339 | trades=1537 | sharpe=  14.89 | win= 75.6% | pnl=  57.8% | dd= 0.45% | 77s
+  [158] fine mfp=0.65 mp=0.41 s=0.95 me=0.1                               | comp=   57.8339 | trades=1537 | sharpe=  14.89 | win= 75.6% | pnl=  57.8% | dd= 0.45% | 78s
+  [159] fine mfp=0.65 mp=0.41 s=0.98 me=0.06                              | comp=   56.8223 | trades=1377 | sharpe=  15.45 | win= 76.6% | pnl=  51.6% | dd= 0.45% | 78s
+  [160] fine mfp=0.65 mp=0.41 s=0.98 me=0.08                              | comp=   56.8223 | trades=1377 | sharpe=  15.45 | win= 76.6% | pnl=  51.6% | dd= 0.45% | 79s
+  [161] fine mfp=0.65 mp=0.41 s=0.98 me=0.1                               | comp=   76.4085 | trades=5456 | sharpe=  10.51 | win= 65.3% | pnl= 294.2% | dd= 0.80% | 79s
+  [162] fine mfp=0.65 mp=0.43 s=0.92 me=0.06                              | comp=   61.5743 | trades=1837 | sharpe=  14.50 | win= 75.5% | pnl=  68.7% | dd= 0.45% | 79s
+  [163] fine mfp=0.65 mp=0.43 s=0.92 me=0.08                              | comp=   76.5975 | trades=6399 | sharpe=   9.73 | win= 62.7% | pnl= 341.5% | dd= 0.77% | 80s
+  [164] fine mfp=0.65 mp=0.43 s=0.92 me=0.1                               | comp=   76.4085 | trades=5456 | sharpe=  10.51 | win= 65.3% | pnl= 294.2% | dd= 0.80% | 81s
+  [165] fine mfp=0.65 mp=0.43 s=0.95 me=0.06                              | comp=   76.5407 | trades=4981 | sharpe=  11.01 | win= 66.7% | pnl= 268.2% | dd= 0.73% | 81s
+  [166] fine mfp=0.65 mp=0.43 s=0.95 me=0.08                              | comp=   76.5407 | trades=4981 | sharpe=  11.01 | win= 66.7% | pnl= 268.2% | dd= 0.73% | 82s
+  [167] fine mfp=0.65 mp=0.43 s=0.95 me=0.1                               | comp=   60.3910 | trades=1673 | sharpe=  14.90 | win= 76.2% | pnl=  62.4% | dd= 0.45% | 82s
+  [168] fine mfp=0.65 mp=0.43 s=0.98 me=0.06                              | comp=   59.0052 | trades=1500 | sharpe=  15.38 | win= 77.1% | pnl=  55.5% | dd= 0.46% | 83s
+  [169] fine mfp=0.65 mp=0.43 s=0.98 me=0.08                              | comp=   59.0052 | trades=1500 | sharpe=  15.38 | win= 77.1% | pnl=  55.5% | dd= 0.46% | 83s
+  [170] fine mfp=0.65 mp=0.43 s=0.98 me=0.1                               | comp=   59.0052 | trades=1500 | sharpe=  15.38 | win= 77.1% | pnl=  55.5% | dd= 0.46% | 84s
+  [171] fine mfp=0.65 mp=0.45 s=0.92 me=0.06                              | comp=   75.7506 | trades=4827 | sharpe=  11.06 | win= 66.8% | pnl= 255.7% | dd= 0.73% | 84s
+  [172] fine mfp=0.65 mp=0.45 s=0.92 me=0.08                              | comp=   73.4392 | trades=4335 | sharpe=  11.31 | win= 67.5% | pnl= 220.9% | dd= 0.70% | 85s
+  [173] fine mfp=0.65 mp=0.45 s=0.92 me=0.1                               | comp=   71.7033 | trades=3888 | sharpe=  11.70 | win= 68.6% | pnl= 194.7% | dd= 0.86% | 85s
+  [174] fine mfp=0.65 mp=0.45 s=0.95 me=0.06                              | comp=   70.7769 | trades=3590 | sharpe=  11.99 | win= 69.2% | pnl= 177.4% | dd= 0.75% | 86s
+  [175] fine mfp=0.65 mp=0.45 s=0.95 me=0.08                              | comp=   67.9462 | trades=3207 | sharpe=  12.15 | win= 69.8% | pnl= 154.9% | dd= 0.64% | 86s
+  [176] fine mfp=0.65 mp=0.45 s=0.95 me=0.1                               | comp=   65.3324 | trades=2837 | sharpe=  12.40 | win= 70.3% | pnl= 132.5% | dd= 0.53% | 87s
+  [177] fine mfp=0.65 mp=0.45 s=0.98 me=0.06                              | comp=   70.9224 | trades=4734 | sharpe=  10.46 | win= 63.8% | pnl= 248.8% | dd= 0.74% | 87s
+  [178] fine mfp=0.65 mp=0.45 s=0.98 me=0.08                              | comp=   60.8850 | trades=1571 | sharpe=  15.50 | win= 77.7% | pnl=  58.1% | dd= 0.46% | 88s
+  [179] fine mfp=0.65 mp=0.45 s=0.98 me=0.1                               | comp=   60.8850 | trades=1571 | sharpe=  15.50 | win= 77.7% | pnl=  58.1% | dd= 0.46% | 88s
+  [180] fine mfp=0.68 mp=0.41 s=0.92 me=0.06                              | comp=   53.1879 | trades=1171 | sharpe=  15.68 | win= 77.0% | pnl=  40.8% | dd= 0.45% | 89s
+  [181] fine mfp=0.68 mp=0.41 s=0.92 me=0.08                              | comp=   53.1879 | trades=1171 | sharpe=  15.68 | win= 77.0% | pnl=  40.8% | dd= 0.45% | 89s
+  [182] fine mfp=0.68 mp=0.41 s=0.92 me=0.1                               | comp=   53.1879 | trades=1171 | sharpe=  15.68 | win= 77.0% | pnl=  40.8% | dd= 0.45% | 90s
+  [183] fine mfp=0.68 mp=0.41 s=0.95 me=0.06                              | comp=   50.7444 | trades=1118 | sharpe=  15.31 | win= 76.3% | pnl=  38.0% | dd= 0.45% | 90s
+  [184] fine mfp=0.68 mp=0.41 s=0.95 me=0.08                              | comp=   72.8962 | trades=5556 | sharpe=   9.94 | win= 64.5% | pnl= 307.7% | dd= 0.80% | 91s
+  [185] fine mfp=0.68 mp=0.41 s=0.95 me=0.1                               | comp=   76.4085 | trades=5456 | sharpe=  10.51 | win= 65.3% | pnl= 294.2% | dd= 0.80% | 91s
+  [186] fine mfp=0.68 mp=0.41 s=0.98 me=0.06                              | comp=   49.2459 | trades=1059 | sharpe=  15.27 | win= 76.3% | pnl=  35.6% | dd= 0.45% | 92s
+  [187] fine mfp=0.68 mp=0.41 s=0.98 me=0.08                              | comp=   49.2459 | trades=1059 | sharpe=  15.27 | win= 76.3% | pnl=  35.6% | dd= 0.45% | 92s
+  [188] fine mfp=0.68 mp=0.41 s=0.98 me=0.1                               | comp=   49.2459 | trades=1059 | sharpe=  15.27 | win= 76.3% | pnl=  35.6% | dd= 0.45% | 92s
+  [189] fine mfp=0.68 mp=0.43 s=0.92 me=0.06                              | comp=   72.6567 | trades=2914 | sharpe=  13.61 | win= 73.5% | pnl=  93.9% | dd= 0.55% | 93s
+  [190] fine mfp=0.68 mp=0.43 s=0.92 me=0.08                              | comp=   76.4085 | trades=5456 | sharpe=  10.51 | win= 65.3% | pnl= 294.2% | dd= 0.80% | 93s
+  [191] fine mfp=0.68 mp=0.43 s=0.92 me=0.1                               | comp=   78.1703 | trades=5715 | sharpe=  10.55 | win= 65.6% | pnl= 646.9% | dd= 0.99% | 94s
+  [192] fine mfp=0.68 mp=0.43 s=0.95 me=0.06                              | comp=   77.7524 | trades=5729 | sharpe=  10.55 | win= 65.6% | pnl= 994.0% | dd= 1.31% | 94s
+  [193] fine mfp=0.68 mp=0.43 s=0.95 me=0.08                              | comp=   77.2574 | trades=5729 | sharpe=  10.55 | win= 65.6% | pnl=1337.9% | dd= 1.62% | 95s
+  [194] fine mfp=0.68 mp=0.43 s=0.95 me=0.1                               | comp=   53.1227 | trades=1223 | sharpe=  15.33 | win= 76.9% | pnl=  41.2% | dd= 0.45% | 95s
+  [195] fine mfp=0.68 mp=0.43 s=0.98 me=0.06                              | comp=   51.4014 | trades=1155 | sharpe=  15.26 | win= 76.8% | pnl=  38.5% | dd= 0.45% | 96s
+  [196] fine mfp=0.68 mp=0.43 s=0.98 me=0.08                              | comp=   51.4014 | trades=1155 | sharpe=  15.26 | win= 76.8% | pnl=  38.5% | dd= 0.45% | 96s
+  [197] fine mfp=0.68 mp=0.43 s=0.98 me=0.1                               | comp=   51.4014 | trades=1155 | sharpe=  15.26 | win= 76.8% | pnl=  38.5% | dd= 0.45% | 97s
+  [198] fine mfp=0.68 mp=0.45 s=0.92 me=0.06                              | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 97s
+  [199] fine mfp=0.68 mp=0.45 s=0.92 me=0.08                              | comp=   80.6894 | trades=6868 | sharpe=   9.88 | win= 64.7% | pnl= 371.8% | dd= 0.75% | 98s
+  [200] fine mfp=0.68 mp=0.45 s=0.92 me=0.1                               | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 98s
+  [201] fine mfp=0.68 mp=0.45 s=0.95 me=0.06                              | comp=   54.8536 | trades=1283 | sharpe=  15.45 | win= 77.5% | pnl=  43.1% | dd= 0.45% | 99s
+  [202] fine mfp=0.68 mp=0.45 s=0.95 me=0.08                              | comp=   54.8536 | trades=1283 | sharpe=  15.45 | win= 77.5% | pnl=  43.1% | dd= 0.45% | 99s
+  [203] fine mfp=0.68 mp=0.45 s=0.95 me=0.1                               | comp=   80.2911 | trades=6339 | sharpe=  10.24 | win= 65.4% | pnl= 340.8% | dd= 0.74% | 100s
+  [204] fine mfp=0.68 mp=0.45 s=0.98 me=0.06                              | comp=   80.2911 | trades=6339 | sharpe=  10.24 | win= 65.4% | pnl= 340.8% | dd= 0.74% | 100s
+  [205] fine mfp=0.68 mp=0.45 s=0.98 me=0.08                              | comp=   80.4532 | trades=6367 | sharpe=  10.23 | win= 65.5% | pnl= 342.1% | dd= 0.74% | 101s
+  [206] fine mfp=0.68 mp=0.45 s=0.98 me=0.1                               | comp=   53.0945 | trades=1213 | sharpe=  15.38 | win= 77.3% | pnl=  40.2% | dd= 0.45% | 101s
+
+--- Phase 5: Per-city overrides ---
+  Best Phase 4: fine mfp=0.68 mp=0.45 s=0.92 me=0.08 = 80.6894
+  [207] high_var_edge=0.1                                                 | comp=   80.6294 | trades=6393 | sharpe=  10.24 | win= 65.6% | pnl= 343.7% | dd= 0.74% | 102s
+  [208] high_var_edge=0.12                                                | comp=   80.6294 | trades=6393 | sharpe=  10.24 | win= 65.6% | pnl= 343.7% | dd= 0.74% | 102s
+  [209] high_var_edge=0.15                                                | comp=   80.7591 | trades=6432 | sharpe=  10.22 | win= 65.8% | pnl= 345.1% | dd= 0.74% | 103s
+  [210] low_var_edge=0.04                                                 | comp=   80.7591 | trades=6432 | sharpe=  10.22 | win= 65.8% | pnl= 345.1% | dd= 0.74% | 103s
+  [211] low_var_edge=0.05                                                 | comp=   79.2816 | trades=5866 | sharpe=  10.49 | win= 66.1% | pnl= 308.8% | dd= 0.66% | 104s
+  [212] low_var_edge=0.06                                                 | comp=   79.2816 | trades=5866 | sharpe=  10.49 | win= 66.1% | pnl= 308.8% | dd= 0.66% | 104s
+  [213] split tight=0.12 loose=0.04                                       | comp=   79.3558 | trades=5889 | sharpe=  10.48 | win= 66.2% | pnl= 309.6% | dd= 0.66% | 105s
+  [214] split tight=0.12 loose=0.06                                       | comp=   79.3558 | trades=5889 | sharpe=  10.48 | win= 66.2% | pnl= 309.6% | dd= 0.66% | 105s
+  [215] split tight=0.15 loose=0.04                                       | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 106s
+  [216] split tight=0.15 loose=0.06                                       | comp=   84.1229 | trades=4982 | sharpe=  12.07 | win= 69.8% | pnl= 212.1% | dd= 0.63% | 106s
+
+--- Phase 6: Sizing & shrinkage ---
+  [217] kelly=0.005                                                       | comp=    0.0000 | trades=   0 | sharpe=   0.00 | win=  0.0% | pnl=   0.0% | dd= 0.00% | 107s
+  [218] kelly=0.01                                                        | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 107s
+  [219] kelly=0.015                                                       | comp=   57.0689 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  76.8% | dd= 0.67% | 108s
+  [220] kelly=0.02                                                        | comp=   56.8144 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl= 113.5% | dd= 0.89% | 108s
+  [221] kelly=0.03                                                        | comp=   56.3054 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl= 211.1% | dd= 1.33% | 109s
+  [222] kelly=0.05                                                        | comp=   56.3054 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl= 211.1% | dd= 1.33% | 109s
+  [223] shrink=0.93                                                       | comp=   55.2573 | trades=1214 | sharpe=  16.00 | win= 78.3% | pnl=  42.0% | dd= 0.45% | 110s
+  [224] shrink=0.95                                                       | comp=   55.2573 | trades=1214 | sharpe=  16.00 | win= 78.3% | pnl=  42.0% | dd= 0.45% | 110s
+  [225] shrink=0.97                                                       | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 111s
+  [226] shrink=0.99                                                       | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 111s
+  [227] max_edge=0.35                                                     | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 112s
+  [228] max_edge=0.42                                                     | comp=   57.3234 | trades=1346 | sharpe=  15.77 | win= 78.0% | pnl=  46.3% | dd= 0.45% | 112s
+  [229] max_edge=0.5                                                      | comp=    0.0000 | trades=   0 | sharpe=   0.00 | win=  0.0% | pnl=   0.0% | dd= 0.00% | 112s
+  [230] max_edge=0.6                                                      | comp=   80.0483 | trades=4010 | sharpe=  12.79 | win= 71.2% | pnl= 164.2% | dd= 0.58% | 113s
+
+--- Phase 7: D1 multiplier with best ---
+  [231] best+d1=1.5                                                       | comp=   76.3933 | trades=4928 | sharpe=  11.04 | win= 67.7% | pnl= 246.8% | dd= 0.73% | 113s
+  [232] best+d1=1.8                                                       | comp=   80.1567 | trades=4035 | sharpe=  12.77 | win= 71.3% | pnl= 164.9% | dd= 0.58% | 114s
+  [233] best+d1=2.0                                                       | comp=   80.1567 | trades=4035 | sharpe=  12.77 | win= 71.3% | pnl= 164.9% | dd= 0.58% | 114s
+  [234] best+d1=2.2                                                       | comp=   57.4945 | trades=1364 | sharpe=  15.71 | win= 77.9% | pnl=  46.8% | dd= 0.45% | 115s
+  [235] best+d1=2.5                                                       | comp=   57.4239 | trades=1357 | sharpe=  15.73 | win= 78.0% | pnl=  46.5% | dd= 0.45% | 115s
+
+================================================================================================================================================================
+TOP 20 EXPERIMENTS (v6 — 20 cities, 235 total, 115s = 1.9min)
+================================================================================================================================================================
+  # 1  split tight=0.15 loose=0.06                                            | comp=   84.1229 | trades=4982 | sharpe=  12.07 | win= 69.8% | pnl= 212.1% | dd= 0.63%
+  # 2  high_var_edge=0.15                                                     | comp=   80.7591 | trades=6432 | sharpe=  10.22 | win= 65.8% | pnl= 345.1% | dd= 0.74%
+  # 3  low_var_edge=0.04                                                      | comp=   80.7591 | trades=6432 | sharpe=  10.22 | win= 65.8% | pnl= 345.1% | dd= 0.74%
+  # 4  fine mfp=0.68 mp=0.45 s=0.92 me=0.08                                   | comp=   80.6894 | trades=6868 | sharpe=   9.88 | win= 64.7% | pnl= 371.8% | dd= 0.75%
+  # 5  high_var_edge=0.1                                                      | comp=   80.6294 | trades=6393 | sharpe=  10.24 | win= 65.6% | pnl= 343.7% | dd= 0.74%
+  # 6  high_var_edge=0.12                                                     | comp=   80.6294 | trades=6393 | sharpe=  10.24 | win= 65.6% | pnl= 343.7% | dd= 0.74%
+  # 7  fine mfp=0.68 mp=0.45 s=0.98 me=0.08                                   | comp=   80.4532 | trades=6367 | sharpe=  10.23 | win= 65.5% | pnl= 342.1% | dd= 0.74%
+  # 8  fine mfp=0.68 mp=0.45 s=0.95 me=0.1                                    | comp=   80.2911 | trades=6339 | sharpe=  10.24 | win= 65.4% | pnl= 340.8% | dd= 0.74%
+  # 9  fine mfp=0.68 mp=0.45 s=0.98 me=0.06                                   | comp=   80.2911 | trades=6339 | sharpe=  10.24 | win= 65.4% | pnl= 340.8% | dd= 0.74%
+  #10  best+d1=1.8                                                            | comp=   80.1567 | trades=4035 | sharpe=  12.77 | win= 71.3% | pnl= 164.9% | dd= 0.58%
+  #11  best+d1=2.0                                                            | comp=   80.1567 | trades=4035 | sharpe=  12.77 | win= 71.3% | pnl= 164.9% | dd= 0.58%
+  #12  max_edge=0.6                                                           | comp=   80.0483 | trades=4010 | sharpe=  12.79 | win= 71.2% | pnl= 164.2% | dd= 0.58%
+  #13  split tight=0.12 loose=0.04                                            | comp=   79.3558 | trades=5889 | sharpe=  10.48 | win= 66.2% | pnl= 309.6% | dd= 0.66%
+  #14  split tight=0.12 loose=0.06                                            | comp=   79.3558 | trades=5889 | sharpe=  10.48 | win= 66.2% | pnl= 309.6% | dd= 0.66%
+  #15  low_var_edge=0.05                                                      | comp=   79.2816 | trades=5866 | sharpe=  10.49 | win= 66.1% | pnl= 308.8% | dd= 0.66%
+  #16  low_var_edge=0.06                                                      | comp=   79.2816 | trades=5866 | sharpe=  10.49 | win= 66.1% | pnl= 308.8% | dd= 0.66%
+  #17  fine mfp=0.68 mp=0.43 s=0.92 me=0.1                                    | comp=   78.1703 | trades=5715 | sharpe=  10.55 | win= 65.6% | pnl= 646.9% | dd= 0.99%
+  #18  fine mfp=0.68 mp=0.43 s=0.95 me=0.06                                   | comp=   77.7524 | trades=5729 | sharpe=  10.55 | win= 65.6% | pnl= 994.0% | dd= 1.31%
+  #19  fine mfp=0.68 mp=0.43 s=0.95 me=0.08                                   | comp=   77.2574 | trades=5729 | sharpe=  10.55 | win= 65.6% | pnl=1337.9% | dd= 1.62%
+  #20  sharp=0.95                                                             | comp=   76.9466 | trades=5713 | sharpe=  10.35 | win= 64.8% | pnl= 309.3% | dd= 0.81%
+
+Total experiments: 235
+
+BEST: split tight=0.15 loose=0.06
+  composite_score = 84.122949
+  params = {
+  "MIN_FORECAST_PROB": 0.68,
+  "MAX_PRICE": 0.45,
+  "PROB_SHARPENING": 0.92,
+  "MIN_EDGE": 0.08
+}
+
+Results saved to /Users/dnl.vlck/Arbo/research/optimization_results_v6.json
+Restored strategy_experiment.py to baseline.
+
+Total time: 115s (1.9min)

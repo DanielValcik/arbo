@@ -1,0 +1,90 @@
+
+======================================================================
+V4a k=20 + AGGREGATE CAP SWEEP + PER-CITY 35% HARD CAP
+Start: 2026-03-17T15:48:58.616549
+======================================================================
+
+==================================================
+v4a_agg30: aggregate_cap=30%, city_cap=35%
+  Score: 132.9  Trades: 175  WR: 37.7%
+  PnL: $14,266.04  DD: 17.3%  Sharpe: 6.21
+  Util: 55.1%  Concurrent: 0.8
+  Max city: 40.4%
+  WF OOS: score=78.2  PnL=$1201.59
+    Fold 1: PnL=$88.02  trades=44  WR=34.1%  util=65.8%
+    Fold 2: PnL=$1754.85  trades=33  WR=45.5%  util=83.2%
+    Fold 3: PnL=$1761.89  trades=28  WR=57.1%  util=69.4%
+  Per-city:
+    munich         $5,765.06  ( 13 tr, WR= 61.5%)   40.4% ⚠
+    seoul          $3,673.22  ( 49 tr, WR= 26.5%)   25.7%
+    atlanta        $3,326.19  ( 28 tr, WR= 67.9%)   23.3%
+    toronto        $  806.80  ( 26 tr, WR= 34.6%)    5.7%
+    nyc            $  694.76  ( 59 tr, WR= 28.8%)    4.9%
+  Gates: DD<20% ✓  MaxCity<35% ✗  OOS>90 ✗
+
+==================================================
+v4a_agg35: aggregate_cap=35%, city_cap=35%
+  Score: 136.1  Trades: 175  WR: 37.7%
+  PnL: $19,908.35  DD: 19.9%  Sharpe: 6.12
+  Util: 55.1%  Concurrent: 0.8
+  Max city: 38.5%
+  WF OOS: score=80.3  PnL=$1398.45
+    Fold 1: PnL=$98.38  trades=44  WR=34.1%  util=65.8%
+    Fold 2: PnL=$2201.19  trades=33  WR=45.5%  util=83.2%
+    Fold 3: PnL=$1895.77  trades=28  WR=57.1%  util=69.4%
+  Per-city:
+    munich         $7,668.07  ( 13 tr, WR= 61.5%)   38.5% ⚠
+    seoul          $5,489.12  ( 49 tr, WR= 26.5%)   27.6%
+    atlanta        $4,691.57  ( 28 tr, WR= 67.9%)   23.6%
+    toronto        $1,228.04  ( 26 tr, WR= 34.6%)    6.2%
+    nyc            $  831.55  ( 59 tr, WR= 28.8%)    4.2%
+  Gates: DD<20% ✓  MaxCity<35% ✗  OOS>90 ✗
+
+==================================================
+v4a_agg40: aggregate_cap=40%, city_cap=35%
+  Score: 136.4  Trades: 175  WR: 37.7%
+  PnL: $20,672.49  DD: 20.6%  Sharpe: 6.1
+  Util: 55.1%  Concurrent: 0.8
+  Max city: 38.3%
+  WF OOS: score=80.6  PnL=$1422.91
+    Fold 1: PnL=$102.63  trades=44  WR=34.1%  util=65.8%
+    Fold 2: PnL=$2261.85  trades=33  WR=45.5%  util=83.2%
+    Fold 3: PnL=$1904.24  trades=28  WR=57.1%  util=69.4%
+  Per-city:
+    munich         $7,924.11  ( 13 tr, WR= 61.5%)   38.3% ⚠
+    seoul          $5,641.67  ( 49 tr, WR= 26.5%)   27.3%
+    atlanta        $4,932.80  ( 28 tr, WR= 67.9%)   23.9%
+    toronto        $1,342.35  ( 26 tr, WR= 34.6%)    6.5%
+    nyc            $  831.55  ( 59 tr, WR= 28.8%)    4.0%
+  Gates: DD<20% ✗  MaxCity<35% ✗  OOS>90 ✗
+
+==================================================
+v4a_agg45: aggregate_cap=45%, city_cap=35%
+  Score: 136.4  Trades: 175  WR: 37.7%
+  PnL: $20,672.49  DD: 20.6%  Sharpe: 6.1
+  Util: 55.1%  Concurrent: 0.8
+  Max city: 38.3%
+  WF OOS: score=80.6  PnL=$1422.91
+    Fold 1: PnL=$102.63  trades=44  WR=34.1%  util=65.8%
+    Fold 2: PnL=$2261.85  trades=33  WR=45.5%  util=83.2%
+    Fold 3: PnL=$1904.24  trades=28  WR=57.1%  util=69.4%
+  Per-city:
+    munich         $7,924.11  ( 13 tr, WR= 61.5%)   38.3% ⚠
+    seoul          $5,641.67  ( 49 tr, WR= 26.5%)   27.3%
+    atlanta        $4,932.80  ( 28 tr, WR= 67.9%)   23.9%
+    toronto        $1,342.35  ( 26 tr, WR= 34.6%)    6.5%
+    nyc            $  831.55  ( 59 tr, WR= 28.8%)    4.0%
+  Gates: DD<20% ✗  MaxCity<35% ✗  OOS>90 ✗
+
+======================================================================
+COMPARISON TABLE
+======================================================================
+Variant         Score   Tr     WR        PnL     DD  Shrp  Util  MaxC    OOS  DD<20  C<35  OOS>90
+----------------------------------------------------------------------------------------------------
+v4a_agg30       132.9  175  37.7% $   14,266  17.3%  6.21   55%   40%  78.2     ✓     ✗      ✗
+v4a_agg35       136.1  175  37.7% $   19,908  19.9%  6.12   55%   39%  80.3     ✓     ✗      ✗
+v4a_agg40       136.4  175  37.7% $   20,672  20.6%  6.10   55%   38%  80.6     ✗     ✗      ✗
+v4a_agg45       136.4  175  37.7% $   20,672  20.6%  6.10   55%   38%  80.6     ✗     ✗      ✗
+
+Results: research/data/experiments/sweep_emos_v4_final.json
+Dashboard: /experiments → select "emos_v4_final"

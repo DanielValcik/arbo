@@ -278,32 +278,29 @@ def download_and_process_hour(
         tmp_path.unlink(missing_ok=True)
         return 0
 
-    # Read and filter with PyArrow predicate pushdown
+    # Read full file and filter by token_id in data JSON
+    # Note: pmxt market_id != Gamma conditionId, so we can't use predicate
+    # pushdown on market_id. Instead we filter on data.token_id after parsing.
     try:
-        # Read only rows matching our conditionIds
+        # Read only book_snapshot rows (skip price_change to reduce parsing)
         table = pq.read_table(
             str(tmp_path),
-            filters=[("market_id", "in", list(condition_ids))],
+            filters=[("update_type", "=", "book_snapshot")],
         )
 
         if table.num_rows == 0:
-            log(f"  {ts_str}: 0 sports rows (file {downloaded // (1024*1024)}MB)")
+            log(f"  {ts_str}: 0 book_snapshot rows (file {downloaded // (1024*1024)}MB)")
             cache_marker.touch()
             tmp_path.unlink(missing_ok=True)
             return 0
 
-        # Extract best_bid prices from book_snapshot events
+        # Extract best_bid prices for our sports token_ids
         prices_to_insert: list[tuple[str, int, float]] = []
+        matched = 0
 
         for i in range(table.num_rows):
-            update_type = table.column("update_type")[i].as_py()
-            if update_type != "book_snapshot":
-                continue
-
-            market_id = table.column("market_id")[i].as_py()
             data_str = table.column("data")[i].as_py()
-
-            if not data_str or market_id not in cid_to_token:
+            if not data_str:
                 continue
 
             try:
@@ -311,20 +308,31 @@ def download_and_process_hour(
             except json.JSONDecodeError:
                 continue
 
+            token_id = data.get("token_id")
+            if not token_id or str(token_id) not in condition_ids:
+                # condition_ids here is actually our set of token_ids
+                continue
+
+            matched += 1
             best_bid = data.get("best_bid")
-            best_ask = data.get("best_ask")
             ts = data.get("timestamp")
+            side = data.get("side", "")
 
             if best_bid is None or ts is None:
                 continue
 
-            token_id = cid_to_token[market_id]
-            price = float(best_bid)  # best_bid = YES price
+            # For YES side: best_bid is the YES price
+            # For NO side: YES price = 1 - NO best_bid
+            if side == "YES":
+                price = float(best_bid)
+            elif side == "NO":
+                price = 1.0 - float(best_bid) if float(best_bid) < 1.0 else 0.0
+            else:
+                price = float(best_bid)
 
             if 0.001 <= price <= 0.999:
-                # Round to minute for dedup
                 minute_ts = (int(ts) // 60) * 60
-                prices_to_insert.append((token_id, minute_ts, price))
+                prices_to_insert.append((str(token_id), minute_ts, price))
 
         # Deduplicate by token+minute (keep last)
         deduped: dict[tuple[str, int], float] = {}
@@ -343,7 +351,8 @@ def download_and_process_hour(
         n_stored = len(deduped)
         n_tokens = len(set(tid for tid, _ in deduped))
         log(f"  {ts_str}: {n_stored} prices from {n_tokens} tokens "
-            f"({table.num_rows} sports rows, file {downloaded // (1024*1024)}MB)")
+            f"({matched} matched/{table.num_rows} snapshots, "
+            f"file {downloaded // (1024*1024)}MB)")
 
         cache_marker.touch()
 
@@ -401,9 +410,26 @@ def main() -> None:
         log("No sports conditionIds found. Exiting.")
         return
 
-    condition_ids = set(cid_map.keys())
-    cid_to_token = {cid: info["token_id_yes"] for cid, info in cid_map.items()}
-    log(f"\nFiltering pmxt data for {len(condition_ids)} sports conditionIds")
+    # pmxt uses data.token_id (numeric), not market_id (hex conditionId)
+    # So we filter on YES token_ids, not conditionIds
+    token_id_set = set()
+    token_to_cid: dict[str, str] = {}
+    for cid, info in cid_map.items():
+        yes_tok = info["token_id_yes"]
+        if yes_tok:
+            token_id_set.add(str(yes_tok))
+            token_to_cid[str(yes_tok)] = cid
+        no_tok = info.get("token_id_no")
+        if no_tok:
+            token_id_set.add(str(no_tok))
+            token_to_cid[str(no_tok)] = cid
+
+    # We pass token_id_set as "condition_ids" parameter to download_and_process_hour
+    # (the name is misleading but it's the set we filter on)
+    condition_ids = token_id_set
+    cid_to_token = {tok: tok for tok in token_id_set}  # identity mapping (tok→tok)
+    log(f"\nFiltering pmxt data for {len(token_id_set)} sports token_ids "
+        f"({len(cid_map)} conditionIds)")
 
     # Also register markets in DB
     db = SportsDB(args.db)

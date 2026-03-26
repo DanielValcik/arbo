@@ -1,0 +1,831 @@
+*** QUICK MODE — reduced trial counts ***
+
+======================================================================
+FINAL SWEEP — Chronological Portfolio Simulator
+Start: 2026-03-14T18:40:57.630485
+======================================================================
+
+Total events: 1716
+Train events (≤2026-01-31): 1058
+Test events  (≥2026-02-01): 657
+Train simulation events: 1058
+
+Phase 1: Broad Random Search (100 trials)
+--------------------------------------------------
+  EXP-0001: score=  105.37  trades= 38  WR=  0.0%  PnL=$ 1997.05  DD= 6.29%  Sharpe=  9.40  util= 0.2%  pph=$ 4.88  ex=33(s12/r21)  ★ NEW BEST
+  EXP-0002: score=  107.00  trades= 37  WR=  0.0%  PnL=$ 2082.26  DD= 7.67%  Sharpe= 12.37  util= 0.2%  pph=$ 4.24  ex=31(s7/r24)  ★ NEW BEST
+  EXP-0004: score=  209.45  trades= 75  WR=  0.0%  PnL=$ 5770.03  DD= 9.75%  Sharpe=  7.12  util= 0.3%  pph=$ 9.40  ex=66(s34/r32)  ★ NEW BEST
+  EXP-0006: score=  496.64  trades=372  WR= 17.2%  PnL=$18515.51  DD=58.51%  Sharpe=  2.32  util= 1.9%  pph=$ 2.07  ★ NEW BEST
+  EXP-0010: score=  687.05  trades=280  WR=  0.0%  PnL=$25167.30  DD=34.92%  Sharpe=  5.07  util= 1.0%  pph=$ 6.45  ex=155(s110/r45)  ★ NEW BEST
+  ... 20/100 done, best: 687.05 (0.3min)
+  EXP-0025: score= 1679.55  trades=575  WR=  9.4%  PnL=$65341.67  DD=35.37%  Sharpe=  2.83  util= 1.3%  pph=$ 4.73  ★ NEW BEST
+  EXP-0032: score= 2527.20  trades=241  WR= 21.2%  PnL=$98360.52  DD=26.49%  Sharpe=  4.45  util= 0.4%  pph=$17.01  ★ NEW BEST
+  ... 40/100 done, best: 2527.20 (0.3min)
+  ... 60/100 done, best: 2527.20 (0.3min)
+  ... 80/100 done, best: 2527.20 (0.3min)
+  ... 100/100 done, best: 2527.20 (0.3min)
+
+Phase 2: Fine-tuning (50 trials around top 20)
+--------------------------------------------------
+  Top 5 scores: [2527.2, 2317.84, 2150.72, 2125.29, 1865.29]
+  ... 10/50 done, best: 2527.20 (0.3min)
+  EXP-0112: score= 3914.48  trades=1396  WR=  4.8%  PnL=$154914.14  DD=92.68%  Sharpe=  2.26  util= 3.3%  pph=$ 4.62  ★ NEW BEST
+  ... 20/50 done, best: 3914.48 (0.3min)
+  ... 30/50 done, best: 3914.48 (0.3min)
+  ... 40/50 done, best: 3914.48 (0.4min)
+  ... 50/50 done, best: 3914.48 (0.4min)
+
+Phase 3: City optimization (50 trials)
+--------------------------------------------------
+  Losing: ['chicago', 'ankara', 'los_angeles', 'miami']
+  Winning: ['dallas', 'atlanta', 'nyc', 'toronto', 'seoul']
+  EXP-0151: score= 4015.20  trades=1376  WR=  4.9%  PnL=$158914.28  DD=92.68%  Sharpe=  2.31  util= 3.3%  pph=$ 4.81  ★ NEW BEST
+  EXP-0153: score= 4018.81  trades=1358  WR=  4.9%  PnL=$159049.53  DD=92.68%  Sharpe=  2.32  util= 3.2%  pph=$ 4.88  ★ NEW BEST
+  EXP-0154: score= 4089.35  trades=1344  WR=  4.9%  PnL=$161849.63  DD=92.68%  Sharpe=  2.36  util= 3.2%  pph=$ 5.02  ★ NEW BEST
+  ... 10/50 done, best: 4089.35 (0.4min)
+  ... 20/50 done, best: 4089.35 (0.4min)
+  ... 30/50 done, best: 4089.35 (0.4min)
+  EXP-0182: score= 4114.38  trades=2032  WR=  5.0%  PnL=$163042.42  DD=94.76%  Sharpe=  2.32  util= 4.5%  pph=$ 3.34  ★ NEW BEST
+  EXP-0189: score= 4242.56  trades=2066  WR=  5.1%  PnL=$168162.20  DD=94.37%  Sharpe=  2.37  util= 4.1%  pph=$ 3.39  ★ NEW BEST
+  ... 40/50 done, best: 4242.56 (0.4min)
+  EXP-0195: score= 4253.39  trades=2069  WR=  5.2%  PnL=$168593.24  DD=94.32%  Sharpe=  2.38  util= 4.1%  pph=$ 3.40  ★ NEW BEST
+  EXP-0196: score= 4263.52  trades=2067  WR=  5.2%  PnL=$168997.25  DD=94.38%  Sharpe=  2.38  util= 4.1%  pph=$ 3.41  ★ NEW BEST
+  EXP-0198: score= 4423.57  trades=1263  WR=  6.0%  PnL=$175104.70  DD=83.15%  Sharpe=  2.64  util= 2.3%  pph=$ 5.78  ★ NEW BEST
+  ... 50/50 done, best: 4423.57 (0.4min)
+
+Phase 4: Exit optimization (50 trials)
+--------------------------------------------------
+  EXP-0201: score= 4737.02  trades=1254  WR=  0.0%  PnL=$186786.33  DD=20.32%  Sharpe=  3.76  util= 0.5%  pph=$12.96  ex=735(s662/r73)  ★ NEW BEST
+  ... 10/50 done, best: 4737.02 (0.4min)
+  EXP-0215: score= 5133.02  trades=1262  WR=  0.0%  PnL=$202712.74  DD=34.95%  Sharpe=  4.00  util= 0.6%  pph=$12.68  ex=683(s607/r76)  ★ NEW BEST
+  ... 20/50 done, best: 5133.02 (0.4min)
+  ... 30/50 done, best: 5133.02 (0.4min)
+  ... 40/50 done, best: 5133.02 (0.4min)
+  ... 50/50 done, best: 5133.02 (0.4min)
+
+Phase 5: Multi-entry-timing (20 configs × 5 timings)
+--------------------------------------------------
+  ... 4/20 done, best robust: 2120.52
+  ... 8/20 done, best robust: 2120.52
+  ... 12/20 done, best robust: 2120.52
+  ... 16/20 done, best robust: 2120.52
+  ... 20/20 done, best robust: 2120.52
+  Top 5 robust scores: [2120.52, 1910.43, 1910.43, 1500.02, 1409.75]
+
+Phase 6: Walk-forward validation (top 10)
+--------------------------------------------------
+  WF #1 (EXP-0215): oos_pnl=$24442.03  oos_score=662.71  trades=873  robust=2120.52
+  WF #2 (EXP-0201): oos_pnl=$21649.82  oos_score=594.74  trades=865  robust=1910.43
+  WF #3 (EXP-0209): oos_pnl=$21649.82  oos_score=594.74  trades=865  robust=1910.43
+  WF #4 (EXP-0198): oos_pnl=$5570.54  oos_score=171.46  trades=726  robust=1500.02
+  WF #5 (EXP-0195): oos_pnl=$14128.26  oos_score=385.00  trades=1029  robust=1409.75
+  WF #6 (EXP-0189): oos_pnl=$14084.01  oos_score=383.87  trades=1027  robust=1408.34
+  WF #7 (EXP-0194): oos_pnl=$14084.01  oos_score=383.87  trades=1027  robust=1408.34
+  WF #8 (EXP-0191): oos_pnl=$14021.84  oos_score=382.26  trades=1031  robust=1402.37
+  WF #9 (EXP-0196): oos_pnl=$14105.00  oos_score=384.42  trades=1034  robust=1355.47
+  WF #10 (EXP-0197): oos_pnl=$14109.57  oos_score=384.54  trades=1034  robust=1355.47
+
+======================================================================
+SWEEP COMPLETE — 0.5 minutes
+======================================================================
+  Sweep ID: sweep_20260314_1841
+  Total trials: 250
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_20260314_1841.json
+
+─── Best Overall (24h entry, training set) ───
+  EXP-0215: score= 5133.02  trades=1262  WR=  0.0%  PnL=$202712.74  DD=34.95%  Sharpe=  4.00  util= 0.6%  pph=$12.68  ex=683(s607/r76)
+  Params:
+    city_overrides: {}
+    excluded_cities: ['ankara', 'chicago', 'los_angeles', 'miami']
+    exit_enabled: True
+    kelly_raw_cap: 0.5
+    max_edge: 0.55
+    max_price: 0.41
+    min_edge: 0.03
+    min_hold_edge: 0.01
+    min_price: 0.005
+    min_prob: 0.065
+    min_volume: 250
+    prob_exit_floor: 0.0
+    prob_sharpening: 1.1
+    profit_take_enabled: False
+    profit_take_min_hours: 4
+    profit_take_threshold: 0.75
+    reentry_cooldown_h: 2
+    reentry_enabled: False
+    shrinkage: 0
+    stop_loss_pct: 1.0
+
+─── Top 5 Multi-Timing (robust) ───
+  #1 (EXP-0215): robust=2120.52  weighted=3542.89  min=-13.04
+    12h: score=-4.16 trades=244
+    24h: score=5133.02 trades=1262
+    36h: score=7104.60 trades=1451
+    48h: score=3899.01 trades=1201
+    6h: score=-13.04 trades=114
+  #2 (EXP-0201): robust=1910.43  weighted=3192.74  min=-13.04
+    12h: score=-4.16 trades=252
+    24h: score=4737.02 trades=1254
+    36h: score=6111.90 trades=1420
+    48h: score=3680.30 trades=1171
+    6h: score=-13.04 trades=114
+  #3 (EXP-0209): robust=1910.43  weighted=3192.74  min=-13.04
+    12h: score=-4.16 trades=252
+    24h: score=4737.02 trades=1254
+    36h: score=6111.90 trades=1420
+    48h: score=3680.30 trades=1171
+    6h: score=-13.04 trades=114
+  #4 (EXP-0198): robust=1500.02  weighted=2507.84  min=-11.71
+    12h: score=-3.98 trades=358
+    24h: score=4423.57 trades=1263
+    36h: score=5923.65 trades=1473
+    48h: score=-9.36 trades=143
+    6h: score=-11.71 trades=127
+  #5 (EXP-0195): robust=1409.75  weighted=2357.06  min=-11.20
+    12h: score=-4.02 trades=319
+    24h: score=4253.39 trades=2069
+    36h: score=5422.07 trades=2382
+    48h: score=-5.93 trades=177
+    6h: score=-11.20 trades=132
+
+─── Top 5 Walk-Forward ───
+  #1 (EXP-0215): oos_pnl=$24442.03  oos_score=662.71  trades=873
+  #2 (EXP-0201): oos_pnl=$21649.82  oos_score=594.74  trades=865
+  #3 (EXP-0209): oos_pnl=$21649.82  oos_score=594.74  trades=865
+  #4 (EXP-0195): oos_pnl=$14128.26  oos_score=385.00  trades=1029
+  #5 (EXP-0197): oos_pnl=$14109.57  oos_score=384.54  trades=1034
+
+  Total time: 0.5 minutes
+*** QUICK MODE — reduced trial counts ***
+
+======================================================================
+FINAL SWEEP — Chronological Portfolio Simulator
+Start: 2026-03-14T19:09:47.330777
+======================================================================
+
+Total events: 1716
+Train events (≤2026-01-31): 1058
+Test events  (≥2026-02-01): 657
+Train simulation events: 1058
+
+Phase 1: Broad Random Search (100 trials)
+--------------------------------------------------
+  EXP-0001: score=  172.25  trades= 77  WR= 35.1%  PnL=$ 4286.91  DD= 9.75%  Sharpe=  7.10  util= 0.2%  pph=$ 9.32  ex=70(s43/r27)  ★ NEW BEST
+  EXP-0011: score=  434.40  trades=148  WR= 35.1%  PnL=$15273.77  DD=17.72%  Sharpe=  6.05  util= 0.8%  pph=$ 4.30  ★ NEW BEST
+  EXP-0015: score=  524.11  trades=159  WR= 42.1%  PnL=$18008.61  DD=25.41%  Sharpe=  7.65  util= 0.4%  pph=$12.20  ex=124(s82/r42)  ★ NEW BEST
+  ... 20/100 done, best: 524.11 (0.2min)
+  EXP-0022: score=  608.52  trades=116  WR= 29.3%  PnL=$22107.51  DD=36.22%  Sharpe=  5.81  util= 0.7%  pph=$ 7.94  ★ NEW BEST
+  ... 40/100 done, best: 608.52 (0.2min)
+  ... 60/100 done, best: 608.52 (0.2min)
+  EXP-0063: score=  786.88  trades=485  WR= 34.6%  PnL=$29282.58  DD=21.17%  Sharpe=  4.93  util= 1.0%  pph=$ 4.65  ex=283(s200/r83)  ★ NEW BEST
+  ... 80/100 done, best: 786.88 (0.2min)
+  ... 100/100 done, best: 786.88 (0.2min)
+
+Phase 2: Fine-tuning (50 trials around top 20)
+--------------------------------------------------
+  Top 5 scores: [786.88, 659.11, 608.52, 542.23, 524.11]
+  ... 10/50 done, best: 786.88 (0.2min)
+  ... 20/50 done, best: 786.88 (0.2min)
+  EXP-0121: score=  790.41  trades=480  WR= 34.6%  PnL=$29413.05  DD=21.28%  Sharpe=  4.98  util= 1.0%  pph=$ 4.70  ex=280(s197/r83)  ★ NEW BEST
+  ... 30/50 done, best: 790.41 (0.2min)
+  ... 40/50 done, best: 790.41 (0.2min)
+  ... 50/50 done, best: 790.41 (0.2min)
+
+Phase 3: City optimization (50 trials)
+--------------------------------------------------
+  Losing: ['chicago', 'seoul']
+  Winning: ['nyc', 'buenos_aires', 'dallas', 'atlanta', 'seattle']
+  EXP-0151: score=  822.82  trades=473  WR= 35.1%  PnL=$30647.29  DD=21.28%  Sharpe=  5.18  util= 1.0%  pph=$ 5.02  ex=279(s196/r83)  ★ NEW BEST
+  EXP-0154: score=  831.30  trades=438  WR= 35.4%  PnL=$30887.76  DD=21.28%  Sharpe=  5.42  util= 0.9%  pph=$ 5.61  ex=265(s184/r81)  ★ NEW BEST
+  ... 10/50 done, best: 831.30 (0.2min)
+  EXP-0170: score=  866.33  trades=369  WR= 37.4%  PnL=$32129.51  DD=23.16%  Sharpe=  5.99  util= 0.9%  pph=$ 6.49  ex=215(s144/r71)  ★ NEW BEST
+  ... 20/50 done, best: 866.33 (0.3min)
+  ... 30/50 done, best: 866.33 (0.3min)
+  EXP-0187: score=  995.61  trades=691  WR= 34.2%  PnL=$37695.90  DD=28.54%  Sharpe=  5.30  util= 1.6%  pph=$ 4.18  ex=392(s284/r108)  ★ NEW BEST
+  EXP-0190: score= 1043.34  trades=604  WR= 35.4%  PnL=$39468.22  DD=28.48%  Sharpe=  5.75  util= 1.5%  pph=$ 4.88  ex=339(s238/r101)  ★ NEW BEST
+  ... 40/50 done, best: 1043.34 (0.3min)
+  EXP-0194: score= 1116.60  trades=604  WR= 35.4%  PnL=$42405.61  DD=35.91%  Sharpe=  5.80  util= 1.7%  pph=$ 5.24  ex=339(s238/r101)  ★ NEW BEST
+  EXP-0195: score= 1494.18  trades=1021  WR= 34.1%  PnL=$57684.81  DD=43.18%  Sharpe=  6.01  util= 3.1%  pph=$ 3.91  ex=523(s362/r161)  ★ NEW BEST
+  EXP-0199: score= 1687.48  trades=1144  WR= 34.8%  PnL=$65299.51  DD=32.45%  Sharpe=  6.36  util= 2.8%  pph=$ 3.85  ex=573(s380/r193)  ★ NEW BEST
+  ... 50/50 done, best: 1687.48 (0.3min)
+
+Phase 4: Exit optimization (50 trials)
+--------------------------------------------------
+  ... 10/50 done, best: 1687.48 (0.3min)
+  ... 20/50 done, best: 1687.48 (0.3min)
+  ... 30/50 done, best: 1687.48 (0.3min)
+  ... 40/50 done, best: 1687.48 (0.3min)
+  ... 50/50 done, best: 1687.48 (0.3min)
+
+Phase 5: Multi-entry-timing (20 configs × 5 timings)
+--------------------------------------------------
+  ... 4/20 done, best robust: 728.22
+  ... 8/20 done, best robust: 751.20
+  ... 12/20 done, best robust: 751.20
+  ... 16/20 done, best robust: 751.20
+  ... 20/20 done, best robust: 751.20
+  Top 5 robust scores: [751.2, 728.22, 721.69, 719.9, 716.01]
+
+Phase 6: Walk-forward validation (top 10)
+--------------------------------------------------
+  WF #1 (EXP-0213): oos_pnl=$9157.26  oos_score=285.91  trades=778  robust=751.20
+  WF #2 (EXP-0199): oos_pnl=$8711.88  oos_score=274.97  trades=777  robust=728.22
+  WF #3 (EXP-0216): oos_pnl=$8616.69  oos_score=271.33  trades=775  robust=721.69
+  WF #4 (EXP-0211): oos_pnl=$8247.25  oos_score=262.27  trades=778  robust=719.90
+  WF #5 (EXP-0215): oos_pnl=$8533.19  oos_score=269.17  trades=778  robust=716.01
+  WF #6 (EXP-0195): oos_pnl=$11644.43  oos_score=350.54  trades=695  robust=708.49
+  WF #7 (EXP-0208): oos_pnl=$7794.47  oos_score=248.80  trades=774  robust=696.34
+  WF #8 (EXP-0224): oos_pnl=$7794.47  oos_score=248.80  trades=774  robust=696.34
+  WF #9 (EXP-0242): oos_pnl=$8167.05  oos_score=260.34  trades=775  robust=690.87
+  WF #10 (EXP-0222): oos_pnl=$8737.16  oos_score=275.55  trades=765  robust=690.15
+
+======================================================================
+SWEEP COMPLETE — 0.4 minutes
+======================================================================
+  Sweep ID: sweep_20260314_1910
+  Total trials: 250
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_20260314_1910.json
+
+─── Best Overall (24h entry, training set) ───
+  EXP-0199: score= 1687.48  trades=1144  WR= 34.8%  PnL=$65299.51  DD=32.45%  Sharpe=  6.36  util= 2.8%  pph=$ 3.85  ex=573(s380/r193)
+  Params:
+    city_overrides: {'ankara': {'max_price': 0.45, 'min_edge': 0.05, 'min_price': 0.15}, 'wellington': {'max_price': 0.6, 'min_edge': 0.01, 'min_price': 0.15}, 'london': {'max_price': 0.55, 'min_edge': 0.05, 'min_price': 0.05}, 'toronto': {'max_price': 0.7, 'min_edge': 0.03, 'min_price': 0.08}}
+    excluded_cities: ['chicago', 'seoul']
+    exit_enabled: True
+    kelly_raw_cap: 0.1
+    max_edge: 0.8
+    max_price: 0.62
+    min_edge: 0.03
+    min_hold_edge: 0.021
+    min_price: 0.05
+    min_prob: 0.05
+    min_volume: 1000
+    prob_exit_floor: 0.0
+    prob_sharpening: 0.6
+    profit_take_enabled: False
+    profit_take_min_hours: 6
+    profit_take_threshold: 0.5
+    reentry_cooldown_h: 1
+    reentry_enabled: False
+    shrinkage: 0.05
+    stop_loss_pct: 1.0
+
+─── Top 5 Multi-Timing (robust) ───
+  #1 (EXP-0213): robust=751.20  weighted=1252.00  min=0.00
+    12h: score=0.00 trades=512
+    24h: score=1658.64 trades=1145
+    36h: score=2111.28 trades=1306
+    48h: score=2214.37 trades=1087
+    6h: score=0.00 trades=209
+  #2 (EXP-0199): robust=728.22  weighted=1213.69  min=0.00
+    12h: score=0.00 trades=512
+    24h: score=1687.48 trades=1144
+    36h: score=1986.20 trades=1303
+    48h: score=2068.07 trades=1118
+    6h: score=0.00 trades=209
+  #3 (EXP-0216): robust=721.69  weighted=1202.82  min=0.00
+    12h: score=0.00 trades=512
+    24h: score=1658.10 trades=1142
+    36h: score=1921.59 trades=1250
+    48h: score=2140.51 trades=1067
+    6h: score=0.00 trades=209
+  #4 (EXP-0211): robust=719.90  weighted=1199.84  min=0.00
+    12h: score=0.00 trades=512
+    24h: score=1673.29 trades=1145
+    36h: score=1961.69 trades=1304
+    48h: score=2036.76 trades=1092
+    6h: score=0.00 trades=209
+  #5 (EXP-0215): robust=716.01  weighted=1193.34  min=0.00
+    12h: score=0.00 trades=512
+    24h: score=1660.68 trades=1145
+    36h: score=1915.08 trades=1282
+    48h: score=2080.82 trades=1076
+    6h: score=0.00 trades=209
+
+─── Top 5 Walk-Forward ───
+  #1 (EXP-0195): oos_pnl=$11644.43  oos_score=350.54  trades=695
+  #2 (EXP-0213): oos_pnl=$9157.26  oos_score=285.91  trades=778
+  #3 (EXP-0222): oos_pnl=$8737.16  oos_score=275.55  trades=765
+  #4 (EXP-0199): oos_pnl=$8711.88  oos_score=274.97  trades=777
+  #5 (EXP-0216): oos_pnl=$8616.69  oos_score=271.33  trades=775
+
+  Total time: 0.4 minutes
+
+======================================================================
+FINAL SWEEP — Chronological Portfolio Simulator
+Start: 2026-03-14T19:16:09.814619
+======================================================================
+
+Total events: 1716
+Train events (≤2026-01-31): 1058
+Test events  (≥2026-02-01): 657
+Train simulation events: 1058
+
+Phase 1: Broad Random Search (2000 trials)
+--------------------------------------------------
+  EXP-0001: score=  172.25  trades= 77  WR= 35.1%  PnL=$ 4286.91  DD= 9.75%  Sharpe=  7.10  util= 0.2%  pph=$ 9.32  ex=70(s43/r27)  ★ NEW BEST
+  EXP-0011: score=  434.40  trades=148  WR= 35.1%  PnL=$15273.77  DD=17.72%  Sharpe=  6.05  util= 0.8%  pph=$ 4.30  ★ NEW BEST
+  EXP-0015: score=  524.11  trades=159  WR= 42.1%  PnL=$18008.61  DD=25.41%  Sharpe=  7.65  util= 0.4%  pph=$12.20  ex=124(s82/r42)  ★ NEW BEST
+  EXP-0022: score=  608.52  trades=116  WR= 29.3%  PnL=$22107.51  DD=36.22%  Sharpe=  5.81  util= 0.7%  pph=$ 7.94  ★ NEW BEST
+  EXP-0063: score=  786.88  trades=485  WR= 34.6%  PnL=$29282.58  DD=21.17%  Sharpe=  4.93  util= 1.0%  pph=$ 4.65  ex=283(s200/r83)  ★ NEW BEST
+  ... 400/2000 done, best: 786.88 (0.3min)
+  EXP-0507: score=  998.14  trades=618  WR= 32.7%  PnL=$37873.79  DD=38.61%  Sharpe=  5.28  util= 1.5%  pph=$ 4.24  ex=317(s219/r98)  ★ NEW BEST
+  ... 800/2000 done, best: 998.14 (0.5min)
+  ... 1200/2000 done, best: 998.14 (0.7min)
+  ... 1600/2000 done, best: 998.14 (0.9min)
+  ... 2000/2000 done, best: 998.14 (1.0min)
+
+Phase 2: Fine-tuning (1000 trials around top 20)
+--------------------------------------------------
+  Top 5 scores: [998.14, 786.88, 750.85, 748.42, 723.33]
+  EXP-2021: score= 1105.79  trades=761  WR= 33.4%  PnL=$42225.25  DD=40.64%  Sharpe=  5.26  util= 1.8%  pph=$ 3.99  ex=403(s284/r119)  ★ NEW BEST
+  ... 200/1000 done, best: 1105.79 (1.1min)
+  EXP-2210: score= 1161.85  trades=1021  WR= 35.2%  PnL=$44526.19  DD=36.40%  Sharpe=  5.26  util= 2.8%  pph=$ 3.12  ex=544(s370/r174)  ★ NEW BEST
+  ... 400/1000 done, best: 1161.85 (1.3min)
+  EXP-2401: score= 1166.33  trades=625  WR= 33.1%  PnL=$44503.31  DD=41.00%  Sharpe=  5.53  util= 2.1%  pph=$ 4.91  ex=320(s221/r99)  ★ NEW BEST
+  EXP-2521: score= 1196.21  trades=1131  WR= 31.2%  PnL=$46013.77  DD=38.58%  Sharpe=  4.88  util= 2.7%  pph=$ 2.71  ex=544(s372/r172)  ★ NEW BEST
+  ... 600/1000 done, best: 1196.21 (1.4min)
+  ... 800/1000 done, best: 1196.21 (1.5min)
+  ... 1000/1000 done, best: 1196.21 (1.6min)
+
+Phase 3: City optimization (500 trials)
+--------------------------------------------------
+  Losing: ['seoul', 'chicago']
+  Winning: ['london', 'dallas', 'buenos_aires', 'toronto', 'nyc']
+  EXP-3001: score= 1356.15  trades=1049  WR= 32.2%  PnL=$52252.14  DD=38.58%  Sharpe=  5.53  util= 2.6%  pph=$ 3.40  ex=524(s360/r164)  ★ NEW BEST
+  ... 100/500 done, best: 1356.15 (1.7min)
+  EXP-3155: score= 1368.87  trades=971  WR= 34.9%  PnL=$52665.70  DD=30.22%  Sharpe=  5.37  util= 2.2%  pph=$ 3.83  ex=512(s350/r162)  ★ NEW BEST
+  EXP-3171: score= 1389.48  trades=976  WR= 35.1%  PnL=$53498.76  DD=30.22%  Sharpe=  5.27  util= 2.2%  pph=$ 3.86  ex=516(s352/r164)  ★ NEW BEST
+  EXP-3183: score= 1431.06  trades=1000  WR= 35.4%  PnL=$55125.18  DD=30.22%  Sharpe=  5.53  util= 2.2%  pph=$ 3.91  ex=532(s364/r168)  ★ NEW BEST
+  EXP-3197: score= 1454.01  trades=1090  WR= 35.5%  PnL=$56043.67  DD=27.80%  Sharpe=  5.52  util= 2.3%  pph=$ 3.74  ex=593(s406/r187)  ★ NEW BEST
+  ... 200/500 done, best: 1454.01 (1.8min)
+  EXP-3209: score= 1456.51  trades=1105  WR= 35.5%  PnL=$56156.23  DD=27.80%  Sharpe=  5.46  util= 2.3%  pph=$ 3.70  ex=602(s413/r189)  ★ NEW BEST
+  EXP-3226: score= 1539.35  trades=1117  WR= 35.6%  PnL=$59419.00  DD=27.80%  Sharpe=  5.69  util= 2.3%  pph=$ 3.89  ex=609(s417/r192)  ★ NEW BEST
+  EXP-3254: score= 1565.53  trades=1061  WR= 36.7%  PnL=$60434.17  DD=27.80%  Sharpe=  5.66  util= 2.3%  pph=$ 4.19  ex=587(s400/r187)  ★ NEW BEST
+  ... 300/500 done, best: 1565.53 (1.9min)
+  EXP-3301: score= 1565.98  trades=1061  WR= 36.7%  PnL=$60454.39  DD=27.92%  Sharpe=  5.67  util= 2.3%  pph=$ 4.17  ex=584(s397/r187)  ★ NEW BEST
+  EXP-3310: score= 1590.38  trades=1071  WR= 36.7%  PnL=$61416.68  DD=27.47%  Sharpe=  5.72  util= 2.3%  pph=$ 4.20  ex=591(s401/r190)  ★ NEW BEST
+  EXP-3318: score= 1604.04  trades=1081  WR= 37.3%  PnL=$61997.64  DD=29.83%  Sharpe=  5.66  util= 2.4%  pph=$ 4.12  ex=585(s390/r195)  ★ NEW BEST
+  EXP-3320: score= 1651.90  trades=1075  WR= 37.1%  PnL=$63867.12  DD=28.80%  Sharpe=  5.77  util= 2.3%  pph=$ 4.33  ex=591(s398/r193)  ★ NEW BEST
+  EXP-3333: score= 1760.10  trades=1075  WR= 37.1%  PnL=$68235.62  DD=40.09%  Sharpe=  5.83  util= 2.8%  pph=$ 4.63  ex=591(s398/r193)  ★ NEW BEST
+  EXP-3335: score= 1968.31  trades=1084  WR= 37.4%  PnL=$76367.17  DD=28.34%  Sharpe=  6.24  util= 2.5%  pph=$ 5.11  ex=597(s398/r199)  ★ NEW BEST
+  EXP-3339: score= 1982.69  trades=1093  WR= 37.4%  PnL=$76939.62  DD=28.34%  Sharpe=  6.27  util= 2.6%  pph=$ 5.09  ex=601(s399/r202)  ★ NEW BEST
+  EXP-3343: score= 2030.16  trades=1094  WR= 37.4%  PnL=$78858.40  DD=33.90%  Sharpe=  6.31  util= 2.8%  pph=$ 5.24  ex=605(s403/r202)  ★ NEW BEST
+  EXP-3355: score= 2084.14  trades=1231  WR= 38.7%  PnL=$81107.90  DD=37.73%  Sharpe=  6.30  util= 2.7%  pph=$ 4.76  ex=675(s441/r234)  ★ NEW BEST
+  EXP-3362: score= 2094.48  trades=1232  WR= 39.4%  PnL=$81530.42  DD=37.77%  Sharpe=  6.28  util= 2.8%  pph=$ 4.70  ex=662(s429/r233)  ★ NEW BEST
+  EXP-3398: score= 2098.38  trades=1233  WR= 39.0%  PnL=$81674.12  DD=37.77%  Sharpe=  6.29  util= 2.7%  pph=$ 4.80  ex=677(s444/r233)  ★ NEW BEST
+  ... 400/500 done, best: 2098.38 (2.0min)
+  EXP-3409: score= 2102.55  trades=1233  WR= 38.6%  PnL=$81824.26  DD=37.77%  Sharpe=  6.31  util= 2.7%  pph=$ 4.92  ex=691(s458/r233)  ★ NEW BEST
+  EXP-3413: score= 2102.70  trades=1231  WR= 38.7%  PnL=$81830.43  DD=37.77%  Sharpe=  6.31  util= 2.7%  pph=$ 4.92  ex=689(s456/r233)  ★ NEW BEST
+  EXP-3476: score= 2103.52  trades=1231  WR= 39.1%  PnL=$81875.85  DD=37.77%  Sharpe=  6.30  util= 2.7%  pph=$ 4.82  ex=676(s443/r233)  ★ NEW BEST
+  ... 500/500 done, best: 2103.52 (2.1min)
+
+Phase 4: Exit optimization (500 trials)
+--------------------------------------------------
+  ... 100/500 done, best: 2103.52 (2.1min)
+  ... 200/500 done, best: 2103.52 (2.2min)
+  ... 300/500 done, best: 2103.52 (2.3min)
+  ... 400/500 done, best: 2103.52 (2.4min)
+  EXP-3907: score= 2118.14  trades=1231  WR= 37.6%  PnL=$82550.02  DD=34.94%  Sharpe=  6.07  util= 2.4%  pph=$ 4.15  ex=559(s326/r233)  ★ NEW BEST
+  ... 500/500 done, best: 2118.14 (2.5min)
+
+Phase 5: Multi-entry-timing (500 configs × 5 timings)
+--------------------------------------------------
+  ... 10/50 done, best robust: 818.96
+  ... 20/50 done, best robust: 827.17
+  ... 30/50 done, best robust: 827.17
+  ... 40/50 done, best robust: 827.43
+  ... 50/50 done, best robust: 827.43
+  Top 5 robust scores: [827.43, 827.43, 827.17, 827.17, 827.17]
+
+Phase 6: Walk-forward validation (top 20)
+--------------------------------------------------
+  WF #1 (MT-P-165): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #2 (MT-P-360): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #3 (MT-P-370): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #4 (MT-P-386): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #5 (MT-P-391): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #6 (MT-P-431): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #7 (MT-P-441): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=876.78
+  WF #8 (MT-P-69): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=876.54
+  WF #9 (MT-P-92): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=876.54
+  WF #10 (MT-P-139): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=876.54
+  WF #11 (MT-P-273): oos_pnl=$17349.31  oos_score=495.53  trades=855  robust=876.54
+  WF #12 (MT-P-304): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=876.54
+  WF #13 (MT-P-364): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=876.54
+  WF #14 (MT-P-175): oos_pnl=$17233.44  oos_score=492.54  trades=856  robust=872.09
+  WF #15 (MT-P-38): oos_pnl=$17349.31  oos_score=495.53  trades=855  robust=871.84
+  WF #16 (MT-P-74): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=871.84
+  WF #17 (MT-P-262): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=871.84
+  WF #18 (MT-P-312): oos_pnl=$17352.03  oos_score=495.60  trades=855  robust=871.84
+  WF #19 (MT-P-378): oos_pnl=$17349.31  oos_score=495.53  trades=855  robust=871.84
+  WF #20 (MT-P-28): oos_pnl=$17457.97  oos_score=498.45  trades=855  robust=827.44
+
+======================================================================
+SWEEP COMPLETE — 4.9 minutes
+======================================================================
+  Sweep ID: sweep_20260314_1920
+  Total trials: 4000
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_20260314_1920.json
+
+─── Best Overall (24h entry, training set) ───
+  EXP-3907: score= 2118.14  trades=1231  WR= 37.6%  PnL=$82550.02  DD=34.94%  Sharpe=  6.07  util= 2.4%  pph=$ 4.15  ex=559(s326/r233)
+  Params:
+    city_overrides: {'wellington': {'max_price': 0.8, 'min_edge': 0.02, 'min_price': 0.15}, 'buenos_aires': {'max_price': 0.5, 'min_edge': 0.02, 'min_price': 0.05}, 'london': {'max_price': 0.45, 'min_edge': 0.05, 'min_price': 0.1}, 'toronto': {'max_price': 0.8, 'min_edge': 0.02, 'min_price': 0.08}, 'miami': {'max_price': 0.5, 'min_edge': 0.02, 'min_price': 0.05}, 'dallas': {'max_price': 0.7, 'min_edge': 0.015, 'min_price': 0.05}, 'seattle': {'max_price': 0.4, 'min_edge': 0.005, 'min_price': 0.15}, 'ankara': {'max_price': 0.4, 'min_edge': 0.05, 'min_price': 0.08}, 'nyc': {'max_price': 0.8, 'min_edge': 0.05, 'min_price': 0.05}, 'atlanta': {'max_price': 0.4, 'min_edge': 0.005, 'min_price': 0.05}}
+    excluded_cities: ['chicago', 'seoul']
+    exit_enabled: True
+    kelly_raw_cap: 0.3
+    max_edge: 0.7
+    max_price: 0.83
+    min_edge: 0.15
+    min_hold_edge: 0.025
+    min_price: 0.09
+    min_prob: 0.03
+    min_volume: 200
+    prob_exit_floor: 0.0
+    prob_sharpening: 0.5
+    profit_take_enabled: False
+    profit_take_min_hours: 8
+    profit_take_threshold: 3.0
+    reentry_cooldown_h: 1
+    reentry_enabled: False
+    shrinkage: 0.09
+    stop_loss_pct: 1.0
+
+─── Top 5 Multi-Timing (robust) ───
+  #1 (MT-P-165): robust=876.78  weighted=1461.30  min=0.00
+    12h: score=0.00 trades=437
+    24h: score=2075.90 trades=1236
+    36h: score=2593.74 trades=1412
+    48h: score=2131.90 trades=1145
+    6h: score=0.00 trades=224
+  #2 (MT-P-360): robust=876.78  weighted=1461.30  min=0.00
+    12h: score=0.00 trades=437
+    24h: score=2075.90 trades=1236
+    36h: score=2593.74 trades=1412
+    48h: score=2131.90 trades=1145
+    6h: score=0.00 trades=224
+  #3 (MT-P-370): robust=876.78  weighted=1461.30  min=0.00
+    12h: score=0.00 trades=437
+    24h: score=2075.90 trades=1236
+    36h: score=2593.74 trades=1412
+    48h: score=2131.90 trades=1145
+    6h: score=0.00 trades=224
+  #4 (MT-P-386): robust=876.78  weighted=1461.30  min=0.00
+    12h: score=0.00 trades=437
+    24h: score=2075.90 trades=1236
+    36h: score=2593.74 trades=1412
+    48h: score=2131.90 trades=1145
+    6h: score=0.00 trades=224
+  #5 (MT-P-391): robust=876.78  weighted=1461.30  min=0.00
+    12h: score=0.00 trades=437
+    24h: score=2075.90 trades=1236
+    36h: score=2593.74 trades=1412
+    48h: score=2131.90 trades=1145
+    6h: score=0.00 trades=224
+
+─── Top 5 Walk-Forward ───
+  #1 (WF-P-70): oos_pnl=$17592.41  oos_score=501.84  trades=859
+  #2 (WF-P-34): oos_pnl=$17461.35  oos_score=498.54  trades=854
+  #3 (WF-P-148): oos_pnl=$17461.35  oos_score=498.54  trades=854
+  #4 (WF-P-25): oos_pnl=$17460.69  oos_score=498.52  trades=855
+  #5 (WF-P-125): oos_pnl=$17460.69  oos_score=498.52  trades=855
+
+  Total time: 4.9 minutes
+
+======================================================================
+FINAL SWEEP — Chronological Portfolio Simulator
+Start: 2026-03-14T19:28:53.010025
+======================================================================
+
+Total events: 1716
+Train events (≤2026-01-31): 1058
+Test events  (≥2026-02-01): 657
+Train simulation events: 1058
+
+Phase 1: Broad Random Search (2000 trials)
+--------------------------------------------------
+  EXP-0001: score=  108.18  trades= 77  WR= 35.1%  PnL=$ 4286.91  DD= 9.75%  Sharpe=  7.10  util= 0.2%  pph=$ 9.32  ex=70(s43/r27)  ★ NEW BEST
+  EXP-0015: score=  124.37  trades=159  WR= 42.1%  PnL=$18008.61  DD=25.41%  Sharpe=  7.65  util= 0.4%  pph=$12.20  ex=124(s82/r42)  ★ NEW BEST
+  EXP-0061: score=  126.57  trades= 89  WR= 43.8%  PnL=$15151.23  DD=11.51%  Sharpe=  9.84  util= 0.3%  pph=$19.01  ex=76(s44/r32)  ★ NEW BEST
+  EXP-0380: score=  127.59  trades=118  WR= 48.3%  PnL=$10634.83  DD=16.85%  Sharpe=  9.57  util= 0.3%  pph=$10.96  ex=101(s64/r37)  ★ NEW BEST
+  ... 400/2000 done, best: 127.59 (0.3min)
+  EXP-0634: score=  128.75  trades=126  WR= 47.6%  PnL=$ 6241.66  DD= 5.43%  Sharpe=  8.98  util= 0.2%  pph=$13.60  ex=122(s84/r38)  ★ NEW BEST
+  EXP-0676: score=  129.67  trades=134  WR= 50.7%  PnL=$11829.87  DD=12.94%  Sharpe=  9.47  util= 0.3%  pph=$11.94  ex=120(s73/r47)  ★ NEW BEST
+  ... 800/2000 done, best: 129.67 (0.5min)
+  EXP-0900: score=  129.78  trades=149  WR= 53.0%  PnL=$16673.46  DD=19.76%  Sharpe= 11.68  util= 0.5%  pph=$ 9.36  ex=110(s65/r45)  ★ NEW BEST
+  ... 1200/2000 done, best: 129.78 (0.7min)
+  EXP-1540: score=  131.69  trades=151  WR= 49.0%  PnL=$15939.45  DD=20.78%  Sharpe= 10.16  util= 0.5%  pph=$10.17  ex=118(s71/r47)  ★ NEW BEST
+  ... 1600/2000 done, best: 131.69 (0.8min)
+  ... 2000/2000 done, best: 131.69 (1.0min)
+
+Phase 2: Fine-tuning (1000 trials around top 20)
+--------------------------------------------------
+  Top 5 scores: [131.69, 129.78, 129.67, 129.49, 129.2]
+  EXP-2042: score=  132.27  trades=149  WR= 51.0%  PnL=$15369.14  DD=16.15%  Sharpe= 10.74  util= 0.4%  pph=$10.10  ex=118(s73/r45)  ★ NEW BEST
+  ... 200/1000 done, best: 132.27 (1.1min)
+  EXP-2304: score=  135.34  trades=215  WR= 44.7%  PnL=$22533.87  DD=16.98%  Sharpe=  9.33  util= 0.5%  pph=$12.50  ex=177(s127/r50)  ★ NEW BEST
+  ... 400/1000 done, best: 135.34 (1.2min)
+  ... 600/1000 done, best: 135.34 (1.3min)
+  ... 800/1000 done, best: 135.34 (1.4min)
+  ... 1000/1000 done, best: 135.34 (1.5min)
+
+Phase 3: City optimization (500 trials)
+--------------------------------------------------
+  Losing: ['chicago', 'seoul']
+  Winning: ['nyc', 'atlanta', 'buenos_aires', 'london', 'dallas']
+  EXP-3001: score=  136.61  trades=198  WR= 45.5%  PnL=$22705.31  DD=16.98%  Sharpe=  9.87  util= 0.4%  pph=$13.57  ex=164(s115/r49)  ★ NEW BEST
+  ... 100/500 done, best: 136.61 (1.5min)
+  EXP-3159: score=  138.09  trades=201  WR= 43.3%  PnL=$20416.29  DD=12.56%  Sharpe= 10.50  util= 0.4%  pph=$12.37  ex=168(s116/r52)  ★ NEW BEST
+  ... 200/500 done, best: 138.09 (1.6min)
+  ... 300/500 done, best: 138.09 (1.6min)
+  EXP-3317: score=  138.14  trades=215  WR= 44.2%  PnL=$21879.56  DD=12.31%  Sharpe= 10.78  util= 0.4%  pph=$12.57  ex=180(s125/r55)  ★ NEW BEST
+  EXP-3346: score=  138.22  trades=215  WR= 44.7%  PnL=$21859.81  DD=11.90%  Sharpe= 10.83  util= 0.4%  pph=$12.97  ex=182(s127/r55)  ★ NEW BEST
+  EXP-3383: score=  138.23  trades=229  WR= 43.2%  PnL=$21863.71  DD=11.87%  Sharpe= 10.25  util= 0.4%  pph=$13.55  ex=199(s144/r55)  ★ NEW BEST
+  ... 400/500 done, best: 138.23 (1.7min)
+  ... 500/500 done, best: 138.23 (1.7min)
+
+Phase 4: Exit optimization (500 trials)
+--------------------------------------------------
+  ... 100/500 done, best: 138.23 (1.8min)
+  ... 200/500 done, best: 138.23 (1.8min)
+  ... 300/500 done, best: 138.23 (1.9min)
+  ... 400/500 done, best: 138.23 (1.9min)
+  ... 500/500 done, best: 138.23 (2.0min)
+
+Phase 5: Multi-entry-timing (500 configs × 5 timings)
+--------------------------------------------------
+  ... 10/50 done, best robust: 45.92
+  ... 20/50 done, best robust: 45.92
+  ... 30/50 done, best robust: 45.92
+  ... 40/50 done, best robust: 45.99
+  ... 50/50 done, best robust: 46.64
+  Top 5 robust scores: [46.64, 46.24, 45.99, 45.95, 45.92]
+
+Phase 6: Walk-forward validation (top 20)
+--------------------------------------------------
+  WF #1 (MT-P-240): oos_pnl=$2431.04  oos_score=91.66  trades=158  robust=54.44
+  WF #2 (MT-P-20): oos_pnl=$2661.88  oos_score=92.16  trades=160  robust=47.41
+  WF #3 (MT-P-35): oos_pnl=$2491.72  oos_score=88.91  trades=162  robust=47.22
+  WF #4 (MT-P-40): oos_pnl=$2491.72  oos_score=88.91  trades=162  robust=47.22
+  WF #5 (MT-P-65): oos_pnl=$2491.72  oos_score=88.91  trades=162  robust=47.22
+  WF #6 (MT-P-70): oos_pnl=$2491.72  oos_score=88.91  trades=162  robust=47.22
+  WF #7 (MT-P-405): oos_pnl=$2491.72  oos_score=88.91  trades=162  robust=47.22
+  WF #8 (MT-P-110): oos_pnl=$2480.83  oos_score=87.70  trades=148  robust=46.72
+  WF #9 (MT-P-160): oos_pnl=$2480.83  oos_score=87.70  trades=148  robust=46.72
+  WF #10 (MT-P-435): oos_pnl=$2480.83  oos_score=87.70  trades=148  robust=46.72
+  WF #11 (MT-P-355): oos_pnl=$2484.71  oos_score=87.68  trades=149  robust=46.68
+  WF #12 (MT-P-415): oos_pnl=$2615.74  oos_score=90.22  trades=155  robust=46.68
+  WF #13 (MT-P-25): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.66
+  WF #14 (MT-P-55): oos_pnl=$2698.22  oos_score=90.57  trades=158  robust=46.66
+  WF #15 (MT-P-105): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.66
+  WF #16 (MT-P-260): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.66
+  WF #17 (MT-P-445): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.66
+  WF #18 (MT-P-145): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.65
+  WF #19 (MT-P-205): oos_pnl=$2643.69  oos_score=90.60  trades=158  robust=46.65
+  WF #20 (MT-P-330): oos_pnl=$2694.15  oos_score=90.42  trades=158  robust=46.65
+
+  Top 20 unique experiments selected (from 4000 total)
+
+======================================================================
+SWEEP COMPLETE — 3.3 minutes
+======================================================================
+  Sweep ID: sweep_20260314_1932
+  Total trials: 4000
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_20260314_1932.json
+
+─── Best Overall (24h entry, training set) ───
+  EXP-3383: score=  138.23  trades=229  WR= 43.2%  PnL=$21863.71  DD=11.87%  Sharpe= 10.25  util= 0.4%  pph=$13.55  ex=199(s144/r55)
+  Params:
+    city_overrides: {'wellington': {'max_price': 0.4, 'min_edge': 0.005, 'min_price': 0.1}, 'dallas': {'max_price': 0.55, 'min_edge': 0.05, 'min_price': 0.05}, 'buenos_aires': {'max_price': 0.55, 'min_edge': 0.01, 'min_price': 0.05}, 'london': {'max_price': 0.8, 'min_edge': 0.015, 'min_price': 0.15}}
+    excluded_cities: ['chicago', 'seoul']
+    exit_enabled: True
+    kelly_raw_cap: 0.4
+    max_edge: 0.7
+    max_price: 0.5
+    min_edge: 0.06
+    min_hold_edge: 0.04
+    min_price: 0.05
+    min_prob: 0.08
+    min_volume: 10
+    prob_exit_floor: 0.3
+    prob_sharpening: 0.9
+    profit_take_enabled: True
+    profit_take_min_hours: 4
+    profit_take_threshold: 1.5
+    reentry_cooldown_h: 2
+    reentry_enabled: False
+    shrinkage: 0.1
+    stop_loss_pct: 1.0
+
+─── Top 5 Multi-Timing (robust) ───
+  #1 (MT-P-240): robust=54.44  weighted=90.74  min=0.00
+    12h: score=0.00 trades=275
+    24h: score=137.15 trades=209
+    36h: score=103.45 trades=244
+    48h: score=100.82 trades=222
+    6h: score=91.85 trades=126
+  #2 (MT-P-20): robust=47.41  weighted=79.02  min=0.00
+    12h: score=0.00 trades=270
+    24h: score=138.50 trades=211
+    36h: score=110.51 trades=245
+    48h: score=102.46 trades=225
+    6h: score=0.00 trades=123
+  #3 (MT-P-35): robust=47.22  weighted=78.69  min=0.00
+    12h: score=0.00 trades=271
+    24h: score=138.50 trades=214
+    36h: score=109.59 trades=244
+    48h: score=101.50 trades=227
+    6h: score=0.00 trades=123
+  #4 (MT-P-40): robust=47.22  weighted=78.69  min=0.00
+    12h: score=0.00 trades=271
+    24h: score=138.50 trades=214
+    36h: score=109.59 trades=244
+    48h: score=101.50 trades=227
+    6h: score=0.00 trades=123
+  #5 (MT-P-65): robust=47.22  weighted=78.69  min=0.00
+    12h: score=0.00 trades=271
+    24h: score=138.50 trades=214
+    36h: score=109.59 trades=244
+    48h: score=101.50 trades=227
+    6h: score=0.00 trades=123
+
+─── Top 5 Walk-Forward ───
+  #1 (WF-P-75): oos_pnl=$3407.77  oos_score=102.31  trades=160
+  #2 (WF-P-8): oos_pnl=$3391.24  oos_score=100.79  trades=158
+  #3 (WF-P-24): oos_pnl=$3391.24  oos_score=100.79  trades=158
+  #4 (WF-P-106): oos_pnl=$3092.60  oos_score=100.41  trades=158
+  #5 (WF-P-140): oos_pnl=$3064.48  oos_score=94.17  trades=230
+
+  Total time: 3.3 minutes
+
+======================================================================
+FINAL SWEEP — Chronological Portfolio Simulator
+Start: 2026-03-14T19:34:55.825154
+======================================================================
+
+Total events: 1716
+Train events (≤2026-01-31): 1058
+Test events  (≥2026-02-01): 657
+Train simulation events: 1058
+
+Phase 1: Broad Random Search (2000 trials)
+--------------------------------------------------
+  EXP-0001: score=  115.23  trades= 77  WR= 35.1%  PnL=$ 4286.91  DD= 9.75%  Sharpe=  7.10  util= 4.9%  pph=$ 9.32  ex=70(s43/r27)  ★ NEW BEST
+  EXP-0011: score=  132.31  trades=148  WR= 35.1%  PnL=$15273.77  DD=17.72%  Sharpe=  6.05  util=26.3%  pph=$ 4.30  ★ NEW BEST
+  EXP-0015: score=  143.57  trades=159  WR= 42.1%  PnL=$18008.61  DD=25.41%  Sharpe=  7.65  util=13.2%  pph=$12.20  ex=124(s82/r42)  ★ NEW BEST
+  EXP-0070: score=  147.63  trades=156  WR= 43.6%  PnL=$17023.24  DD=21.43%  Sharpe=  8.65  util=14.7%  pph=$ 9.44  ex=113(s68/r45)  ★ NEW BEST
+  ... 400/2000 done, best: 147.63 (0.3min)
+  EXP-0642: score=  147.89  trades=226  WR= 35.0%  PnL=$16585.27  DD=17.87%  Sharpe=  6.37  util=14.9%  pph=$10.57  ex=189(s146/r43)  ★ NEW BEST
+  ... 800/2000 done, best: 147.89 (0.5min)
+  EXP-0900: score=  150.93  trades=149  WR= 53.0%  PnL=$16673.46  DD=19.76%  Sharpe= 11.68  util=14.6%  pph=$ 9.36  ex=110(s65/r45)  ★ NEW BEST
+  ... 1200/2000 done, best: 150.93 (0.6min)
+  EXP-1540: score=  151.19  trades=151  WR= 49.0%  PnL=$15939.45  DD=20.78%  Sharpe= 10.16  util=13.5%  pph=$10.17  ex=118(s71/r47)  ★ NEW BEST
+  ... 1600/2000 done, best: 151.19 (0.8min)
+  EXP-1861: score=  158.44  trades=215  WR= 44.7%  PnL=$21747.62  DD=21.05%  Sharpe=  8.32  util=19.9%  pph=$ 9.28  ex=156(s106/r50)  ★ NEW BEST
+  ... 2000/2000 done, best: 158.44 (1.0min)
+
+Phase 2: Fine-tuning (1000 trials around top 20)
+--------------------------------------------------
+  Top 5 scores: [158.44, 151.19, 150.93, 150.02, 149.1]
+  EXP-2181: score=  159.29  trades=215  WR= 44.2%  PnL=$21534.23  DD=17.08%  Sharpe=  8.32  util=19.3%  pph=$ 9.60  ex=158(s108/r50)  ★ NEW BEST
+  ... 200/1000 done, best: 159.29 (1.1min)
+  EXP-2261: score=  161.95  trades=217  WR= 44.2%  PnL=$22546.09  DD=12.80%  Sharpe=  9.17  util=18.0%  pph=$10.93  ex=168(s118/r50)  ★ NEW BEST
+  ... 400/1000 done, best: 161.95 (1.1min)
+  ... 600/1000 done, best: 161.95 (1.2min)
+  ... 800/1000 done, best: 161.95 (1.3min)
+  ... 1000/1000 done, best: 161.95 (1.4min)
+
+Phase 3: City optimization (500 trials)
+--------------------------------------------------
+  Losing: ['seoul', 'chicago']
+  Winning: ['nyc', 'atlanta', 'buenos_aires', 'london', 'dallas']
+  EXP-3001: score=  162.58  trades=202  WR= 45.5%  PnL=$23134.15  DD=12.80%  Sharpe=  9.83  util=17.1%  pph=$12.25  ex=159(s110/r49)  ★ NEW BEST
+  EXP-3002: score=  162.94  trades=200  WR= 45.5%  PnL=$23288.57  DD=12.80%  Sharpe=  9.95  util=17.1%  pph=$12.49  ex=158(s109/r49)  ★ NEW BEST
+  ... 100/500 done, best: 162.94 (1.5min)
+  EXP-3160: score=  163.30  trades=224  WR= 43.8%  PnL=$23575.27  DD=12.80%  Sharpe=  9.67  util=17.9%  pph=$11.75  ex=177(s126/r51)  ★ NEW BEST
+  EXP-3165: score=  164.05  trades=244  WR= 41.4%  PnL=$22300.24  DD=12.80%  Sharpe=  9.27  util=19.2%  pph=$10.26  ex=193(s138/r55)  ★ NEW BEST
+  EXP-3175: score=  164.68  trades=248  WR= 41.1%  PnL=$24774.03  DD=12.80%  Sharpe=  9.38  util=19.4%  pph=$11.32  ex=197(s144/r53)  ★ NEW BEST
+  EXP-3193: score=  166.18  trades=274  WR= 40.5%  PnL=$26276.64  DD=12.80%  Sharpe=  9.78  util=19.6%  pph=$11.43  ex=221(s164/r57)  ★ NEW BEST
+  ... 200/500 done, best: 166.18 (1.5min)
+  EXP-3215: score=  166.30  trades=276  WR= 40.9%  PnL=$27544.76  DD=12.80%  Sharpe=  9.62  util=20.0%  pph=$11.69  ex=220(s163/r57)  ★ NEW BEST
+  EXP-3244: score=  166.39  trades=278  WR= 40.6%  PnL=$27481.36  DD=12.80%  Sharpe=  9.65  util=20.0%  pph=$11.76  ex=222(s166/r56)  ★ NEW BEST
+  ... 300/500 done, best: 166.39 (1.6min)
+  EXP-3336: score=  166.57  trades=272  WR= 41.5%  PnL=$27819.83  DD=12.80%  Sharpe=  9.81  util=19.8%  pph=$12.17  ex=218(s162/r56)  ★ NEW BEST
+  ... 400/500 done, best: 166.57 (1.6min)
+  EXP-3494: score=  167.11  trades=272  WR= 41.2%  PnL=$28059.67  DD=12.66%  Sharpe=  9.88  util=20.3%  pph=$12.03  ex=217(s161/r56)  ★ NEW BEST
+  ... 500/500 done, best: 167.11 (1.7min)
+
+Phase 4: Exit optimization (500 trials)
+--------------------------------------------------
+  ... 100/500 done, best: 167.11 (1.7min)
+  ... 200/500 done, best: 167.11 (1.8min)
+  ... 300/500 done, best: 167.11 (1.8min)
+  ... 400/500 done, best: 167.11 (1.9min)
+  ... 500/500 done, best: 167.11 (1.9min)
+
+Phase 5: Multi-entry-timing (500 configs × 5 timings)
+--------------------------------------------------
+  ... 10/50 done, best robust: 58.08
+  ... 20/50 done, best robust: 58.08
+  ... 30/50 done, best robust: 58.08
+  ... 40/50 done, best robust: 58.08
+  ... 50/50 done, best robust: 58.08
+  Top 5 robust scores: [58.08, 58.03, 58.03, 58.03, 58.03]
+
+Phase 6: Walk-forward validation (top 20)
+--------------------------------------------------
+  WF #1 (MT-P-135): oos_pnl=$3221.43  oos_score=105.45  trades=210  robust=58.55
+  WF #2 (MT-P-185): oos_pnl=$3221.43  oos_score=105.45  trades=210  robust=58.55
+  WF #3 (MT-P-275): oos_pnl=$3221.43  oos_score=105.45  trades=210  robust=58.55
+  WF #4 (MT-P-50): oos_pnl=$3177.58  oos_score=104.19  trades=210  robust=58.24
+  WF #5 (MT-P-190): oos_pnl=$3177.58  oos_score=104.19  trades=210  robust=58.24
+  WF #6 (MT-P-425): oos_pnl=$3177.58  oos_score=104.19  trades=210  robust=58.24
+  WF #7 (MT-P-70): oos_pnl=$3177.58  oos_score=104.19  trades=210  robust=58.15
+  WF #8 (MT-P-360): oos_pnl=$3177.58  oos_score=104.19  trades=210  robust=58.15
+  WF #9 (MT-P-415): oos_pnl=$3141.48  oos_score=103.89  trades=209  robust=58.15
+  WF #10 (MT-P-15): oos_pnl=$3233.81  oos_score=105.30  trades=210  robust=58.11
+  WF #11 (MT-P-30): oos_pnl=$3233.81  oos_score=105.30  trades=210  robust=58.11
+  WF #12 (MT-P-180): oos_pnl=$3134.70  oos_score=103.84  trades=215  robust=58.11
+  WF #13 (MT-P-430): oos_pnl=$3233.81  oos_score=105.30  trades=210  robust=58.11
+  WF #14 (MT-P-8): oos_pnl=$3086.26  oos_score=105.34  trades=210  robust=58.10
+  WF #15 (MT-P-73): oos_pnl=$3086.26  oos_score=105.34  trades=210  robust=58.10
+  WF #16 (MT-P-96): oos_pnl=$3086.17  oos_score=105.37  trades=211  robust=58.10
+  WF #17 (MT-P-101): oos_pnl=$3064.45  oos_score=104.73  trades=209  robust=58.10
+  WF #18 (MT-P-114): oos_pnl=$3086.26  oos_score=105.34  trades=210  robust=58.10
+  WF #19 (MT-P-116): oos_pnl=$3086.17  oos_score=105.37  trades=211  robust=58.10
+  WF #20 (MT-P-183): oos_pnl=$3086.26  oos_score=105.34  trades=210  robust=58.10
+
+  Top 20 unique experiments selected (from 4000 total)
+
+======================================================================
+SWEEP COMPLETE — 3.2 minutes
+======================================================================
+  Sweep ID: sweep_20260314_1938
+  Total trials: 4000
+  Results: /Users/dnl.vlck/Arbo/research/data/experiments/sweep_20260314_1938.json
+
+─── Best Overall (24h entry, training set) ───
+  EXP-3494: score=  167.11  trades=272  WR= 41.2%  PnL=$28059.67  DD=12.66%  Sharpe=  9.88  util=20.3%  pph=$12.03  ex=217(s161/r56)
+  Params:
+    city_overrides: {'seattle': {'max_price': 0.55, 'min_edge': 0.005, 'min_price': 0.15}, 'toronto': {'max_price': 0.4, 'min_edge': 0.005, 'min_price': 0.05}, 'atlanta': {'max_price': 0.55, 'min_edge': 0.02, 'min_price': 0.05}, 'ankara': {'max_price': 0.55, 'min_edge': 0.005, 'min_price': 0.08}, 'buenos_aires': {'max_price': 0.7, 'min_edge': 0.02, 'min_price': 0.05}, 'dallas': {'max_price': 0.8, 'min_edge': 0.05, 'min_price': 0.05}, 'wellington': {'max_price': 0.5, 'min_edge': 0.02, 'min_price': 0.05}, 'miami': {'max_price': 0.4, 'min_edge': 0.05, 'min_price': 0.08}}
+    excluded_cities: ['chicago', 'seoul']
+    exit_enabled: True
+    kelly_raw_cap: 0.4
+    max_edge: 0.7
+    max_price: 0.5
+    min_edge: 0.1
+    min_hold_edge: 0
+    min_price: 0.05
+    min_prob: 0.06
+    min_volume: 510
+    prob_exit_floor: 0.25
+    prob_sharpening: 0.9
+    profit_take_enabled: True
+    profit_take_min_hours: 4
+    profit_take_threshold: 1.5
+    reentry_cooldown_h: 1
+    reentry_enabled: False
+    shrinkage: 0.03
+    stop_loss_pct: 1.0
+
+─── Top 5 Multi-Timing (robust) ───
+  #1 (MT-P-135): robust=58.55  weighted=97.59  min=0.00
+    12h: score=0.00 trades=151
+    24h: score=166.62 trades=272
+    36h: score=145.49 trades=321
+    48h: score=123.36 trades=263
+    6h: score=0.00 trades=147
+  #2 (MT-P-185): robust=58.55  weighted=97.59  min=0.00
+    12h: score=0.00 trades=151
+    24h: score=166.62 trades=272
+    36h: score=145.49 trades=321
+    48h: score=123.36 trades=263
+    6h: score=0.00 trades=147
+  #3 (MT-P-275): robust=58.55  weighted=97.59  min=0.00
+    12h: score=0.00 trades=151
+    24h: score=166.62 trades=272
+    36h: score=145.49 trades=321
+    48h: score=123.36 trades=263
+    6h: score=0.00 trades=147
+  #4 (MT-P-50): robust=58.24  weighted=97.07  min=0.00
+    12h: score=0.00 trades=151
+    24h: score=166.58 trades=272
+    36h: score=143.06 trades=322
+    48h: score=123.25 trades=263
+    6h: score=0.00 trades=147
+  #5 (MT-P-190): robust=58.24  weighted=97.07  min=0.00
+    12h: score=0.00 trades=151
+    24h: score=166.58 trades=272
+    36h: score=143.06 trades=322
+    48h: score=123.25 trades=263
+    6h: score=0.00 trades=147
+
+─── Top 5 Walk-Forward ───
+  #1 (WF-P-19): oos_pnl=$5590.11  oos_score=122.20  trades=396
+  #2 (WF-P-31): oos_pnl=$6336.90  oos_score=121.95  trades=393
+  #3 (WF-P-132): oos_pnl=$6336.90  oos_score=121.95  trades=393
+  #4 (WF-P-166): oos_pnl=$6336.90  oos_score=121.95  trades=393
+  #5 (WF-P-136): oos_pnl=$4022.40  oos_score=114.42  trades=256
+
+  Total time: 3.2 minutes
