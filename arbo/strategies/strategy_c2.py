@@ -82,11 +82,15 @@ class StrategyC2:
         paper_engine: Any = None,
         metoffice_api_key: str = "",
         orderbook_provider: OrderbookProvider | None = None,
+        execution_mode: str = "paper",
+        live_executor: Any = None,
     ) -> None:
         self._risk = risk_manager
         self._paper_engine = paper_engine
         self._metoffice_key = metoffice_api_key
         self._orderbook = orderbook_provider
+        self._execution_mode = execution_mode  # "paper" or "live"
+        self._live_executor = live_executor
 
         # Own weather clients
         self._noaa: NOAAWeatherClient | None = None
@@ -126,6 +130,7 @@ class StrategyC2:
 
         logger.info(
             "strategy_c2_initialized",
+            execution_mode=self._execution_mode,
             min_hold_edge=MIN_HOLD_EDGE,
             profit_target=PROFIT_TARGET_ABS,
             emos_window=EMOS_TRAINING_WINDOW,
@@ -366,25 +371,72 @@ class StrategyC2:
             if not decision.approved:
                 continue
 
-            # Execute paper trade
-            if self._paper_engine:
-                trade_details = {
-                    "city": city,
-                    "target_date": str(sig.market.target_date),
-                    "bucket_text": sig.market.question[:120],
-                    "forecast_temp_c": sig.forecast_temp_c,
-                    "forecast_prob": sig.forecast_probability,
-                    "market_price_gamma": float(gamma_price),
-                    "clob_fill_p1": float(clob_fill) if clob_fill else None,
-                    "direction": sig.direction,
-                    "edge_at_scan": round(sig.edge, 4),
-                    "volume_24h": sig.market.volume_24h,
-                    "liquidity": sig.market.liquidity,
-                    "model": "emos_exit_fusion",
-                    "min_hold_edge": MIN_HOLD_EDGE,
-                    "profit_target": PROFIT_TARGET_ABS,
-                }
+            # Execute trade (paper or live)
+            trade_details = {
+                "mode": self._execution_mode,
+                "city": city,
+                "target_date": str(sig.market.target_date),
+                "bucket_text": sig.market.question[:120],
+                "forecast_temp_c": sig.forecast_temp_c,
+                "forecast_prob": sig.forecast_probability,
+                "market_price_gamma": float(gamma_price),
+                "clob_fill_p1": float(clob_fill) if clob_fill else None,
+                "direction": sig.direction,
+                "edge_at_scan": round(sig.edge, 4),
+                "volume_24h": sig.market.volume_24h,
+                "liquidity": sig.market.liquidity,
+                "model": "emos_exit_fusion",
+                "min_hold_edge": MIN_HOLD_EDGE,
+                "profit_target": PROFIT_TARGET_ABS,
+                "neg_risk": sig.market.neg_risk,
+            }
 
+            executed = False
+            live_fill = None
+
+            if self._execution_mode == "live" and self._live_executor:
+                # LIVE: submit real CLOB order
+                fill = await self._live_executor.buy(
+                    token_id=token_id,
+                    price=float(execution_price),
+                    size_usdc=float(trade_size),
+                    neg_risk=sig.market.neg_risk,
+                )
+                trade_details["live_order_id"] = fill.order_id
+                trade_details["live_fill_price"] = float(fill.fill_price) if fill.fill_price else None
+                trade_details["live_latency_ms"] = fill.latency_ms
+                trade_details["live_status"] = fill.status
+
+                if fill.status == "filled":
+                    executed = True
+                    # Also record in paper engine for tracking/dashboard
+                    if self._paper_engine:
+                        self._paper_engine.place_trade(
+                            market_condition_id=sig.market.condition_id,
+                            token_id=token_id,
+                            side="BUY",
+                            market_price=gamma_price,
+                            model_prob=Decimal(str(sig.forecast_probability)),
+                            layer=0,
+                            market_category="weather",
+                            strategy=STRATEGY_ID,
+                            pre_computed_size=trade_size,
+                            volume_24h=Decimal(str(sig.market.volume_24h)),
+                            liquidity=Decimal(str(sig.market.liquidity)),
+                            clob_fill_price=fill.fill_price or clob_fill,
+                            trade_details=trade_details,
+                        )
+                    live_fill = fill
+                else:
+                    logger.warning(
+                        "c2_live_buy_failed",
+                        city=city,
+                        status=fill.status,
+                        error=fill.error,
+                    )
+
+            elif self._paper_engine:
+                # PAPER: simulate trade
                 trade_result = self._paper_engine.place_trade(
                     market_condition_id=sig.market.condition_id,
                     token_id=token_id,
@@ -400,33 +452,39 @@ class StrategyC2:
                     clob_fill_price=clob_fill,
                     trade_details=trade_details,
                 )
-                if trade_result:
-                    self._risk.post_trade_update(
-                        sig.market.condition_id, "weather", trade_size
-                    )
-                    self._risk.strategy_post_trade(STRATEGY_ID, trade_size)
-                    traded_signals.append(sig)
-                    self._trades_placed += 1
-                    trades_this_scan += 1
+                executed = bool(trade_result)
 
-                    # Track for exit checks
-                    self._open_positions[token_id] = {
-                        "entry_price": float(execution_price),
-                        "entry_edge": edge,
-                        "entry_prob": sig.forecast_probability,
-                        "city": city,
-                        "entry_ts": datetime.now(timezone.utc).isoformat(),
-                        "signal": sig,
-                    }
+            if executed:
+                self._risk.post_trade_update(
+                    sig.market.condition_id, "weather", trade_size
+                )
+                self._risk.strategy_post_trade(STRATEGY_ID, trade_size)
+                traded_signals.append(sig)
+                self._trades_placed += 1
+                trades_this_scan += 1
 
-                    logger.info(
-                        "c2_paper_trade_placed",
-                        city=city,
-                        direction=sig.direction,
-                        size=str(trade_size),
-                        edge=round(sig.edge, 4),
-                        clob_fill=str(clob_fill) if clob_fill else "synthetic",
-                    )
+                # Track for exit checks
+                fill_price = float(live_fill.fill_price) if live_fill and live_fill.fill_price else float(execution_price)
+                self._open_positions[token_id] = {
+                    "entry_price": fill_price,
+                    "entry_edge": edge,
+                    "entry_prob": sig.forecast_probability,
+                    "city": city,
+                    "entry_ts": datetime.now(timezone.utc).isoformat(),
+                    "signal": sig,
+                    "shares": float(trade_size) / fill_price if fill_price > 0 else 0,
+                    "neg_risk": sig.market.neg_risk,
+                }
+
+                logger.info(
+                    "c2_trade_placed",
+                    mode=self._execution_mode,
+                    city=city,
+                    direction=sig.direction,
+                    size=str(trade_size),
+                    edge=round(sig.edge, 4),
+                    fill=str(live_fill.fill_price) if live_fill else str(clob_fill) if clob_fill else "synthetic",
+                )
 
         logger.info(
             "c2_poll_complete",

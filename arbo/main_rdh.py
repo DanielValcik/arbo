@@ -434,16 +434,34 @@ class RDHOrchestrator:
     async def _init_strategy_c2(self) -> Any:
         """Initialize Strategy C2: EMOS + Edge Exit Fusion.
 
-        Fully independent — own forecast clients, own quality gate, own exit logic.
-        Shares only the CLOB orderbook provider (read-only, stateless).
+        Supports paper and live execution modes.
+        Set C2_EXECUTION_MODE=live in .env to enable real CLOB trading.
         """
+        import os
+
         from arbo.strategies.strategy_c2 import StrategyC2
+
+        execution_mode = os.getenv("C2_EXECUTION_MODE", "paper")
+        live_executor = None
+
+        if execution_mode == "live":
+            from arbo.core.live_executor import LiveExecutor
+
+            # Reuse the authenticated CLOB client (already initialized for orderbook reads)
+            if self._poly_client_readonly is not None:
+                live_executor = LiveExecutor(self._poly_client_readonly)
+                logger.info("c2_live_executor_ready")
+            else:
+                logger.warning("c2_live_executor_no_client", msg="Falling back to paper mode")
+                execution_mode = "paper"
 
         s = StrategyC2(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
             metoffice_api_key=self._config.metoffice_api_key,
             orderbook_provider=self._orderbook_provider,
+            execution_mode=execution_mode,
+            live_executor=live_executor,
         )
         await s.init()
         return s
@@ -1202,7 +1220,10 @@ class RDHOrchestrator:
         if not exits:
             return
 
-        # Execute sells
+        # Execute sells (paper or live)
+        is_live = self._strategy_c2._execution_mode == "live"
+        live_exec = self._strategy_c2._live_executor
+
         for token_id, exit_reason in exits:
             bid_price = current_prices.get(token_id)
             if bid_price is None:
@@ -1215,6 +1236,30 @@ class RDHOrchestrator:
             if pos is None:
                 continue
 
+            # Live sell via CLOB
+            if is_live and live_exec:
+                pos_data = self._strategy_c2._open_positions.get(token_id, {})
+                shares = pos_data.get("shares", float(pos.shares))
+                neg_risk = pos_data.get("neg_risk", True)
+
+                fill = await live_exec.sell(
+                    token_id=token_id,
+                    price=float(bid_price),
+                    shares=shares,
+                    neg_risk=neg_risk,
+                )
+                if fill.status != "filled":
+                    logger.warning(
+                        "c2_live_sell_failed",
+                        token_id=token_id[:20],
+                        status=fill.status,
+                        error=fill.error,
+                    )
+                    continue
+                # Use live fill price for P&L
+                bid_price = fill.fill_price or bid_price
+
+            # Paper sell (always — for tracking even in live mode)
             pnl = self._paper_engine.sell_position(
                 token_id=token_id,
                 sell_price=bid_price,
