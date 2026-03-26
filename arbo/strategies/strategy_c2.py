@@ -444,6 +444,15 @@ class StrategyC2:
 
         triggered: list[tuple[str, str]] = []
 
+        if not self._open_positions:
+            return triggered
+
+        logger.info(
+            "c2_exit_check_start",
+            n_positions=len(self._open_positions),
+            n_prices=len(current_prices),
+        )
+
         for token_id, pos_data in list(self._open_positions.items()):
             current_price = current_prices.get(token_id)
             if current_price is None:
