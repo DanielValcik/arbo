@@ -267,8 +267,11 @@ class StrategyC2:
                 else sig.market.token_id_no
             )
 
-            # Already have open position for this token?
-            if token_id in self._open_positions:
+            # Already have open position for this token? Check paper engine (source of truth)
+            if self._paper_engine and token_id in {
+                p.token_id for p in self._paper_engine.open_positions
+                if getattr(p, "strategy", "") == "C2"
+            }:
                 continue
 
             gamma_price = Decimal(str(sig.market.market_price))
@@ -449,6 +452,17 @@ class StrategyC2:
 
         triggered: list[tuple[str, str]] = []
 
+        # Sync: remove from _open_positions any token that paper engine no longer has
+        if self._paper_engine:
+            live_tokens = {
+                p.token_id for p in self._paper_engine.open_positions
+                if getattr(p, "strategy", "") == "C2"
+            }
+            stale = [tid for tid in self._open_positions if tid not in live_tokens]
+            for tid in stale:
+                logger.info("c2_position_sync_removed", token_id=tid[:20])
+                del self._open_positions[tid]
+
         if not self._open_positions:
             return triggered
 
@@ -531,11 +545,24 @@ class StrategyC2:
         return triggered
 
     def handle_resolution(self, condition_id: str, pnl: Decimal) -> None:
-        """Handle market resolution — clean up tracked position."""
-        # Remove any open position tracking for this market
-        to_remove = [
-            tid for tid, data in self._open_positions.items()
-            if data.get("signal") and data["signal"].market.condition_id == condition_id
-        ]
+        """Handle market resolution — clean up tracked position.
+
+        Sync is also done in check_exits() via paper engine source of truth,
+        but explicit cleanup here catches resolution immediately.
+        """
+        to_remove = []
+        for tid, data in self._open_positions.items():
+            sig = data.get("signal")
+            if sig and sig.market.condition_id == condition_id:
+                to_remove.append(tid)
+            # Also check paper engine — if token is no longer open, remove
+            elif self._paper_engine:
+                still_open = any(
+                    p.token_id == tid
+                    for p in self._paper_engine.open_positions
+                    if getattr(p, "strategy", "") == "C2"
+                )
+                if not still_open:
+                    to_remove.append(tid)
         for tid in to_remove:
             self._open_positions.pop(tid, None)
