@@ -408,7 +408,6 @@ class StrategyC2:
                 trade_details["live_submitted_shares"] = round(float(trade_size) / float(execution_price), 2) if float(execution_price) > 0 else 0
                 # Orderbook state at entry (for spread analysis)
                 if ob_snap is not None:
-                    from arbo.connectors.orderbook_provider import available_depth
                     trade_details["entry_ob_bid_depth"] = float(available_depth(ob_snap, "SELL"))
                     trade_details["entry_ob_ask_depth"] = float(available_depth(ob_snap, "BUY"))
                     if ob_snap.best_bid and ob_snap.best_ask:

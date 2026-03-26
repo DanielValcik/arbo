@@ -1185,6 +1185,18 @@ class RDHOrchestrator:
             await self._save_signals_to_db(trades, strategy="C2")
             await self._paper_engine.sync_positions_to_db()
 
+            # Slack notification for live entries
+            if self._strategy_c2._execution_mode == "live" and self._slack_bot:
+                for sig in trades:
+                    city = sig.market.city.value if sig.market.city else "?"
+                    try:
+                        await self._slack_bot._post(
+                            "C0AP2QLLM2N",
+                            text=f":arrow_right: *C2 LIVE BUY* — {city.upper()} {sig.direction}\nEdge: {sig.edge:.1%}  |  Price: ${sig.market.market_price:.4f}",
+                        )
+                    except Exception:
+                        pass
+
     async def _run_c2_exit_check(self) -> None:
         """Check C2 positions for exit triggers every 60 seconds.
 
@@ -1278,12 +1290,58 @@ class RDHOrchestrator:
                 exit_reason=exit_reason,
             )
 
+            # Slack notification for C2 trade close
+            await self._notify_c2_trade_close(
+                pos, exit_reason, float(pnl), float(bid_price), is_live,
+            )
+
         logger.info(
             "c2_exits_executed",
             count=len(exits),
             tokens=[t[:20] for t, _ in exits],
         )
         await self._paper_engine.sync_positions_to_db()
+
+    async def _notify_c2_trade_close(
+        self,
+        pos: Any,
+        exit_reason: str,
+        pnl: float,
+        exit_price: float,
+        is_live: bool,
+    ) -> None:
+        """Send Slack notification when C2 closes a trade."""
+        C2_SLACK_CHANNEL = "C0AP2QLLM2N"
+        if self._slack_bot is None:
+            return
+        try:
+            td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
+            if not td:
+                td = {}
+            city = td.get("city", "?")
+            direction = td.get("direction", "?")
+            entry = float(pos.avg_price)
+            size = float(pos.size)
+
+            # Get current C2 state
+            ss = self._risk_manager.get_strategy_state("C2") if self._risk_manager else None
+            total_pnl = float(ss.total_pnl) if ss else 0
+            deployed = float(ss.deployed) if ss else 0
+            available = float(ss.available) if ss else 0
+
+            mode = "LIVE" if is_live else "PAPER"
+            emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
+            pnl_sign = "+" if pnl >= 0 else ""
+
+            text = (
+                f"{emoji} *C2 {mode} — {city.upper()}* {direction}\n"
+                f"Entry: ${entry:.4f} → Exit: ${exit_price:.4f} ({exit_reason})\n"
+                f"Size: ${size:.2f}  |  P&L: *{pnl_sign}${pnl:.2f}*\n"
+                f"Balance: ${total_pnl:.2f} total P&L  |  ${deployed:.0f} deployed  |  ${available:.0f} available"
+            )
+            await self._slack_bot._post(C2_SLACK_CHANNEL, text=text)
+        except Exception as e:
+            logger.debug("c2_slack_notify_error", error=str(e))
 
     def _get_current_prices(
         self, price_type: str = "yes"
