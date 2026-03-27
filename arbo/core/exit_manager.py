@@ -36,7 +36,7 @@ class PendingExit:
     """An exit that needs to be completed."""
 
     token_id: str
-    city: str
+    city: str  # For weather; for crypto, use label instead
     exit_reason: str
     original_shares: int
     remaining_shares: int
@@ -48,6 +48,8 @@ class PendingExit:
     last_attempt_at: float = 0.0
     total_sold: int = 0
     total_revenue: float = 0.0
+    neg_risk: bool = True  # False for B2 crypto markets
+    label: str = ""  # Display label (e.g. "BTC_88000" for B2)
 
 
 class ExitManager:
@@ -152,7 +154,7 @@ class ExitManager:
         fill = await self._executor.sell(
             token_id=pe.token_id,
             price=pe.entry_price,  # Will be replaced by taker price inside executor
-            neg_risk=True,
+            neg_risk=pe.neg_risk,
         )
         if fill.fill_price:
             pe.maker_price = float(fill.fill_price)

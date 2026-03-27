@@ -88,7 +88,9 @@ class RDHOrchestrator:
         self._strategy_b: Any = None
         self._strategy_c: Any = None
         self._strategy_c2: Any = None  # EMOS + Edge Exit Fusion (weather variant)
-        self._exit_manager: Any = None  # Persistent exit manager for live C2
+        self._strategy_b2: Any = None  # Crypto Price Edge
+        self._binance_ws: Any = None   # Binance WebSocket feed for B2
+        self._exit_manager: Any = None  # Persistent exit manager for live C2/B2
 
         # B2 social momentum (Santiment + CoinGecko)
         self._santiment: Any = None
@@ -285,6 +287,9 @@ class RDHOrchestrator:
         # Strategy C2: EMOS + Edge Exit Fusion (AFTER load_state_from_db so it can restore positions)
         self._strategy_c2 = await self._init_optional("StrategyC2", self._init_strategy_c2)
 
+        # Strategy B2: Crypto Price Edge
+        self._strategy_b2 = await self._init_optional("StrategyB2", self._init_strategy_b2)
+
         # Restore realized P&L from DB into risk manager
         await self._restore_pnl_from_db()
 
@@ -471,6 +476,55 @@ class RDHOrchestrator:
         await s.init()
 
         # Give C2 reference to exit manager (prevents buying tokens being exited)
+        if self._exit_manager:
+            s._exit_manager_ref = self._exit_manager
+
+        return s
+
+    async def _init_strategy_b2(self) -> Any:
+        """Initialize Strategy B2: Crypto Price Edge.
+
+        Supports paper and live execution modes.
+        Set B2_EXECUTION_MODE=live in .env to enable real CLOB trading.
+        """
+        import os
+
+        from arbo.connectors.binance_ws import BinanceWSFeed
+        from arbo.strategies.strategy_b2 import StrategyB2
+
+        execution_mode = os.getenv("B2_EXECUTION_MODE", "paper")
+        live_executor = None
+
+        # Initialize Binance WebSocket for real-time prices
+        self._binance_ws = BinanceWSFeed(symbols=["BTCUSDT", "ETHUSDT"])
+        await self._binance_ws.start()
+        logger.info("binance_ws_started_for_b2")
+
+        if execution_mode == "live":
+            from arbo.core.exit_manager import ExitManager
+            from arbo.core.live_executor import LiveExecutor
+
+            if self._poly_client_readonly is not None:
+                live_executor = LiveExecutor(self._poly_client_readonly)
+                # Reuse exit manager from C2, or create one if not yet created
+                if self._exit_manager is None:
+                    self._exit_manager = ExitManager(live_executor)
+                logger.info("b2_live_executor_ready")
+            else:
+                logger.warning("b2_live_executor_no_client", msg="Falling back to paper mode")
+                execution_mode = "paper"
+
+        s = StrategyB2(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine,
+            binance_ws=self._binance_ws,
+            orderbook_provider=self._orderbook_provider,
+            execution_mode=execution_mode,
+            live_executor=live_executor,
+        )
+        await s.init()
+
+        # Give B2 reference to exit manager (prevents buying tokens being exited)
         if self._exit_manager:
             s._exit_manager_ref = self._exit_manager
 
@@ -944,6 +998,9 @@ class RDHOrchestrator:
         if self._strategy_c2 is not None:
             task_defs.append(("strategy_C2", self._run_strategy_c2, 300))       # entry scan every 5 min
             task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # exit check every 60s
+        if self._strategy_b2 is not None:
+            task_defs.append(("strategy_B2", self._run_strategy_b2, 60))        # entry scan every 60s (faster)
+            task_defs.append(("B2_exit_monitor", self._run_b2_exit_check, 30))  # exit check every 30s
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
@@ -1334,6 +1391,127 @@ class RDHOrchestrator:
                 tokens=[t[:20] for t, _ in exits],
         )
         await self._paper_engine.sync_positions_to_db()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # STRATEGY B2: Crypto Price Edge
+    # ═══════════════════════════════════════════════════════════════════════
+
+    async def _run_strategy_b2(self) -> None:
+        """B2 entry scan every 60 seconds.
+
+        Gets crypto markets from discovery, scans with volatility model,
+        applies quality gate, and executes trades.
+        """
+        if self._strategy_b2 is None or self._discovery is None:
+            return
+
+        markets = self._discovery.get_by_category("crypto")
+        if not markets:
+            return
+
+        trades = await self._strategy_b2.poll_cycle(markets)
+
+        if trades:
+            for sig in trades:
+                logger.info(
+                    "b2_trade_executed",
+                    asset=sig.asset,
+                    strike=float(sig.strike),
+                    edge=f"{sig.edge:.3f}",
+                    exchange_price=f"${sig.current_exchange_price:.0f}",
+                )
+            await self._paper_engine.sync_positions_to_db()
+
+    async def _run_b2_exit_check(self) -> None:
+        """Check B2 positions for exit triggers every 30 seconds.
+
+        Fetches CLOB prices and recomputes probability with latest
+        Binance exchange price.
+        """
+        if (
+            self._strategy_b2 is None
+            or self._paper_engine is None
+            or self._orderbook_provider is None
+        ):
+            return
+
+        b2_positions = [
+            p for p in self._paper_engine.open_positions
+            if getattr(p, "strategy", "") == "B2"
+        ]
+        if not b2_positions:
+            return
+
+        token_ids = [p.token_id for p in b2_positions]
+        # Non-NegRisk: use real orderbook
+        snapshots = await self._orderbook_provider.get_snapshots_batch(
+            token_ids, neg_risk=False
+        )
+        current_prices: dict[str, float] = {}
+        for tid, snap in snapshots.items():
+            if snap is not None and snap.best_bid is not None:
+                current_prices[tid] = float(snap.best_bid)
+
+        # Check for exit triggers
+        exits = await self._strategy_b2.check_exits(current_prices)
+
+        is_live = self._strategy_b2._execution_mode == "live"
+
+        for token_id, exit_reason in (exits or []):
+            bid_price = current_prices.get(token_id)
+            if bid_price is None:
+                continue
+
+            pos = next(
+                (p for p in b2_positions if p.token_id == token_id),
+                None,
+            )
+            if pos is None:
+                continue
+
+            if is_live and self._exit_manager:
+                b2_pos = self._strategy_b2._open_positions.get(token_id)
+                shares = self._strategy_b2._live_executor._shares_owned.get(token_id, 0) if self._strategy_b2._live_executor else 0
+                if shares > 0:
+                    from arbo.core.exit_manager import PendingExit
+
+                    self._exit_manager.register_exit(
+                        token_id=token_id,
+                        city=b2_pos.asset if b2_pos else "?",
+                        exit_reason=exit_reason,
+                        shares=shares,
+                        entry_price=float(pos.avg_price),
+                    )
+                    # Set non-NegRisk flag on the PendingExit
+                    pe = self._exit_manager._pending.get(token_id)
+                    if pe:
+                        pe.neg_risk = False
+                        pe.label = f"{b2_pos.asset}_{int(b2_pos.strike)}" if b2_pos else ""
+            else:
+                # Paper: instant sell
+                from decimal import Decimal as D
+                pnl = self._paper_engine.sell_position(
+                    token_id=token_id,
+                    sell_price=D(str(bid_price)),
+                    exit_reason=exit_reason,
+                )
+                self._risk_manager.strategy_post_trade("B2", pos.size, pnl=pnl)
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id, pnl=pnl,
+                    exit_price=D(str(bid_price)), exit_reason=exit_reason,
+                )
+
+        # Process pending exits (shared ExitManager)
+        if is_live and self._exit_manager and self._exit_manager.has_pending:
+            await self._exit_manager.process_exits()
+
+        if exits:
+            logger.info(
+                "b2_exits_processed",
+                new_triggers=len(exits),
+                tokens=[t[:20] for t, _ in exits],
+            )
+            await self._paper_engine.sync_positions_to_db()
 
     async def _notify_c2_trade_close(
         self,

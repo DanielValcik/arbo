@@ -35,6 +35,7 @@ KELLY_FRACTION = Decimal("0.25")  # Quarter-Kelly sizing (RDH pivot: was 0.5)
 STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "A": Decimal("400"),   # Theta Decay — 20%
     "B": Decimal("400"),   # Reflexivity Surfer — 20%
+    "B2": Decimal("500"),  # Crypto Price Edge (CEO approval pending)
     "C": Decimal("1000"),  # Compound Weather — 50%
     "C2": Decimal("1000"), # EMOS + Edge Exit Fusion (weather variant)
 }
