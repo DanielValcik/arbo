@@ -259,6 +259,9 @@ class StrategyB2:
             kelly_raw = (prob * odds - (1 - prob)) / odds
             if kelly_raw <= 0:
                 skip_reasons["kelly_neg"] = skip_reasons.get("kelly_neg", 0) + 1
+                logger.info("b2_kelly_neg", asset=sig.asset, strike=float(sig.strike),
+                            model_prob=f"{sig.model_prob:.4f}", clob_price=f"{clob_price:.4f}",
+                            clob_edge=f"{clob_edge:.4f}", kelly=f"{kelly_raw:.4f}")
                 continue
             kelly_raw = min(kelly_raw, KELLY_RAW_CAP)
             kelly_adj = kelly_raw * float(KELLY_FRACTION)
