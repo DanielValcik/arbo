@@ -312,7 +312,7 @@ class StrategyB2:
                 token_id=token_id,
                 side="BUY",
                 price=Decimal(str(round(clob_price, 4))),
-                size=Decimal(str(round(trade_size, 2))),
+                size=Decimal(str(round(trade_size, 2))),  # Decimal for risk_manager
                 layer=0,
                 market_category="crypto",
                 strategy=STRATEGY_NAME,

@@ -236,9 +236,9 @@ class RiskManager:
 
         # 6. Market type concentration check
         category = request.market_category
-        current_exposure = self._state.category_exposure.get(category, Decimal("0"))
-        category_max = self._state.capital * MAX_MARKET_TYPE_PCT
-        if current_exposure + request.size > category_max:
+        current_exposure = Decimal(str(self._state.category_exposure.get(category, 0)))
+        category_max = Decimal(str(self._state.capital)) * MAX_MARKET_TYPE_PCT
+        if current_exposure + Decimal(str(request.size)) > category_max:
             return RiskDecision(
                 approved=False,
                 reason=f"Category '{category}' exposure would exceed {MAX_MARKET_TYPE_PCT*100}% "
