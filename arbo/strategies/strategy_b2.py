@@ -258,6 +258,7 @@ class StrategyB2:
 
             kelly_raw = (prob * odds - (1 - prob)) / odds
             if kelly_raw <= 0:
+                skip_reasons["kelly_neg"] = skip_reasons.get("kelly_neg", 0) + 1
                 continue
             kelly_raw = min(kelly_raw, KELLY_RAW_CAP)
             kelly_adj = kelly_raw * float(KELLY_FRACTION)
@@ -283,6 +284,7 @@ class StrategyB2:
                 trade_size = min(trade_size, sig.volume_24h * VOLUME_CAP_PCT)
 
             if trade_size < 1.0:
+                skip_reasons["size_too_small"] = skip_reasons.get("size_too_small", 0) + 1
                 continue
 
             # 8. Risk check
@@ -300,7 +302,8 @@ class StrategyB2:
             )
             decision = self._risk_manager.pre_trade_check(trade_req)
             if not decision.approved:
-                logger.debug("b2_risk_rejected", reason=decision.reason)
+                skip_reasons["risk_rejected"] = skip_reasons.get("risk_rejected", 0) + 1
+                logger.info("b2_risk_rejected", reason=decision.reason, size=trade_size)
                 continue
 
             actual_size = float(decision.adjusted_size or trade_size)
