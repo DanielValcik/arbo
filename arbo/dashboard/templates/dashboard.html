@@ -429,6 +429,7 @@
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('arbo')">ARBO</button>
+        <button class="tab-btn" onclick="switchTab('liveb2')" style="color:var(--orange)">LIVE B2</button>
         <button class="tab-btn" onclick="switchTab('livec2')" style="color:var(--teal)">LIVE C2</button>
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
@@ -1254,6 +1255,103 @@
             </div>
         </div>
     </div><!-- end skinnyContent -->
+
+    <!-- ============================================================ -->
+    <!-- LIVE B2 TAB — Crypto Price Edge -->
+    <!-- ============================================================ -->
+    <div id="liveb2Content" class="tab-content">
+        <div class="grid">
+            <!-- B2 Overview -->
+            <div class="card" style="border-top:3px solid var(--orange)">
+                <div class="card-title">B2 Crypto Price Edge</div>
+                <div id="lb2Overview" style="font-size:12px">
+                    <div style="text-align:center;padding:20px;color:var(--text-dim)">
+                        <div style="font-size:24px;font-weight:700;color:var(--orange)" id="lb2TotalPnl">$0.00</div>
+                        <div>Total P&L</div>
+                        <div style="margin-top:12px;display:flex;justify-content:space-around">
+                            <div><span id="lb2Trades" style="font-weight:700">0</span><br>Trades</div>
+                            <div><span id="lb2WinRate" style="font-weight:700">--</span><br>Win Rate</div>
+                            <div><span id="lb2Deployed" style="font-weight:700">$0</span><br>Deployed</div>
+                            <div><span id="lb2Positions" style="font-weight:700">0</span><br>Positions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Info -->
+            <div class="card" style="border-top:3px solid var(--orange)">
+                <div class="card-title">Model: Crypto-Price-Edge-v4</div>
+                <div style="font-size:11px">
+                    <table style="width:100%">
+                        <tbody>
+                            <tr><td>Backtest score</td><td style="font-weight:700">145.4</td></tr>
+                            <tr><td>Win rate (backtest)</td><td>85.3%</td></tr>
+                            <tr><td>Sharpe</td><td>7.75</td></tr>
+                            <tr><td>Max DD</td><td>5.8%</td></tr>
+                            <tr><td>Volatilita</td><td>realized 72h, scale=0.3</td></tr>
+                            <tr><td>Min edge</td><td>8%</td></tr>
+                            <tr><td>Exit</td><td>edge &lt; 2% nebo PT $0.20</td></tr>
+                            <tr><td>Assets</td><td>BTC (ETH planned)</td></tr>
+                            <tr><td>Fee model</td><td>maker 0%, taker exit</td></tr>
+                            <tr><td>Market typ</td><td>Daily "above" (NOT NegRisk)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- B2 Trades Table -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">B2 Trades</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cas</th>
+                                <th>Asset</th>
+                                <th>Strike</th>
+                                <th>Smer</th>
+                                <th>Size</th>
+                                <th>Entry</th>
+                                <th>Exit</th>
+                                <th>Exchange Price</th>
+                                <th>Edge</th>
+                                <th>P&L</th>
+                                <th>Duvod</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb2TradesBody">
+                            <tr><td colspan="11" style="color:var(--text-dim);text-align:center">Zatim zadna B2 data -- spusti paper trading</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- B2 Open Positions -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">Otevrene pozice</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Strike</th>
+                                <th>Smer</th>
+                                <th>Entry cena</th>
+                                <th>Aktualni cena</th>
+                                <th>Binance cena</th>
+                                <th>Edge</th>
+                                <th>Unrealized P&L</th>
+                                <th>Hold time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb2PositionsBody">
+                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center">Zadne otevrene pozice</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ============================================================ -->
     <!-- LIVE C2 TAB -->
@@ -2812,6 +2910,12 @@
         } else {
             if (lc2RefreshInterval) { clearInterval(lc2RefreshInterval); lc2RefreshInterval = null; }
         }
+        if (tab === 'liveb2') {
+            fetchLiveB2();
+            if (!lb2RefreshInterval) lb2RefreshInterval = setInterval(fetchLiveB2, 10000);
+        } else {
+            if (lb2RefreshInterval) { clearInterval(lb2RefreshInterval); lb2RefreshInterval = null; }
+        }
     }
 
     // ===== CryptoArb dashboard =====
@@ -3190,7 +3294,81 @@
         }
     }
 
+    // ===== Live B2 dashboard (Crypto Price Edge) =====
+    let lb2RefreshInterval = null;
+    async function fetchLiveB2() {
+        const [stratData, posData] = await Promise.allSettled([
+            fetchJSON('/api/strategies'),
+            fetchJSON('/api/positions?strategy=B2'),
+        ]);
+
+        // Overview card
+        const strats = stratData.value?.strategies || [];
+        const b2 = strats.find(s => s.id === 'B2');
+        if (b2) {
+            const pnl = b2.total_pnl || 0;
+            document.getElementById('lb2TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            document.getElementById('lb2TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lb2Deployed').textContent = '$' + (b2.deployed || 0).toFixed(0);
+            document.getElementById('lb2Positions').textContent = b2.position_count || 0;
+            const wr = b2.total_pnl > 0 ? '—' : '—';
+            document.getElementById('lb2WinRate').textContent = wr;
+        }
+
+        // Trades — from closed positions with strategy=B2
+        const closedResp = await fetchJSON('/api/closed-positions?strategy=B2');
+        const closed = closedResp?.positions || [];
+        if (closed.length > 0) {
+            const wins = closed.filter(p => (p.actual_pnl || 0) > 0).length;
+            const total = closed.length;
+            document.getElementById('lb2Trades').textContent = total;
+            document.getElementById('lb2WinRate').textContent = total > 0 ? ((wins/total)*100).toFixed(0) + '%' : '—';
+
+            document.getElementById('lb2TradesBody').innerHTML = closed.slice(0, 30).map(t => {
+                const pnl = t.actual_pnl || 0;
+                const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                const details = t.trade_details || {};
+                return `<tr>
+                    <td>${t.placed_at ? new Date(t.placed_at).toLocaleString('cs-CZ', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'}) : '—'}</td>
+                    <td style="font-weight:600">${details.asset || 'BTC'}</td>
+                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '—'}</td>
+                    <td>${details.direction || '—'}</td>
+                    <td>$${(t.size || 0).toFixed(1)}</td>
+                    <td>${(t.fill_price || 0).toFixed(3)}</td>
+                    <td>${t.exit_price ? t.exit_price.toFixed(3) : '—'}</td>
+                    <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '—'}</td>
+                    <td>${(t.edge || 0).toFixed(3)}</td>
+                    <td style="color:${pnlColor};font-weight:700">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                    <td>${t.exit_reason || t.status || '—'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Open positions
+        const positions = posData.value?.positions || [];
+        const b2Positions = positions.filter(p => (p.strategy || '') === 'B2');
+        if (b2Positions.length > 0) {
+            document.getElementById('lb2PositionsBody').innerHTML = b2Positions.map(p => {
+                const details = p.trade_details || {};
+                const upnl = p.unrealized_pnl || 0;
+                const upnlColor = upnl >= 0 ? 'var(--green)' : 'var(--red)';
+                return `<tr>
+                    <td style="font-weight:600">${details.asset || 'BTC'}</td>
+                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '—'}</td>
+                    <td>${details.direction || '—'}</td>
+                    <td>${(p.avg_price || 0).toFixed(3)}</td>
+                    <td>${(p.current_price || 0).toFixed(3)}</td>
+                    <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '—'}</td>
+                    <td>${(details.edge || 0).toFixed(3)}</td>
+                    <td style="color:${upnlColor};font-weight:700">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</td>
+                    <td>—</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
     // ===== Live C2 dashboard =====
+    let lc2RefreshInterval = null;
     async function fetchLiveC2() {
         // Fetch C2 data from existing endpoints (live-specific endpoint added later)
         const [stratData, tradesData, cityData, evrData] = await Promise.allSettled([

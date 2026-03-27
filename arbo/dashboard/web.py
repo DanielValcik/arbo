@@ -155,6 +155,7 @@ def _dec(val: Any) -> float | None:
 _STRATEGY_META: dict[str, dict[str, str]] = {
     "A": {"name": "Theta Decay", "category": "Longshots", "description": "Sell optimism premium on longshot YES contracts"},
     "B": {"name": "Reflexivity Surfer", "category": "Trending", "description": "Ride reflexive momentum in trending markets"},
+    "B2": {"name": "Crypto Price Edge", "category": "Crypto", "description": "Volatility model vs Binance price on crypto prediction markets"},
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
 }
@@ -1241,6 +1242,34 @@ async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str,
                 "emos_window": 21,
                 "emos_method": "rolling_mae + ewma bias",
                 "exit_slippage_pct": 6.0,
+            }
+        elif sid == "B2":
+            entry["model"] = {
+                "name": "Crypto-Price-Edge-v4",
+                "score": 145.4,
+                "train_trades": 409,
+                "train_wr": 85.3,
+                "oos_pnl": 56,
+                "oos_wr": 81.8,
+                "walkforward_pnl": 56,
+                "max_drawdown_pct": 5.8,
+                "assets": ["BTC"],
+                "expected_daily_trades": "5-6",
+                "min_edge": 0.08,
+                "kelly_fraction": 0.25,
+                "prob_sharpening": 1.0,
+                "excluded_assets": ["SOL", "XRP", "DOGE", "ADA", "BNB"],
+                "exit_type": "edge-based + profit take",
+                "min_hold_edge": 0.02,
+                "profit_target": 0.20,
+                "volatility_window": 72,
+                "volatility_method": "realized",
+                "sigma_scale": 0.3,
+                "fee_model": "maker entry 0%, taker exit = p*(1-p)*0.25",
+                "market_type": "daily above (NOT NegRisk)",
+                "data_source": "Binance real-time price",
+                "backtest_period": "87 days (2025-12-28 → 2026-03-26)",
+                "backtest_data": "1,821 BTC markets, 17.8M price points",
             }
 
         strategies.append(entry)
