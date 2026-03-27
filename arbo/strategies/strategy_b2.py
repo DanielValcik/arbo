@@ -230,8 +230,8 @@ class StrategyB2:
                         token_id, neg_risk=False
                     )
                     if ob_snap and ob_snap.midpoint is not None:
-                        mid = float(ob_snap.midpoint)
-                        spread = float(ob_snap.spread or 1.0)
+                        mid = float(ob_snap.midpoint) if ob_snap.midpoint else 0
+                        spread = float(ob_snap.spread) if ob_snap.spread else 1.0
                         # Only use CLOB price if spread is reasonable (< 50%)
                         if spread < 0.50 and 0.01 < mid < 0.99:
                             clob_price = mid
@@ -293,7 +293,7 @@ class StrategyB2:
                 skip_reasons["no_capital"] = skip_reasons.get("no_capital", 0) + 1
                 continue
 
-            trade_size = round(available * kelly_adj, 2)
+            trade_size = round(float(available) * kelly_adj, 2)
             trade_size = min(trade_size, float(strat_state.allocated) * 0.10)  # Max 10% of allocation
 
             # Volume cap
