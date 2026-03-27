@@ -246,8 +246,8 @@ class RiskManager:
             )
 
         # 7. Total exposure cap
-        exposure_max = self._state.capital * MAX_TOTAL_EXPOSURE_PCT
-        if self._state.open_positions_value + request.size > exposure_max:
+        exposure_max = Decimal(str(self._state.capital)) * MAX_TOTAL_EXPOSURE_PCT
+        if Decimal(str(self._state.open_positions_value)) + Decimal(str(request.size)) > exposure_max:
             logger.warning(
                 "risk_rejected",
                 check="total_exposure",
