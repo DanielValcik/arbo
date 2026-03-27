@@ -399,7 +399,6 @@ class StrategyB2:
             )
 
             executed.append(sig)
-            self._risk_manager.record_trade(trade_req)
             attempted += 1
 
         except Exception as e:
