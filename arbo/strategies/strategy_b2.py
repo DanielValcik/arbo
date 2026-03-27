@@ -343,9 +343,10 @@ class StrategyB2:
                 shares = int(actual_size / clob_price)
                 fill_price = clob_price
 
-            # 10. Record trade
+            # 10. Record trade in paper engine
+            paper_trade = None
             if self._paper_engine:
-                self._paper_engine.place_trade(
+                paper_trade = self._paper_engine.place_trade(
                     market_condition_id=sig.condition_id,
                     token_id=token_id,
                     side="BUY",
@@ -367,6 +368,10 @@ class StrategyB2:
                         "market_type": sig.market_type,
                     },
                 )
+
+            if paper_trade is None and self._paper_engine:
+                skip_reasons["paper_rejected"] = skip_reasons.get("paper_rejected", 0) + 1
+                continue
 
             # Track position
             self._open_positions[token_id] = OpenPosition(
