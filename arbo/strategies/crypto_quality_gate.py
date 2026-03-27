@@ -17,42 +17,43 @@ from arbo.utils.logger import get_logger
 logger = get_logger("crypto_quality_gate")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# THRESHOLDS — from autoresearch v4 (2026-03-27)
-# Score=145.4, 409 trades, WR=85.3%, PnL=$11,107, Sharpe=7.75, DD=5.8%
-# Dataset: 1,821 BTC markets, 87 days (2025-12-28 → 2026-03-26)
+# THRESHOLDS — from autoresearch v5 (2026-03-27, BTC+ETH)
+# Score=155.9, 902 trades, WR=84.7%, PnL=$27,034, Sharpe=7.95, DD=4.4%
+# Dataset: 3,745 labeled markets (1,825 BTC + 1,920 ETH), 87 days
 # Fee model: maker entry 0%, taker exit fee = price*(1-price)*0.25
+# OOS: $1,229 avg PnL across 3 walk-forward folds
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Entry thresholds
 MIN_EDGE = 0.08
-MAX_EDGE = 0.40  # Cap edge — signals >40% are likely model miscalibration
-MIN_PRICE = 0.03
-MAX_PRICE = 0.70
+MAX_EDGE = 0.90
+MIN_PRICE = 0.05
+MAX_PRICE = 0.60
 MIN_VOLUME_24H = 0.0    # PMD doesn't have volume; live uses liquidity check
 MIN_LIQUIDITY = 0.0      # Gamma API doesn't always provide liquidity; crypto markets have deep books
-MIN_TIME_TO_EXPIRY_H = 4
+MIN_TIME_TO_EXPIRY_H = 8
 MAX_TIME_TO_EXPIRY_H = 168  # 7 days max
 
 # Volatility model
-VOLATILITY_WINDOW = 72       # 72 hours of price history for sigma
-VOLATILITY_METHOD = "realized"
-SIGMA_SCALE = 0.3
+VOLATILITY_WINDOW = 168      # 168 hours (7 days) of price history for sigma
+VOLATILITY_METHOD = "ewma"
+SIGMA_SCALE = 0.8
 
 # Exit thresholds
 EXIT_ENABLED = True
-MIN_HOLD_EDGE = 0.02         # Exit when edge drops below 2%
+MIN_HOLD_EDGE = 0.03         # Exit when edge drops below 3%
 EXIT_SLIPPAGE_PCT = 0.01     # 1% slippage (tight spreads on crypto)
-PROB_EXIT_FLOOR = 0.05       # Exit if model prob drops below 5%
-PROFIT_TAKE_ALSO = True
-PROFIT_TARGET_ABS = 0.20     # Take profit at +$0.20
+PROB_EXIT_FLOOR = 0.0        # Disabled
+PROFIT_TAKE_ALSO = False     # No profit take — hold to resolution
+PROFIT_TARGET_ABS = 0.30     # Only if PROFIT_TAKE_ALSO re-enabled
 
 # Sizing
-KELLY_RAW_CAP = 0.20
-PROB_SHARPENING = 1.0
-SHRINKAGE = 0.0
-MAX_AGGREGATE_PCT = 0.80     # Deploy up to 80% of capital
-MAX_POSITION_PCT = 0.10      # 10% per single position
-REENTRY_COOLDOWN_H = 1       # 1 hour cooldown per token
+KELLY_RAW_CAP = 0.30
+PROB_SHARPENING = 1.20       # Push probabilities toward extremes
+SHRINKAGE = 0.02
+MAX_AGGREGATE_PCT = 0.70     # Deploy up to 70% of capital
+MAX_POSITION_PCT = 0.08      # 8% per single position
+REENTRY_COOLDOWN_H = 0       # No cooldown
 
 # Exchange price freshness
 MAX_EXCHANGE_PRICE_AGE_S = 30.0  # Max 30 seconds stale
@@ -60,16 +61,8 @@ MAX_EXCHANGE_PRICE_AGE_S = 30.0  # Max 30 seconds stale
 # Excluded assets (insufficient liquidity)
 EXCLUDED_ASSETS: set[str] = {"SOL", "XRP", "DOGE", "ADA", "BNB"}
 
-# Per-asset overrides (from autoresearch Gen 2)
-ASSET_OVERRIDES: dict[str, dict[str, float]] = {
-    "BTC": {
-        "min_edge": 0.08,
-        "max_price": 0.70,
-        "min_price": 0.03,
-        "kelly_raw_cap": 0.25,
-        "prob_sharpening": 1.05,
-    },
-}
+# Per-asset overrides — none needed, both BTC and ETH profitable
+ASSET_OVERRIDES: dict[str, dict[str, float]] = {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
