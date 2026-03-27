@@ -238,9 +238,15 @@ class StrategyB2:
             else:
                 clob_price = sig.market_price
 
-            # 6. Revalidate edge with CLOB price
+            # 6. Revalidate with CLOB price
+            # CLOB price may differ significantly from Gamma (esp. deep ITM/OTM)
+            from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE
+            if clob_price < MIN_PRICE or clob_price > MAX_PRICE:
+                skip_reasons["clob_price_out_of_range"] = skip_reasons.get("clob_price_out_of_range", 0) + 1
+                continue
+
             clob_edge = sig.model_prob - clob_price
-            if abs(clob_edge) < 0.01:  # Edge gone at CLOB price
+            if clob_edge < 0.01:  # Need positive edge at CLOB price
                 skip_reasons["clob_edge_gone"] = skip_reasons.get("clob_edge_gone", 0) + 1
                 continue
 
