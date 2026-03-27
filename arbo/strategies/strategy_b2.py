@@ -163,7 +163,7 @@ class StrategyB2:
                 self._vol_estimator.update(symbol, price, time.time())
 
         if not exchange_prices:
-            logger.debug("b2_no_exchange_prices")
+            logger.info("b2_no_exchange_prices")
             return []
 
         # 2. Scan markets
@@ -175,10 +175,20 @@ class StrategyB2:
         )
 
         if not signals:
+            logger.info("b2_no_signals", crypto_markets=len(markets))
             return []
 
         # 3. Quality gate
         qualified = filter_signals(signals)
+
+        logger.info(
+            "b2_poll_summary",
+            exchange_btc=exchange_prices.get("BTCUSDT", 0),
+            crypto_markets=len(markets),
+            signals=len(signals),
+            qualified=len(qualified),
+        )
+
         if not qualified:
             return []
 

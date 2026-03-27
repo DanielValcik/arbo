@@ -193,7 +193,7 @@ def filter_signals(signals: list[Any]) -> list[Any]:
             rejected_reasons[reason] = rejected_reasons.get(reason, 0) + 1
 
     if rejected_reasons:
-        logger.debug(
+        logger.info(
             "crypto_quality_gate_filtered",
             passed=len(qualified),
             rejected=len(signals) - len(qualified),
