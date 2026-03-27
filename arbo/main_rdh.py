@@ -1443,14 +1443,24 @@ class RDHOrchestrator:
             return
 
         token_ids = [p.token_id for p in b2_positions]
-        # Non-NegRisk: use real orderbook
+        # Non-NegRisk: use real orderbook, but fall back to midpoint/Gamma
+        # on thin books (bid=0.01 is not a real price)
         snapshots = await self._orderbook_provider.get_snapshots_batch(
             token_ids, neg_risk=False
         )
         current_prices: dict[str, float] = {}
         for tid, snap in snapshots.items():
-            if snap is not None and snap.best_bid is not None:
-                current_prices[tid] = float(snap.best_bid)
+            if snap is None:
+                continue
+            mid = float(snap.midpoint) if snap.midpoint else None
+            spread = float(snap.spread) if snap.spread else 1.0
+            bid = float(snap.best_bid) if snap.best_bid else None
+            # Use midpoint if spread is reasonable, else use entry price as proxy
+            if mid and spread < 0.50 and 0.01 < mid < 0.99:
+                current_prices[tid] = mid
+            elif bid and bid > 0.02:
+                current_prices[tid] = bid
+            # else: skip — no reliable price, don't trigger exit
 
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)
@@ -1460,6 +1470,9 @@ class RDHOrchestrator:
         for token_id, exit_reason in (exits or []):
             bid_price = current_prices.get(token_id)
             if bid_price is None:
+                continue
+            # Don't sell at absurdly low prices (thin CLOB book artifact)
+            if bid_price < 0.02:
                 continue
 
             pos = next(
