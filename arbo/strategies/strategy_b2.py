@@ -197,7 +197,8 @@ class StrategyB2:
         attempted = 0
         skip_reasons: dict[str, int] = {}
 
-        for sig in qualified[:MAX_TRADES_PER_SCAN * 3]:  # Try more to find 3 good ones
+        try:
+          for sig in qualified[:MAX_TRADES_PER_SCAN * 3]:  # Try more to find 3 good ones
             if attempted >= MAX_TRADES_PER_SCAN:
                 break
 
@@ -374,7 +375,10 @@ class StrategyB2:
             self._risk_manager.record_trade(trade_req)
             attempted += 1
 
-        if skip_reasons or executed:
+        except Exception as e:
+            logger.error("b2_entry_loop_error", error=str(e), attempted=attempted)
+
+        if skip_reasons or executed or qualified:
             logger.info(
                 "b2_entry_summary",
                 executed=len(executed),
