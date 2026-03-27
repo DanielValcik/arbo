@@ -239,15 +239,20 @@ class StrategyB2:
                 clob_price = sig.market_price
 
             # 6. Revalidate with CLOB price
-            # CLOB price may differ significantly from Gamma (esp. deep ITM/OTM)
-            from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE
+            from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
             if clob_price < MIN_PRICE or clob_price > MAX_PRICE:
-                skip_reasons["clob_price_out_of_range"] = skip_reasons.get("clob_price_out_of_range", 0) + 1
+                skip_reasons["clob_price_range"] = skip_reasons.get("clob_price_range", 0) + 1
+                continue
+
+            # Gamma vs CLOB divergence check — large gap means stale/synthetic Gamma price
+            gamma_clob_gap = abs(sig.market_price - clob_price)
+            if gamma_clob_gap > 0.15:
+                skip_reasons["gamma_clob_diverge"] = skip_reasons.get("gamma_clob_diverge", 0) + 1
                 continue
 
             clob_edge = sig.model_prob - clob_price
-            if clob_edge < 0.01:  # Need positive edge at CLOB price
-                skip_reasons["clob_edge_gone"] = skip_reasons.get("clob_edge_gone", 0) + 1
+            if clob_edge < MIN_EDGE:
+                skip_reasons["clob_edge_low"] = skip_reasons.get("clob_edge_low", 0) + 1
                 continue
 
             skip_reasons["reached_sizing"] = skip_reasons.get("reached_sizing", 0) + 1
