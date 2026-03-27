@@ -244,6 +244,8 @@ class StrategyB2:
                 skip_reasons["clob_edge_gone"] = skip_reasons.get("clob_edge_gone", 0) + 1
                 continue
 
+            skip_reasons["reached_sizing"] = skip_reasons.get("reached_sizing", 0) + 1
+
             # 7. Kelly sizing
             prob = sig.model_prob
             price = clob_price
@@ -262,10 +264,15 @@ class StrategyB2:
 
             # Get available capital from risk manager
             strat_state = self._risk_manager.get_strategy_state(STRATEGY_NAME)
-            if strat_state is None or strat_state.is_halted:
+            if strat_state is None:
+                skip_reasons["no_strat_state"] = skip_reasons.get("no_strat_state", 0) + 1
+                continue
+            if strat_state.is_halted:
+                skip_reasons["halted"] = skip_reasons.get("halted", 0) + 1
                 continue
             available = float(strat_state.allocated - strat_state.deployed)
             if available <= 0:
+                skip_reasons["no_capital"] = skip_reasons.get("no_capital", 0) + 1
                 continue
 
             trade_size = round(available * kelly_adj, 2)
