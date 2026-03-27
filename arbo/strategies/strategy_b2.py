@@ -353,7 +353,7 @@ class StrategyB2:
                     model_prob=sig.model_prob,
                     layer=0,
                     market_category="crypto",
-                    fee_enabled=sig.fee_enabled,
+                    fee_enabled=False,  # Maker entry = 0% fee; fee tracked separately
                     strategy=STRATEGY_NAME,
                     pre_computed_size=actual_size,
                     clob_fill_price=fill_price,
