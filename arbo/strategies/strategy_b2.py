@@ -403,7 +403,9 @@ class StrategyB2:
             attempted += 1
 
         except Exception as e:
-            logger.error("b2_entry_loop_error", error=str(e), attempted=attempted)
+            import traceback
+            logger.error("b2_entry_loop_error", error=str(e), attempted=attempted,
+                         tb=traceback.format_exc()[-300:])
 
         if skip_reasons or executed or qualified:
             logger.info(
