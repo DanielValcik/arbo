@@ -221,22 +221,25 @@ class StrategyB2:
                 continue
 
             # 5. Fetch CLOB orderbook (non-NegRisk: real orderbook)
+            # For crypto markets, prefer midpoint; fall back to Gamma price
+            # if CLOB is too thin (bid=0.01, ask=0.99 = empty book)
+            clob_price = sig.market_price  # Default: use Gamma price
             if self._orderbook_provider:
                 try:
                     ob_snap = await self._orderbook_provider.get_snapshot(
                         token_id, neg_risk=False
                     )
-                    if ob_snap and ob_snap.best_ask is not None:
-                        clob_price = float(ob_snap.best_ask)
-                    else:
-                        skip_reasons["no_orderbook"] = skip_reasons.get("no_orderbook", 0) + 1
-                        continue
+                    if ob_snap and ob_snap.midpoint is not None:
+                        mid = float(ob_snap.midpoint)
+                        spread = float(ob_snap.spread or 1.0)
+                        # Only use CLOB price if spread is reasonable (< 50%)
+                        if spread < 0.50 and 0.01 < mid < 0.99:
+                            clob_price = mid
+                        # else: keep Gamma price (thin book)
                 except Exception as e:
                     skip_reasons["ob_error"] = skip_reasons.get("ob_error", 0) + 1
                     logger.warning("b2_orderbook_error", token=token_id[:20], error=str(e))
-                    continue
-            else:
-                clob_price = sig.market_price
+                    # Continue with Gamma price
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
