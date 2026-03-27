@@ -194,20 +194,29 @@ class StrategyB2:
 
         # 4. Process top signals
         now = time.time()
-        for sig in qualified[:MAX_TRADES_PER_SCAN]:
+        attempted = 0
+        skip_reasons: dict[str, int] = {}
+
+        for sig in qualified[:MAX_TRADES_PER_SCAN * 3]:  # Try more to find 3 good ones
+            if attempted >= MAX_TRADES_PER_SCAN:
+                break
+
             token_id = sig.token_id
 
             # Skip if already have position
             if token_id in self._open_positions:
+                skip_reasons["has_position"] = skip_reasons.get("has_position", 0) + 1
                 continue
 
             # Skip if in pending exit
             if self._exit_manager_ref and token_id in self._exit_manager_ref._pending:
+                skip_reasons["pending_exit"] = skip_reasons.get("pending_exit", 0) + 1
                 continue
 
             # Cooldown check
             last_trade = self._last_trade_time.get(token_id, 0)
             if now - last_trade < MIN_HOURS_BETWEEN_TRADES * 3600:
+                skip_reasons["cooldown"] = skip_reasons.get("cooldown", 0) + 1
                 continue
 
             # 5. Fetch CLOB orderbook (non-NegRisk: real orderbook)
@@ -219,8 +228,11 @@ class StrategyB2:
                     if ob_snap and ob_snap.best_ask is not None:
                         clob_price = float(ob_snap.best_ask)
                     else:
+                        skip_reasons["no_orderbook"] = skip_reasons.get("no_orderbook", 0) + 1
                         continue
-                except Exception:
+                except Exception as e:
+                    skip_reasons["ob_error"] = skip_reasons.get("ob_error", 0) + 1
+                    logger.warning("b2_orderbook_error", token=token_id[:20], error=str(e))
                     continue
             else:
                 clob_price = sig.market_price
@@ -228,6 +240,7 @@ class StrategyB2:
             # 6. Revalidate edge with CLOB price
             clob_edge = sig.model_prob - clob_price
             if abs(clob_edge) < 0.01:  # Edge gone at CLOB price
+                skip_reasons["clob_edge_gone"] = skip_reasons.get("clob_edge_gone", 0) + 1
                 continue
 
             # 7. Kelly sizing
@@ -359,6 +372,15 @@ class StrategyB2:
 
             executed.append(sig)
             self._risk_manager.record_trade(trade_req)
+            attempted += 1
+
+        if skip_reasons or executed:
+            logger.info(
+                "b2_entry_summary",
+                executed=len(executed),
+                skip_reasons=skip_reasons,
+                qualified=len(qualified),
+            )
 
         return executed
 
