@@ -3368,7 +3368,6 @@
     }
 
     // ===== Live C2 dashboard =====
-    let lc2RefreshInterval = null;
     async function fetchLiveC2() {
         // Fetch C2 data from existing endpoints (live-specific endpoint added later)
         const [stratData, tradesData, cityData, evrData] = await Promise.allSettled([
