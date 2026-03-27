@@ -107,8 +107,9 @@ class StrategyB2:
     async def init(self) -> None:
         """Initialize strategy — restore state from paper engine."""
         if self._paper_engine:
-            for tid, pos in self._paper_engine.open_positions.items():
-                if pos.strategy == STRATEGY_NAME:
+            for pos in self._paper_engine.open_positions:
+                tid = pos.token_id
+                if getattr(pos, "strategy", "") == STRATEGY_NAME:
                     self._open_positions[tid] = OpenPosition(
                         token_id=tid,
                         condition_id="",
