@@ -349,8 +349,8 @@ class StrategyB2:
                     market_condition_id=sig.condition_id,
                     token_id=token_id,
                     side="BUY",
-                    market_price=clob_price,
-                    model_prob=sig.model_prob,
+                    market_price=Decimal(str(round(clob_price, 4))),
+                    model_prob=Decimal(str(round(sig.model_prob, 4))),
                     layer=0,
                     market_category="crypto",
                     fee_enabled=False,  # Maker entry = 0% fee; fee tracked separately
