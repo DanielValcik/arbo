@@ -25,7 +25,7 @@ logger = get_logger("crypto_quality_gate")
 
 # Entry thresholds
 MIN_EDGE = 0.08
-MAX_EDGE = 0.90  # Allow high-edge signals (deep ITM/OTM with real edge)
+MAX_EDGE = 0.40  # Cap edge — signals >40% are likely model miscalibration
 MIN_PRICE = 0.03
 MAX_PRICE = 0.70
 MIN_VOLUME_24H = 0.0    # PMD doesn't have volume; live uses liquidity check
