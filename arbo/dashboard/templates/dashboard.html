@@ -2616,12 +2616,13 @@
         const datasets = [
             {label: 'A Theta', data: series.A || [], borderColor: '#f0883e', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
             {label: 'B Reflexivity', data: series.B || [], borderColor: '#bc8cff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
+            {label: 'B2 Crypto Edge', data: series.B2 || [], borderColor: '#f97316', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
             {label: 'C Weather', data: series.C || [], borderColor: '#58a6ff', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
             {label: 'C2 EMOS Exit', data: series.C2 || [], borderColor: '#14b8a6', tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false},
         ];
         if (stratCompChart) {
             stratCompChart.data.labels = labels;
-            datasets.forEach((ds, i) => { stratCompChart.data.datasets[i].data = ds.data; });
+            stratCompChart.data.datasets = datasets;
             stratCompChart.update('none');
         } else {
             stratCompChart = new Chart(document.getElementById('stratCompChart'), {
