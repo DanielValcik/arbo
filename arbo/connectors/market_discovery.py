@@ -636,6 +636,65 @@ class MarketDiscovery:
 
         return all_markets
 
+    async def _fetch_crypto_price_events(self) -> list[GammaMarket]:
+        """Fetch crypto price prediction events via /events endpoint.
+
+        Daily "above" markets (e.g., "Bitcoin above $68K on March 27?")
+        are individual binary markets that appear in /events but may not
+        be in top volume on /markets. Fetches via tag_slug=crypto.
+        """
+        if not self._session:
+            return []
+
+        all_markets: list[GammaMarket] = []
+        try:
+            # Fetch active crypto events
+            for tag in ["bitcoin", "ethereum"]:
+                params = {
+                    "tag_slug": tag,
+                    "active": "true",
+                    "closed": "false",
+                    "limit": "100",
+                }
+                url = f"{self._gamma_url}/events"
+                async with self._session.get(url, params=params) as resp:
+                    if resp.status != 200:
+                        continue
+                    events = await resp.json()
+                    if not isinstance(events, list):
+                        continue
+
+                    for event in events:
+                        title = (event.get("title", "") or "").lower()
+                        # Only process price prediction markets
+                        if not any(kw in title for kw in ["above", "below", "price", "hit"]):
+                            continue
+
+                        nested = event.get("markets", [])
+                        if not isinstance(nested, list):
+                            continue
+
+                        for raw_market in nested:
+                            if not isinstance(raw_market, dict):
+                                continue
+                            if raw_market.get("closed", False):
+                                continue
+                            if not raw_market.get("active", True):
+                                continue
+                            market = GammaMarket(raw_market)
+                            market.category = "crypto"
+                            if market.condition_id and market.active:
+                                all_markets.append(market)
+
+            logger.info(
+                "crypto_price_events_fetched",
+                markets=len(all_markets),
+            )
+        except Exception as e:
+            logger.warning("crypto_price_events_exception", error=str(e))
+
+        return all_markets
+
     async def refresh(self) -> list[GammaMarket]:
         """Refresh market catalog if refresh interval has elapsed.
 
@@ -655,6 +714,10 @@ class MarketDiscovery:
         # Fetch weather temperature events (NegRisk, not in /markets endpoint)
         weather_markets = await self._fetch_weather_events()
         markets.extend(weather_markets)
+
+        # Fetch crypto price events (daily "above", also via /events)
+        crypto_price_markets = await self._fetch_crypto_price_events()
+        markets.extend(crypto_price_markets)
 
         self._markets = {m.condition_id: m for m in markets}
         self._last_refresh = now
