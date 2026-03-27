@@ -355,8 +355,8 @@ class StrategyB2:
                     market_category="crypto",
                     fee_enabled=False,  # Maker entry = 0% fee; fee tracked separately
                     strategy=STRATEGY_NAME,
-                    pre_computed_size=actual_size,
-                    clob_fill_price=fill_price,
+                    pre_computed_size=Decimal(str(round(actual_size, 2))),
+                    clob_fill_price=Decimal(str(round(fill_price, 4))),
                     trade_details={
                         "asset": sig.asset,
                         "strike": float(sig.strike),
