@@ -2029,6 +2029,8 @@ class RDHOrchestrator:
                         self._strategy_b.handle_resolution(cid, pnl)
                     elif strategy == "C2" and self._strategy_c2 is not None:
                         self._strategy_c2.handle_resolution(cid, pnl)
+                    elif strategy == "B2" and self._strategy_b2 is not None:
+                        self._strategy_b2.handle_resolution(cid, float(pnl))
                     elif strategy == "C" and self._strategy_c is not None:
                         self._strategy_c.handle_resolution(cid, pnl)
                         # Shadow exit A/B comparison

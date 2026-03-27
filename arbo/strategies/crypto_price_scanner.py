@@ -135,6 +135,17 @@ def scan_crypto_markets(
         if info.is_5min:
             continue
 
+        # Only trade daily "above"/"below" markets
+        # Skip: monthly "hit/dip", range "between", up/down, and other types
+        q_lower = question.lower()
+        if any(kw in q_lower for kw in ["dip to", "hit", "between", "what price", "up or down"]):
+            continue
+        if info.direction not in ("above", "below"):
+            continue
+        # Must have "above" or "below" explicitly in question
+        if "above" not in q_lower and "below" not in q_lower:
+            continue
+
         # Get current exchange price
         exchange_price = exchange_prices.get(info.symbol)
         if exchange_price is None or exchange_price <= 0:
@@ -146,8 +157,8 @@ def scan_crypto_markets(
         # Compute hours to expiry
         hours_to_expiry = compute_hours_to_expiry(info.expiry)
 
-        # Classify market type
-        market_type = classify_market_type(question)
+        # Classify market type — force daily_above since we filtered above
+        market_type = "daily_above"
 
         # Compute model probability
         model_prob = estimate_crypto_prob(
