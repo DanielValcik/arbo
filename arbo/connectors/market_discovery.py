@@ -648,8 +648,9 @@ class MarketDiscovery:
 
         all_markets: list[GammaMarket] = []
         try:
-            # Fetch active crypto events
-            for tag in ["bitcoin", "ethereum"]:
+            # Fetch active crypto price events
+            # Daily "above" markets are tagged with "crypto-prices", not "bitcoin"/"crypto"
+            for tag in ["crypto-prices"]:
                 params = {
                     "tag_slug": tag,
                     "active": "true",
