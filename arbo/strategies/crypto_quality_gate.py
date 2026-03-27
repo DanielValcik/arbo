@@ -25,11 +25,11 @@ logger = get_logger("crypto_quality_gate")
 
 # Entry thresholds
 MIN_EDGE = 0.08
-MAX_EDGE = 0.50
+MAX_EDGE = 0.90  # Allow high-edge signals (deep ITM/OTM with real edge)
 MIN_PRICE = 0.03
 MAX_PRICE = 0.70
 MIN_VOLUME_24H = 0.0    # PMD doesn't have volume; live uses liquidity check
-MIN_LIQUIDITY = 5000.0   # $5K minimum for live trading
+MIN_LIQUIDITY = 0.0      # Gamma API doesn't always provide liquidity; crypto markets have deep books
 MIN_TIME_TO_EXPIRY_H = 4
 MAX_TIME_TO_EXPIRY_H = 168  # 7 days max
 
