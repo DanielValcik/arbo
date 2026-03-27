@@ -198,7 +198,7 @@ class StrategyB2:
         skip_reasons: dict[str, int] = {}
 
         try:
-          for sig in qualified[:MAX_TRADES_PER_SCAN * 3]:  # Try more to find 3 good ones
+          for sig in qualified[:50]:  # Try up to 50 to find viable entries past deep ITM/OTM
             if attempted >= MAX_TRADES_PER_SCAN:
                 break
 
