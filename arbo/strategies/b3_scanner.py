@@ -227,6 +227,20 @@ class B3Scanner:
             except Exception as e:
                 logger.warning("b3_slug_fetch_error", slug=slug, error=str(e))
 
+        # Retry btc_at_start for events where Binance kline wasn't ready yet
+        # (happens for future windows fetched before their kline exists)
+        for ev in self._events.values():
+            if ev.btc_at_start is None and now >= ev.start_ts + 60:
+                # Kline should be available now (event started > 1 min ago)
+                btc_start = await self._fetch_btc_at_start(ev.start_ts)
+                if btc_start:
+                    ev.btc_at_start = btc_start
+                    logger.info(
+                        "b3_btc_start_retry_ok",
+                        question=ev.question[:50],
+                        btc_at_start=f"${btc_start:,.2f}",
+                    )
+
         # Clean expired events (ended > 10 min ago)
         expired = [
             cid for cid, ev in self._events.items()
