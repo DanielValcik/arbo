@@ -161,6 +161,22 @@ class StrategyB3:
         if not btc_price:
             return []
 
+        # 2b. Retry btc_at_start for events where Binance kline wasn't ready.
+        # Must happen BEFORE scan() and on every poll (not just fetch_events).
+        # Critical: events fetched for future windows get btc_at_start=None,
+        # and the kline becomes available ~60s after event start. If retry
+        # only runs in fetch_events (every 2 min), we miss the minute-2 window.
+        for ev in self._scanner._events.values():
+            if ev.btc_at_start is None and now >= ev.start_ts + 60:
+                btc_start = await self._scanner._fetch_btc_at_start(ev.start_ts)
+                if btc_start:
+                    ev.btc_at_start = btc_start
+                    logger.info(
+                        "b3_btc_start_filled",
+                        question=ev.question[:50],
+                        btc=f"${btc_start:,.2f}",
+                    )
+
         # 3. Compute per-minute sigma
         sigma_per_min = self._vol_estimator.get_sigma("BTCUSDT", now)
         sigma_per_min = max(sigma_per_min, SIGMA_FLOOR)
