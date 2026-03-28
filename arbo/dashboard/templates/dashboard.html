@@ -19,6 +19,7 @@
             --purple: #bc8cff;
             --orange: #f0883e;
             --teal: #14b8a6;
+            --gold: #e3b341;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -196,6 +197,7 @@
         .strat-a { background: var(--orange); color: #000; }
         .strat-b { background: var(--purple); color: #000; }
         .strat-c { background: var(--blue); color: #000; }
+        .strat-b3 { background: var(--gold); color: #000; }
         .strat-c2 { background: var(--teal); color: #000; }
         .strategy-short {
             font-size: 10px;
@@ -430,6 +432,7 @@
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('arbo')">ARBO</button>
         <button class="tab-btn" onclick="switchTab('liveb2')" style="color:var(--orange)">LIVE B2</button>
+        <button class="tab-btn" onclick="switchTab('liveb3')" style="color:var(--gold)">LIVE B3</button>
         <button class="tab-btn" onclick="switchTab('livec2')" style="color:var(--teal)">LIVE C2</button>
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
@@ -443,6 +446,8 @@
             <option value="all">All</option>
             <option value="A">A — Theta Decay</option>
             <option value="B">B — Reflexivity Surfer</option>
+            <option value="B2">B2 — Crypto Price Edge</option>
+            <option value="B3">B3 — Binance Oracle Scalper</option>
             <option value="C">C — Compound Weather</option>
             <option value="C2">C2 — EMOS Exit Fusion</option>
         </select>
@@ -1354,6 +1359,102 @@
     </div>
 
     <!-- ============================================================ -->
+    <!-- LIVE B3 TAB — Binance Oracle Scalper -->
+    <!-- ============================================================ -->
+    <div id="liveb3Content" class="tab-content">
+        <div class="grid">
+            <!-- B3 Overview -->
+            <div class="card" style="border-top:3px solid var(--gold)">
+                <div class="card-title">B3 Binance Oracle Scalper</div>
+                <div id="lb3Overview" style="font-size:12px">
+                    <div style="text-align:center;padding:20px;color:var(--text-dim)">
+                        <div style="font-size:24px;font-weight:700;color:var(--gold)" id="lb3TotalPnl">$0.00</div>
+                        <div>Total P&L</div>
+                        <div style="margin-top:12px;display:flex;justify-content:space-around">
+                            <div><span id="lb3Trades" style="font-weight:700">0</span><br>Trades</div>
+                            <div><span id="lb3WinRate" style="font-weight:700">--</span><br>Win Rate</div>
+                            <div><span id="lb3Deployed" style="font-weight:700">$0</span><br>Deployed</div>
+                            <div><span id="lb3Positions" style="font-weight:700">0</span><br>Positions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Info -->
+            <div class="card" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Model: Binance-Oracle-Scalper-v1</div>
+                <div style="font-size:11px">
+                    <table style="width:100%">
+                        <tbody>
+                            <tr><td>OOS score</td><td style="font-weight:700">6,140</td></tr>
+                            <tr><td>Win rate (OOS)</td><td>52.1%</td></tr>
+                            <tr><td>Sharpe (OOS)</td><td>22.0</td></tr>
+                            <tr><td>Max DD</td><td>33.1%</td></tr>
+                            <tr><td>Volatilita</td><td>realized 720min, scale=0.644</td></tr>
+                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.095</td></tr>
+                            <tr><td>Profit target</td><td>$0.207/share</td></tr>
+                            <tr><td>Stop loss</td><td>$0.038/share</td></tr>
+                            <tr><td>Max hold</td><td>3 min</td></tr>
+                            <tr><td>Fee model</td><td>PostOnly maker 0% + rebate</td></tr>
+                            <tr><td>Market typ</td><td>BTC 5-min Up/Down</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- B3 Trades Table -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">B3 Trades</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cas</th>
+                                <th>Smer</th>
+                                <th>BTC Start</th>
+                                <th>BTC Entry</th>
+                                <th>Entry FV</th>
+                                <th>Exit FV</th>
+                                <th>Size</th>
+                                <th>Edge</th>
+                                <th>P&L</th>
+                                <th>Duvod</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb3TradesBody">
+                            <tr><td colspan="10" style="color:var(--text-dim);text-align:center">Zatim zadna B3 data -- spusti paper trading</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- B3 Open Positions -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Otevrene pozice</div>
+                <div style="overflow-x:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Smer</th>
+                                <th>BTC Start</th>
+                                <th>BTC Now</th>
+                                <th>Entry FV</th>
+                                <th>Current FV</th>
+                                <th>Unrealized</th>
+                                <th>Hold (min)</th>
+                                <th>Time left (min)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb3PositionsBody">
+                            <tr><td colspan="8" style="color:var(--text-dim);text-align:center">Zadne otevrene pozice</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
     <!-- LIVE C2 TAB -->
     <!-- ============================================================ -->
     <div id="livec2Content" class="tab-content">
@@ -1523,6 +1624,8 @@
         let cls = 'strat-a';
         let label = 'A';
         if (s === 'B' || s === 'strategy_B') { cls = 'strat-b'; label = 'B'; }
+        else if (s === 'B2' || s === 'strategy_B2') { cls = 'strat-a'; label = 'B2'; }
+        else if (s === 'B3' || s === 'strategy_B3') { cls = 'strat-b3'; label = 'B3'; }
         else if (s === 'C2' || s === 'strategy_C2') { cls = 'strat-c2'; label = 'C2'; }
         else if (s === 'C' || s === 'strategy_C') { cls = 'strat-c'; label = 'C'; }
         else if (s === 'A' || s === 'strategy_A') { cls = 'strat-a'; label = 'A'; }
@@ -1804,12 +1907,16 @@
     const STRATEGY_SHORT = {
         'A': 'Sazi proti udalostem, ktere se pravdepodobne nestanou.',
         'B': 'Vydelava na hype cyklech kolem kryptomen.',
+        'B2': 'Sazi na BTC/ETH cenu podle volatilniho modelu.',
+        'B3': 'Skalpuje BTC 5-min markety podle Binance ceny.',
         'C': 'Presnejsi predpoved pocasi nez co trh ocekava.',
         'C2': 'Chytrejsi exit — prodava kdyz vyhoda zmizi, nenecha prodelat.',
     };
     const STRATEGY_DETAIL = {
         'A': 'Kupuje NO kontrakty u longshotovych udalosti (cena YES pod 15 centu). Trh precenuje sanci, ze se udalost stane. Jak se blizi expirace a nic se nedeje, cena NO roste a my profitujeme. Filtrujeme pres 3-sigma taker flow a min. $10K volume.',
         'B': 'Sleduje socialni data (Santiment, CoinGecko) a identifikuje boom-bust vzory na crypto trzich. Ve fazi boomu kupuje YES, na vrcholu prodava. Pouziva divergenci mezi socialnim sentimentem a cenou na Polymarketu jako signal.',
+        'B2': 'Pouziva Binance realtime cenu BTC/ETH a volatilni model k odhadu pravdepodobnosti "bude cena nad X?". Kdyz model rika vyssi sanci nez trh, kupuje. Maker ordery = 0% fee. Drzi hodiny/dny do expirace nebo edge-based exit.',
+        'B3': 'Binance cena BTC se meni DRIV nez Polymarket 5-minutove markety. Pocita fair value z Binance a vstupuje ve 2. minute okna. Momentum strategie: kdyz BTC roste, kupuje Up token. PostOnly ordery = 0% fee + rebate. Drzi 1-3 minuty, ~33 obchodu denne.',
         'C': 'Kombinuje predpovedi z NOAA, Met Office a Open-Meteo pro 20 mest. Porovnava nasi pravdepodobnost s cenou na Polymarketu. Vydelava tam, kde mame presnejsi odhad teploty. Pouziva stejna METAR letistni data jako Polymarket pro rozhodovani.',
         'C2': 'EMOS model se uci z historickych chyb predpovedi a adaptuje nejistotu per mesto. Misto cekani na vysledek (0 nebo 1 dolar) proda pozici kdyz model rika "vyhoda zmizela". Tim zachrani penize na prohravajicich obchodech (95% uspesnost exitu). Aktivni v 15 mestech, vylouceny Sao Paulo, Tel Aviv, Tokyo, Lucknow.',
     };
@@ -2147,7 +2254,10 @@
             const datasets = [
                 {label: 'A', data: chart.map(d => d.A_cumulative || 0), borderColor: '#3b82f6', fill: false, tension: 0.3, pointRadius: 2},
                 {label: 'B', data: chart.map(d => d.B_cumulative || 0), borderColor: '#a855f7', fill: false, tension: 0.3, pointRadius: 2},
+                {label: 'B2', data: chart.map(d => d.B2_cumulative || 0), borderColor: '#f0883e', fill: false, tension: 0.3, pointRadius: 2},
+                {label: 'B3', data: chart.map(d => d.B3_cumulative || 0), borderColor: '#e3b341', fill: false, tension: 0.3, pointRadius: 2},
                 {label: 'C', data: chart.map(d => d.C_cumulative || 0), borderColor: '#22c55e', fill: false, tension: 0.3, pointRadius: 2},
+                {label: 'C2', data: chart.map(d => d.C2_cumulative || 0), borderColor: '#14b8a6', fill: false, tension: 0.3, pointRadius: 2},
             ];
 
             const ctx = document.getElementById('drawdownChart');
@@ -2884,7 +2994,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-        const contentMap = { arbo: 'arboContent', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
+        const contentMap = { arbo: 'arboContent', liveb2: 'liveb2Content', liveb3: 'liveb3Content', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
         document.getElementById(contentMap[tab]).classList.add('active');
 
         if (tab === 'cryptoarb') {
@@ -2916,6 +3026,12 @@
             if (!lb2RefreshInterval) lb2RefreshInterval = setInterval(fetchLiveB2, 10000);
         } else {
             if (lb2RefreshInterval) { clearInterval(lb2RefreshInterval); lb2RefreshInterval = null; }
+        }
+        if (tab === 'liveb3') {
+            fetchLiveB3();
+            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(fetchLiveB3, 10000);
+        } else {
+            if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
         }
     }
 
@@ -3363,6 +3479,77 @@
                     <td>${(details.edge || 0).toFixed(3)}</td>
                     <td style="color:${upnlColor};font-weight:700">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</td>
                     <td>—</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // ===== Live B3 dashboard (Binance Oracle Scalper) =====
+    let lb3RefreshInterval = null;
+    async function fetchLiveB3() {
+        const [stratData, posData] = await Promise.allSettled([
+            fetchJSON('/api/strategies'),
+            fetchJSON('/api/positions?strategy=B3'),
+        ]);
+
+        // Overview card
+        const strats = stratData.value?.strategies || [];
+        const b3 = strats.find(s => s.id === 'B3');
+        if (b3) {
+            const pnl = b3.total_pnl || 0;
+            document.getElementById('lb3TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            document.getElementById('lb3TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lb3Deployed').textContent = '$' + (b3.deployed || 0).toFixed(0);
+            document.getElementById('lb3Positions').textContent = b3.position_count || 0;
+        }
+
+        // Trades — from closed positions with strategy=B3
+        const closedResp = await fetchJSON('/api/closed-positions?strategy=B3');
+        const closed = closedResp?.positions || [];
+        if (closed.length > 0) {
+            const wins = closed.filter(p => (p.actual_pnl || 0) > 0).length;
+            const total = closed.length;
+            document.getElementById('lb3Trades').textContent = total;
+            document.getElementById('lb3WinRate').textContent = total > 0 ? ((wins/total)*100).toFixed(0) + '%' : '--';
+
+            document.getElementById('lb3TradesBody').innerHTML = closed.slice(0, 50).map(t => {
+                const pnl = t.actual_pnl || 0;
+                const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                const details = t.trade_details || {};
+                return `<tr>
+                    <td>${t.placed_at ? new Date(t.placed_at).toLocaleString('cs-CZ', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'}) : '--'}</td>
+                    <td style="font-weight:600">${details.direction === 'up' ? 'UP' : details.direction === 'down' ? 'DOWN' : '--'}</td>
+                    <td>$${details.btc_at_start ? Number(details.btc_at_start).toLocaleString() : '--'}</td>
+                    <td>$${details.btc_now ? Number(details.btc_now).toLocaleString() : '--'}</td>
+                    <td>${(t.fill_price || 0).toFixed(3)}</td>
+                    <td>${t.exit_price ? t.exit_price.toFixed(3) : '--'}</td>
+                    <td>$${(t.size || 0).toFixed(1)}</td>
+                    <td>${details.edge ? (details.edge * 100).toFixed(1) + '%' : '--'}</td>
+                    <td style="color:${pnlColor};font-weight:700">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                    <td>${t.exit_reason || t.status || '--'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Open positions
+        const positions = posData.value?.positions || [];
+        const b3Positions = positions.filter(p => (p.strategy || '') === 'B3');
+        if (b3Positions.length > 0) {
+            document.getElementById('lb3PositionsBody').innerHTML = b3Positions.map(p => {
+                const details = p.trade_details || {};
+                const upnl = p.unrealized_pnl || 0;
+                const upnlColor = upnl >= 0 ? 'var(--green)' : 'var(--red)';
+                const holdMin = p.placed_at ? ((Date.now() - new Date(p.placed_at).getTime()) / 60000).toFixed(1) : '--';
+                const timeLeftMin = details.event_end_ts ? Math.max(0, (details.event_end_ts * 1000 - Date.now()) / 60000).toFixed(1) : '--';
+                return `<tr>
+                    <td style="font-weight:600">${details.direction === 'up' ? 'UP' : details.direction === 'down' ? 'DOWN' : '--'}</td>
+                    <td>$${details.btc_at_start ? Number(details.btc_at_start).toLocaleString() : '--'}</td>
+                    <td>$${details.btc_now ? Number(details.btc_now).toLocaleString() : '--'}</td>
+                    <td>${(p.avg_price || 0).toFixed(3)}</td>
+                    <td>${(p.current_price || 0).toFixed(3)}</td>
+                    <td style="color:${upnlColor};font-weight:700">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</td>
+                    <td>${holdMin}</td>
+                    <td>${timeLeftMin}</td>
                 </tr>`;
             }).join('');
         }

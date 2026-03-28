@@ -1,4 +1,4 @@
-bankroll: 3000.00  # A=400 + B=400 + C=1000 + C2=1000 + Reserve=200
+bankroll: 5000.00  # A=400 + B=400 + B2=1000 + B3=1000 + C=1000 + C2=1000 + Reserve=200
 currency: EUR
 
 # --- Polymarket connection ---
@@ -96,6 +96,11 @@ reflexivity:
   min_volume_24h: 5000               # $5K minimum volume
   min_liquidity: 2000                # $2K minimum liquidity
   kaito_cache_ttl_s: 300             # 5 min Kaito data cache
+
+# --- Strategy B3: Binance Oracle Scalper ---
+b3:
+  scan_interval_s: 15            # 15s entry scan (5-min windows need fast polling)
+  exit_check_interval_s: 10     # 10s exit monitoring
 
 # --- Strategy allocations: DOCUMENTATION ONLY ---
 # Actual values are HARDCODED in arbo/core/risk_manager.py

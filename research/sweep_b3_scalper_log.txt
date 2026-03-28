@@ -1,0 +1,94 @@
+[15:48:39] Strategy B3 — Binance Oracle Scalper Autoresearch
+[15:48:39] ============================================================
+[15:48:39] Loading data...
+[15:48:39] Windows: 17883 × 5min, 5961 × 15min
+[15:48:39] 
+=== GEN 0: RANDOM SEARCH (1000 trials) ===
+[15:49:06]   ★ NEW BEST #72: score=2697.4  trades=7854  WR=62.6%  PnL=$18473  Sharpe=8.86  DD=49.5%  hold=5.1min
+[15:49:06]     VOL: window=1440min, method=realized, σ_scale=0.3
+[15:49:06]     ENTRY: thr=0.277, min_t=0, max_t=12, momentum
+[15:49:06]     EXIT: pt=0.18, sl=0.207, hold_max=10min, edge_exit=0.014, end=0, resolution=yes
+[15:49:06]     MKT: spread=0.025, maker, pos%=0.045, edge_scale=1.82, window=15min, cooldown=2
+[15:49:06]     EXITS: {'stop': 2234, 'profit': 3580, 'resolution_win': 991, 'time': 606, 'edge_gone': 317, 'resolution_lose': 126}
+[15:51:52]   ★ NEW BEST #575: score=6841.4  trades=8085  WR=72.0%  PnL=$34454  Sharpe=16.26  DD=59.5%  hold=1.7min
+[15:51:52]     VOL: window=1440min, method=realized, σ_scale=1.48
+[15:51:52]     ENTRY: thr=0.135, min_t=1, max_t=3, momentum
+[15:51:52]     EXIT: pt=0.146, sl=0.274, hold_max=2min, edge_exit=0.01, end=0, resolution=yes
+[15:51:52]     MKT: spread=0.015, maker, pos%=0.064, edge_scale=7.34, window=5min, cooldown=1
+[15:51:52]     EXITS: {'stop': 908, 'time': 2481, 'profit': 2739, 'resolution_win': 1652, 'resolution_lose': 226, 'edge_gone': 79}
+[15:54:22] Gen 0 done in 343s. Best score: 6841.4
+[15:54:22] 
+Top-15 scores: ['6841.4', '3777.5', '2697.4', '6.0', '2.4', '1.0', '0.1', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0']
+[15:54:22] 
+=== GEN 1: FINE-TUNE TOP-15 (600 trials) ===
+[15:54:25]   ★ NEW BEST gen1#8: score=10983.5  trades=12706  WR=63.2%  PnL=$36179  Sharpe=11.49  DD=22.4%  hold=2.3min
+[15:54:25]     VOL: window=60min, method=realized, σ_scale=0.524
+[15:54:25]     ENTRY: thr=0.053, min_t=2, max_t=2, momentum
+[15:54:25]     EXIT: pt=0.237, sl=0.3, hold_max=3min, edge_exit=0.06, end=0, resolution=yes
+[15:54:25]     MKT: spread=0.022, maker, pos%=0.022, edge_scale=7.7, window=5min, cooldown=0
+[15:54:25]     EXITS: {'edge_gone': 1291, 'stop': 2062, 'resolution_win': 5315, 'profit': 2718, 'resolution_lose': 1320}
+[15:55:18]   ★ NEW BEST gen1#163: score=19379.4  trades=11207  WR=71.3%  PnL=$58131  Sharpe=23.31  DD=34.0%  hold=1.9min
+[15:55:18]     VOL: window=120min, method=realized, σ_scale=0.952
+[15:55:18]     ENTRY: thr=0.13, min_t=2, max_t=3, momentum
+[15:55:18]     EXIT: pt=0.154, sl=0.3, hold_max=3min, edge_exit=0.057, end=0, resolution=yes
+[15:55:18]     MKT: spread=0.01, maker, pos%=0.086, edge_scale=5.012, window=5min, cooldown=2
+[15:55:18]     EXITS: {'edge_gone': 1050, 'stop': 1314, 'profit': 4091, 'resolution_win': 3905, 'resolution_lose': 847}
+[15:57:59] Gen 1 done in 216s. Best score: 19379.4
+[15:57:59] 
+=== GEN 2: EXIT + WINDOW TUNING (300 trials) ===
+[15:58:21]   ★ NEW BEST gen2#38: score=23420.3  trades=15204  WR=56.3%  PnL=$85988  Sharpe=19.13  DD=47.4%  hold=1.5min
+[15:58:21]     VOL: window=1440min, method=realized, σ_scale=1.334
+[15:58:21]     ENTRY: thr=0.02, min_t=2, max_t=3, momentum
+[15:58:21]     EXIT: pt=0.107, sl=0.026, hold_max=3min, edge_exit=0.019, end=0, resolution=yes
+[15:58:21]     MKT: spread=0.016, maker, pos%=0.073, edge_scale=8.0, window=5min, cooldown=1
+[15:58:21]     EXITS: {'profit': 6662, 'stop': 6173, 'resolution_win': 1899, 'resolution_lose': 383, 'edge_gone': 87}
+[15:59:06]   ★ NEW BEST gen2#148: score=26734.6  trades=14343  WR=64.0%  PnL=$75439  Sharpe=23.22  DD=31.3%  hold=1.9min
+[15:59:06]     VOL: window=120min, method=realized, σ_scale=0.449
+[15:59:06]     ENTRY: thr=0.088, min_t=2, max_t=3, momentum
+[15:59:06]     EXIT: pt=0.16, sl=0.165, hold_max=3min, edge_exit=0.056, end=0, resolution=yes
+[15:59:06]     MKT: spread=0.01, maker, pos%=0.105, edge_scale=7.296, window=5min, cooldown=1
+[15:59:06]     EXITS: {'resolution_win': 4019, 'stop': 3418, 'profit': 5158, 'resolution_lose': 970, 'edge_gone': 778}
+[15:59:36]   ★ NEW BEST gen2#211: score=27763.7  trades=10653  WR=55.8%  PnL=$95663  Sharpe=31.78  DD=42.3%  hold=2.0min
+[15:59:36]     VOL: window=720min, method=realized, σ_scale=0.644
+[15:59:36]     ENTRY: thr=0.095, min_t=2, max_t=2, momentum
+[15:59:36]     EXIT: pt=0.207, sl=0.038, hold_max=3min, edge_exit=0.076, end=0, resolution=yes
+[15:59:36]     MKT: spread=0.01, maker, pos%=0.067, edge_scale=4.838, window=5min, cooldown=3
+[15:59:36]     EXITS: {'stop': 4282, 'profit': 2510, 'resolution_win': 3430, 'resolution_lose': 363, 'edge_gone': 68}
+[16:00:17] Gen 2 done in 138s. Best score: 27763.7
+[16:00:17] 
+=== WALK-FORWARD VALIDATION (top 5) ===
+[16:00:18] 
+  #1 (window=5min, momentum, maker):
+[16:00:18]     IS:  score=21116.3  trades=7324  WR=57.4%  PnL=$75193  Sharpe=38.14  DD=42.3%
+[16:00:18]     OOS: score=6140.2  trades=3329  WR=52.1%  PnL=$20285  Sharpe=21.96  DD=33.1%
+[16:00:18]     Params: entry_thr=0.095, σ_scale=0.644, σ_win=720, pt=0.207, sl=0.038
+[16:00:18]     Exits: {'profit': 790, 'resolution_lose': 123, 'stop': 1438, 'resolution_win': 946, 'edge_gone': 32}
+[16:00:18] 
+  #2 (window=5min, momentum, maker):
+[16:00:18]     IS:  score=20168.6  trades=9916  WR=64.9%  PnL=$58737  Sharpe=26.18  DD=31.3%
+[16:00:18]     OOS: score=4275.2  trades=4427  WR=61.8%  PnL=$16602  Sharpe=16.87  DD=44.6%
+[16:00:18]     Params: entry_thr=0.088, σ_scale=0.449, σ_win=120, pt=0.16, sl=0.165
+[16:00:18]     Exits: {'profit': 1587, 'resolution_lose': 281, 'edge_gone': 271, 'resolution_win': 1151, 'stop': 1137}
+[16:00:20] 
+  #3 (window=5min, momentum, maker):
+[16:00:20]     IS:  score=18278.5  trades=10538  WR=57.5%  PnL=$69237  Sharpe=19.96  DD=47.4%
+[16:00:20]     OOS: score=5856.0  trades=4666  WR=53.7%  PnL=$16615  Sharpe=20.29  DD=24.5%
+[16:00:20]     Params: entry_thr=0.02, σ_scale=1.334, σ_win=1440, pt=0.107, sl=0.026
+[16:00:20]     Exits: {'profit': 2056, 'stop': 2029, 'edge_gone': 31, 'resolution_win': 448, 'resolution_lose': 102}
+[16:00:20] 
+  #4 (window=5min, momentum, maker):
+[16:00:20]     IS:  score=15198.6  trades=7753  WR=72.4%  PnL=$47082  Sharpe=26.44  DD=34.0%
+[16:00:20]     OOS: score=3068.7  trades=3454  WR=68.9%  PnL=$10838  Sharpe=17.24  DD=37.6%
+[16:00:20]     Params: entry_thr=0.13, σ_scale=0.952, σ_win=120, pt=0.154, sl=0.3
+[16:00:20]     Exits: {'profit': 1237, 'resolution_lose': 256, 'resolution_win': 1142, 'stop': 465, 'edge_gone': 354}
+[16:00:22] 
+  #5 (window=5min, momentum, maker):
+[16:00:22]     IS:  score=14403.2  trades=10654  WR=59.9%  PnL=$44726  Sharpe=27.70  DD=35.9%
+[16:00:22]     OOS: score=2619.6  trades=4718  WR=54.5%  PnL=$12136  Sharpe=13.18  DD=47.4%
+[16:00:22]     Params: entry_thr=0.02, σ_scale=1.05, σ_win=1440, pt=0.238, sl=0.122
+[16:00:22]     Exits: {'profit': 811, 'time': 1893, 'stop': 1226, 'edge_gone': 518, 'forced_end': 270}
+[16:00:22] 
+Results saved to /Users/dnl.vlck/Arbo/research/data/experiments/sweep_b3_scalper.json
+[16:00:22] Log saved to /Users/dnl.vlck/Arbo/research/sweep_b3_scalper_log.txt
+[16:00:22] 
+Total time: Gen0=343s, Gen1=216s, Gen2=138s

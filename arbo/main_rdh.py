@@ -89,7 +89,8 @@ class RDHOrchestrator:
         self._strategy_c: Any = None
         self._strategy_c2: Any = None  # EMOS + Edge Exit Fusion (weather variant)
         self._strategy_b2: Any = None  # Crypto Price Edge
-        self._binance_ws: Any = None   # Binance WebSocket feed for B2
+        self._strategy_b3: Any = None  # Binance Oracle Scalper (5-min BTC Up/Down)
+        self._binance_ws: Any = None   # Binance WebSocket feed for B2/B3
         self._exit_manager: Any = None  # Persistent exit manager for live C2/B2
 
         # B2 social momentum (Santiment + CoinGecko)
@@ -289,6 +290,9 @@ class RDHOrchestrator:
 
         # Strategy B2: Crypto Price Edge
         self._strategy_b2 = await self._init_optional("StrategyB2", self._init_strategy_b2)
+
+        # Strategy B3: Binance Oracle Scalper
+        self._strategy_b3 = await self._init_optional("StrategyB3", self._init_strategy_b3)
 
         # Restore realized P&L from DB into risk manager
         await self._restore_pnl_from_db()
@@ -528,6 +532,30 @@ class RDHOrchestrator:
         if self._exit_manager:
             s._exit_manager_ref = self._exit_manager
 
+        return s
+
+    async def _init_strategy_b3(self) -> Any:
+        """Initialize Strategy B3: Binance Oracle Scalper.
+
+        Reuses Binance WebSocket from B2 (starts it if not already running).
+        """
+        from arbo.strategies.strategy_b3 import StrategyB3
+
+        # Ensure Binance WS is running (may already be started by B2)
+        if self._binance_ws is None:
+            from arbo.connectors.binance_ws import BinanceWSFeed
+
+            self._binance_ws = BinanceWSFeed(symbols=["BTCUSDT", "ETHUSDT"])
+            await self._binance_ws.start()
+            logger.info("binance_ws_started_for_b3")
+
+        s = StrategyB3(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine,
+            binance_ws=self._binance_ws,
+            execution_mode="paper",
+        )
+        await s.init()
         return s
 
     async def _init_gefs_background(self) -> None:
@@ -1001,6 +1029,9 @@ class RDHOrchestrator:
         if self._strategy_b2 is not None:
             task_defs.append(("strategy_B2", self._run_strategy_b2, 60))        # entry scan every 60s (faster)
             task_defs.append(("B2_exit_monitor", self._run_b2_exit_check, 30))  # exit check every 30s
+        if self._strategy_b3 is not None:
+            task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
+            task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
@@ -1526,6 +1557,76 @@ class RDHOrchestrator:
             )
             await self._paper_engine.sync_positions_to_db()
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # STRATEGY B3: Binance Oracle Scalper
+    # ═══════════════════════════════════════════════════════════════════════
+
+    async def _run_strategy_b3(self) -> None:
+        """B3 entry scan every 15 seconds.
+
+        Fetches BTC Up/Down events, checks for entry signals at minute 2,
+        and executes PostOnly trades.
+        """
+        if self._strategy_b3 is None:
+            return
+
+        trades = await self._strategy_b3.poll_cycle()
+
+        if trades:
+            for sig in trades:
+                logger.info(
+                    "b3_trade_executed",
+                    direction="UP" if sig.direction == 1 else "DOWN",
+                    edge=f"{sig.edge:.3f}",
+                    btc=f"${sig.btc_now:.0f}",
+                )
+            await self._paper_engine.sync_positions_to_db()
+
+    async def _run_b3_exit_check(self) -> None:
+        """Check B3 positions for exit triggers every 10 seconds.
+
+        Recomputes fair value with latest Binance price and checks
+        profit target, stop loss, time limit, and edge exit.
+        """
+        if self._strategy_b3 is None or self._paper_engine is None:
+            return
+
+        exits = await self._strategy_b3.check_exits()
+
+        for token_id, exit_reason, exit_price in (exits or []):
+            pos = next(
+                (p for p in self._paper_engine.open_positions
+                 if p.token_id == token_id),
+                None,
+            )
+            if pos is None:
+                continue
+
+            from decimal import Decimal as D
+
+            pnl = self._paper_engine.sell_position(
+                token_id=token_id,
+                sell_price=D(str(round(exit_price, 4))),
+                exit_reason=exit_reason,
+            )
+            self._risk_manager.post_trade_update(
+                pos.market_condition_id, "crypto", pos.size, pnl=pnl,
+            )
+            self._risk_manager.strategy_post_trade("B3", pos.size, pnl=pnl)
+            await self._paper_engine.update_resolved_trades_in_db(
+                token_id=token_id, pnl=pnl,
+                exit_price=D(str(round(exit_price, 4))),
+                exit_reason=exit_reason,
+            )
+
+        if exits:
+            logger.info(
+                "b3_exits_processed",
+                count=len(exits),
+                reasons=[r for _, r, _ in exits],
+            )
+            await self._paper_engine.sync_positions_to_db()
+
     async def _notify_c2_trade_close(
         self,
         pos: Any,
@@ -2044,6 +2145,8 @@ class RDHOrchestrator:
                         self._strategy_c2.handle_resolution(cid, pnl)
                     elif strategy == "B2" and self._strategy_b2 is not None:
                         self._strategy_b2.handle_resolution(cid, float(pnl))
+                    elif strategy == "B3" and self._strategy_b3 is not None:
+                        self._strategy_b3.handle_resolution(cid, float(pnl))
                     elif strategy == "C" and self._strategy_c is not None:
                         self._strategy_c.handle_resolution(cid, pnl)
                         # Shadow exit A/B comparison

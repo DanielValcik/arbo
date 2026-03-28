@@ -156,6 +156,7 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "A": {"name": "Theta Decay", "category": "Longshots", "description": "Sell optimism premium on longshot YES contracts"},
     "B": {"name": "Reflexivity Surfer", "category": "Trending", "description": "Ride reflexive momentum in trending markets"},
     "B2": {"name": "Crypto Price Edge", "category": "Crypto", "description": "Volatility model vs Binance price on crypto prediction markets"},
+    "B3": {"name": "Binance Oracle Scalper", "category": "Crypto", "description": "BTC 5-min Up/Down momentum scalper via Binance price oracle"},
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
 }
@@ -798,8 +799,9 @@ async def api_drawdown(_user: str = Depends(_verify_credentials)) -> dict[str, A
             )
 
             # Build cumulative series per strategy
-            cumulative: dict[str, float] = {"A": 0.0, "B": 0.0, "C": 0.0}
-            day_data: dict[str, dict[str, Any]] = {}  # day_str → {A:, B:, C:}
+            all_sids = list(_STRATEGY_META.keys())
+            cumulative: dict[str, float] = {s: 0.0 for s in all_sids}
+            day_data: dict[str, dict[str, Any]] = {}
 
             for row in result:
                 day_str = row[0].strftime("%Y-%m-%d") if row[0] else None
@@ -824,7 +826,7 @@ async def api_drawdown(_user: str = Depends(_verify_credentials)) -> dict[str, A
 
             for day_str in sorted(day_data.keys()):
                 entry: dict[str, Any] = {"date": day_str}
-                for sid in ["A", "B", "C"]:
+                for sid in all_sids:
                     d = day_data[day_str].get(sid, {})
                     entry[f"{sid}_pnl"] = d.get("pnl", 0)
                     entry[f"{sid}_cumulative"] = d.get("cumulative", cumulative.get(sid, 0))
@@ -1270,6 +1272,30 @@ async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str,
                 "data_source": "Binance real-time price",
                 "backtest_period": "87 days (2025-12-28 → 2026-03-26)",
                 "backtest_data": "3,745 markets (BTC+ETH), 95M price points",
+            }
+        elif sid == "B3":
+            entry["model"] = {
+                "name": "Binance-Oracle-Scalper-v1",
+                "oos_score": 6140,
+                "train_trades": 7324,
+                "train_wr": 57.4,
+                "oos_pnl": 20285,
+                "oos_wr": 52.1,
+                "oos_sharpe": 22.0,
+                "max_drawdown_pct": 33.1,
+                "expected_daily_trades": "33",
+                "entry_trigger": "|signal_fv - 0.50| > 0.095",
+                "sigma_window": 720,
+                "sigma_method": "realized",
+                "sigma_scale": 0.644,
+                "profit_target": 0.207,
+                "stop_loss": 0.038,
+                "max_hold_min": 3,
+                "fee_model": "PostOnly maker 0% + 20% rebate",
+                "market_type": "BTC 5-min Up/Down (NOT NegRisk)",
+                "data_source": "Binance real-time price",
+                "backtest_period": "89 days (2025-12-28 → 2026-03-27)",
+                "backtest_data": "89,419 1-min klines, 17,883 windows",
             }
 
         strategies.append(entry)

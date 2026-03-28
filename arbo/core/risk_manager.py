@@ -36,6 +36,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "A": Decimal("400"),   # Theta Decay — 20%
     "B": Decimal("400"),   # Reflexivity Surfer — 20%
     "B2": Decimal("1000"), # Crypto Price Edge
+    "B3": Decimal("1000"), # Binance Oracle Scalper (5-min BTC Up/Down)
     "C": Decimal("1000"),  # Compound Weather — 50%
     "C2": Decimal("1000"), # EMOS + Edge Exit Fusion (weather variant)
 }
