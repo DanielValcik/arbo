@@ -538,6 +538,7 @@ class RDHOrchestrator:
         """Initialize Strategy B3: Binance Oracle Scalper.
 
         Reuses Binance WebSocket from B2 (starts it if not already running).
+        Also starts RTDS Chainlink feed for resolution price comparison.
         """
         from arbo.strategies.strategy_b3 import StrategyB3
 
@@ -549,10 +550,22 @@ class RDHOrchestrator:
             await self._binance_ws.start()
             logger.info("binance_ws_started_for_b3")
 
+        # Start RTDS Chainlink feed (resolution price + Binance via same WS)
+        rtds_feed = None
+        try:
+            from arbo.connectors.rtds_chainlink import RTDSChainlinkFeed
+
+            rtds_feed = RTDSChainlinkFeed()
+            await rtds_feed.start()
+            logger.info("rtds_chainlink_started_for_b3")
+        except Exception as e:
+            logger.warning("rtds_chainlink_init_failed", error=str(e))
+
         s = StrategyB3(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
             binance_ws=self._binance_ws,
+            rtds_feed=rtds_feed,
             execution_mode="paper",
         )
         await s.init()

@@ -79,11 +79,13 @@ class StrategyB3:
         risk_manager: Any,
         paper_engine: Any | None = None,
         binance_ws: Any | None = None,
+        rtds_feed: Any | None = None,
         execution_mode: str = "paper",
     ) -> None:
         self._risk_manager = risk_manager
         self._paper_engine = paper_engine
         self._binance_ws = binance_ws
+        self._rtds_feed = rtds_feed  # Chainlink resolution price feed
         self._execution_mode = execution_mode
 
         # B3 scanner (manages event lifecycle)
@@ -181,15 +183,28 @@ class StrategyB3:
         sigma_per_min = self._vol_estimator.get_sigma("BTCUSDT", now)
         sigma_per_min = max(sigma_per_min, SIGMA_FLOOR)
 
-        # 4. Scan for signals
+        # 4. Get Chainlink resolution price for comparison
+        chainlink_price = None
+        if self._rtds_feed:
+            chainlink_price = self._rtds_feed.get_price("btc/usd")
+
+        # 5. Scan for signals (using Binance for now — fastest signal)
         signals = self._scanner.scan(btc_price, sigma_per_min)
 
         if not signals:
             return []
 
+        # Log comparison: Binance vs Chainlink on every signal
+        delta_str = ""
+        if chainlink_price and btc_price:
+            delta = btc_price - chainlink_price
+            delta_str = f"${delta:+.2f}"
+
         logger.info(
             "b3_scan",
-            btc=f"${btc_price:.0f}",
+            btc_binance=f"${btc_price:.2f}",
+            btc_chainlink=f"${chainlink_price:.2f}" if chainlink_price else "N/A",
+            delta=delta_str or "N/A",
             sigma=f"{sigma_per_min:.6f}",
             events=self._scanner.active_event_count,
             signals=len(signals),
@@ -284,6 +299,8 @@ class StrategyB3:
                         "direction": "up" if sig.direction == 1 else "down",
                         "btc_at_start": sig.btc_at_start,
                         "btc_now": sig.btc_now,
+                        "btc_chainlink": chainlink_price,
+                        "btc_binance_chainlink_delta": round(btc_price - chainlink_price, 2) if chainlink_price else None,
                         "sigma_per_min": sig.sigma_per_min,
                         "signal_fv_up": sig.signal_fv_up,
                         "market_fv_up": sig.market_fv_up,
