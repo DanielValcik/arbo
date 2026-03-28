@@ -1573,9 +1573,10 @@ class RDHOrchestrator:
 
         if trades:
             for sig in trades:
+                direction = "UP" if sig.direction == 1 else "DOWN"
                 logger.info(
                     "b3_trade_executed",
-                    direction="UP" if sig.direction == 1 else "DOWN",
+                    direction=direction,
                     edge=f"{sig.edge:.3f}",
                     btc=f"${sig.btc_now:.0f}",
                 )
@@ -1587,6 +1588,10 @@ class RDHOrchestrator:
                         except Exception as e:
                             logger.warning("b3_save_trade_db_error", error=str(e))
                         break
+                # Sync B3 market to DB so dashboard shows question text
+                await self._sync_b3_market_to_db(sig)
+                # Slack notification
+                await self._notify_b3_entry(sig)
             await self._paper_engine.sync_positions_to_db()
 
     async def _run_b3_exit_check(self) -> None:
@@ -1625,6 +1630,8 @@ class RDHOrchestrator:
                 exit_price=D(str(round(exit_price, 4))),
                 exit_reason=exit_reason,
             )
+            # Slack notification
+            await self._notify_b3_exit(pos, exit_reason, float(pnl), exit_price)
 
         if exits:
             logger.info(
@@ -1674,6 +1681,79 @@ class RDHOrchestrator:
             await self._slack_bot._post(C2_SLACK_CHANNEL, text=text)
         except Exception as e:
             logger.debug("c2_slack_notify_error", error=str(e))
+
+    async def _notify_b3_entry(self, sig: Any) -> None:
+        """Send Slack notification on B3 trade entry."""
+        if self._slack_bot is None:
+            return
+        try:
+            direction = "UP" if sig.direction == 1 else "DOWN"
+            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
+            total_pnl = float(ss.total_pnl) if ss else 0
+
+            text = (
+                f":zap: *B3 ENTRY — BTC {direction}*\n"
+                f"BTC: ${sig.btc_now:,.0f}  |  FV: {sig.entry_price:.3f}  |  Edge: {sig.edge:.1%}\n"
+                f"Sigma: {sig.sigma_per_min:.6f}/min  |  B3 P&L: ${total_pnl:+.2f}"
+            )
+            await self._slack_bot.send_message(text)
+        except Exception as e:
+            logger.debug("b3_slack_entry_error", error=str(e))
+
+    async def _notify_b3_exit(
+        self, pos: Any, exit_reason: str, pnl: float, exit_price: float,
+    ) -> None:
+        """Send Slack notification on B3 trade exit."""
+        if self._slack_bot is None:
+            return
+        try:
+            td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
+            if not td:
+                td = {}
+            direction = (td.get("direction", "?")).upper()
+            entry = float(pos.avg_price)
+            size = float(pos.size)
+
+            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
+            total_pnl = float(ss.total_pnl) if ss else 0
+
+            emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
+            pnl_sign = "+" if pnl >= 0 else ""
+
+            text = (
+                f"{emoji} *B3 EXIT — BTC {direction}* ({exit_reason})\n"
+                f"Entry: {entry:.3f} → Exit: {exit_price:.3f}  |  Size: ${size:.2f}\n"
+                f"P&L: *{pnl_sign}${pnl:.2f}*  |  B3 Total: ${total_pnl:+.2f}"
+            )
+            await self._slack_bot.send_message(text)
+        except Exception as e:
+            logger.debug("b3_slack_exit_error", error=str(e))
+
+    async def _sync_b3_market_to_db(self, sig: Any) -> None:
+        """Sync B3 market to DB so dashboard shows question text instead of hash."""
+        try:
+            import sqlalchemy as _sa
+
+            from arbo.utils.db import Market, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                stmt = (
+                    _sa.dialects.postgresql.insert(Market)
+                    .values(
+                        condition_id=sig.condition_id,
+                        question=sig.question,
+                        category="crypto",
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["condition_id"],
+                        set_={"question": sig.question, "category": "crypto"},
+                    )
+                )
+                await session.execute(stmt)
+                await session.commit()
+        except Exception as e:
+            logger.debug("b3_market_sync_error", error=str(e))
 
     def _get_current_prices(
         self, price_type: str = "yes"
