@@ -1443,6 +1443,7 @@ class RDHOrchestrator:
         trades = await self._strategy_b2.poll_cycle(markets)
 
         if trades:
+            await self._save_trades_to_db(trades)
             for sig in trades:
                 logger.info(
                     "b2_trade_executed",
@@ -1706,9 +1707,12 @@ class RDHOrchestrator:
         if self._paper_engine is None:
             return
         for trade_item in trades:
-            # Extract condition_id from dict or WeatherSignal
+            # Extract condition_id from dict, WeatherSignal, or CryptoSignal
             if isinstance(trade_item, dict):
                 cond = trade_item.get("condition_id", "")
+            elif hasattr(trade_item, "condition_id"):
+                # CryptoSignal: condition_id directly on signal
+                cond = trade_item.condition_id
             elif hasattr(trade_item, "market"):
                 # WeatherSignal: condition_id is at signal.market.condition_id
                 cond = getattr(trade_item.market, "condition_id", "")
