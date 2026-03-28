@@ -239,26 +239,27 @@ class StrategyB2:
                 skip_reasons["no_price"] = skip_reasons.get("no_price", 0) + 1
                 continue
 
-            best_bid = float(ob_snap.best_bid) if ob_snap.best_bid else 0
-            best_ask = float(ob_snap.best_ask) if ob_snap.best_ask else 0
+            # /price endpoint: best_bid=SELL price, best_ask=BUY price
+            # For non-NegRisk: BUY might be < SELL (normal) or BUY > SELL (inverted)
+            raw_bid = float(ob_snap.best_bid) if ob_snap.best_bid else 0
+            raw_ask = float(ob_snap.best_ask) if ob_snap.best_ask else 0
+            mid = float(ob_snap.midpoint) if ob_snap.midpoint else 0
 
-            # /price returns BUY=bid, SELL=ask (what taker gets/pays)
-            if best_bid <= 0.001 or best_ask <= 0.001:
+            if mid <= 0.001 or mid >= 0.999:
                 skip_reasons["no_price_data"] = skip_reasons.get("no_price_data", 0) + 1
                 continue
 
-            spread = abs(best_ask - best_bid)
-            mid = (best_bid + best_ask) / 2
-
-            # Reject if spread > 15% of mid (should be ~1-5% on liquid markets)
+            # Use midpoint — the /price endpoint gives tight spreads (~1c)
+            spread = abs(raw_ask - raw_bid)
             spread_pct = spread / mid if mid > 0 else 1.0
-            if spread_pct > 0.15:
+
+            if spread_pct > 0.20:
                 skip_reasons["wide_spread"] = skip_reasons.get("wide_spread", 0) + 1
+                logger.debug("b2_wide_spread", mid=mid, bid=raw_bid, ask=raw_ask, spread_pct=f"{spread_pct:.2f}")
                 continue
 
-            # Entry price: maker posts at BUY price (0% fee), taker pays SELL price
-            # For paper: use BUY price (maker, same as C2 weather strategy)
-            clob_price = best_bid
+            # Entry: use the lower of bid/ask as maker price (what we'd pay)
+            clob_price = min(raw_bid, raw_ask) if min(raw_bid, raw_ask) > 0.001 else mid
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
