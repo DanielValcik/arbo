@@ -690,6 +690,42 @@ class MarketDiscovery:
                             if market.condition_id and market.active:
                                 all_markets.append(market)
 
+            # Also fetch daily above/hit events by slug (tag search misses them)
+            from datetime import datetime, timedelta, timezone as tz
+            now = datetime.now(tz.utc)
+            seen_cids = {m.condition_id for m in all_markets}
+            for day_offset in range(0, 4):  # Today + next 3 days
+                day = now + timedelta(days=day_offset)
+                month_name = day.strftime("%B").lower()
+                day_num = day.day
+                for asset in ["bitcoin", "ethereum"]:
+                    for slug_tpl in [
+                        f"{asset}-above-on-{month_name}-{day_num}-{day.year}",
+                        f"what-price-will-{asset}-hit-on-{month_name}-{day_num}",
+                    ]:
+                        try:
+                            slug_url = f"{self._gamma_url}/events?slug={slug_tpl}"
+                            async with self._session.get(slug_url) as resp2:
+                                if resp2.status != 200:
+                                    continue
+                                slug_events = await resp2.json()
+                                if not isinstance(slug_events, list):
+                                    continue
+                                for sev in slug_events:
+                                    for raw_m in sev.get("markets", []):
+                                        if not isinstance(raw_m, dict):
+                                            continue
+                                        if raw_m.get("closed") or not raw_m.get("active", True):
+                                            continue
+                                        cid = raw_m.get("conditionId", "")
+                                        if cid and cid not in seen_cids:
+                                            m2 = GammaMarket(raw_m)
+                                            m2.category = "crypto"
+                                            all_markets.append(m2)
+                                            seen_cids.add(cid)
+                        except Exception:
+                            pass
+
             logger.info(
                 "crypto_price_events_fetched",
                 markets=len(all_markets),
