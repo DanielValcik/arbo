@@ -1692,19 +1692,26 @@ class RDHOrchestrator:
 
     async def _notify_b3_entry(self, sig: Any) -> None:
         """Send Slack notification on B3 trade entry."""
+        B3_SLACK_CHANNEL = "C0APFCD4M9U"
         if self._slack_bot is None:
             return
         try:
             direction = "UP" if sig.direction == 1 else "DOWN"
             ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
             total_pnl = float(ss.total_pnl) if ss else 0
+            deployed = float(ss.deployed) if ss else 0
+
+            # Compute trade size (same logic as poll_cycle)
+            raw_pct = min(0.067, sig.edge * 4.838)
+            available = float(ss.allocated - ss.deployed) if ss else 0
+            bet_size = min(available * raw_pct, 100.0)
 
             text = (
                 f":zap: *B3 ENTRY — BTC {direction}*\n"
                 f"BTC: ${sig.btc_now:,.0f}  |  FV: {sig.entry_price:.3f}  |  Edge: {sig.edge:.1%}\n"
-                f"Sigma: {sig.sigma_per_min:.6f}/min  |  B3 P&L: ${total_pnl:+.2f}"
+                f"Size: ~${bet_size:.0f}  |  Deployed: ${deployed:.0f}  |  B3 Total: ${total_pnl:+.2f}"
             )
-            await self._slack_bot.send_message(text)
+            await self._slack_bot._post(B3_SLACK_CHANNEL, text=text)
         except Exception as e:
             logger.debug("b3_slack_entry_error", error=str(e))
 
@@ -1712,6 +1719,7 @@ class RDHOrchestrator:
         self, pos: Any, exit_reason: str, pnl: float, exit_price: float,
     ) -> None:
         """Send Slack notification on B3 trade exit."""
+        B3_SLACK_CHANNEL = "C0APFCD4M9U"
         if self._slack_bot is None:
             return
         try:
@@ -1719,7 +1727,9 @@ class RDHOrchestrator:
             if not td:
                 td = {}
             direction = (td.get("direction", "?")).upper()
-            entry = float(pos.avg_price)
+            entry_fv = float(td.get("market_fv_up", pos.avg_price))
+            if direction == "DOWN":
+                entry_fv = 1.0 - entry_fv if entry_fv < 0.9 else float(pos.avg_price)
             size = float(pos.size)
 
             ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
@@ -1727,13 +1737,18 @@ class RDHOrchestrator:
 
             emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
             pnl_sign = "+" if pnl >= 0 else ""
+            hold_s = ""
+            if hasattr(pos, "opened_at") and pos.opened_at:
+                from datetime import UTC, datetime
+                delta = (datetime.now(UTC) - pos.opened_at).total_seconds()
+                hold_s = f"  |  Hold: {delta:.0f}s"
 
             text = (
                 f"{emoji} *B3 EXIT — BTC {direction}* ({exit_reason})\n"
-                f"Entry: {entry:.3f} → Exit: {exit_price:.3f}  |  Size: ${size:.2f}\n"
+                f"Entry FV: {float(pos.avg_price):.3f} → Exit: {exit_price:.3f}  |  Size: ${size:.0f}{hold_s}\n"
                 f"P&L: *{pnl_sign}${pnl:.2f}*  |  B3 Total: ${total_pnl:+.2f}"
             )
-            await self._slack_bot.send_message(text)
+            await self._slack_bot._post(B3_SLACK_CHANNEL, text=text)
         except Exception as e:
             logger.debug("b3_slack_exit_error", error=str(e))
 
