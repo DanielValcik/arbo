@@ -164,8 +164,8 @@ def scan_crypto_markets(
         if strike_val <= 0:
             continue
         distance_pct = abs(strike_val - exchange_price) / exchange_price
-        if distance_pct > 0.05:
-            continue  # Too far from money — OTM/deep ITM, thin books
+        if distance_pct > 0.10:
+            continue  # Too far from money (>10%) — deep OTM/ITM
 
         # Compute volatility
         sigma_hourly = vol_estimator.get_sigma(info.symbol, current_time)

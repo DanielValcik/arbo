@@ -653,12 +653,12 @@ class MarketDiscovery:
             # - crypto-prices: monthly/yearly hit markets
             # - daily: daily above/hit markets (today's sessions)
             # - bitcoin/ethereum: asset-specific events
-            for tag in ["crypto-prices", "daily", "bitcoin", "ethereum"]:
+            for tag in ["crypto-prices", "daily", "bitcoin", "ethereum", "today"]:
                 params = {
                     "tag_slug": tag,
                     "active": "true",
                     "closed": "false",
-                    "limit": "100",
+                    "limit": "200",
                 }
                 url = f"{self._gamma_url}/events"
                 async with self._session.get(url, params=params) as resp:
