@@ -34,6 +34,7 @@ from arbo.utils.logger import get_logger
 logger = get_logger("b3_scanner")
 
 GAMMA_URL = "https://gamma-api.polymarket.com"
+BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 
 _SQRT2 = math.sqrt(2.0)
 
@@ -202,6 +203,10 @@ class B3Scanner:
 
                 question = raw_market.get("question", event.get("title", ""))
 
+                # Fetch BTC price at event start from Binance klines API.
+                # This matches the backtest's closes[start_idx] exactly.
+                btc_start = await self._fetch_btc_at_start(start_ts)
+
                 self._events[cid] = B3Event(
                     condition_id=cid,
                     token_id_up=clob_ids[0],
@@ -209,8 +214,15 @@ class B3Scanner:
                     question=question,
                     start_ts=start_ts,
                     end_ts=end_ts,
+                    btc_at_start=btc_start,
                 )
                 new_count += 1
+                if btc_start:
+                    logger.info(
+                        "b3_event_btc_start",
+                        slug=slug,
+                        btc_at_start=f"${btc_start:,.2f}",
+                    )
 
             except Exception as e:
                 logger.warning("b3_slug_fetch_error", slug=slug, error=str(e))
@@ -230,6 +242,41 @@ class B3Scanner:
                 expired=len(expired),
                 active=len(self._events),
             )
+
+    async def _fetch_btc_at_start(self, event_start_ts: float) -> float | None:
+        """Fetch BTC close price at event start from Binance 1-min klines.
+
+        Matches backtest's `S_start = closes[start_idx]` — the close price
+        of the 1-minute candle at the event start timestamp.
+
+        Args:
+            event_start_ts: Unix timestamp of the event start.
+
+        Returns:
+            BTC close price at event start, or None if unavailable.
+        """
+        if not self._session:
+            return None
+        try:
+            start_ms = int(event_start_ts * 1000)
+            async with self._session.get(
+                BINANCE_KLINES_URL,
+                params={
+                    "symbol": "BTCUSDT",
+                    "interval": "1m",
+                    "startTime": str(start_ms),
+                    "limit": "1",
+                },
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                klines = await resp.json()
+                if klines and len(klines) > 0:
+                    # Kline format: [open_time, open, high, low, close, ...]
+                    return float(klines[0][4])  # close price
+        except Exception as e:
+            logger.warning("b3_binance_kline_error", error=str(e))
+        return None
 
     def scan(
         self,
@@ -261,9 +308,11 @@ class B3Scanner:
             if elapsed_min < MIN_ENTRY_MIN or elapsed_min >= MAX_ENTRY_MIN + 1:
                 continue
 
-            # Record BTC price at event start (first time we see it in window)
+            # btc_at_start must be set by fetch_events via Binance klines API.
+            # If missing (API failed), skip this event — wrong S_start causes
+            # bad FV computation and 3x larger stop losses.
             if ev.btc_at_start is None:
-                ev.btc_at_start = btc_price  # Approximation — will refine
+                continue
 
             btc_start = ev.btc_at_start
             if btc_start <= 0:
