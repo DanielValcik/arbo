@@ -386,8 +386,8 @@ class StrategyB2:
                         "sigma": sig.sigma_hourly,
                         "hours_to_expiry": sig.hours_to_expiry,
                         "market_type": sig.market_type,
-                        "clob_bid": best_bid,
-                        "clob_ask": best_ask,
+                        "clob_bid": raw_bid,
+                        "clob_ask": raw_ask,
                         "clob_spread_pct": round(spread_pct * 100, 1),
                     },
                 )
