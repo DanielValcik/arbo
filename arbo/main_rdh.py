@@ -1578,6 +1578,14 @@ class RDHOrchestrator:
                     edge=f"{sig.edge:.3f}",
                     btc=f"${sig.btc_now:.0f}",
                 )
+                # Save trade to DB (find matching in-memory trade by condition_id)
+                for t in reversed(self._paper_engine.trade_history):
+                    if t.market_condition_id == sig.condition_id and t.status.value == "open":
+                        try:
+                            await self._paper_engine.save_trade_to_db(t)
+                        except Exception as e:
+                            logger.warning("b3_save_trade_db_error", error=str(e))
+                        break
             await self._paper_engine.sync_positions_to_db()
 
     async def _run_b3_exit_check(self) -> None:
