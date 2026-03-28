@@ -144,7 +144,7 @@ def scan_crypto_markets(
         # Reject wrong market types
         if any(kw in q_lower for kw in [
             "dip to", "between", "up or down",
-            "will the price of",  # Weekly — no real liquidity
+            "volatility index",  # Not a price market
         ]):
             continue
 
