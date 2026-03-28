@@ -1044,15 +1044,19 @@ async def api_trades(_user: str = Depends(_verify_credentials)) -> dict[str, Any
 
 
 @app.get("/api/closed-positions")
-async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+async def api_closed_positions(
+    request: Request,
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
     """Closed (resolved) positions — won and lost trades."""
+    strategy_filter = request.query_params.get("strategy")
     trades: list[dict[str, Any]] = []
     try:
         from arbo.utils.db import Market, PaperTrade, get_session_factory
 
         factory = get_session_factory()
         async with factory() as session:
-            result = await session.execute(
+            query = (
                 sa.select(PaperTrade, Market.question, Market.category)
                 .outerjoin(Market, PaperTrade.market_condition_id == Market.condition_id)
                 .where(PaperTrade.status.in_(["won", "lost", "sold"]))
@@ -1062,8 +1066,11 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
                         PaperTrade.notes != "pre-validation",
                     )
                 )
-                .order_by(PaperTrade.resolved_at.desc())
-                .limit(50)
+            )
+            if strategy_filter:
+                query = query.where(PaperTrade.strategy == strategy_filter)
+            result = await session.execute(
+                query.order_by(PaperTrade.resolved_at.desc()).limit(50)
             )
             for row in result.all():
                 trade = row[0]
@@ -1078,9 +1085,14 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
                         "strategy": getattr(trade, "strategy", "") or "",
                         "side": trade.side,
                         "price": _dec(trade.price),
+                        "fill_price": _dec(getattr(trade, "fill_price", None)),
                         "size": _dec(trade.size),
+                        "edge": _dec(getattr(trade, "edge", None)),
                         "status": trade.status,
                         "actual_pnl": _dec(trade.actual_pnl),
+                        "exit_price": _dec(getattr(trade, "exit_price", None)),
+                        "exit_reason": getattr(trade, "exit_reason", None),
+                        "trade_details": getattr(trade, "trade_details", None),
                         "category": category,
                         "placed_at": trade.placed_at.isoformat() if trade.placed_at else None,
                         "resolved_at": (
@@ -1091,7 +1103,8 @@ async def api_closed_positions(_user: str = Depends(_verify_credentials)) -> dic
     except Exception as e:
         logger.warning("closed_positions_query_error", error=str(e))
 
-    return {"trades": trades}
+    # Return both keys for backwards compatibility (JS uses "positions")
+    return {"trades": trades, "positions": trades}
 
 
 @app.get("/api/daily-pnl")
