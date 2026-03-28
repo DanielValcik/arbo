@@ -1475,25 +1475,20 @@ class RDHOrchestrator:
             return
 
         token_ids = [p.token_id for p in b2_positions]
-        # Fetch real CLOB orderbook for each position
+        # Use /price endpoint (neg_risk=True forces it) — RFQM pricing
         snapshots = await self._orderbook_provider.get_snapshots_batch(
-            token_ids, neg_risk=False
+            token_ids, neg_risk=True
         )
         current_prices: dict[str, float] = {}  # midpoint for edge check
-        sell_prices: dict[str, float] = {}     # bid for actual sell
+        sell_prices: dict[str, float] = {}     # BUY price = what seller receives
         for tid, snap in snapshots.items():
             if snap is None:
                 continue
             best_bid = float(snap.best_bid) if snap.best_bid else 0
             best_ask = float(snap.best_ask) if snap.best_ask else 0
-
-            # Only use price if book has real liquidity (spread < 30%)
-            if best_bid > 0.02 and best_ask > 0.02 and best_ask < 0.98:
-                spread_pct = (best_ask - best_bid) / ((best_bid + best_ask) / 2)
-                if spread_pct < 0.30:
-                    current_prices[tid] = (best_bid + best_ask) / 2
-                    sell_prices[tid] = best_bid  # Sell at bid (what we actually receive)
-            # else: no reliable price → don't trigger exit, let resolution handle it
+            if best_bid > 0.001 and best_ask > 0.001:
+                current_prices[tid] = (best_bid + best_ask) / 2
+                sell_prices[tid] = best_bid  # Sell at BUY price (taker sell)
 
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)
@@ -2004,32 +1999,21 @@ class RDHOrchestrator:
                 updated = 0
                 for pos in self._paper_engine.open_positions:
                     new_price = None
-                    is_b2 = getattr(pos, "strategy", "") == "B2"
+                    is_b2 = getattr(pos, "strategy", "") in ("B2", "B3")
 
-                    # Try CLOB orderbook
+                    # All strategies use /price endpoint (neg_risk=True)
+                    # Works for both NegRisk weather AND RFQM crypto markets
                     if self._orderbook_provider is not None:
                         try:
-                            # B2 = non-NegRisk (real orderbook), others = NegRisk
                             snap = await self._orderbook_provider.get_snapshot(
-                                pos.token_id, neg_risk=not is_b2
+                                pos.token_id, neg_risk=True
                             )
-                            if snap is not None:
-                                if is_b2:
-                                    # B2: only use price if book has real liquidity
-                                    best_bid = float(snap.best_bid) if snap.best_bid else 0
-                                    best_ask = float(snap.best_ask) if snap.best_ask else 0
-                                    if best_bid > 0.02 and best_ask > 0.02 and best_ask < 0.98:
-                                        spread_pct = (best_ask - best_bid) / ((best_bid + best_ask) / 2)
-                                        if spread_pct < 0.30:
-                                            from decimal import Decimal as _D
-                                            new_price = _D(str(round((best_bid + best_ask) / 2, 4)))
-                                    # else: keep None — don't update with garbage price
-                                elif snap.midpoint is not None:
-                                    new_price = snap.midpoint
+                            if snap is not None and snap.midpoint is not None:
+                                new_price = snap.midpoint
                         except Exception:
                             pass  # Fall through to Gamma
 
-                    # Fallback: Gamma API cached prices (NOT for B2 — unreliable)
+                    # Fallback: Gamma API cached prices (NOT for B2/B3)
                     if new_price is None and not is_b2 and self._discovery is not None:
                         market = self._discovery.get_by_condition_id(
                             pos.market_condition_id

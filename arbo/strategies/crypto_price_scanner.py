@@ -136,28 +136,23 @@ def scan_crypto_markets(
             continue
 
         # ── MARKET TYPE FILTER ──
-        # Only trade DAILY "above" markets with specific resolution time.
-        # Daily: "Bitcoin above 67,400 on March 28, 11AM ET?" (has date + time)
-        # Weekly: "Will the price of Bitcoin be above $70,000?" (no specific time)
-        # Skip: monthly "hit/dip", range "between", up/down, weekly "price of"
+        # Trade: daily "above" + daily "hit/reach" (barrier options)
+        # Both have /price endpoint liquidity (RFQM, not orderbook)
+        # Skip: weekly "Will the price of...", up/down, between, dip
         q_lower = question.lower()
 
-        # Reject non-above/below
+        # Reject wrong market types
         if any(kw in q_lower for kw in [
-            "dip to", "hit", "between", "what price", "up or down",
-            "will the price of",  # Weekly markets — thin CLOB books
+            "dip to", "between", "up or down",
+            "will the price of",  # Weekly — no real liquidity
         ]):
             continue
-        if info.direction not in ("above", "below"):
-            continue
-        if "above" not in q_lower and "below" not in q_lower:
-            continue
 
-        # Daily markets have specific time in question (e.g., "11AM ET", "2PM ET")
-        import re
-        has_time = bool(re.search(r'\d{1,2}\s*(AM|PM)\s*ET', question, re.IGNORECASE))
-        if not has_time:
-            continue  # Weekly market without specific resolution time
+        # Must be "above/below" or "reach/hit"
+        is_above = "above" in q_lower or "below" in q_lower
+        is_hit = "reach" in q_lower or "hit" in q_lower
+        if not is_above and not is_hit:
+            continue
 
         # ── EXCHANGE PRICE + ATM FILTER ──
         exchange_price = exchange_prices.get(info.symbol)
@@ -178,7 +173,7 @@ def scan_crypto_markets(
         # Compute hours to expiry
         hours_to_expiry = compute_hours_to_expiry(info.expiry)
 
-        market_type = "daily_above"
+        market_type = "monthly_hit" if is_hit else "daily_above"
 
         # Compute model probability
         model_prob = estimate_crypto_prob(

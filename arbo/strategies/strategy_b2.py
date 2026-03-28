@@ -220,43 +220,45 @@ class StrategyB2:
                 skip_reasons["cooldown"] = skip_reasons.get("cooldown", 0) + 1
                 continue
 
-            # 5. Fetch CLOB orderbook — MUST have real bid/ask
-            # Entry price = CLOB ask (what we actually pay)
-            # Never use Gamma price or midpoint for entry
+            # 5. Fetch CLOB prices via /price endpoint (NOT /book)
+            # Crypto markets use RFQM pricing — /book is empty but /price gives
+            # executable prices with tight spreads (same mechanism as NegRisk weather)
             if not self._orderbook_provider:
                 skip_reasons["no_ob_provider"] = skip_reasons.get("no_ob_provider", 0) + 1
                 continue
             try:
+                # Use neg_risk=True to force /price endpoint (works for ALL markets)
                 ob_snap = await self._orderbook_provider.get_snapshot(
-                    token_id, neg_risk=False
+                    token_id, neg_risk=True
                 )
             except Exception as e:
                 skip_reasons["ob_error"] = skip_reasons.get("ob_error", 0) + 1
                 continue
 
             if not ob_snap:
-                skip_reasons["no_orderbook"] = skip_reasons.get("no_orderbook", 0) + 1
+                skip_reasons["no_price"] = skip_reasons.get("no_price", 0) + 1
                 continue
 
             best_bid = float(ob_snap.best_bid) if ob_snap.best_bid else 0
             best_ask = float(ob_snap.best_ask) if ob_snap.best_ask else 0
 
-            # Need both bid and ask for a real market
-            if best_bid <= 0.01 or best_ask <= 0.01 or best_ask >= 0.99:
-                skip_reasons["thin_book"] = skip_reasons.get("thin_book", 0) + 1
+            # /price returns BUY=bid, SELL=ask (what taker gets/pays)
+            if best_bid <= 0.001 or best_ask <= 0.001:
+                skip_reasons["no_price_data"] = skip_reasons.get("no_price_data", 0) + 1
                 continue
 
-            spread = best_ask - best_bid
-            spread_pct = spread / ((best_bid + best_ask) / 2) if (best_bid + best_ask) > 0 else 1.0
+            spread = abs(best_ask - best_bid)
+            mid = (best_bid + best_ask) / 2
 
-            # Reject wide spreads — >20% means poor liquidity
-            if spread_pct > 0.20:
+            # Reject if spread > 15% of mid (should be ~1-5% on liquid markets)
+            spread_pct = spread / mid if mid > 0 else 1.0
+            if spread_pct > 0.15:
                 skip_reasons["wide_spread"] = skip_reasons.get("wide_spread", 0) + 1
                 continue
 
-            # Entry price = ask (what we pay as taker) or bid (what we post as maker)
-            # For paper: use midpoint as compromise (maker would get bid, taker pays ask)
-            clob_price = (best_bid + best_ask) / 2
+            # Entry price: maker posts at BUY price (0% fee), taker pays SELL price
+            # For paper: use BUY price (maker, same as C2 weather strategy)
+            clob_price = best_bid
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
