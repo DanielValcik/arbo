@@ -112,7 +112,12 @@ class B3Scanner:
     async def fetch_events(self) -> None:
         """Fetch active BTC Up/Down events from Gamma API.
 
-        Only refetches if enough time has passed since last fetch.
+        Uses predictive slug generation because Gamma /events endpoint
+        with tag_slug filters does NOT reliably return current 5-min events.
+        Slug format: btc-updown-5m-{unix_start_ts} where start_ts is
+        aligned to 5-minute boundaries.
+
+        Fetches the current window + next 2 windows (covers 15 min ahead).
         """
         now = time.time()
         if now - self._last_fetch_ts < self._fetch_interval_s:
@@ -122,38 +127,47 @@ class B3Scanner:
         if not self._session:
             return
 
-        try:
-            params = {
-                "tag_slug": "up-or-down",
-                "active": "true",
-                "closed": "false",
-                "limit": "50",
-            }
-            async with self._session.get(
-                f"{GAMMA_URL}/events", params=params,
-            ) as resp:
-                if resp.status != 200:
-                    logger.warning("b3_gamma_fetch_error", status=resp.status)
-                    return
-                events = await resp.json()
+        # Generate slugs for current + upcoming windows
+        window_start = int(now // 300) * 300  # Round down to 5-min boundary
+        slugs_to_check = [
+            f"btc-updown-5m-{window_start + offset * 300}"
+            for offset in range(-1, 3)  # Previous, current, next 2
+        ]
 
-            if not isinstance(events, list):
-                return
+        new_count = 0
+        for slug in slugs_to_check:
+            # Skip if we already have this event (by slug → start_ts)
+            try:
+                slug_ts = int(slug.split("-")[-1])
+            except ValueError:
+                continue
+            # Check if already tracked by start_ts
+            if any(
+                abs(ev.start_ts - slug_ts) < 10
+                for ev in self._events.values()
+            ):
+                continue
 
-            new_count = 0
-            for event in events:
-                title = (event.get("title", "") or "").lower()
-                # Only BTC up/down markets
-                if "bitcoin" not in title and "btc" not in title:
+            try:
+                async with self._session.get(
+                    f"{GAMMA_URL}/events", params={"slug": slug},
+                ) as resp:
+                    if resp.status != 200:
+                        continue
+                    events = await resp.json()
+
+                if not events:
                     continue
-                if "up or down" not in title:
+                event = events[0] if isinstance(events, list) else events
+
+                title = (event.get("title", "") or "").lower()
+                if "bitcoin" not in title:
                     continue
 
                 nested = event.get("markets", [])
                 if not isinstance(nested, list) or not nested:
                     continue
 
-                # Each event has one market with Up/Down outcomes
                 raw_market = nested[0]
                 if not isinstance(raw_market, dict):
                     continue
@@ -198,24 +212,24 @@ class B3Scanner:
                 )
                 new_count += 1
 
-            # Clean expired events (ended > 10 min ago)
-            expired = [
-                cid for cid, ev in self._events.items()
-                if now - ev.end_ts > 600
-            ]
-            for cid in expired:
-                del self._events[cid]
+            except Exception as e:
+                logger.warning("b3_slug_fetch_error", slug=slug, error=str(e))
 
-            if new_count > 0 or expired:
-                logger.info(
-                    "b3_events_updated",
-                    new=new_count,
-                    expired=len(expired),
-                    active=len(self._events),
-                )
+        # Clean expired events (ended > 10 min ago)
+        expired = [
+            cid for cid, ev in self._events.items()
+            if now - ev.end_ts > 600
+        ]
+        for cid in expired:
+            del self._events[cid]
 
-        except Exception as e:
-            logger.warning("b3_gamma_fetch_exception", error=str(e))
+        if new_count > 0 or expired:
+            logger.info(
+                "b3_events_updated",
+                new=new_count,
+                expired=len(expired),
+                active=len(self._events),
+            )
 
     def scan(
         self,
