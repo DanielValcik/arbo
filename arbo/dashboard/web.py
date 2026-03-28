@@ -2547,7 +2547,7 @@ async def api_strategy_pnl_series(
 
             labels = sorted(all_dates)
             series: dict[str, list[float]] = {}
-            for strat in ["A", "B", "B2", "C", "C2"]:
+            for strat in list(_STRATEGY_META.keys()):
                 cum = 0.0
                 values: list[float] = []
                 for day in labels:
