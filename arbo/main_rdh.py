@@ -1474,24 +1474,25 @@ class RDHOrchestrator:
             return
 
         token_ids = [p.token_id for p in b2_positions]
-        # Non-NegRisk: use real orderbook, but fall back to midpoint/Gamma
-        # on thin books (bid=0.01 is not a real price)
+        # Fetch real CLOB orderbook for each position
         snapshots = await self._orderbook_provider.get_snapshots_batch(
             token_ids, neg_risk=False
         )
-        current_prices: dict[str, float] = {}
+        current_prices: dict[str, float] = {}  # midpoint for edge check
+        sell_prices: dict[str, float] = {}     # bid for actual sell
         for tid, snap in snapshots.items():
             if snap is None:
                 continue
-            mid = float(snap.midpoint) if snap.midpoint else None
-            spread = float(snap.spread) if snap.spread else 1.0
-            bid = float(snap.best_bid) if snap.best_bid else None
-            # Use midpoint if spread is reasonable, else use entry price as proxy
-            if mid and spread < 0.50 and 0.01 < mid < 0.99:
-                current_prices[tid] = mid
-            elif bid and bid > 0.02:
-                current_prices[tid] = bid
-            # else: skip — no reliable price, don't trigger exit
+            best_bid = float(snap.best_bid) if snap.best_bid else 0
+            best_ask = float(snap.best_ask) if snap.best_ask else 0
+
+            # Only use price if book has real liquidity (spread < 30%)
+            if best_bid > 0.02 and best_ask > 0.02 and best_ask < 0.98:
+                spread_pct = (best_ask - best_bid) / ((best_bid + best_ask) / 2)
+                if spread_pct < 0.30:
+                    current_prices[tid] = (best_bid + best_ask) / 2
+                    sell_prices[tid] = best_bid  # Sell at bid (what we actually receive)
+            # else: no reliable price → don't trigger exit, let resolution handle it
 
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)
@@ -1499,11 +1500,8 @@ class RDHOrchestrator:
         is_live = self._strategy_b2._execution_mode == "live"
 
         for token_id, exit_reason in (exits or []):
-            bid_price = current_prices.get(token_id)
-            if bid_price is None:
-                continue
-            # Don't sell at absurdly low prices (thin CLOB book artifact)
-            if bid_price < 0.02:
+            bid_price = sell_prices.get(token_id)
+            if bid_price is None or bid_price < 0.02:
                 continue
 
             pos = next(
@@ -1914,20 +1912,33 @@ class RDHOrchestrator:
                 updated = 0
                 for pos in self._paper_engine.open_positions:
                     new_price = None
+                    is_b2 = getattr(pos, "strategy", "") == "B2"
 
-                    # Try CLOB first (NegRisk price endpoint — real-time)
+                    # Try CLOB orderbook
                     if self._orderbook_provider is not None:
                         try:
+                            # B2 = non-NegRisk (real orderbook), others = NegRisk
                             snap = await self._orderbook_provider.get_snapshot(
-                                pos.token_id, neg_risk=True
+                                pos.token_id, neg_risk=not is_b2
                             )
-                            if snap is not None and snap.midpoint is not None:
-                                new_price = snap.midpoint
+                            if snap is not None:
+                                if is_b2:
+                                    # B2: only use price if book has real liquidity
+                                    best_bid = float(snap.best_bid) if snap.best_bid else 0
+                                    best_ask = float(snap.best_ask) if snap.best_ask else 0
+                                    if best_bid > 0.02 and best_ask > 0.02 and best_ask < 0.98:
+                                        spread_pct = (best_ask - best_bid) / ((best_bid + best_ask) / 2)
+                                        if spread_pct < 0.30:
+                                            from decimal import Decimal as _D
+                                            new_price = _D(str(round((best_bid + best_ask) / 2, 4)))
+                                    # else: keep None — don't update with garbage price
+                                elif snap.midpoint is not None:
+                                    new_price = snap.midpoint
                         except Exception:
                             pass  # Fall through to Gamma
 
-                    # Fallback: Gamma API cached prices
-                    if new_price is None and self._discovery is not None:
+                    # Fallback: Gamma API cached prices (NOT for B2 — unreliable)
+                    if new_price is None and not is_b2 and self._discovery is not None:
                         market = self._discovery.get_by_condition_id(
                             pos.market_condition_id
                         )

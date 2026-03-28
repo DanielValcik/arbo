@@ -220,8 +220,9 @@ class StrategyB2:
                 skip_reasons["cooldown"] = skip_reasons.get("cooldown", 0) + 1
                 continue
 
-            # 5. Fetch CLOB orderbook (non-NegRisk: real orderbook)
-            # MUST have real CLOB price — never trade on Gamma alone
+            # 5. Fetch CLOB orderbook — MUST have real bid/ask
+            # Entry price = CLOB ask (what we actually pay)
+            # Never use Gamma price or midpoint for entry
             if not self._orderbook_provider:
                 skip_reasons["no_ob_provider"] = skip_reasons.get("no_ob_provider", 0) + 1
                 continue
@@ -233,19 +234,29 @@ class StrategyB2:
                 skip_reasons["ob_error"] = skip_reasons.get("ob_error", 0) + 1
                 continue
 
-            if not ob_snap or ob_snap.midpoint is None:
+            if not ob_snap:
                 skip_reasons["no_orderbook"] = skip_reasons.get("no_orderbook", 0) + 1
                 continue
 
-            mid = float(ob_snap.midpoint) if ob_snap.midpoint else 0
-            spread = float(ob_snap.spread) if ob_snap.spread else 1.0
+            best_bid = float(ob_snap.best_bid) if ob_snap.best_bid else 0
+            best_ask = float(ob_snap.best_ask) if ob_snap.best_ask else 0
 
-            # Reject thin books — spread >= 30% means price is unreliable
-            if spread >= 0.30 or mid <= 0.01 or mid >= 0.99:
+            # Need both bid and ask for a real market
+            if best_bid <= 0.01 or best_ask <= 0.01 or best_ask >= 0.99:
                 skip_reasons["thin_book"] = skip_reasons.get("thin_book", 0) + 1
                 continue
 
-            clob_price = mid
+            spread = best_ask - best_bid
+            spread_pct = spread / ((best_bid + best_ask) / 2) if (best_bid + best_ask) > 0 else 1.0
+
+            # Reject wide spreads — >20% means poor liquidity
+            if spread_pct > 0.20:
+                skip_reasons["wide_spread"] = skip_reasons.get("wide_spread", 0) + 1
+                continue
+
+            # Entry price = ask (what we pay as taker) or bid (what we post as maker)
+            # For paper: use midpoint as compromise (maker would get bid, taker pays ask)
+            clob_price = (best_bid + best_ask) / 2
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
@@ -372,6 +383,9 @@ class StrategyB2:
                         "sigma": sig.sigma_hourly,
                         "hours_to_expiry": sig.hours_to_expiry,
                         "market_type": sig.market_type,
+                        "clob_bid": best_bid,
+                        "clob_ask": best_ask,
+                        "clob_spread_pct": round(spread_pct * 100, 1),
                     },
                 )
 

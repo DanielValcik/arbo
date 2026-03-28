@@ -135,21 +135,42 @@ def scan_crypto_markets(
         if info.is_5min:
             continue
 
-        # Only trade daily "above"/"below" markets
-        # Skip: monthly "hit/dip", range "between", up/down, and other types
+        # ── MARKET TYPE FILTER ──
+        # Only trade DAILY "above" markets with specific resolution time.
+        # Daily: "Bitcoin above 67,400 on March 28, 11AM ET?" (has date + time)
+        # Weekly: "Will the price of Bitcoin be above $70,000?" (no specific time)
+        # Skip: monthly "hit/dip", range "between", up/down, weekly "price of"
         q_lower = question.lower()
-        if any(kw in q_lower for kw in ["dip to", "hit", "between", "what price", "up or down"]):
+
+        # Reject non-above/below
+        if any(kw in q_lower for kw in [
+            "dip to", "hit", "between", "what price", "up or down",
+            "will the price of",  # Weekly markets — thin CLOB books
+        ]):
             continue
         if info.direction not in ("above", "below"):
             continue
-        # Must have "above" or "below" explicitly in question
         if "above" not in q_lower and "below" not in q_lower:
             continue
 
-        # Get current exchange price
+        # Daily markets have specific time in question (e.g., "11AM ET", "2PM ET")
+        import re
+        has_time = bool(re.search(r'\d{1,2}\s*(AM|PM)\s*ET', question, re.IGNORECASE))
+        if not has_time:
+            continue  # Weekly market without specific resolution time
+
+        # ── EXCHANGE PRICE + ATM FILTER ──
         exchange_price = exchange_prices.get(info.symbol)
         if exchange_price is None or exchange_price <= 0:
             continue
+
+        # ATM filter: only trade strikes within ±5% of current price
+        strike_val = float(info.strike)
+        if strike_val <= 0:
+            continue
+        distance_pct = abs(strike_val - exchange_price) / exchange_price
+        if distance_pct > 0.05:
+            continue  # Too far from money — OTM/deep ITM, thin books
 
         # Compute volatility
         sigma_hourly = vol_estimator.get_sigma(info.symbol, current_time)
@@ -157,7 +178,6 @@ def scan_crypto_markets(
         # Compute hours to expiry
         hours_to_expiry = compute_hours_to_expiry(info.expiry)
 
-        # Classify market type — force daily_above since we filtered above
         market_type = "daily_above"
 
         # Compute model probability
