@@ -1380,6 +1380,22 @@
                 </div>
             </div>
 
+            <!-- B3 Cumulative P&L Chart -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Kumulativni P&L</div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b3CumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B3 Daily Bar Chart -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Denni P&L</div>
+                <div class="chart-container" style="height:150px">
+                    <canvas id="b3DailyPnlChart"></canvas>
+                </div>
+            </div>
+
             <!-- Model Info -->
             <div class="card" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Model: Binance-Oracle-Scalper-v1</div>
@@ -3549,6 +3565,62 @@
             document.getElementById('lb3TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
             document.getElementById('lb3Deployed').textContent = '$' + (b3.deployed || 0).toFixed(0);
             document.getElementById('lb3Positions').textContent = b3.position_count || 0;
+        }
+
+        // B3 Charts — cumulative line + daily bars (from EVR daily_series)
+        if (evrOverview && evrOverview.daily_series && evrOverview.daily_series.length > 0) {
+            const series = evrOverview.daily_series;
+            const labels = series.map(d => d.date ? d.date.slice(5) : '');
+            const cumValues = series.map(d => d.cumulative);
+            const dailyValues = series.map(d => d.pnl);
+            const dailyColors = dailyValues.map(v => v >= 0 ? '#3fb950' : '#f85149');
+
+            // Cumulative line chart
+            const cumCtx = document.getElementById('b3CumPnlChart');
+            if (window._b3CumChart) window._b3CumChart.destroy();
+            window._b3CumChart = new Chart(cumCtx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: cumValues,
+                        borderColor: '#e3b341',
+                        backgroundColor: 'rgba(227,179,65,0.1)',
+                        fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: {legend: {display: false}},
+                    scales: {
+                        x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}},
+                        y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                    }
+                }
+            });
+
+            // Daily bar chart
+            const barCtx = document.getElementById('b3DailyPnlChart');
+            if (window._b3DailyChart) window._b3DailyChart.destroy();
+            window._b3DailyChart = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: dailyValues,
+                        backgroundColor: dailyColors,
+                        borderRadius: 3,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: {legend: {display: false}},
+                    scales: {
+                        x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}},
+                        y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                    }
+                }
+            });
         }
 
         // Trades table — from closed positions with strategy=B3
