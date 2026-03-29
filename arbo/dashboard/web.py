@@ -1070,7 +1070,7 @@ async def api_closed_positions(
             if strategy_filter:
                 query = query.where(PaperTrade.strategy == strategy_filter)
             result = await session.execute(
-                query.order_by(PaperTrade.resolved_at.desc()).limit(50)
+                query.order_by(PaperTrade.resolved_at.desc()).limit(200)
             )
             for row in result.all():
                 trade = row[0]

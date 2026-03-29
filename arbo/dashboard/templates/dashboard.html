@@ -3530,10 +3530,20 @@
             fetchJSON('/api/positions?strategy=B3'),
         ]);
 
-        // Overview card
+        // Overview card — use EVR endpoint (DB source of truth) for PnL/trades/WR
+        const evrOverview = await fetchJSON('/api/expected-vs-reality-b3');
         const strats = stratData.value?.strategies || [];
         const b3 = strats.find(s => s.id === 'B3');
-        if (b3) {
+        if (evrOverview && evrOverview.actual) {
+            const act = evrOverview.actual;
+            const pnl = act.total_pnl || 0;
+            document.getElementById('lb3TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            document.getElementById('lb3TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lb3Deployed').textContent = '$' + (b3 ? (b3.deployed || 0).toFixed(0) : '0');
+            document.getElementById('lb3Positions').textContent = b3 ? (b3.position_count || 0) : 0;
+            document.getElementById('lb3Trades').textContent = act.total_resolved || 0;
+            document.getElementById('lb3WinRate').textContent = act.total_resolved > 0 ? (act.win_rate * 100).toFixed(0) + '%' : '--';
+        } else if (b3) {
             const pnl = b3.total_pnl || 0;
             document.getElementById('lb3TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
             document.getElementById('lb3TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
@@ -3541,14 +3551,10 @@
             document.getElementById('lb3Positions').textContent = b3.position_count || 0;
         }
 
-        // Trades — from closed positions with strategy=B3
+        // Trades table — from closed positions with strategy=B3
         const closedResp = await fetchJSON('/api/closed-positions?strategy=B3');
-        const closed = closedResp?.positions || [];
+        const closed = closedResp?.positions || []
         if (closed.length > 0) {
-            const wins = closed.filter(p => (p.actual_pnl || 0) > 0).length;
-            const total = closed.length;
-            document.getElementById('lb3Trades').textContent = total;
-            document.getElementById('lb3WinRate').textContent = total > 0 ? ((wins/total)*100).toFixed(0) + '%' : '--';
 
             document.getElementById('lb3TradesBody').innerHTML = closed.slice(0, 50).map(t => {
                 const pnl = t.actual_pnl || 0;
