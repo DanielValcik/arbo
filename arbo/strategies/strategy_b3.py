@@ -247,6 +247,20 @@ class StrategyB3:
             if entry_price <= 0.01:
                 continue
 
+            # Liquidity check: fetch orderbook and compute max size
+            # where slippage < MAX_SLIPPAGE_PCT of edge
+            liq = await self._check_liquidity(token_id, entry_price, bet_size)
+            if liq is not None:
+                bet_size = liq["safe_size"]
+                if bet_size < MIN_ORDER_SIZE:
+                    logger.info(
+                        "b3_low_liquidity",
+                        token=token_id[:20],
+                        available_usd=f"${liq['available_usd']:.0f}",
+                        safe_size=f"${bet_size:.0f}",
+                    )
+                    continue
+
             shares = bet_size / entry_price
             shares = min(shares, MAX_SHARES)
             if shares < 1:
@@ -306,6 +320,8 @@ class StrategyB3:
                         "edge": sig.edge,
                         "market_type": "5min_updown",
                         "event_end_ts": sig.event_end_ts,
+                        "liq_available_usd": liq["available_usd"] if liq else None,
+                        "liq_slippage": liq["slippage"] if liq else None,
                     },
                 )
 
@@ -341,6 +357,127 @@ class StrategyB3:
             executed.append(sig)
 
         return executed
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # LIQUIDITY CHECK
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Max slippage as fraction of our edge before we reduce size
+    _MAX_SLIPPAGE_FRAC = 0.25  # Slippage must be < 25% of edge
+
+    async def _check_liquidity(
+        self, token_id: str, target_price: float, desired_size: float,
+    ) -> dict | None:
+        """Fetch orderbook and compute optimal trade size based on liquidity.
+
+        Walks the ask side of the orderbook to find how much we can buy
+        without slippage exceeding _MAX_SLIPPAGE_FRAC of our edge.
+
+        Args:
+            token_id: CLOB token to check.
+            target_price: Our target entry price (FV + spread/2).
+            desired_size: How much USD we want to trade.
+
+        Returns:
+            Dict with safe_size, available_usd, avg_price, slippage.
+            None if orderbook fetch fails (proceed with desired_size).
+        """
+        try:
+            import aiohttp
+
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as session, session.get(
+                f"https://clob.polymarket.com/book?token_id={token_id}",
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                book = await resp.json()
+
+            asks = book.get("asks", [])
+            if not asks:
+                return {"safe_size": 0, "available_usd": 0, "avg_price": 0, "slippage": 0}
+
+            # Sort asks ascending by price
+            asks_sorted = sorted(asks, key=lambda a: float(a["price"]))
+
+            # Only consider asks in tradeable range (near our target price)
+            max_price = min(target_price + 0.15, 0.95)
+            min_price = max(target_price - 0.15, 0.05)
+            relevant = [
+                a for a in asks_sorted
+                if min_price <= float(a["price"]) <= max_price
+            ]
+
+            if not relevant:
+                return {"safe_size": 0, "available_usd": 0, "avg_price": 0, "slippage": 0}
+
+            best_ask = float(relevant[0]["price"])
+            total_available_usd = sum(
+                float(a["size"]) * float(a["price"]) for a in relevant
+            )
+
+            # Walk asks to find max size where slippage < threshold
+            # Slippage = avg_fill_price - best_ask
+            max_slip = SPREAD * 2  # Max acceptable slippage ($0.02)
+            filled_shares = 0.0
+            total_cost = 0.0
+            safe_size = 0.0
+
+            for a in relevant:
+                p = float(a["price"])
+                s = float(a["size"])
+
+                # Simulate filling this level
+                test_shares = filled_shares + s
+                test_cost = total_cost + s * p
+                test_avg = test_cost / test_shares if test_shares > 0 else 0
+                test_slip = test_avg - best_ask
+
+                if test_slip > max_slip:
+                    # This level would push slippage too high
+                    # Partial fill: how many shares at this price keeps slip OK?
+                    if filled_shares > 0:
+                        # slip = (total_cost + n*p) / (filled + n) - best_ask <= max_slip
+                        # total_cost + n*p <= (filled + n) * (best_ask + max_slip)
+                        # n * (p - best_ask - max_slip) <= filled * (best_ask + max_slip) - total_cost
+                        denom = p - best_ask - max_slip
+                        if denom > 0:
+                            max_n = (filled_shares * (best_ask + max_slip) - total_cost) / denom
+                            max_n = max(0, min(s, max_n))
+                            filled_shares += max_n
+                            total_cost += max_n * p
+                    break
+
+                filled_shares += s
+                total_cost += s * p
+
+            safe_size = min(total_cost, desired_size)
+            avg_price = total_cost / filled_shares if filled_shares > 0 else 0
+            slippage = avg_price - best_ask if best_ask > 0 else 0
+
+            logger.info(
+                "b3_liquidity_check",
+                token=token_id[:20],
+                target_price=f"{target_price:.3f}",
+                desired=f"${desired_size:.0f}",
+                available=f"${total_available_usd:.0f}",
+                safe=f"${safe_size:.0f}",
+                best_ask=f"{best_ask:.3f}",
+                avg_fill=f"{avg_price:.3f}",
+                slippage=f"{slippage:.4f}",
+            )
+
+            return {
+                "safe_size": safe_size,
+                "available_usd": total_available_usd,
+                "avg_price": avg_price,
+                "slippage": slippage,
+            }
+
+        except Exception as e:
+            logger.debug("b3_liquidity_check_error", error=str(e))
+            return None  # Fallback: use desired_size
 
     # ═══════════════════════════════════════════════════════════════════════
     # EXIT: Check Exits
