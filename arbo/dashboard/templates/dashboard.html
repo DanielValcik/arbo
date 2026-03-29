@@ -1451,6 +1451,43 @@
                     </table>
                 </div>
             </div>
+            <!-- B3 Expected vs Reality -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title" style="border-left:3px solid var(--gold);padding-left:8px">Expected vs Reality — Strategy B3 (Binance Oracle Scalper)</div>
+                <div style="display:flex;gap:20px;flex-wrap:wrap">
+                    <div style="flex:1;min-width:300px">
+                        <table style="font-size:11px">
+                            <thead><tr><th>Metrika</th><th>Ocekavani</th><th>Realita</th><th></th></tr></thead>
+                            <tbody id="lb3EvrBody">
+                                <tr><td colspan="4" style="color:var(--text-dim);text-align:center">Nacitam...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="flex:1;min-width:300px">
+                        <div style="height:160px"><canvas id="evrB3Chart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- B3 Exit Reasons -->
+            <div class="card" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Exit Reasons</div>
+                <table style="font-size:11px;width:100%">
+                    <tbody id="lb3ExitBody">
+                        <tr><td colspan="2" style="color:var(--text-dim);text-align:center">Nacitam...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- B3 Chainlink Delta -->
+            <div class="card" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Chainlink vs Binance</div>
+                <table style="font-size:11px;width:100%">
+                    <tbody id="lb3ChainlinkBody">
+                        <tr><td colspan="2" style="color:var(--text-dim);text-align:center">Nacitam...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -3553,6 +3590,85 @@
                     <td>${timeLeftMin}</td>
                 </tr>`;
             }).join('');
+        }
+
+        // B3 Expected vs Reality
+        const evrResp = await fetchJSON('/api/expected-vs-reality-b3');
+        if (evrResp && !evrResp.too_early) {
+            const exp = evrResp.expected || {};
+            const act = evrResp.actual || {};
+
+            function evrRow(label, expected, actual, fmt, better) {
+                const dot = better === 'good' ? '<span style="color:var(--green)">●</span>' :
+                            better === 'bad' ? '<span style="color:var(--red)">●</span>' :
+                            '<span style="color:var(--yellow)">○</span>';
+                return `<tr><td>${label}</td><td>${expected}</td><td style="font-weight:600">${actual}</td><td>${dot}</td></tr>`;
+            }
+
+            const wrOk = act.win_rate >= exp.win_rate - 0.05 ? 'good' : 'bad';
+            const pnlOk = act.pnl_per_day >= exp.pnl_per_day * 0.3 ? 'good' : act.pnl_per_day > 0 ? 'neutral' : 'bad';
+            const lossOk = act.avg_loss <= exp.avg_loss * 1.3 ? 'good' : act.avg_loss <= exp.avg_loss * 1.8 ? 'neutral' : 'bad';
+            const tpdOk = act.trades_per_day >= exp.trades_per_day * 0.3 ? 'good' : 'neutral';
+
+            document.getElementById('lb3EvrBody').innerHTML = [
+                evrRow('Resolved', '--', `${act.total_resolved} (${act.wins}W / ${act.losses}L)`, '', 'neutral'),
+                evrRow('Win Rate', (exp.win_rate * 100).toFixed(1) + '%', (act.win_rate * 100).toFixed(1) + '%', '', wrOk),
+                evrRow('Avg PnL/trade', '$' + exp.avg_pnl_per_trade.toFixed(2), '$' + act.avg_pnl_per_trade.toFixed(2), '', act.avg_pnl_per_trade >= exp.avg_pnl_per_trade * 0.5 ? 'good' : 'bad'),
+                evrRow('Avg win', '$' + exp.avg_win.toFixed(2), '$' + act.avg_win.toFixed(2), '', 'good'),
+                evrRow('Avg loss', '$' + exp.avg_loss.toFixed(2), '$' + act.avg_loss.toFixed(2), '', lossOk),
+                evrRow('Trades/den', exp.trades_per_day, act.trades_per_day.toFixed(0), '', tpdOk),
+                evrRow('P&L/den', '+$' + exp.pnl_per_day.toFixed(0), (act.pnl_per_day >= 0 ? '+$' : '-$') + Math.abs(act.pnl_per_day).toFixed(2), '', pnlOk),
+                evrRow('Realizovany P&L', '--', (act.total_pnl >= 0 ? '+$' : '-$') + Math.abs(act.total_pnl).toFixed(2), '', act.total_pnl > 0 ? 'good' : 'bad'),
+                evrRow('Aktivni dny', '--', act.days_active, '', 'neutral'),
+            ].join('');
+
+            // Exit reasons
+            const exits = act.exit_reasons || {};
+            const totalExits = Object.values(exits).reduce((a, b) => a + b, 0) || 1;
+            document.getElementById('lb3ExitBody').innerHTML = [
+                `<tr><td>Profit target</td><td style="color:var(--green);font-weight:700">${exits.profit || 0} (${((exits.profit||0)/totalExits*100).toFixed(0)}%)</td></tr>`,
+                `<tr><td>Stop loss</td><td style="color:var(--red);font-weight:700">${exits.stop || 0} (${((exits.stop||0)/totalExits*100).toFixed(0)}%)</td></tr>`,
+                `<tr><td>Resolution</td><td>${exits.resolution || 0}</td></tr>`,
+                `<tr><td>Time limit</td><td>${exits.time || 0}</td></tr>`,
+                `<tr><td>Edge gone</td><td>${exits.edge_gone || 0}</td></tr>`,
+            ].join('');
+
+            // Chainlink
+            document.getElementById('lb3ChainlinkBody').innerHTML = act.chainlink_avg_delta !== null ? [
+                `<tr><td>Prumerny delta</td><td style="font-weight:700">+$${act.chainlink_avg_delta.toFixed(2)}</td></tr>`,
+                `<tr><td>Tradu s delta</td><td>${act.chainlink_trades}</td></tr>`,
+                `<tr><td>Smer</td><td>Binance vyssi</td></tr>`,
+            ].join('') : '<tr><td colspan="2" style="color:var(--text-dim)">Zatim malo dat</td></tr>';
+
+            // Chart
+            const series = evrResp.daily_series || [];
+            if (series.length > 0 && typeof Chart !== 'undefined') {
+                const labels = series.map(d => d.date ? d.date.slice(5) : '');
+                const values = series.map(d => d.cumulative);
+                const ctx = document.getElementById('evrB3Chart');
+                if (window._evrB3Chart) window._evrB3Chart.destroy();
+                window._evrB3Chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Kumulativni P&L (B3)',
+                            data: values,
+                            borderColor: '#e3b341',
+                            backgroundColor: 'rgba(227,179,65,0.1)',
+                            fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: {legend: {display: false}},
+                        scales: {
+                            x: {ticks: {color: '#8b949e', font: {size: 9}}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                            y: {ticks: {color: '#8b949e', font: {size: 9}, callback: v => '$'+v}, grid: {color: 'rgba(48,54,61,0.5)'}},
+                        }
+                    }
+                });
+            }
         }
     }
 
