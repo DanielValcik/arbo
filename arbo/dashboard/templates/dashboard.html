@@ -1945,9 +1945,9 @@
                 // Merge per-strategy P&L details
                 const sp = spnl[s.id] || {};
                 const dailyPnl = sp.daily_pnl || 0;
-                const weeklyPnl = s.weekly_pnl || 0;
+                const weeklyPnl = sp.weekly_pnl || s.weekly_pnl || 0;
                 const monthlyPnl = sp.monthly_pnl || 0;
-                const totalPnl = s.total_pnl || 0;
+                const totalPnl = sp.total_pnl || s.total_pnl || 0;
                 const roi = sp.roi_pct || 0;
                 return `
                     <div class="${cardClass}" style="cursor:pointer" onclick="document.getElementById('${cardId}').classList.toggle('detail-visible')">

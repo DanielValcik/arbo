@@ -1690,6 +1690,25 @@ class RDHOrchestrator:
         except Exception as e:
             logger.debug("c2_slack_notify_error", error=str(e))
 
+    async def _get_b3_total_pnl_from_db(self) -> float:
+        """Get B3 total P&L from DB (source of truth, survives restarts)."""
+        try:
+            import sqlalchemy as _sa
+
+            from arbo.utils.db import PaperTrade, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    _sa.select(_sa.func.coalesce(_sa.func.sum(PaperTrade.actual_pnl), 0))
+                    .where(PaperTrade.strategy == "B3")
+                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
+                )
+                return float(result.scalar() or 0)
+        except Exception:
+            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
+            return float(ss.total_pnl) if ss else 0
+
     async def _notify_b3_entry(self, sig: Any) -> None:
         """Send Slack notification on B3 trade entry."""
         B3_SLACK_CHANNEL = "C0APFCD4M9U"
@@ -1697,8 +1716,8 @@ class RDHOrchestrator:
             return
         try:
             direction = "UP" if sig.direction == 1 else "DOWN"
+            total_pnl = await self._get_b3_total_pnl_from_db()
             ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
-            total_pnl = float(ss.total_pnl) if ss else 0
             deployed = float(ss.deployed) if ss else 0
 
             # Compute trade size (same logic as poll_cycle)
@@ -1732,8 +1751,7 @@ class RDHOrchestrator:
                 entry_fv = 1.0 - entry_fv if entry_fv < 0.9 else float(pos.avg_price)
             size = float(pos.size)
 
-            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
-            total_pnl = float(ss.total_pnl) if ss else 0
+            total_pnl = await self._get_b3_total_pnl_from_db()
 
             emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
             pnl_sign = "+" if pnl >= 0 else ""
