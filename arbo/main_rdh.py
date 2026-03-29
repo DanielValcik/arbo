@@ -1630,7 +1630,7 @@ class RDHOrchestrator:
                 exit_reason=exit_reason,
             )
             self._risk_manager.post_trade_update(
-                pos.market_condition_id, "crypto", pos.size, pnl=pnl,
+                pos.market_condition_id, "crypto_5min", pos.size, pnl=pnl,
             )
             self._risk_manager.strategy_post_trade("B3", pos.size, pnl=pnl)
             await self._paper_engine.update_resolved_trades_in_db(

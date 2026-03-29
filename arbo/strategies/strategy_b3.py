@@ -265,7 +265,7 @@ class StrategyB3:
                 price=Decimal(str(round(entry_price, 4))),
                 size=Decimal(str(round(actual_size, 2))),
                 layer=0,
-                market_category="crypto",
+                market_category="crypto_5min",
                 strategy=STRATEGY_NAME,
             )
             decision = self._risk_manager.pre_trade_check(trade_req)
@@ -289,7 +289,7 @@ class StrategyB3:
                         4,
                     ))),
                     layer=0,
-                    market_category="crypto",
+                    market_category="crypto_5min",
                     fee_enabled=False,  # Maker = 0%
                     strategy=STRATEGY_NAME,
                     pre_computed_size=Decimal(str(round(actual_size, 2))),
