@@ -317,18 +317,20 @@ class RiskManager:
             size: Trade size in USDC.
             pnl: Realized P&L if trade resolved (None for new positions).
         """
-        # Update category exposure
+        # Update category exposure and open positions
         current = self._state.category_exposure.get(market_category, Decimal("0"))
-        self._state.category_exposure[market_category] = current + size
 
-        # Update open positions value and per-market tracking
         if pnl is None:
-            # Opening a new position
+            # Opening a new position — add to exposure
+            self._state.category_exposure[market_category] = current + size
             self._state.open_positions_value += size
             cur_count = self._state.market_positions.get(market_id, 0)
             self._state.market_positions[market_id] = cur_count + 1
         else:
-            # Closing / resolving a position
+            # Closing / resolving a position — remove from exposure
+            self._state.category_exposure[market_category] = max(
+                Decimal("0"), current - size
+            )
             self._state.daily_pnl += pnl
             self._state.weekly_pnl += pnl
             self._state.open_positions_value = max(
@@ -336,10 +338,6 @@ class RiskManager:
             )
             cur_count = self._state.market_positions.get(market_id, 0)
             self._state.market_positions[market_id] = max(0, cur_count - 1)
-            # Remove from category exposure
-            self._state.category_exposure[market_category] = max(
-                Decimal("0"), current + size - abs(size)
-            )
 
         logger.info(
             "exposure_updated",
