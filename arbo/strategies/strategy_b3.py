@@ -23,7 +23,6 @@ from typing import Any
 
 from arbo.models.volatility_model import VolatilityEstimator
 from arbo.strategies.b3_quality_gate import (
-    ALLOW_RESOLUTION,
     EDGE_EXIT,
     EDGE_SCALING,
     MAX_BET_SIZE,
@@ -375,13 +374,19 @@ class StrategyB3:
 
             # Resolution check: event has ended
             if now >= pos.event_end_ts:
-                if ALLOW_RESOLUTION:
-                    # Let it resolve naturally — paper engine handles resolution
-                    # Don't exit here, wait for resolution event
-                    continue
+                # Event resolved — compute final FV based on whether BTC
+                # ended above or below S_start (= resolution outcome).
+                if pos.btc_at_start > 0:
+                    resolved_up = btc_price >= pos.btc_at_start
+                    won = (pos.direction == 1 and resolved_up) or (
+                        pos.direction == -1 and not resolved_up
+                    )
+                    # Resolution: token redeems at $1 (won) or $0 (lost)
+                    exit_price = 1.0 if won else 0.0
                 else:
-                    triggered.append((token_id, "forced_end", pos.entry_mkt_fv))
-                    continue
+                    exit_price = pos.entry_mkt_fv  # Fallback
+                triggered.append((token_id, "resolution", exit_price))
+                continue
 
             if t_remaining <= 0 or pos.btc_at_start <= 0:
                 continue
