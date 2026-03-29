@@ -33,11 +33,16 @@ CONTRARIAN = False                # MOMENTUM: follow BTC direction
 
 # Exit
 PROFIT_TARGET = 0.207             # Take profit $0.207/share
-STOP_LOSS = 0.038                 # Stop loss $0.038/share
+STOP_LOSS = 0.038                 # FV-based stop (DISABLED when USE_BTC_STOP=True)
 MAX_HOLD_MIN = 3                  # Max 3 minutes holding
 EDGE_EXIT = 0.076                 # Exit if edge drops below 7.6%
 EXIT_BEFORE_END = 0               # Don't force exit before resolution
 ALLOW_RESOLUTION = True           # Can hold through market resolution
+
+# BTC-price-based stop (replaces FV stop — linear, no CDF overshoot)
+# Validated in b3_improvement_study: OOS score +47%, WR 52→66%, DD 33→23%
+USE_BTC_STOP = True               # Use BTC % reversal stop instead of FV stop
+BTC_STOP_PCT = 0.0015             # 0.15% BTC reversal = ~$100 at $66,500
 
 # Market model
 SPREAD = 0.01                     # $0.01 bid-ask spread

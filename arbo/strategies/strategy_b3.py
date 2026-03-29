@@ -23,6 +23,7 @@ from typing import Any
 
 from arbo.models.volatility_model import VolatilityEstimator
 from arbo.strategies.b3_quality_gate import (
+    BTC_STOP_PCT,
     EDGE_EXIT,
     EDGE_SCALING,
     MAX_BET_SIZE,
@@ -39,6 +40,7 @@ from arbo.strategies.b3_quality_gate import (
     SPREAD,
     STOP_LOSS,
     STRATEGY_NAME,
+    USE_BTC_STOP,
     WINDOW_MIN,
 )
 from arbo.strategies.b3_scanner import B3Scanner, B3Signal
@@ -65,6 +67,7 @@ class B3Position:
     event_start_ts: float     # Event start timestamp
     event_end_ts: float       # Event end timestamp (resolution)
     btc_at_start: float       # BTC price at event start
+    btc_at_entry: float       # BTC price at entry time (for BTC stop)
     sigma_per_min: float      # Volatility at entry
     shares: float
     question: str = ""
@@ -338,6 +341,7 @@ class StrategyB3:
                 event_start_ts=sig.event_start_ts,
                 event_end_ts=sig.event_end_ts,
                 btc_at_start=sig.btc_at_start,
+                btc_at_entry=sig.btc_now,
                 sigma_per_min=sig.sigma_per_min,
                 shares=shares,
                 question=sig.question,
@@ -556,12 +560,21 @@ class StrategyB3:
 
             if unrealized >= PROFIT_TARGET:
                 reason = "profit"
+            elif USE_BTC_STOP:
+                # BTC-price-based stop: linear, no CDF overshoot
+                btc_change = (btc_price - pos.btc_at_entry) / pos.btc_at_entry
+                if (pos.direction == 1 and btc_change <= -BTC_STOP_PCT) or (
+                    pos.direction == -1 and btc_change >= BTC_STOP_PCT
+                ):
+                    reason = "stop"
             elif unrealized <= -STOP_LOSS:
                 reason = "stop"
-            elif hold_min >= MAX_HOLD_MIN:
-                reason = "time"
-            elif abs(pos_signal_fv - 0.50) < EDGE_EXIT and hold_min >= 0.5:
-                reason = "edge_gone"
+
+            if not reason:
+                if hold_min >= MAX_HOLD_MIN:
+                    reason = "time"
+                elif abs(pos_signal_fv - 0.50) < EDGE_EXIT and hold_min >= 0.5:
+                    reason = "edge_gone"
 
             if reason:
                 exit_price = pos_mkt_fv - SPREAD / 2  # Sell at bid
@@ -573,6 +586,8 @@ class StrategyB3:
             pos = self._open_positions.pop(token_id, None)
             if pos:
                 self._last_exit_time[pos.condition_id] = now
+                btc_change_pct = ((btc_price - pos.btc_at_entry) / pos.btc_at_entry * 100
+                                  if pos.btc_at_entry > 0 else 0.0)
                 logger.info(
                     "b3_exit",
                     direction="UP" if pos.direction == 1 else "DOWN",
@@ -580,6 +595,7 @@ class StrategyB3:
                     entry_fv=f"{pos.entry_mkt_fv:.3f}",
                     exit_fv=f"{exit_price:.3f}",
                     pnl=f"{exit_price - pos.entry_mkt_fv - SPREAD / 2:.3f}",
+                    btc_change=f"{btc_change_pct:+.3f}%",
                 )
 
         return triggered
