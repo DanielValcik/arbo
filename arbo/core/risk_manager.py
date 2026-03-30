@@ -215,8 +215,8 @@ class RiskManager:
                     adjusted_size=confluence_max,
                 )
 
-        # 4. Daily loss check
-        if abs(self._state.daily_pnl) >= self._state.capital * DAILY_LOSS_PCT:
+        # 4. Daily loss check (only on LOSSES, not gains)
+        if self._state.daily_pnl <= -(self._state.capital * DAILY_LOSS_PCT):
             logger.critical(
                 "daily_loss_limit_hit",
                 daily_pnl=str(self._state.daily_pnl),
@@ -225,8 +225,8 @@ class RiskManager:
             self._trigger_shutdown("Daily loss limit exceeded")
             return RiskDecision(approved=False, reason="Daily loss limit exceeded — shutdown")
 
-        # 5. Weekly loss check
-        if abs(self._state.weekly_pnl) >= self._state.capital * WEEKLY_LOSS_PCT:
+        # 5. Weekly loss check (only on LOSSES, not gains)
+        if self._state.weekly_pnl <= -(self._state.capital * WEEKLY_LOSS_PCT):
             logger.critical(
                 "weekly_loss_limit_hit",
                 weekly_pnl=str(self._state.weekly_pnl),
@@ -350,7 +350,7 @@ class RiskManager:
         if (
             pnl is not None
             and pnl < 0
-            and abs(self._state.daily_pnl) >= self._state.capital * DAILY_LOSS_PCT
+            and self._state.daily_pnl <= -(self._state.capital * DAILY_LOSS_PCT)
         ):
             self._trigger_shutdown("Daily loss limit exceeded after trade resolution")
 
