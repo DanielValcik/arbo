@@ -1398,7 +1398,7 @@
 
             <!-- B3 Daily Bar Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Denni P&L</div>
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L<span id="lb3AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
                 <div class="chart-container" style="height:150px">
                     <canvas id="b3DailyPnlChart"></canvas>
                 </div>
@@ -3593,6 +3593,14 @@
             const cumValues = series.map(d => d.cumulative);
             const dailyValues = series.map(d => d.pnl);
             const dailyColors = dailyValues.map(v => v >= 0 ? '#3fb950' : '#f85149');
+
+            // Average daily P&L
+            const avgDaily = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+            const avgEl = document.getElementById('lb3AvgDailyPnl');
+            if (avgEl) {
+                avgEl.style.color = avgDaily >= 0 ? 'var(--green)' : 'var(--red)';
+                avgEl.textContent = 'prumer: ' + (avgDaily >= 0 ? '+' : '') + '$' + avgDaily.toFixed(2) + '/den';
+            }
 
             // Cumulative line chart
             const cumCtx = document.getElementById('b3CumPnlChart');
