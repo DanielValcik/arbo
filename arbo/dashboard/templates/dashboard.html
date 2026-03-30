@@ -1388,6 +1388,14 @@
                 </div>
             </div>
 
+            <!-- B3 Per-Trade Cumulative P&L -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">P&L po kazdem tradu (od $0)</div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b3TradeByTradeChart"></canvas>
+                </div>
+            </div>
+
             <!-- B3 Daily Bar Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Denni P&L</div>
@@ -3637,6 +3645,91 @@
         // Trades table — from closed positions with strategy=B3
         const closedResp = await fetchJSON('/api/closed-positions?strategy=B3');
         const closed = closedResp?.positions || []
+
+        // Per-trade cumulative P&L chart (starting from $0)
+        if (closed.length > 0 && typeof Chart !== 'undefined') {
+            const tradesChron = [...closed].reverse(); // oldest first
+            let cumPnl = 0;
+            const tradeLabels = [];
+            const tradeValues = [0]; // start at $0
+            const tradeColors = [];
+            tradeLabels.push('Start');
+            for (let i = 0; i < tradesChron.length; i++) {
+                const pnl = tradesChron[i].actual_pnl || 0;
+                cumPnl += pnl;
+                tradeLabels.push('#' + (i + 1));
+                tradeValues.push(Math.round(cumPnl * 100) / 100);
+                tradeColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
+            }
+            // Segment colors: green when going up, red when going down
+            const segColors = tradeValues.map((v, i) =>
+                i === 0 ? '#e3b341' : v >= tradeValues[i-1] ? '#3fb950' : '#f85149'
+            );
+            const ctx = document.getElementById('b3TradeByTradeChart');
+            if (window._b3TradeChart) window._b3TradeChart.destroy();
+            window._b3TradeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: tradeLabels,
+                    datasets: [{
+                        label: 'Kumulativni P&L',
+                        data: tradeValues,
+                        borderColor: '#e3b341',
+                        backgroundColor: 'rgba(227,179,65,0.08)',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: tradeValues.length > 100 ? 1.5 : 3,
+                        pointBackgroundColor: segColors,
+                        pointBorderColor: segColors,
+                        borderWidth: 2,
+                        segment: {
+                            borderColor: ctx2 => {
+                                const cur = ctx2.p1.parsed.y;
+                                const prev = ctx2.p0.parsed.y;
+                                return cur >= prev ? '#3fb950' : '#f85149';
+                            }
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: {
+                        legend: {display: false},
+                        tooltip: {
+                            callbacks: {
+                                label: ctx2 => {
+                                    const idx = ctx2.dataIndex;
+                                    if (idx === 0) return 'Start: $0';
+                                    const t = tradesChron[idx - 1];
+                                    const pnl = t.actual_pnl || 0;
+                                    const dir = t.trade_details?.direction || '?';
+                                    const reason = t.exit_reason || '?';
+                                    return `Trade #${idx}: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${dir} → ${reason}) | Total: $${ctx2.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#8b949e', font: {size: 8},
+                                maxTicksLimit: 20,
+                                callback: function(val, idx) {
+                                    if (tradeLabels.length <= 30) return tradeLabels[idx];
+                                    return idx % Math.ceil(tradeLabels.length / 20) === 0 ? tradeLabels[idx] : '';
+                                }
+                            },
+                            grid: {color: 'rgba(48,54,61,0.3)'}
+                        },
+                        y: {
+                            ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0)},
+                            grid: {color: 'rgba(48,54,61,0.5)'}
+                        }
+                    }
+                }
+            });
+        }
+
         if (closed.length > 0) {
 
             document.getElementById('lb3TradesBody').innerHTML = closed.slice(0, 50).map(t => {
