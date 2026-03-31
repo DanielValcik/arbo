@@ -574,7 +574,7 @@ class RDHOrchestrator:
             if self._poly_client_readonly is not None:
                 live_executor = LiveExecutor(self._poly_client_readonly)
                 logger.info("b3_live_executor_ready", mode=execution_mode,
-                           size=os.getenv("B3_LIVE_SIZE_USD", "10"))
+                           msg="capital from wallet balance, % sizing")
             else:
                 logger.warning("b3_live_executor_no_client", msg="Falling back to paper mode")
                 execution_mode = "paper"

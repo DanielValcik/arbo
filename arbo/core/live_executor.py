@@ -126,6 +126,20 @@ class LiveExecutor:
         except Exception as e:
             logger.warning("positions_sync_failed", error=str(e))
 
+    async def get_balance(self) -> float:
+        """Get USDC balance from wallet. Returns 0 on failure."""
+        try:
+            clob = await self._ensure_clob()
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, clob.get_balance_allowance,
+            )
+            # result is {"balance": "123.45", ...}
+            return float(result.get("balance", 0)) if isinstance(result, dict) else 0.0
+        except Exception as e:
+            logger.warning("balance_fetch_failed", error=str(e))
+            return 0.0
+
     async def _get_prices(self, token_id: str) -> tuple[float | None, float | None]:
         """Get BUY (bid) and SELL (ask) prices. Returns (buy_price, sell_price)."""
         try:
