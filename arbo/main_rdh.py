@@ -2555,21 +2555,7 @@ class RDHOrchestrator:
                         pnl=str(pnl),
                     )
 
-                    # Slack notification (skip B2/B3 — they have own channels)
-                    if self._slack_bot is not None and strategy not in ("B2", "B3"):
-                        market_name = getattr(market, "question", cid[:40]) or cid[:40]
-                        result_status = "won" if winning else "lost"
-                        try:
-                            await self._slack_bot.send_resolution_alert(
-                                market=market_name,
-                                strategy=strategy or "?",
-                                side=pos.side or "?",
-                                size=float(getattr(pos, "size", 0)),
-                                pnl=float(pnl),
-                                status=result_status,
-                            )
-                        except Exception as slack_err:
-                            logger.warning("resolution_slack_error", error=str(slack_err))
+                    # Individual resolution alerts disabled — daily summary only
 
                   except Exception as pos_err:
                     logger.error(
