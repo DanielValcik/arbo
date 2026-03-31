@@ -127,33 +127,18 @@ class LiveExecutor:
             logger.warning("positions_sync_failed", error=str(e))
 
     async def get_balance(self) -> float:
-        """Get wallet balance. Tries CLOB auth, then Data API. Returns 0 on failure."""
+        """Get available USDC balance from CLOB API. Returns 0 on failure."""
         try:
+            from py_clob_client.clob_types import AssetType, BalanceAllowanceParams
             clob = await self._ensure_clob()
             loop = asyncio.get_event_loop()
-            # CLOB balance-allowance (requires auth, returns USDC balance)
+            params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
             result = await loop.run_in_executor(
-                None, lambda: clob.get_balance_allowance()
+                None, lambda: clob.get_balance_allowance(params)
             )
             if isinstance(result, dict):
-                bal = float(result.get("balance", 0))
-                if bal > 0:
-                    return bal
-        except Exception:
-            pass  # Fall through to Data API
-
-        # Fallback: Data API /value (positions value, no auth)
-        if not self._funder:
-            return 0.0
-        try:
-            url = f"{DATA_API}/value?user={self._funder}"
-            req = urllib.request.Request(url, headers={"User-Agent": "Arbo/1.0"})
-            loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(None, lambda: json.loads(
-                urllib.request.urlopen(req, timeout=10, context=_SSL_CTX).read()
-            ))
-            if isinstance(data, list) and data:
-                return float(data[0].get("value", 0))
+                raw = int(result.get("balance", 0))
+                return raw / 1_000_000  # USDC has 6 decimals
         except Exception as e:
             logger.warning("balance_fetch_failed", error=str(e))
         return 0.0
