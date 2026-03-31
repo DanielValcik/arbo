@@ -97,10 +97,9 @@ class StrategyB3:
         self._execution_mode = execution_mode  # "paper", "dual", "live"
         self._live_executor = live_executor
 
-        # Live config (from env, set by orchestrator)
+        # Live config — B3_LIVE_CAPITAL is the source of truth for sizing
         import os
-        self._live_capital_fallback = float(os.getenv("B3_LIVE_CAPITAL", "300"))
-        self._live_capital: float = self._live_capital_fallback
+        self._live_capital = float(os.getenv("B3_LIVE_CAPITAL", "300"))
         self._live_capital_last_check: float = 0.0
         self._live_entry_timeout_s = int(os.getenv("B3_LIVE_ENTRY_TIMEOUT_S", "10"))
         self._live_exit_maker_timeout_s = int(os.getenv("B3_LIVE_EXIT_MAKER_TIMEOUT_S", "5"))
@@ -360,21 +359,7 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
             ):
                 try:
-                    # Refresh wallet balance every 60s
-                    if now - self._live_capital_last_check > 60:
-                        bal = await self._live_executor.get_balance()
-                        if bal > 0:
-                            self._live_capital = bal
-                        else:
-                            self._live_capital = self._live_capital_fallback
-                        self._live_capital_last_check = now
-                        logger.info(
-                            "b3_live_balance",
-                            balance=f"${self._live_capital:.2f}",
-                            source="wallet" if bal > 0 else "fallback",
-                        )
-
-                    # Same % sizing as paper, but on live wallet balance
+                    # Same % sizing as paper, but on live capital (env var)
                     live_size = min(
                         self._live_capital * raw_pct, MAX_BET_SIZE,
                     )

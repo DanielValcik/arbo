@@ -1674,26 +1674,26 @@ class RDHOrchestrator:
                     from sqlalchemy import text as _text
 
                     from arbo.utils.db import get_session_factory
+                    live_data = json.dumps({
+                        "live_exit_price": live_exit_info.get("live_exit_price", 0) if live_exit_info else 0,
+                        "live_exit_shares": live_exit_info.get("live_exit_shares", 0) if live_exit_info else 0,
+                        "live_exit_status": live_exit_info.get("live_exit_status", "resolution") if live_exit_info else "resolution",
+                        "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0) if live_exit_info else 0,
+                    })
                     factory = get_session_factory()
                     async with factory() as session:
                         await session.execute(
                             _text("""
                                 UPDATE paper_trades
                                 SET trade_details = trade_details || :live_data::jsonb
-                                WHERE token_id = :tid AND strategy = 'B3'
-                                  AND status IN ('won', 'lost', 'sold')
-                                ORDER BY placed_at DESC LIMIT 1
+                                WHERE id = (
+                                    SELECT id FROM paper_trades
+                                    WHERE token_id = :tid AND strategy = 'B3'
+                                      AND status IN ('won', 'lost', 'sold')
+                                    ORDER BY placed_at DESC LIMIT 1
+                                )
                             """),
-                            {
-                                "tid": token_id,
-                                "live_data": json.dumps({
-                                    "live_exit_price": live_exit_info.get("live_exit_price", 0) if live_exit_info else 0,
-                                    "live_exit_shares": live_exit_info.get("live_exit_shares", 0) if live_exit_info else 0,
-                                    "live_exit_status": live_exit_info.get("live_exit_status", "resolution") if live_exit_info else "resolution",
-                                    "live_exit_slippage": live_exit_info.get("live_exit_slippage", 0) if live_exit_info else 0,
-                                    "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0) if live_exit_info else 0,
-                                }),
-                            },
+                            {"tid": token_id, "live_data": live_data},
                         )
                         await session.commit()
                 except Exception as e:
@@ -1806,17 +1806,26 @@ class RDHOrchestrator:
             if self._strategy_b3 and hasattr(self._strategy_b3, '_open_positions'):
                 for _tid, bpos in self._strategy_b3._open_positions.items():
                     if bpos.condition_id == sig.condition_id and bpos.live_fill_status:
-                        if bpos.live_fill_status not in ("", "skipped"):
+                        st = bpos.live_fill_status
+                        if st in ("filled", "partial") and bpos.live_shares > 0:
                             gap = bpos.live_entry_price - sig.entry_price
                             live_text = (
                                 f":zap: *B3 LIVE BUY — BTC {direction}*\n"
-                                f"*{bpos.live_fill_status}*  |  "
+                                f"*{st}*  |  "
                                 f"{bpos.live_shares} shares @ "
                                 f"{bpos.live_entry_price:.3f}  |  "
                                 f"${bpos.live_shares * bpos.live_entry_price:.1f}  |  "
                                 f"{bpos.live_latency_ms}ms\n"
                                 f"Model FV: {sig.entry_price:.3f}  |  "
                                 f"Gap: {gap:+.3f}"
+                            )
+                            await self._slack_bot._post(b3_live_channel, text=live_text)
+                        elif st in ("failed", "error", "too_small"):
+                            live_text = (
+                                f":no_entry: *B3 LIVE BUY SKIP — "
+                                f"BTC {direction}*\n"
+                                f"Reason: {st}  |  "
+                                f"{bpos.live_latency_ms}ms"
                             )
                             await self._slack_bot._post(b3_live_channel, text=live_text)
                         break
@@ -1882,13 +1891,17 @@ class RDHOrchestrator:
                 live_emoji = ":white_check_mark:" if live_pnl >= 0 else ":x:"
 
                 if live_status in ("filled", "partial") and live_xs > 0:
+                    paper_entry = float(pos.avg_price) if pos else 0
                     live_text = (
                         f"{live_emoji} *B3 LIVE SELL — BTC {dir_str}*"
                         f" ({exit_reason})\n"
-                        f"Entry: {live_entry_price:.3f} -> "
-                        f"Exit: {live_xp:.3f}  |  "
+                        f"Live:  {live_entry_price:.3f} -> "
+                        f"{live_xp:.3f}  |  "
+                        f"P&L: *{live_pnl_s}*  |  "
                         f"{live_xs} shares  |  {latency}ms\n"
-                        f"Live P&L: *{live_pnl_s}*"
+                        f"Paper: {paper_entry:.3f} -> "
+                        f"{exit_price:.3f}  |  "
+                        f"P&L: *{pnl_sign}${pnl:.2f}*"
                     )
                 else:
                     live_text = (

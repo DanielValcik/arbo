@@ -3952,12 +3952,21 @@
                         const t = chronological[i];
                         const d = t.trade_details || {};
                         paperCum += (t.actual_pnl || 0);
-                        // Normalize live PnL to paper size for comparison
-                        const paperSize = t.size || 67;
+                        // Live PnL: actual CLOB entry → CLOB exit
                         const lep = d.live_entry_price || 0;
-                        const lxp = d.live_exit_price || (t.exit_price || 0);
-                        if (lep > 0) {
-                            const livePnlNorm = (lxp - lep) * (paperSize / lep);
+                        const lxp = d.live_exit_price || 0;
+                        const lShares = d.live_entry_shares || 0;
+                        if (lep > 0 && lxp > 0 && lShares > 0) {
+                            // Raw live PnL, normalized to paper size
+                            const paperSize = t.size || 67;
+                            const livePnlRaw = (lxp - lep) * lShares;
+                            const livePnlNorm = livePnlRaw * (paperSize / (lep * lShares));
+                            liveCum += livePnlNorm;
+                        } else if (lep > 0 && t.exit_reason === 'resolution') {
+                            // Resolution: token auto-redeems, use paper exit
+                            const paperSize = t.size || 67;
+                            const resExit = t.exit_price || 0;
+                            const livePnlNorm = (resExit - lep) * (paperSize / lep);
                             liveCum += livePnlNorm;
                         }
                         labels.push('#' + (i + 1));
