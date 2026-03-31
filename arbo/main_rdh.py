@@ -198,6 +198,50 @@ class RDHOrchestrator:
 
     def _handle_signal(self, sig: signal.Signals) -> None:
         logger.info("signal_received", signal=sig.name)
+        # Schedule graceful B3 shutdown (wait for open positions)
+        asyncio.ensure_future(self._graceful_b3_shutdown(sig))
+
+    async def _graceful_b3_shutdown(self, sig: signal.Signals) -> None:
+        """Wait for open B3 live positions before shutdown (max 3 min)."""
+        b3 = self._strategy_b3
+        if b3 and b3._open_positions:
+            live_count = sum(
+                1 for p in b3._open_positions.values() if p.live_shares > 0
+            )
+            if live_count > 0:
+                logger.info(
+                    "b3_graceful_shutdown_waiting",
+                    live_positions=live_count,
+                    msg="Waiting up to 3 min for B3 live positions to close",
+                )
+                # Wait up to 3 minutes, checking every 10s
+                for _ in range(18):
+                    await asyncio.sleep(10)
+                    # Run exit check
+                    try:
+                        await self._run_b3_exit_check()
+                    except Exception:
+                        pass
+                    # Check if all live positions closed
+                    remaining = sum(
+                        1 for p in b3._open_positions.values()
+                        if p.live_shares > 0
+                    ) if b3._open_positions else 0
+                    if remaining == 0:
+                        logger.info("b3_graceful_shutdown_done", msg="All live positions closed")
+                        break
+                    logger.info("b3_graceful_shutdown_waiting", remaining=remaining)
+                else:
+                    remaining = sum(
+                        1 for p in b3._open_positions.values()
+                        if p.live_shares > 0
+                    ) if b3._open_positions else 0
+                    if remaining > 0:
+                        logger.warning(
+                            "b3_graceful_shutdown_timeout",
+                            remaining=remaining,
+                            msg="Positions will auto-resolve at market end",
+                        )
         self._shutdown_event.set()
 
     # ------------------------------------------------------------------
