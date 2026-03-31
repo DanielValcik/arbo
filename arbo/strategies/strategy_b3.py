@@ -358,10 +358,12 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
             ):
                 try:
+                    # Use same size as paper for fair comparison
+                    live_size = actual_size if self._live_size_usd <= 0 else self._live_size_usd
                     fill = await self._live_executor.buy(
                         token_id=token_id,
                         price=entry_price,
-                        size_usdc=self._live_size_usd,
+                        size_usdc=live_size,
                         neg_risk=False,
                         tick_size="0.01",
                         maker_timeout_s=self._live_entry_timeout_s,
@@ -396,7 +398,7 @@ class StrategyB3:
                     paper_trade.trade_details["live_entry_shares"] = live_shares
                     paper_trade.trade_details["live_fill_status"] = live_fill_status
                     paper_trade.trade_details["live_entry_latency_ms"] = live_latency_ms
-                    paper_trade.trade_details["live_size_usd"] = self._live_size_usd
+                    paper_trade.trade_details["live_size_usd"] = live_size
 
             # Track position
             self._open_positions[token_id] = B3Position(
