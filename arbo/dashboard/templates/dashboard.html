@@ -3625,7 +3625,7 @@
                     <td>$${details.strike ? Number(details.strike).toLocaleString() : '--'}</td>
                     <td>${details.direction || '--'}</td>
                     <td>$${(t.size || 0).toFixed(1)}</td>
-                    <td>${(t.fill_price || 0).toFixed(3)}</td>
+                    <td>${(t.fill_price || t.price || 0).toFixed(3)}</td>
                     <td>${t.exit_price ? t.exit_price.toFixed(3) : '--'}</td>
                     <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '--'}</td>
                     <td style="color:${pnlColor};font-weight:700">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
@@ -3857,7 +3857,8 @@
                     const lep = details.live_entry_price || 0;
                     const lxp = details.live_exit_price || 0;
                     const lShares = details.live_entry_shares || 0;
-                    const entrySlip = lep ? (lep - (t.fill_price || 0)).toFixed(3) : '';
+                    const paperEntry = t.fill_price || t.price || 0;
+                    const entrySlip = lep ? (lep - paperEntry).toFixed(3) : '';
                     liveEntryCell = `<td>${lep ? lep.toFixed(3) : '--'} <span style="font-size:9px;color:var(--text-dim)">${entrySlip ? '(' + (entrySlip >= 0 ? '+' : '') + entrySlip + ')' : ''}</span></td>`;
                     if (lxp) {
                         const exitSlip = (details.live_exit_slippage || 0).toFixed(3);
@@ -3877,7 +3878,7 @@
                     <td style="font-weight:600">${details.direction === 'up' ? 'UP' : details.direction === 'down' ? 'DOWN' : '--'}</td>
                     <td>$${details.btc_at_start ? Number(details.btc_at_start).toLocaleString() : '--'}</td>
                     <td>$${details.btc_now ? Number(details.btc_now).toLocaleString() : '--'}</td>
-                    <td>${(t.fill_price || 0).toFixed(3)}</td>
+                    <td>${(t.fill_price || t.price || 0).toFixed(3)}</td>
                     <td>${t.exit_price ? t.exit_price.toFixed(3) : '--'}</td>
                     <td>$${(t.size || 0).toFixed(1)}</td>
                     <td>${details.edge ? (details.edge * 100).toFixed(1) + '%' : '--'}</td>
