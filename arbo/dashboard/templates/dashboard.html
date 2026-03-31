@@ -1421,25 +1421,9 @@
                 <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim)"></div>
             </div>
 
-            <!-- B3 Cumulative P&L Chart -->
-            <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Kumulativni P&L</div>
-                <div class="chart-container" style="height:180px">
-                    <canvas id="b3CumPnlChart"></canvas>
-                </div>
-            </div>
-
-            <!-- B3 Per-Trade Cumulative P&L -->
-            <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">P&L po kazdem tradu (od $0)</div>
-                <div class="chart-container" style="height:220px">
-                    <canvas id="b3TradeByTradeChart"></canvas>
-                </div>
-            </div>
-
             <!-- B3 LIVE Cumulative P&L Chart -->
             <div class="card grid-full" style="border-top:3px solid #3fb950">
-                <div class="card-title">Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span><span id="lb3LiveCumStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
                 <div class="chart-container" style="height:180px">
                     <canvas id="b3LiveCumPnlChart"></canvas>
                 </div>
@@ -1450,6 +1434,22 @@
                 <div class="card-title">P&L po kazdem tradu (od $0) <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
                 <div class="chart-container" style="height:220px">
                     <canvas id="b3LiveTradeByTradeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B3 Cumulative P&L Chart (PAPER) -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Kumulativni P&L <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b3CumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B3 Per-Trade Cumulative P&L (PAPER) -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">P&L po kazdem tradu (od $0) <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b3TradeByTradeChart"></canvas>
                 </div>
             </div>
 
@@ -3983,6 +3983,19 @@
                     lColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
                 }
                 const lSegColors = lValues.map((v, i) => i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149');
+                // Stats: avg per trade + per day
+                const totalLivePnl = lCum;
+                const tradeCount = liveChron.length;
+                const avgPerTrade = tradeCount > 0 ? totalLivePnl / tradeCount : 0;
+                const dates = new Set(liveChron.map(t => t.placed_at ? t.placed_at.slice(0, 10) : ''));
+                const days = Math.max(dates.size, 1);
+                const avgPerDay = totalLivePnl / days;
+                const statsEl = document.getElementById('lb3LiveCumStats');
+                if (statsEl) {
+                    const c = totalLivePnl >= 0 ? 'var(--green)' : 'var(--red)';
+                    statsEl.innerHTML = `<span style="color:${c}">${avgPerTrade >= 0 ? '+' : ''}$${avgPerTrade.toFixed(2)}/trade</span> | <span style="color:${c}">${avgPerDay >= 0 ? '+' : ''}$${avgPerDay.toFixed(0)}/den</span>`;
+                }
+
                 const lCumCtx = document.getElementById('b3LiveCumPnlChart');
                 if (lCumCtx) {
                     if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
