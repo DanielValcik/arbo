@@ -3694,7 +3694,7 @@
                 const posList = wallet.positions || [];
                 if (posList.length > 0) {
                     document.getElementById('lb3WalletPositionsList').innerHTML = posList
-                        .filter(p => p.current_value > 0 || p.title.includes('Bitcoin'))
+                        .filter(p => p.current_value > 0)
                         .slice(0, 10)
                         .map(p => {
                             const c = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
