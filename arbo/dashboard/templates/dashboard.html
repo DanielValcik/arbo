@@ -4000,17 +4000,20 @@
                     lColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
                 }
                 const lSegColors = lValues.map((v, i) => i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149');
-                // Stats: avg per trade + per day
-                const totalLivePnl = lCum;
-                const tradeCount = liveChron.length;
-                const avgPerTrade = tradeCount > 0 ? totalLivePnl / tradeCount : 0;
-                const dates = new Set(liveChron.map(t => t.placed_at ? t.placed_at.slice(0, 10) : ''));
-                const days = Math.max(dates.size, 1);
-                const avgPerDay = totalLivePnl / days;
+                // Stats from Polymarket wallet (source of truth)
                 const statsEl = document.getElementById('lb3LiveCumStats');
                 if (statsEl) {
-                    const c = totalLivePnl >= 0 ? 'var(--green)' : 'var(--red)';
-                    statsEl.innerHTML = `<span style="color:${c}">${avgPerTrade >= 0 ? '+' : ''}$${avgPerTrade.toFixed(2)}/trade</span> | <span style="color:${c}">${avgPerDay >= 0 ? '+' : ''}$${avgPerDay.toFixed(0)}/den</span>`;
+                    const wallet = walletData.value;
+                    if (wallet && wallet.portfolio !== undefined) {
+                        const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
+                        const tradeCount = liveChron.length || 1;
+                        const avgPT = realPnl / tradeCount;
+                        const dates = new Set(liveChron.map(t => t.placed_at ? t.placed_at.slice(0, 10) : ''));
+                        const days = Math.max(dates.size, 1);
+                        const avgPD = realPnl / days;
+                        const c = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
+                        statsEl.innerHTML = `<span style="color:${c}">${avgPT >= 0 ? '+' : ''}$${avgPT.toFixed(2)}/trade</span> | <span style="color:${c}">${avgPD >= 0 ? '+' : ''}$${avgPD.toFixed(0)}/den</span>`;
+                    }
                 }
 
                 const lCumCtx = document.getElementById('b3LiveCumPnlChart');
