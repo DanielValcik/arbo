@@ -1671,33 +1671,34 @@ class RDHOrchestrator:
             # Store live exit info in trade_details for dashboard
             if live_exit_info or live_shares > 0:
                 try:
-                    from sqlalchemy import text as _text
+                    import sqlalchemy as _sa
 
-                    from arbo.utils.db import get_session_factory
-                    live_data = json.dumps({
+                    from arbo.utils.db import PaperTrade, get_session_factory
+                    live_upd = {
                         "live_exit_price": live_exit_info.get("live_exit_price", 0) if live_exit_info else 0,
                         "live_exit_shares": live_exit_info.get("live_exit_shares", 0) if live_exit_info else 0,
                         "live_exit_status": live_exit_info.get("live_exit_status", "resolution") if live_exit_info else "resolution",
                         "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0) if live_exit_info else 0,
-                    })
+                    }
                     factory = get_session_factory()
                     async with factory() as session:
-                        await session.execute(
-                            _text("""
-                                UPDATE paper_trades
-                                SET trade_details = trade_details || :live_data::jsonb
-                                WHERE id = (
-                                    SELECT id FROM paper_trades
-                                    WHERE token_id = :tid AND strategy = 'B3'
-                                      AND status IN ('won', 'lost', 'sold')
-                                    ORDER BY placed_at DESC LIMIT 1
-                                )
-                            """),
-                            {"tid": token_id, "live_data": live_data},
+                        # Find the trade
+                        row = await session.execute(
+                            _sa.select(PaperTrade)
+                            .where(PaperTrade.token_id == token_id)
+                            .where(PaperTrade.strategy == "B3")
+                            .order_by(PaperTrade.placed_at.desc())
+                            .limit(1)
                         )
-                        await session.commit()
+                        trade = row.scalar_one_or_none()
+                        if trade and trade.trade_details:
+                            trade.trade_details = {**trade.trade_details, **live_upd}
+                            await session.commit()
+                            logger.info("b3_live_exit_saved_to_db", token=token_id[:20])
+                        else:
+                            logger.warning("b3_live_exit_no_trade", token=token_id[:20])
                 except Exception as e:
-                    logger.debug("b3_live_exit_db_update_error", error=str(e))
+                    logger.warning("b3_live_exit_db_error", error=str(e))
 
             # Slack notification
             await self._notify_b3_exit(
