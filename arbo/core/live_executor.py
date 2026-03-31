@@ -139,6 +139,7 @@ class LiveExecutor:
     async def buy(
         self, token_id: str, price: float, size_usdc: float,
         neg_risk: bool = True, tick_size: str = "0.01",
+        maker_timeout_s: int | None = None,
     ) -> LiveFill:
         """MAKER BUY at BUY price (same as paper). 0% fee + rebate."""
         buy_price, sell_price = await self._get_prices(token_id)
@@ -175,8 +176,9 @@ class LiveExecutor:
             fill.order_id = order_id
 
             # Wait for maker fill
+            timeout = maker_timeout_s if maker_timeout_s is not None else MAKER_FILL_TIMEOUT_ENTRY_S
             filled = await self._poll_fill(clob, order_id, immediate,
-                                            timeout_s=MAKER_FILL_TIMEOUT_ENTRY_S)
+                                            timeout_s=timeout)
 
             # Always cancel remainder
             await self._cancel(order_id, clob)
@@ -208,6 +210,7 @@ class LiveExecutor:
     async def sell(
         self, token_id: str, price: float, shares: float | None = None,
         neg_risk: bool = True, tick_size: str = "0.01",
+        maker_timeout_s: int | None = None,
     ) -> LiveFill:
         """MAKER SELL at SELL price first, fallback to TAKER at BUY price."""
         await self._sync_positions()
@@ -240,8 +243,9 @@ class LiveExecutor:
             )
             fill.order_id = order_id
 
+            timeout = maker_timeout_s if maker_timeout_s is not None else MAKER_FILL_TIMEOUT_EXIT_S
             filled = await self._poll_fill(clob, order_id, immediate,
-                                            timeout_s=MAKER_FILL_TIMEOUT_EXIT_S)
+                                            timeout_s=timeout)
             await self._cancel(order_id, clob)
 
             if filled >= sell_shares:

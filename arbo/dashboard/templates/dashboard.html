@@ -1473,14 +1473,31 @@
                                 <th>Size</th>
                                 <th>Edge</th>
                                 <th>P&L</th>
+                                <th>Live Entry</th>
+                                <th>Live Exit</th>
+                                <th>Live P&L</th>
                                 <th>Duvod</th>
                             </tr>
                         </thead>
                         <tbody id="lb3TradesBody">
-                            <tr><td colspan="10" style="color:var(--text-dim);text-align:center">Zatim zadna B3 data -- spusti paper trading</td></tr>
+                            <tr><td colspan="13" style="color:var(--text-dim);text-align:center">Zatim zadna B3 data -- spusti paper trading</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- B3 Paper vs Live Comparison -->
+            <div class="card grid-full" id="b3LiveComparisonCard" style="border-top:3px solid var(--gold);display:none">
+                <div class="card-title">Paper vs Live</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;text-align:center;margin-bottom:16px">
+                    <div><div style="font-size:11px;color:var(--text-dim)">Live tradu</div><div id="lb3LiveTradeCount" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Fill rate</div><div id="lb3LiveFillRate" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Avg entry slippage</div><div id="lb3LiveEntrySlip" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Avg exit slippage</div><div id="lb3LiveExitSlip" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Paper avg PnL</div><div id="lb3PaperAvgPnl" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Live avg PnL (norm)</div><div id="lb3LiveAvgPnl" style="font-size:18px;font-weight:700">--</div></div>
+                </div>
+                <div style="height:220px"><canvas id="b3PaperVsLiveChart"></canvas></div>
             </div>
 
             <!-- B3 Open Positions -->
@@ -3832,6 +3849,29 @@
                 const pnl = t.actual_pnl || 0;
                 const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
                 const details = t.trade_details || {};
+                const hasLive = details.live_fill_status && details.live_fill_status !== 'skipped';
+                let liveEntryCell = '<td style="color:var(--text-dim)">--</td>';
+                let liveExitCell = '<td style="color:var(--text-dim)">--</td>';
+                let livePnlCell = '<td style="color:var(--text-dim)">--</td>';
+                if (hasLive) {
+                    const lep = details.live_entry_price || 0;
+                    const lxp = details.live_exit_price || 0;
+                    const lShares = details.live_entry_shares || 0;
+                    const entrySlip = lep ? (lep - (t.fill_price || 0)).toFixed(3) : '';
+                    liveEntryCell = `<td>${lep ? lep.toFixed(3) : '--'} <span style="font-size:9px;color:var(--text-dim)">${entrySlip ? '(' + (entrySlip >= 0 ? '+' : '') + entrySlip + ')' : ''}</span></td>`;
+                    if (lxp) {
+                        const exitSlip = (details.live_exit_slippage || 0).toFixed(3);
+                        liveExitCell = `<td>${lxp.toFixed(3)} <span style="font-size:9px;color:var(--text-dim)">(${exitSlip >= 0 ? '+' : ''}${exitSlip})</span></td>`;
+                    } else if (details.live_exit_status === 'resolution') {
+                        liveExitCell = '<td style="color:var(--text-dim)">auto</td>';
+                    }
+                    if (lep && (lxp || details.live_exit_status === 'resolution')) {
+                        const exitP = lxp || (t.exit_price || 0);
+                        const lPnl = (exitP - lep) * lShares;
+                        const lPnlColor = lPnl >= 0 ? 'var(--green)' : 'var(--red)';
+                        livePnlCell = `<td style="color:${lPnlColor};font-weight:600">${lPnl >= 0 ? '+' : ''}$${lPnl.toFixed(2)}</td>`;
+                    }
+                }
                 return `<tr>
                     <td>${t.placed_at ? new Date(t.placed_at).toLocaleString('cs-CZ', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'}) : '--'}</td>
                     <td style="font-weight:600">${details.direction === 'up' ? 'UP' : details.direction === 'down' ? 'DOWN' : '--'}</td>
@@ -3842,9 +3882,147 @@
                     <td>$${(t.size || 0).toFixed(1)}</td>
                     <td>${details.edge ? (details.edge * 100).toFixed(1) + '%' : '--'}</td>
                     <td style="color:${pnlColor};font-weight:700">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                    ${liveEntryCell}
+                    ${liveExitCell}
+                    ${livePnlCell}
                     <td>${t.exit_reason || t.status || '--'}</td>
                 </tr>`;
             }).join('');
+
+            // Paper vs Live comparison card
+            const liveTrades = closed.filter(t => {
+                const d = t.trade_details || {};
+                return d.live_fill_status && d.live_fill_status !== 'skipped';
+            });
+            const compCard = document.getElementById('b3LiveComparisonCard');
+            if (liveTrades.length > 0 && compCard) {
+                compCard.style.display = '';
+                const filled = liveTrades.filter(t => t.trade_details.live_fill_status === 'filled' || t.trade_details.live_fill_status === 'partial');
+                document.getElementById('lb3LiveTradeCount').textContent = liveTrades.length;
+                document.getElementById('lb3LiveFillRate').textContent = ((filled.length / liveTrades.length) * 100).toFixed(0) + '%';
+
+                // Avg entry slippage
+                const entrySlips = filled.filter(t => t.trade_details.live_entry_price).map(t => t.trade_details.live_entry_price - (t.fill_price || 0));
+                const avgEntrySlip = entrySlips.length ? entrySlips.reduce((a,b) => a+b, 0) / entrySlips.length : 0;
+                const esEl = document.getElementById('lb3LiveEntrySlip');
+                esEl.textContent = (avgEntrySlip >= 0 ? '+' : '') + avgEntrySlip.toFixed(4);
+                esEl.style.color = Math.abs(avgEntrySlip) < 0.005 ? 'var(--green)' : 'var(--red)';
+
+                // Avg exit slippage
+                const exitSlips = filled.filter(t => t.trade_details.live_exit_slippage !== undefined).map(t => t.trade_details.live_exit_slippage);
+                const avgExitSlip = exitSlips.length ? exitSlips.reduce((a,b) => a+b, 0) / exitSlips.length : 0;
+                const xsEl = document.getElementById('lb3LiveExitSlip');
+                xsEl.textContent = (avgExitSlip >= 0 ? '+' : '') + avgExitSlip.toFixed(4);
+                xsEl.style.color = Math.abs(avgExitSlip) < 0.005 ? 'var(--green)' : 'var(--red)';
+
+                // Paper avg PnL
+                const paperAvg = closed.reduce((s,t) => s + (t.actual_pnl || 0), 0) / closed.length;
+                const paEl = document.getElementById('lb3PaperAvgPnl');
+                paEl.textContent = (paperAvg >= 0 ? '+' : '') + '$' + paperAvg.toFixed(2);
+                paEl.style.color = paperAvg >= 0 ? 'var(--green)' : 'var(--red)';
+
+                // Live avg PnL (normalized to paper size for fair comparison)
+                const liveWithPnl = filled.filter(t => t.trade_details.live_entry_price && (t.trade_details.live_exit_price || t.exit_price));
+                if (liveWithPnl.length > 0) {
+                    let livePnlSum = 0;
+                    for (const t of liveWithPnl) {
+                        const d = t.trade_details;
+                        const exitP = d.live_exit_price || t.exit_price || 0;
+                        const paperSize = t.size || 67;
+                        const normalizedPnl = (exitP - d.live_entry_price) * (paperSize / d.live_entry_price);
+                        livePnlSum += normalizedPnl;
+                    }
+                    const liveAvg = livePnlSum / liveWithPnl.length;
+                    const laEl = document.getElementById('lb3LiveAvgPnl');
+                    laEl.textContent = (liveAvg >= 0 ? '+' : '') + '$' + liveAvg.toFixed(2);
+                    laEl.style.color = liveAvg >= 0 ? 'var(--green)' : 'var(--red)';
+                }
+
+                // Paper vs Live cumulative PnL chart
+                const pvlCtx = document.getElementById('b3PaperVsLiveChart');
+                if (pvlCtx) {
+                    // Build parallel cumulative series from trades that have live data
+                    // Sort chronologically (oldest first)
+                    const chronological = [...liveTrades].sort((a,b) => new Date(a.placed_at) - new Date(b.placed_at));
+                    let paperCum = 0, liveCum = 0;
+                    const labels = [];
+                    const paperData = [];
+                    const liveData = [];
+                    for (let i = 0; i < chronological.length; i++) {
+                        const t = chronological[i];
+                        const d = t.trade_details || {};
+                        paperCum += (t.actual_pnl || 0);
+                        // Normalize live PnL to paper size for comparison
+                        const paperSize = t.size || 67;
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || (t.exit_price || 0);
+                        if (lep > 0) {
+                            const livePnlNorm = (lxp - lep) * (paperSize / lep);
+                            liveCum += livePnlNorm;
+                        }
+                        labels.push('#' + (i + 1));
+                        paperData.push(Math.round(paperCum * 100) / 100);
+                        liveData.push(Math.round(liveCum * 100) / 100);
+                    }
+
+                    if (window._b3PvLChart) window._b3PvLChart.destroy();
+                    window._b3PvLChart = new Chart(pvlCtx, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: 'Paper',
+                                    data: paperData,
+                                    borderColor: '#4fc3f7',
+                                    backgroundColor: 'rgba(79,195,247,0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    fill: false,
+                                    tension: 0.2,
+                                },
+                                {
+                                    label: 'Live (norm)',
+                                    data: liveData,
+                                    borderColor: '#ffd54f',
+                                    backgroundColor: 'rgba(255,213,79,0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    fill: false,
+                                    tension: 0.2,
+                                    borderDash: [5, 3],
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, labels: { color: '#aaa', font: { size: 10 } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: ctx => `${ctx.dataset.label}: $${ctx.raw.toFixed(2)}`,
+                                        afterBody: (items) => {
+                                            if (items.length >= 2) {
+                                                const diff = items[0].raw - items[1].raw;
+                                                return `Gap: ${diff >= 0 ? '+' : ''}$${diff.toFixed(2)}`;
+                                            }
+                                            return '';
+                                        },
+                                    },
+                                },
+                            },
+                            scales: {
+                                x: { display: false },
+                                y: {
+                                    grid: { color: 'rgba(255,255,255,0.05)' },
+                                    ticks: { color: '#888', callback: v => '$' + v },
+                                },
+                            },
+                        },
+                    });
+                }
+            }
         }
 
         // Open positions

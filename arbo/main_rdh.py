@@ -539,8 +539,14 @@ class RDHOrchestrator:
 
         Reuses Binance WebSocket from B2 (starts it if not already running).
         Also starts RTDS Chainlink feed for resolution price comparison.
+        Supports paper/dual/live modes via B3_EXECUTION_MODE env var.
         """
+        import os
+
         from arbo.strategies.strategy_b3 import StrategyB3
+
+        execution_mode = os.getenv("B3_EXECUTION_MODE", "paper")
+        live_executor = None
 
         # Ensure Binance WS is running (may already be started by B2)
         if self._binance_ws is None:
@@ -561,12 +567,25 @@ class RDHOrchestrator:
         except Exception as e:
             logger.warning("rtds_chainlink_init_failed", error=str(e))
 
+        # Live executor for dual/live mode
+        if execution_mode in ("dual", "live"):
+            from arbo.core.live_executor import LiveExecutor
+
+            if self._poly_client_readonly is not None:
+                live_executor = LiveExecutor(self._poly_client_readonly)
+                logger.info("b3_live_executor_ready", mode=execution_mode,
+                           size=os.getenv("B3_LIVE_SIZE_USD", "10"))
+            else:
+                logger.warning("b3_live_executor_no_client", msg="Falling back to paper mode")
+                execution_mode = "paper"
+
         s = StrategyB3(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
             binance_ws=self._binance_ws,
             rtds_feed=rtds_feed,
-            execution_mode="paper",
+            execution_mode=execution_mode,
+            live_executor=live_executor,
         )
         await s.init()
         return s
@@ -1607,13 +1626,14 @@ class RDHOrchestrator:
 
         Recomputes fair value with latest Binance price and checks
         profit target, stop loss, time limit, and edge exit.
+        Handles both paper and live sells (dual mode).
         """
         if self._strategy_b3 is None or self._paper_engine is None:
             return
 
         exits = await self._strategy_b3.check_exits()
 
-        for token_id, exit_reason, exit_price in (exits or []):
+        for token_id, exit_reason, exit_price, live_shares in (exits or []):
             pos = next(
                 (p for p in self._paper_engine.open_positions
                  if p.token_id == token_id),
@@ -1638,14 +1658,57 @@ class RDHOrchestrator:
                 exit_price=D(str(round(exit_price, 4))),
                 exit_reason=exit_reason,
             )
+
+            # Live sell (dual mode) — skip resolution (token auto-redeems)
+            live_exit_info = None
+            if live_shares > 0 and exit_reason != "resolution":
+                live_exit_info = await self._strategy_b3.sell_live_position(
+                    token_id=token_id,
+                    exit_reason=exit_reason,
+                    paper_exit_price=exit_price,
+                )
+
+            # Store live exit info in trade_details for dashboard
+            if live_exit_info or live_shares > 0:
+                try:
+                    from sqlalchemy import text as _text
+
+                    from arbo.utils.db import get_session_factory
+                    factory = get_session_factory()
+                    async with factory() as session:
+                        await session.execute(
+                            _text("""
+                                UPDATE paper_trades
+                                SET trade_details = trade_details || :live_data::jsonb
+                                WHERE token_id = :tid AND strategy = 'B3'
+                                  AND status IN ('won', 'lost', 'sold')
+                                ORDER BY placed_at DESC LIMIT 1
+                            """),
+                            {
+                                "tid": token_id,
+                                "live_data": json.dumps({
+                                    "live_exit_price": live_exit_info.get("live_exit_price", 0) if live_exit_info else 0,
+                                    "live_exit_shares": live_exit_info.get("live_exit_shares", 0) if live_exit_info else 0,
+                                    "live_exit_status": live_exit_info.get("live_exit_status", "resolution") if live_exit_info else "resolution",
+                                    "live_exit_slippage": live_exit_info.get("live_exit_slippage", 0) if live_exit_info else 0,
+                                    "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0) if live_exit_info else 0,
+                                }),
+                            },
+                        )
+                        await session.commit()
+                except Exception as e:
+                    logger.debug("b3_live_exit_db_update_error", error=str(e))
+
             # Slack notification
-            await self._notify_b3_exit(pos, exit_reason, float(pnl), exit_price)
+            await self._notify_b3_exit(
+                pos, exit_reason, float(pnl), exit_price, live_exit_info,
+            )
 
         if exits:
             logger.info(
                 "b3_exits_processed",
                 count=len(exits),
-                reasons=[r for _, r, _ in exits],
+                reasons=[r for _, r, _, _ in exits],
             )
             await self._paper_engine.sync_positions_to_db()
 
@@ -1710,8 +1773,13 @@ class RDHOrchestrator:
             return float(ss.total_pnl) if ss else 0
 
     async def _notify_b3_entry(self, sig: Any) -> None:
-        """Send Slack notification on B3 trade entry."""
-        B3_SLACK_CHANNEL = "C0APFCD4M9U"
+        """Send Slack notification on B3 trade entry.
+
+        Paper notifications → C0APFCD4M9U (B3 paper channel)
+        Live notifications  → C0APX4K8Z2N (B3 live channel)
+        """
+        b3_paper_channel = "C0APFCD4M9U"
+        b3_live_channel = "C0APX4K8Z2N"
         if self._slack_bot is None:
             return
         try:
@@ -1730,15 +1798,38 @@ class RDHOrchestrator:
                 f"BTC: ${sig.btc_now:,.0f}  |  FV: {sig.entry_price:.3f}  |  Edge: {sig.edge:.1%}\n"
                 f"Size: ~${bet_size:.0f}  |  Deployed: ${deployed:.0f}  |  B3 Total: ${total_pnl:+.2f}"
             )
-            await self._slack_bot._post(B3_SLACK_CHANNEL, text=text)
+            await self._slack_bot._post(b3_paper_channel, text=text)
+
+            # Send live fill to separate channel
+            if self._strategy_b3 and hasattr(self._strategy_b3, '_open_positions'):
+                for _tid, bpos in self._strategy_b3._open_positions.items():
+                    if bpos.condition_id == sig.condition_id and bpos.live_fill_status:
+                        if bpos.live_fill_status not in ("", "skipped"):
+                            live_text = (
+                                f":zap: *B3 LIVE ENTRY — BTC {direction}*\n"
+                                f"Status: *{bpos.live_fill_status}*  |  "
+                                f"{bpos.live_shares} shares @ {bpos.live_entry_price:.3f}  |  "
+                                f"{bpos.live_latency_ms}ms\n"
+                                f"Paper price: {sig.entry_price:.3f}  |  "
+                                f"Slippage: {bpos.live_entry_price - sig.entry_price:+.4f}"
+                            )
+                            await self._slack_bot._post(b3_live_channel, text=live_text)
+                        break
+
         except Exception as e:
             logger.debug("b3_slack_entry_error", error=str(e))
 
     async def _notify_b3_exit(
         self, pos: Any, exit_reason: str, pnl: float, exit_price: float,
+        live_exit_info: dict | None = None,
     ) -> None:
-        """Send Slack notification on B3 trade exit."""
-        B3_SLACK_CHANNEL = "C0APFCD4M9U"
+        """Send Slack notification on B3 trade exit.
+
+        Paper notifications → C0APFCD4M9U (B3 paper channel)
+        Live notifications  → C0APX4K8Z2N (B3 live channel)
+        """
+        b3_paper_channel = "C0APFCD4M9U"
+        b3_live_channel = "C0APX4K8Z2N"
         if self._slack_bot is None:
             return
         try:
@@ -1761,12 +1852,28 @@ class RDHOrchestrator:
                 delta = (datetime.now(UTC) - pos.opened_at).total_seconds()
                 hold_s = f"  |  Hold: {delta:.0f}s"
 
+            # Paper exit → paper channel
             text = (
                 f"{emoji} *B3 EXIT — BTC {direction}* ({exit_reason})\n"
                 f"Entry FV: {float(pos.avg_price):.3f} → Exit: {exit_price:.3f}  |  Size: ${size:.0f}{hold_s}\n"
                 f"P&L: *{pnl_sign}${pnl:.2f}*  |  B3 Total: ${total_pnl:+.2f}"
             )
-            await self._slack_bot._post(B3_SLACK_CHANNEL, text=text)
+            await self._slack_bot._post(b3_paper_channel, text=text)
+
+            # Live exit → live channel
+            if live_exit_info and live_exit_info.get("live_exit_status") not in (None, "error"):
+                live_price = live_exit_info.get("live_exit_price", 0)
+                slippage = live_exit_info.get("live_exit_slippage", 0)
+                latency = live_exit_info.get("live_exit_latency_ms", 0)
+                live_shares = live_exit_info.get("live_exit_shares", 0)
+                live_emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
+                live_text = (
+                    f"{live_emoji} *B3 LIVE EXIT — BTC {direction}* ({exit_reason})\n"
+                    f"Live exit: {live_price:.3f}  |  {live_shares} shares  |  {latency}ms\n"
+                    f"Paper exit: {exit_price:.3f}  |  Slippage: {slippage:+.4f}"
+                )
+                await self._slack_bot._post(b3_live_channel, text=live_text)
+
         except Exception as e:
             logger.debug("b3_slack_exit_error", error=str(e))
 

@@ -71,6 +71,11 @@ class B3Position:
     sigma_per_min: float      # Volatility at entry
     shares: float
     question: str = ""
+    # Live execution tracking (dual mode)
+    live_shares: int = 0          # Shares bought via live executor
+    live_entry_price: float = 0.0  # Actual fill price from CLOB
+    live_fill_status: str = ""     # "filled", "partial", "failed", "skipped"
+    live_latency_ms: int = 0       # Entry fill latency
 
 
 class StrategyB3:
@@ -83,12 +88,22 @@ class StrategyB3:
         binance_ws: Any | None = None,
         rtds_feed: Any | None = None,
         execution_mode: str = "paper",
+        live_executor: Any | None = None,
     ) -> None:
         self._risk_manager = risk_manager
         self._paper_engine = paper_engine
         self._binance_ws = binance_ws
         self._rtds_feed = rtds_feed  # Chainlink resolution price feed
-        self._execution_mode = execution_mode
+        self._execution_mode = execution_mode  # "paper", "dual", "live"
+        self._live_executor = live_executor
+
+        # Live config (from env, set by orchestrator)
+        import os
+        self._live_size_usd = float(os.getenv("B3_LIVE_SIZE_USD", "10"))
+        self._live_entry_timeout_s = int(os.getenv("B3_LIVE_ENTRY_TIMEOUT_S", "10"))
+        self._live_exit_maker_timeout_s = int(os.getenv("B3_LIVE_EXIT_MAKER_TIMEOUT_S", "5"))
+        self._live_daily_pnl: float = 0.0  # Track live PnL for kill switch
+        self._live_daily_loss_limit = float(os.getenv("B3_LIVE_DAILY_LOSS_LIMIT", "50"))
 
         # B3 scanner (manages event lifecycle)
         self._scanner = B3Scanner()
@@ -331,6 +346,58 @@ class StrategyB3:
             if paper_trade is None and self._paper_engine:
                 continue
 
+            # Live execution (dual mode)
+            live_shares = 0
+            live_entry_price = 0.0
+            live_fill_status = "skipped"
+            live_latency_ms = 0
+
+            if (
+                self._execution_mode in ("dual", "live")
+                and self._live_executor is not None
+                and self._live_daily_pnl > -self._live_daily_loss_limit
+            ):
+                try:
+                    fill = await self._live_executor.buy(
+                        token_id=token_id,
+                        price=entry_price,
+                        size_usdc=self._live_size_usd,
+                        neg_risk=False,
+                        tick_size="0.01",
+                        maker_timeout_s=self._live_entry_timeout_s,
+                    )
+                    live_shares = fill.shares_filled
+                    live_entry_price = float(fill.fill_price) if fill.fill_price else 0.0
+                    live_fill_status = fill.status
+                    live_latency_ms = fill.latency_ms
+                    logger.info(
+                        "b3_live_entry",
+                        status=fill.status,
+                        shares=fill.shares_filled,
+                        price=live_entry_price,
+                        latency_ms=fill.latency_ms,
+                        paper_price=round(entry_price, 4),
+                        slippage=(
+                            round(live_entry_price - entry_price, 4) if live_entry_price else 0
+                        ),
+                    )
+                except Exception as e:
+                    live_fill_status = "error"
+                    logger.error("b3_live_entry_error", error=str(e))
+
+                # Update paper trade's trade_details with live fill info
+                has_td = (
+                    paper_trade
+                    and hasattr(paper_trade, "trade_details")
+                    and paper_trade.trade_details
+                )
+                if has_td:
+                    paper_trade.trade_details["live_entry_price"] = live_entry_price
+                    paper_trade.trade_details["live_entry_shares"] = live_shares
+                    paper_trade.trade_details["live_fill_status"] = live_fill_status
+                    paper_trade.trade_details["live_entry_latency_ms"] = live_latency_ms
+                    paper_trade.trade_details["live_size_usd"] = self._live_size_usd
+
             # Track position
             self._open_positions[token_id] = B3Position(
                 condition_id=sig.condition_id,
@@ -345,6 +412,10 @@ class StrategyB3:
                 sigma_per_min=sig.sigma_per_min,
                 shares=shares,
                 question=sig.question,
+                live_shares=live_shares,
+                live_entry_price=live_entry_price,
+                live_fill_status=live_fill_status,
+                live_latency_ms=live_latency_ms,
             )
             self._scanner.mark_traded(sig.condition_id)
 
@@ -356,6 +427,7 @@ class StrategyB3:
                 btc=f"${sig.btc_now:.0f}",
                 size=f"${actual_size:.2f}",
                 shares=f"{shares:.0f}",
+                live=live_fill_status if self._execution_mode != "paper" else None,
             )
 
             executed.append(sig)
@@ -487,13 +559,14 @@ class StrategyB3:
     # EXIT: Check Exits
     # ═══════════════════════════════════════════════════════════════════════
 
-    async def check_exits(self) -> list[tuple[str, str, float]]:
+    async def check_exits(self) -> list[tuple[str, str, float, int]]:
         """Check open positions for exit triggers.
 
         Called every 10 seconds. Recomputes fair value with latest BTC price.
 
         Returns:
-            List of (token_id, reason, exit_price) for triggered exits.
+            List of (token_id, reason, exit_price, live_shares) for triggered exits.
+            live_shares > 0 means there's a live position to sell.
         """
         if not self._open_positions:
             return []
@@ -506,7 +579,7 @@ class StrategyB3:
             return []
 
         now = time.time()
-        triggered: list[tuple[str, str, float]] = []
+        triggered: list[tuple[str, str, float, int]] = []
 
         for token_id, pos in list(self._open_positions.items()):
             elapsed_min = (now - pos.event_start_ts) / 60.0
@@ -526,7 +599,7 @@ class StrategyB3:
                     exit_price = 1.0 if won else 0.0
                 else:
                     exit_price = pos.entry_mkt_fv  # Fallback
-                triggered.append((token_id, "resolution", exit_price))
+                triggered.append((token_id, "resolution", exit_price, pos.live_shares))
                 continue
 
             if t_remaining <= 0 or pos.btc_at_start <= 0:
@@ -579,10 +652,10 @@ class StrategyB3:
             if reason:
                 exit_price = pos_mkt_fv - SPREAD / 2  # Sell at bid
                 exit_price = max(0.01, exit_price)
-                triggered.append((token_id, reason, exit_price))
+                triggered.append((token_id, reason, exit_price, pos.live_shares))
 
         # Process exits
-        for token_id, reason, exit_price in triggered:
+        for token_id, reason, exit_price, _live_shares in triggered:
             pos = self._open_positions.pop(token_id, None)
             if pos:
                 self._last_exit_time[pos.condition_id] = now
@@ -599,6 +672,49 @@ class StrategyB3:
                 )
 
         return triggered
+
+    async def sell_live_position(
+        self, token_id: str, exit_reason: str, paper_exit_price: float,
+    ) -> dict | None:
+        """Sell live position via taker (immediate). Returns comparison dict or None."""
+        if self._live_executor is None:
+            return None
+
+        try:
+            fill = await self._live_executor.sell(
+                token_id=token_id,
+                price=paper_exit_price,
+                neg_risk=False,
+                tick_size="0.01",
+                maker_timeout_s=self._live_exit_maker_timeout_s,
+            )
+            live_exit_price = float(fill.fill_price) if fill.fill_price else 0.0
+            slippage = round(paper_exit_price - live_exit_price, 4) if live_exit_price else 0
+            logger.info(
+                "b3_live_exit",
+                reason=exit_reason,
+                status=fill.status,
+                shares=fill.shares_filled,
+                live_price=live_exit_price,
+                paper_price=round(paper_exit_price, 4),
+                slippage=slippage,
+                latency_ms=fill.latency_ms,
+            )
+            # Track live PnL for daily kill switch
+            if fill.shares_filled > 0 and live_exit_price > 0:
+                # Approximate live PnL (exit - entry for the shares sold)
+                # Actual PnL tracked via Data API balance changes
+                self._live_daily_pnl += fill.usdc_spent  # Add sell proceeds
+            return {
+                "live_exit_status": fill.status,
+                "live_exit_price": live_exit_price,
+                "live_exit_shares": fill.shares_filled,
+                "live_exit_latency_ms": fill.latency_ms,
+                "live_exit_slippage": slippage,
+            }
+        except Exception as e:
+            logger.error("b3_live_exit_error", token=token_id[:20], error=str(e))
+            return {"live_exit_status": "error", "live_exit_error": str(e)}
 
     def handle_resolution(self, condition_id: str, pnl: float) -> None:
         """Clean up position after market resolves."""
