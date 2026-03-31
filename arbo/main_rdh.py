@@ -1962,11 +1962,20 @@ class RDHOrchestrator:
             redeemed = result.get("redeemed", 0)
             logger.info("auto_redeem_result", status=status, redeemed=redeemed)
             if redeemed > 0 and self._slack_bot:
+                # Get new balance after redeem
+                new_bal = ""
+                try:
+                    if self._strategy_b3 and self._strategy_b3._live_executor:
+                        bal = await self._strategy_b3._live_executor.get_balance()
+                        if bal > 0:
+                            new_bal = f"\nAvailable: *${bal:.2f}*"
+                except Exception:
+                    pass
                 await self._slack_bot._post(
                     "C0APX4K8Z2N",
                     text=(
                         f":moneybag: *AUTO-REDEEM*\n"
-                        f"Redeemed {redeemed} positions"
+                        f"Redeemed {redeemed} positions{new_bal}"
                     ),
                 )
         except Exception as e:
