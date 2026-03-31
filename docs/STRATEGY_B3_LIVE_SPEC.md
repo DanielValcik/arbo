@@ -109,8 +109,9 @@ Live:  +$2.03  (0.590 → 0.795) ← $0.007 slippage
 ```bash
 # .env on VPS
 B3_EXECUTION_MODE=dual          # paper|dual|live
-B3_LIVE_SIZE_USD=10             # Fixed live size per trade
-B3_LIVE_MAX_CONCURRENT=1        # Max simultaneous live positions
+B3_LIVE_CAPITAL=300             # Live capital base for % sizing (paper uses $1000)
+                                 # Same formula: min(capital * raw_pct, MAX_BET_SIZE)
+                                 # $300 × 6.7% = ~$20/trade (vs paper $1000 × 6.7% = ~$67)
 B3_LIVE_DAILY_LOSS_LIMIT=50     # Kill live if daily loss > this
 B3_LIVE_ENTRY_TIMEOUT_S=10      # PostOnly fill timeout
 B3_LIVE_EXIT_MAKER_TIMEOUT_S=5  # Maker exit attempt before taker

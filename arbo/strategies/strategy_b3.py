@@ -99,7 +99,7 @@ class StrategyB3:
 
         # Live config (from env, set by orchestrator)
         import os
-        self._live_size_usd = float(os.getenv("B3_LIVE_SIZE_USD", "10"))
+        self._live_capital = float(os.getenv("B3_LIVE_CAPITAL", "300"))
         self._live_entry_timeout_s = int(os.getenv("B3_LIVE_ENTRY_TIMEOUT_S", "10"))
         self._live_exit_maker_timeout_s = int(os.getenv("B3_LIVE_EXIT_MAKER_TIMEOUT_S", "5"))
         self._live_daily_pnl: float = 0.0  # Track live PnL for kill switch
@@ -358,8 +358,13 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
             ):
                 try:
-                    # Use same size as paper for fair comparison
-                    live_size = actual_size if self._live_size_usd <= 0 else self._live_size_usd
+                    # Same % sizing as paper, but on live capital
+                    live_size = min(
+                        self._live_capital * raw_pct, MAX_BET_SIZE,
+                    )
+                    if live_size < MIN_ORDER_SIZE:
+                        live_fill_status = "too_small"
+                        raise ValueError(f"Live size ${live_size:.1f} < min ${MIN_ORDER_SIZE}")
                     fill = await self._live_executor.buy(
                         token_id=token_id,
                         price=entry_price,
@@ -398,7 +403,8 @@ class StrategyB3:
                     paper_trade.trade_details["live_entry_shares"] = live_shares
                     paper_trade.trade_details["live_fill_status"] = live_fill_status
                     paper_trade.trade_details["live_entry_latency_ms"] = live_latency_ms
-                    paper_trade.trade_details["live_size_usd"] = live_size
+                    paper_trade.trade_details["live_size_usd"] = round(live_size, 2)
+                    paper_trade.trade_details["live_capital"] = self._live_capital
 
             # Track position
             self._open_positions[token_id] = B3Position(
