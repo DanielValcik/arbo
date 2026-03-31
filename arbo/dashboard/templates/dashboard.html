@@ -1268,7 +1268,7 @@
         <div class="grid">
             <!-- B2 Overview -->
             <div class="card" style="border-top:3px solid var(--orange)">
-                <div class="card-title">B2 Crypto Price Edge</div>
+                <div class="card-title">B2 Crypto Price Edge <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
                 <div id="lb2Overview" style="font-size:12px">
                     <div style="text-align:center;padding:20px;color:var(--text-dim)">
                         <div style="font-size:24px;font-weight:700;color:var(--orange)" id="lb2TotalPnl">$0.00</div>
@@ -1283,22 +1283,51 @@
                 </div>
             </div>
 
-            <!-- Model Info -->
+            <!-- B2 Cumulative P&L Chart -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">Kumulativni P&L</div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b2CumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B2 Per-Trade Cumulative P&L -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">P&L po kazdem tradu (od $0)</div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b2TradeByTradeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B2 Daily Bar Chart -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L<span id="lb2AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
+                <div class="chart-container" style="height:150px">
+                    <canvas id="b2DailyPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Model Info + Live Stats -->
             <div class="card" style="border-top:3px solid var(--orange)">
-                <div class="card-title">Model: Crypto-Price-Edge-v4</div>
+                <div class="card-title">Model: Crypto-Price-Edge-v5</div>
                 <div style="font-size:11px">
                     <table style="width:100%">
                         <tbody>
-                            <tr><td>Backtest score</td><td style="font-weight:700">145.4</td></tr>
-                            <tr><td>Win rate (backtest)</td><td>85.3%</td></tr>
-                            <tr><td>Sharpe</td><td>7.75</td></tr>
-                            <tr><td>Max DD</td><td>5.8%</td></tr>
-                            <tr><td>Volatilita</td><td>realized 72h, scale=0.3</td></tr>
+                            <tr><td>Backtest score</td><td style="font-weight:700">155.9</td></tr>
+                            <tr><td>Win rate (backtest)</td><td>84.7%</td></tr>
+                            <tr><td>Sharpe</td><td>7.95</td></tr>
+                            <tr><td>Max DD</td><td>4.4%</td></tr>
+                            <tr><td>Volatilita</td><td>EWMA 168h, scale=0.8</td></tr>
                             <tr><td>Min edge</td><td>8%</td></tr>
-                            <tr><td>Exit</td><td>edge &lt; 2% nebo PT $0.20</td></tr>
-                            <tr><td>Assets</td><td>BTC (ETH planned)</td></tr>
-                            <tr><td>Fee model</td><td>maker 0%, taker exit</td></tr>
-                            <tr><td>Market typ</td><td>Daily "above" (NOT NegRisk)</td></tr>
+                            <tr><td>Exit</td><td>edge &lt; 3% (hold to resolution)</td></tr>
+                            <tr><td>Assets</td><td>BTC + ETH</td></tr>
+                            <tr><td>Fee model</td><td>maker 0%, taker exit p*(1-p)*0.25</td></tr>
+                            <tr><td>Market typ</td><td>Daily above + daily hit (RFQM)</td></tr>
+                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;color:var(--orange)">Paper Trading</td></tr>
+                            <tr><td>Prumerny win</td><td style="color:var(--green);font-weight:700" id="lb2AvgWin">--</td></tr>
+                            <tr><td>Prumerny loss</td><td style="color:var(--red);font-weight:700" id="lb2AvgLoss">--</td></tr>
+                            <tr><td>Win/Loss ratio</td><td style="font-weight:700" id="lb2WLRatio">--</td></tr>
+                            <tr><td>Prumerny PnL/trade</td><td style="font-weight:700" id="lb2AvgPnl">--</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1319,13 +1348,12 @@
                                 <th>Entry</th>
                                 <th>Exit</th>
                                 <th>Exchange Price</th>
-                                <th>Edge</th>
                                 <th>P&L</th>
                                 <th>Duvod</th>
                             </tr>
                         </thead>
                         <tbody id="lb2TradesBody">
-                            <tr><td colspan="11" style="color:var(--text-dim);text-align:center">Zatim zadna B2 data -- spusti paper trading</td></tr>
+                            <tr><td colspan="10" style="color:var(--text-dim);text-align:center">Zatim zadna B2 data -- spusti paper trading</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1343,14 +1371,12 @@
                                 <th>Smer</th>
                                 <th>Entry cena</th>
                                 <th>Aktualni cena</th>
-                                <th>Binance cena</th>
-                                <th>Edge</th>
                                 <th>Unrealized P&L</th>
-                                <th>Hold time</th>
+                                <th>Rozhodnuti</th>
                             </tr>
                         </thead>
                         <tbody id="lb2PositionsBody">
-                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center">Zadne otevrene pozice</td></tr>
+                            <tr><td colspan="7" style="color:var(--text-dim);text-align:center">Zadne otevrene pozice</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -3486,44 +3512,107 @@
             fetchJSON('/api/positions?strategy=B2'),
         ]);
 
-        // Overview card
+        // Overview card — use EVR endpoint (DB source of truth)
+        const evrOverview = await fetchJSON('/api/expected-vs-reality-b2');
         const strats = stratData.value?.strategies || [];
         const b2 = strats.find(s => s.id === 'B2');
-        if (b2) {
+        if (evrOverview && evrOverview.actual && evrOverview.actual.total_resolved > 0) {
+            const act = evrOverview.actual;
+            const pnl = act.total_pnl || 0;
+            document.getElementById('lb2TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+            document.getElementById('lb2TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lb2Deployed').textContent = '$' + (b2 ? (b2.deployed || 0).toFixed(0) : '0');
+            document.getElementById('lb2Positions').textContent = b2 ? (b2.position_count || 0) : 0;
+            document.getElementById('lb2Trades').textContent = act.total_resolved || 0;
+            document.getElementById('lb2WinRate').textContent = act.total_resolved > 0 ? (act.win_rate * 100).toFixed(0) + '%' : '--';
+            document.getElementById('lb2AvgWin').textContent = '+$' + (act.avg_win || 0).toFixed(2);
+            document.getElementById('lb2AvgLoss').textContent = '-$' + (act.avg_loss || 0).toFixed(2);
+            const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
+            document.getElementById('lb2WLRatio').textContent = ratio;
+            document.getElementById('lb2AvgPnl').textContent = (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2);
+        } else if (b2) {
             const pnl = b2.total_pnl || 0;
             document.getElementById('lb2TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
             document.getElementById('lb2TotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
             document.getElementById('lb2Deployed').textContent = '$' + (b2.deployed || 0).toFixed(0);
             document.getElementById('lb2Positions').textContent = b2.position_count || 0;
-            const wr = b2.total_pnl > 0 ? '—' : '—';
-            document.getElementById('lb2WinRate').textContent = wr;
         }
 
-        // Trades — from closed positions with strategy=B2
+        // Charts — cumulative line + daily bars
+        if (evrOverview && evrOverview.daily_series && evrOverview.daily_series.length > 0) {
+            const series = evrOverview.daily_series;
+            const labels = series.map(d => d.date ? d.date.slice(5) : '');
+            const cumValues = series.map(d => d.cumulative);
+            const dailyValues = series.map(d => d.pnl);
+            const dailyColors = dailyValues.map(v => v >= 0 ? '#3fb950' : '#f85149');
+
+            const avgDaily = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+            const avgEl = document.getElementById('lb2AvgDailyPnl');
+            if (avgEl) {
+                avgEl.style.color = avgDaily >= 0 ? 'var(--green)' : 'var(--red)';
+                avgEl.textContent = 'prumer: ' + (avgDaily >= 0 ? '+' : '') + '$' + avgDaily.toFixed(2) + '/den';
+            }
+
+            // Cumulative line chart
+            const cumCtx = document.getElementById('b2CumPnlChart');
+            if (window._b2CumChart) window._b2CumChart.destroy();
+            window._b2CumChart = new Chart(cumCtx, {
+                type: 'line',
+                data: { labels, datasets: [{ data: cumValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
+            });
+
+            // Daily bar chart
+            const barCtx = document.getElementById('b2DailyPnlChart');
+            if (window._b2DailyChart) window._b2DailyChart.destroy();
+            window._b2DailyChart = new Chart(barCtx, {
+                type: 'bar',
+                data: { labels, datasets: [{ data: dailyValues, backgroundColor: dailyColors, borderRadius: 3 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
+            });
+        }
+
+        // Trades table + per-trade P&L chart
         const closedResp = await fetchJSON('/api/closed-positions?strategy=B2');
         const closed = closedResp?.positions || [];
-        if (closed.length > 0) {
-            const wins = closed.filter(p => (p.actual_pnl || 0) > 0).length;
-            const total = closed.length;
-            document.getElementById('lb2Trades').textContent = total;
-            document.getElementById('lb2WinRate').textContent = total > 0 ? ((wins/total)*100).toFixed(0) + '%' : '—';
 
-            document.getElementById('lb2TradesBody').innerHTML = closed.slice(0, 30).map(t => {
+        if (closed.length > 0 && typeof Chart !== 'undefined') {
+            const tradesChron = [...closed].reverse();
+            let cumPnl = 0;
+            const tradeLabels = ['Start'];
+            const tradeValues = [0];
+            for (let i = 0; i < tradesChron.length; i++) {
+                const pnl = tradesChron[i].actual_pnl || 0;
+                cumPnl += pnl;
+                tradeLabels.push('#' + (i + 1));
+                tradeValues.push(Math.round(cumPnl * 100) / 100);
+            }
+            const segColors = tradeValues.map((v, i) => i === 0 ? '#f97316' : v >= tradeValues[i-1] ? '#3fb950' : '#f85149');
+            const ctx = document.getElementById('b2TradeByTradeChart');
+            if (window._b2TradeChart) window._b2TradeChart.destroy();
+            window._b2TradeChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: tradeLabels, datasets: [{ label: 'Kumulativni P&L', data: tradeValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.08)', fill: true, tension: 0.1, pointRadius: tradeValues.length > 100 ? 1.5 : 3, pointBackgroundColor: segColors, borderWidth: 2, segment: { borderColor: ctx2 => ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149' } }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: {display: false}, tooltip: { callbacks: { label: ctx2 => { const idx = ctx2.dataIndex; if (idx === 0) return 'Start: $0'; const t = tradesChron[idx-1]; const pnl = t.actual_pnl||0; const d = t.trade_details||{}; return `Trade #${idx}: ${pnl>=0?'+':''}$${pnl.toFixed(2)} (${d.asset||'?'} $${d.strike||'?'} ${t.exit_reason||'?'}) | Total: $${ctx2.parsed.y.toFixed(2)}`; } } } }, scales: { x: { ticks: { color: '#8b949e', font: {size: 8}, maxTicksLimit: 20, callback: function(val, idx) { if (tradeLabels.length <= 30) return tradeLabels[idx]; return idx % Math.ceil(tradeLabels.length / 20) === 0 ? tradeLabels[idx] : ''; } }, grid: {color: 'rgba(48,54,61,0.3)'} }, y: { ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0)}, grid: {color: 'rgba(48,54,61,0.5)'} } } }
+            });
+        }
+
+        if (closed.length > 0) {
+            document.getElementById('lb2TradesBody').innerHTML = closed.slice(0, 50).map(t => {
                 const pnl = t.actual_pnl || 0;
                 const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
                 const details = t.trade_details || {};
                 return `<tr>
-                    <td>${t.placed_at ? new Date(t.placed_at).toLocaleString('cs-CZ', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'}) : '—'}</td>
+                    <td>${t.placed_at ? new Date(t.placed_at).toLocaleString('cs-CZ', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'}) : '--'}</td>
                     <td style="font-weight:600">${details.asset || 'BTC'}</td>
-                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '—'}</td>
-                    <td>${details.direction || '—'}</td>
+                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '--'}</td>
+                    <td>${details.direction || '--'}</td>
                     <td>$${(t.size || 0).toFixed(1)}</td>
                     <td>${(t.fill_price || 0).toFixed(3)}</td>
-                    <td>${t.exit_price ? t.exit_price.toFixed(3) : '—'}</td>
-                    <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '—'}</td>
-                    <td>${(t.edge || 0).toFixed(3)}</td>
+                    <td>${t.exit_price ? t.exit_price.toFixed(3) : '--'}</td>
+                    <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '--'}</td>
                     <td style="color:${pnlColor};font-weight:700">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
-                    <td>${t.exit_reason || t.status || '—'}</td>
+                    <td>${t.exit_reason || t.status || '--'}</td>
                 </tr>`;
             }).join('');
         }
@@ -3536,16 +3625,15 @@
                 const details = p.trade_details || {};
                 const upnl = p.unrealized_pnl || 0;
                 const upnlColor = upnl >= 0 ? 'var(--green)' : 'var(--red)';
+                const endDate = p.end_date ? new Date(p.end_date).toLocaleString('cs-CZ', {day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '--';
                 return `<tr>
                     <td style="font-weight:600">${details.asset || 'BTC'}</td>
-                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '—'}</td>
-                    <td>${details.direction || '—'}</td>
+                    <td>$${details.strike ? Number(details.strike).toLocaleString() : '--'}</td>
+                    <td>${details.direction || '--'}</td>
                     <td>${(p.avg_price || 0).toFixed(3)}</td>
-                    <td>${(p.current_price || 0).toFixed(3)}</td>
-                    <td>$${details.exchange_price ? Number(details.exchange_price).toLocaleString() : '—'}</td>
-                    <td>${(details.edge || 0).toFixed(3)}</td>
-                    <td style="color:${upnlColor};font-weight:700">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</td>
-                    <td>—</td>
+                    <td>${p.current_price ? p.current_price.toFixed(3) : '--'}</td>
+                    <td style="color:${upnlColor};font-weight:700">${upnl !== 0 ? (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2) : '--'}</td>
+                    <td>${endDate}</td>
                 </tr>`;
             }).join('');
         }

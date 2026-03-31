@@ -2341,6 +2341,121 @@ async def api_expected_vs_reality_b3(
         return {"error": str(e), "too_early": True, "actual": {}, "expected": {}}
 
 
+@app.get("/api/expected-vs-reality-b2")
+async def api_expected_vs_reality_b2(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Compare B2 backtest expectations to actual paper trading."""
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(
+                    PaperTrade.actual_pnl,
+                    PaperTrade.status,
+                    PaperTrade.exit_reason,
+                    PaperTrade.placed_at,
+                    PaperTrade.resolved_at,
+                    PaperTrade.size,
+                    PaperTrade.trade_details["asset"].astext,
+                    PaperTrade.trade_details["strike"].astext,
+                    PaperTrade.trade_details["direction"].astext,
+                )
+                .where(PaperTrade.strategy == "B2")
+                .where(PaperTrade.status.in_(["won", "lost", "sold"]))
+                .order_by(PaperTrade.placed_at)
+            )
+            rows = result.all()
+
+            if not rows:
+                return {"too_early": True, "actual": {}, "expected": {}, "daily_series": []}
+
+            total_pnl = 0.0
+            wins = 0
+            losses = 0
+            resolution_count = 0
+            edge_count = 0
+            profit_count = 0
+            daily_pnl: dict[str, float] = {}
+            win_pnls: list[float] = []
+            loss_pnls: list[float] = []
+
+            for row in rows:
+                pnl = float(row[0] or 0)
+                total_pnl += pnl
+                exit_reason = row[2] or ""
+
+                if pnl > 0:
+                    wins += 1
+                    win_pnls.append(pnl)
+                else:
+                    losses += 1
+                    loss_pnls.append(abs(pnl))
+
+                if exit_reason == "resolution":
+                    resolution_count += 1
+                elif exit_reason == "edge_lost":
+                    edge_count += 1
+                elif exit_reason == "profit_take":
+                    profit_count += 1
+
+                if row[3]:
+                    day = row[3].strftime("%Y-%m-%d")
+                    daily_pnl[day] = daily_pnl.get(day, 0) + pnl
+
+            total_resolved = wins + losses
+            days_active = len(daily_pnl)
+            wr = wins / total_resolved if total_resolved > 0 else 0
+            avg_win = sum(win_pnls) / len(win_pnls) if win_pnls else 0
+            avg_loss = sum(loss_pnls) / len(loss_pnls) if loss_pnls else 0
+            pnl_per_day = total_pnl / days_active if days_active > 0 else 0
+
+            cum = 0.0
+            daily_series = []
+            for day in sorted(daily_pnl.keys()):
+                cum += daily_pnl[day]
+                daily_series.append({"date": day, "pnl": round(daily_pnl[day], 2), "cumulative": round(cum, 2)})
+
+            expected = {
+                "win_rate": 0.847,
+                "avg_pnl_per_trade": 30.0,
+                "trades_per_day": 10,
+                "pnl_per_day": 300,
+                "sharpe": 7.95,
+                "max_dd_pct": 4.4,
+            }
+
+            actual = {
+                "total_resolved": total_resolved,
+                "wins": wins,
+                "losses": losses,
+                "win_rate": round(wr, 4),
+                "total_pnl": round(total_pnl, 2),
+                "avg_pnl_per_trade": round(total_pnl / total_resolved, 2) if total_resolved else 0,
+                "avg_win": round(avg_win, 2),
+                "avg_loss": round(avg_loss, 2),
+                "trades_per_day": round(total_resolved / days_active, 1) if days_active else 0,
+                "pnl_per_day": round(pnl_per_day, 2),
+                "days_active": days_active,
+                "exit_reasons": {
+                    "resolution": resolution_count,
+                    "edge_lost": edge_count,
+                    "profit_take": profit_count,
+                },
+            }
+
+            return {
+                "expected": expected,
+                "actual": actual,
+                "daily_series": daily_series,
+                "too_early": total_resolved < 5,
+            }
+    except Exception as e:
+        return {"error": str(e), "too_early": True, "actual": {}, "expected": {}}
+
+
 @app.get("/api/seasonality")
 async def api_seasonality(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Seasonality analysis for Strategy C."""
