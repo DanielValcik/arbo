@@ -1410,9 +1410,10 @@
             <div class="card" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
                 <div style="text-align:center;padding:20px;color:var(--text-dim)">
-                    <div style="font-size:24px;font-weight:700;color:var(--green)" id="lb3WalletBalance">--</div>
-                    <div>Available</div>
+                    <div style="font-size:24px;font-weight:700" id="lb3LivePnl">--</div>
+                    <div>Live P&L</div>
                     <div style="margin-top:12px;display:flex;justify-content:space-around">
+                        <div><span id="lb3WalletBalance" style="font-weight:700">--</span><br>Available</div>
                         <div><span id="lb3WalletPositions" style="font-weight:700">--</span><br>V pozicich</div>
                         <div><span id="lb3WalletPortfolio" style="font-weight:700">--</span><br>Portfolio</div>
                         <div><span id="lb3WalletSizing" style="font-weight:700">--</span><br>Sizing</div>
@@ -3704,8 +3705,13 @@
                 const bal = wallet.balance || 0;
                 const posVal = wallet.total_value || 0;
                 const portfolio = wallet.portfolio || (bal + posVal);
+                // Live P&L = portfolio - starting capital
+                const startingCapital = wallet.starting_capital || 300;
+                const livePnl = portfolio - startingCapital;
+                const pnlEl = document.getElementById('lb3LivePnl');
+                pnlEl.textContent = (livePnl >= 0 ? '+' : '') + '$' + livePnl.toFixed(2);
+                pnlEl.style.color = livePnl >= 0 ? 'var(--green)' : 'var(--red)';
                 document.getElementById('lb3WalletBalance').textContent = '$' + bal.toFixed(2);
-                document.getElementById('lb3WalletBalance').style.color = 'var(--green)';
                 document.getElementById('lb3WalletPositions').textContent = '$' + posVal.toFixed(2);
                 document.getElementById('lb3WalletPortfolio').textContent = '$' + portfolio.toFixed(2);
                 const sizing = Math.min(bal * 0.067, 100).toFixed(0);

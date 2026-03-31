@@ -2410,6 +2410,7 @@ async def api_polymarket_wallet(
 
         result["balance"] = await asyncio.get_event_loop().run_in_executor(None, _get_bal)
         result["portfolio"] = round(result["balance"] + result["total_value"], 2)
+        result["starting_capital"] = float(os.getenv("B3_LIVE_STARTING_CAPITAL", "300"))
     except Exception as e:
         result["balance_error"] = str(e)
 
