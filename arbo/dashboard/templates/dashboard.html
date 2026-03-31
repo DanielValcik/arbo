@@ -3978,14 +3978,15 @@
                     const paperExit = liveChron[i].exit_price || 0;
                     let pnl = 0;
                     if (lep > 0 && lxp > 0 && lsh > 0) {
-                        // Sell succeeded or resolution with value
+                        // Sell succeeded
                         pnl = (lxp - lep) * lsh;
-                    } else if (lep > 0 && lsh > 0 && (lxst === 'resolution' || liveChron[i].exit_reason === 'resolution')) {
-                        // Resolution: use paper exit ($1 or $0)
+                    } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
+                        // Resolution: paper exit IS the outcome ($1 or $0)
                         pnl = (paperExit - lep) * lsh;
-                    } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial') && paperExit >= 0) {
-                        // Sell failed → stranded → resolved at paper exit price
-                        pnl = (paperExit - lep) * lsh;
+                    } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial' || lxst === 'skipped')) {
+                        // Sell failed → stranded → assume resolved at $0 (loss)
+                        // Conservative: most stranded positions lose
+                        pnl = -lep * lsh;
                     }
                     lCum += pnl;
                     lLabels.push('#' + (i + 1));
@@ -4032,10 +4033,10 @@
                         let pnl = 0;
                         if (lep > 0 && lxp > 0 && lsh > 0) {
                             pnl = (lxp - lep) * lsh;
-                        } else if (lep > 0 && lsh > 0 && (lxst === 'resolution' || liveChron[i].exit_reason === 'resolution')) {
+                        } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
                             pnl = (paperExit - lep) * lsh;
-                        } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial') && paperExit >= 0) {
-                            pnl = (paperExit - lep) * lsh;
+                        } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial' || lxst === 'skipped')) {
+                            pnl = -lep * lsh;
                         }
                         const dir = (d.direction || '?').toUpperCase();
                         ltLabels.push(`#${i+1} ${dir}`);
