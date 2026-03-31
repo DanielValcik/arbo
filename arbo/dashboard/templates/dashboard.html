@@ -3974,9 +3974,19 @@
                     const lep = d.live_entry_price || 0;
                     const lxp = d.live_exit_price || 0;
                     const lsh = d.live_entry_shares || 0;
+                    const lxst = d.live_exit_status || '';
+                    const paperExit = liveChron[i].exit_price || 0;
                     let pnl = 0;
-                    if (lep > 0 && lxp > 0 && lsh > 0) pnl = (lxp - lep) * lsh;
-                    else if (lep > 0 && liveChron[i].exit_reason === 'resolution') pnl = ((liveChron[i].exit_price || 0) - lep) * lsh;
+                    if (lep > 0 && lxp > 0 && lsh > 0) {
+                        // Sell succeeded or resolution with value
+                        pnl = (lxp - lep) * lsh;
+                    } else if (lep > 0 && lsh > 0 && (lxst === 'resolution' || liveChron[i].exit_reason === 'resolution')) {
+                        // Resolution: use paper exit ($1 or $0)
+                        pnl = (paperExit - lep) * lsh;
+                    } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial') && paperExit >= 0) {
+                        // Sell failed → stranded → resolved at paper exit price
+                        pnl = (paperExit - lep) * lsh;
+                    }
                     lCum += pnl;
                     lLabels.push('#' + (i + 1));
                     lValues.push(Math.round(lCum * 100) / 100);
@@ -4017,9 +4027,16 @@
                         const lep = d.live_entry_price || 0;
                         const lxp = d.live_exit_price || 0;
                         const lsh = d.live_entry_shares || 0;
+                        const lxst = d.live_exit_status || '';
+                        const paperExit = liveChron[i].exit_price || 0;
                         let pnl = 0;
-                        if (lep > 0 && lxp > 0 && lsh > 0) pnl = (lxp - lep) * lsh;
-                        else if (lep > 0 && liveChron[i].exit_reason === 'resolution') pnl = ((liveChron[i].exit_price || 0) - lep) * lsh;
+                        if (lep > 0 && lxp > 0 && lsh > 0) {
+                            pnl = (lxp - lep) * lsh;
+                        } else if (lep > 0 && lsh > 0 && (lxst === 'resolution' || liveChron[i].exit_reason === 'resolution')) {
+                            pnl = (paperExit - lep) * lsh;
+                        } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial') && paperExit >= 0) {
+                            pnl = (paperExit - lep) * lsh;
+                        }
                         const dir = (d.direction || '?').toUpperCase();
                         ltLabels.push(`#${i+1} ${dir}`);
                         ltValues.push(Math.round(pnl * 100) / 100);
