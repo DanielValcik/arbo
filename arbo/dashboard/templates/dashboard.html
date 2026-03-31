@@ -1406,6 +1406,21 @@
                 </div>
             </div>
 
+            <!-- Polymarket Wallet (next to overview) -->
+            <div class="card" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div style="text-align:center;padding:20px;color:var(--text-dim)">
+                    <div style="font-size:24px;font-weight:700;color:var(--green)" id="lb3WalletBalance">--</div>
+                    <div>Available</div>
+                    <div style="margin-top:12px;display:flex;justify-content:space-around">
+                        <div><span id="lb3WalletPositions" style="font-weight:700">--</span><br>V pozicich</div>
+                        <div><span id="lb3WalletPortfolio" style="font-weight:700">--</span><br>Portfolio</div>
+                        <div><span id="lb3WalletSizing" style="font-weight:700">--</span><br>Sizing</div>
+                    </div>
+                </div>
+                <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim)"></div>
+            </div>
+
             <!-- B3 Cumulative P&L Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Kumulativni P&L</div>
@@ -1499,18 +1514,6 @@
                 </div>
                 <div style="height:220px"><canvas id="b3PaperVsLiveChart"></canvas></div>
                 <div style="height:180px;margin-top:12px"><canvas id="b3LiveTradeBarChart"></canvas></div>
-            </div>
-
-            <!-- Polymarket Wallet -->
-            <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Polymarket Ucet</div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;text-align:center;margin-bottom:12px">
-                    <div><div style="font-size:11px;color:var(--text-dim)">Available</div><div id="lb3WalletBalance" style="font-size:20px;font-weight:700">--</div></div>
-                    <div><div style="font-size:11px;color:var(--text-dim)">V pozicich</div><div id="lb3WalletPositions" style="font-size:20px;font-weight:700">--</div></div>
-                    <div><div style="font-size:11px;color:var(--text-dim)">Portfolio</div><div id="lb3WalletPortfolio" style="font-size:20px;font-weight:700">--</div></div>
-                    <div><div style="font-size:11px;color:var(--text-dim)">Live sizing</div><div id="lb3WalletSizing" style="font-size:20px;font-weight:700">--</div></div>
-                </div>
-                <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim)"></div>
             </div>
 
             <!-- B3 Open Positions -->
@@ -4001,22 +4004,15 @@
                         const t = chronological[i];
                         const d = t.trade_details || {};
                         paperCum += (t.actual_pnl || 0);
-                        // Live PnL: actual CLOB entry → CLOB exit
+                        // Live PnL: raw CLOB entry → CLOB exit (no normalization)
                         const lep = d.live_entry_price || 0;
                         const lxp = d.live_exit_price || 0;
                         const lShares = d.live_entry_shares || 0;
                         if (lep > 0 && lxp > 0 && lShares > 0) {
-                            // Raw live PnL, normalized to paper size
-                            const paperSize = t.size || 67;
-                            const livePnlRaw = (lxp - lep) * lShares;
-                            const livePnlNorm = livePnlRaw * (paperSize / (lep * lShares));
-                            liveCum += livePnlNorm;
+                            liveCum += (lxp - lep) * lShares;
                         } else if (lep > 0 && t.exit_reason === 'resolution') {
-                            // Resolution: token auto-redeems, use paper exit
-                            const paperSize = t.size || 67;
                             const resExit = t.exit_price || 0;
-                            const livePnlNorm = (resExit - lep) * (paperSize / lep);
-                            liveCum += livePnlNorm;
+                            liveCum += (resExit - lep) * lShares;
                         }
                         labels.push('#' + (i + 1));
                         paperData.push(Math.round(paperCum * 100) / 100);
@@ -4030,7 +4026,7 @@
                             labels,
                             datasets: [
                                 {
-                                    label: 'Paper',
+                                    label: 'Paper (~$67/trade)',
                                     data: paperData,
                                     borderColor: '#4fc3f7',
                                     backgroundColor: 'rgba(79,195,247,0.1)',
@@ -4040,7 +4036,7 @@
                                     tension: 0.2,
                                 },
                                 {
-                                    label: 'Live (norm)',
+                                    label: 'Live (~$20/trade)',
                                     data: liveData,
                                     borderColor: '#ffd54f',
                                     backgroundColor: 'rgba(255,213,79,0.1)',
