@@ -48,10 +48,10 @@ PROFIT_TAKE_ALSO = False     # No profit take — hold to resolution
 PROFIT_TARGET_ABS = 0.30     # Only if PROFIT_TAKE_ALSO re-enabled
 
 # Sizing
-KELLY_RAW_CAP = 0.30
-PROB_SHARPENING = 1.20       # Push probabilities toward extremes
+KELLY_RAW_CAP = 0.40         # Increased from 0.30 (autoresearch v6)
+PROB_SHARPENING = 1.50       # Increased from 1.20 — best single improvement (+2.1 score)
 SHRINKAGE = 0.02
-MAX_AGGREGATE_PCT = 0.70     # Deploy up to 70% of capital
+MAX_AGGREGATE_PCT = 0.90     # Increased from 0.70 — deploy more capital
 MAX_POSITION_PCT = 0.08      # 8% per single position
 REENTRY_COOLDOWN_H = 0       # No cooldown
 
