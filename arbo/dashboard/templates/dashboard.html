@@ -1498,6 +1498,7 @@
                     <div><div style="font-size:11px;color:var(--text-dim)">Live avg PnL (norm)</div><div id="lb3LiveAvgPnl" style="font-size:18px;font-weight:700">--</div></div>
                 </div>
                 <div style="height:220px"><canvas id="b3PaperVsLiveChart"></canvas></div>
+                <div style="height:180px;margin-top:12px"><canvas id="b3LiveTradeBarChart"></canvas></div>
             </div>
 
             <!-- B3 Open Positions -->
@@ -4030,6 +4031,63 @@
                             },
                             scales: {
                                 x: { display: false },
+                                y: {
+                                    grid: { color: 'rgba(255,255,255,0.05)' },
+                                    ticks: { color: '#888', callback: v => '$' + v },
+                                },
+                            },
+                        },
+                    });
+                }
+
+                // Per-trade live P&L bar chart
+                const barCtx = document.getElementById('b3LiveTradeBarChart');
+                if (barCtx && chronological.length > 0) {
+                    const barLabels = [];
+                    const barValues = [];
+                    const barColors = [];
+                    for (let i = 0; i < chronological.length; i++) {
+                        const t = chronological[i];
+                        const d = t.trade_details || {};
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || 0;
+                        const lShares = d.live_entry_shares || 0;
+                        let pnl = 0;
+                        if (lep > 0 && lxp > 0 && lShares > 0) {
+                            pnl = (lxp - lep) * lShares;
+                        } else if (lep > 0 && t.exit_reason === 'resolution') {
+                            pnl = ((t.exit_price || 0) - lep) * lShares;
+                        }
+                        const dir = (d.direction || '?').toUpperCase();
+                        barLabels.push(`#${i+1} ${dir}`);
+                        barValues.push(Math.round(pnl * 100) / 100);
+                        barColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
+                    }
+                    if (window._b3LiveBarChart) window._b3LiveBarChart.destroy();
+                    window._b3LiveBarChart = new Chart(barCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: barLabels,
+                            datasets: [{
+                                label: 'Live P&L',
+                                data: barValues,
+                                backgroundColor: barColors,
+                                borderRadius: 3,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: ctx => `Live P&L: ${ctx.raw >= 0 ? '+' : ''}$${ctx.raw.toFixed(2)}`,
+                                    },
+                                },
+                            },
+                            scales: {
+                                x: { ticks: { color: '#888', font: { size: 9 } }, grid: { display: false } },
                                 y: {
                                     grid: { color: 'rgba(255,255,255,0.05)' },
                                     ticks: { color: '#888', callback: v => '$' + v },
