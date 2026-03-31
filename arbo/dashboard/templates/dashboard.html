@@ -3994,7 +3994,20 @@
                         liveData.push(Math.round(liveCum * 100) / 100);
                     }
 
-                    if (window._b3PvLChart) window._b3PvLChart.destroy();
+                    if (window._b3PvLChart) {
+                        if (window._b3PvLChartLen === chronological.length) {
+                            // Same data, just update values
+                            window._b3PvLChart.data.datasets[0].data = paperData;
+                            window._b3PvLChart.data.datasets[1].data = liveData;
+                            window._b3PvLChart.update('none');
+                            // Skip chart recreation below
+                            pvlCtx.__skip = true;
+                        } else {
+                            window._b3PvLChart.destroy();
+                        }
+                    }
+                    if (!pvlCtx.__skip) {
+                    window._b3PvLChartLen = chronological.length;
                     window._b3PvLChart = new Chart(pvlCtx, {
                         type: 'line',
                         data: {
@@ -4050,6 +4063,8 @@
                             },
                         },
                     });
+                    }
+                    pvlCtx.__skip = false;
                 }
 
                 // Per-trade live P&L bar chart
@@ -4075,7 +4090,13 @@
                         barValues.push(Math.round(pnl * 100) / 100);
                         barColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
                     }
+                    if (window._b3LiveBarChart && window._b3LiveBarLen === chronological.length) {
+                        window._b3LiveBarChart.data.datasets[0].data = barValues;
+                        window._b3LiveBarChart.data.datasets[0].backgroundColor = barColors;
+                        window._b3LiveBarChart.update('none');
+                    } else {
                     if (window._b3LiveBarChart) window._b3LiveBarChart.destroy();
+                    window._b3LiveBarLen = chronological.length;
                     window._b3LiveBarChart = new Chart(barCtx, {
                         type: 'bar',
                         data: {
@@ -4107,6 +4128,7 @@
                             },
                         },
                     });
+                    }
                 }
             }
         }

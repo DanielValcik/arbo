@@ -1899,7 +1899,24 @@ class RDHOrchestrator:
                 live_pnl_s = f"{'+' if live_pnl >= 0 else ''}${live_pnl:.2f}"
                 live_emoji = ":white_check_mark:" if live_pnl >= 0 else ":x:"
 
-                if live_status in ("filled", "partial") and live_xs > 0:
+                if live_status == "resolution":
+                    # Auto-resolve: token redeems at $1 or $0
+                    live_pnl = (live_xp - live_entry_price) * live_shares if live_entry_price > 0 else 0
+                    live_pnl_s = f"{'+' if live_pnl >= 0 else ''}${live_pnl:.2f}"
+                    res_emoji = ":white_check_mark:" if live_xp > 0.5 else ":x:"
+                    paper_entry = float(pos.avg_price) if pos else 0
+                    live_text = (
+                        f"{res_emoji} *B3 LIVE RESOLVE — "
+                        f"BTC {dir_str}*\n"
+                        f"Live:  {live_entry_price:.3f} -> "
+                        f"{'$1' if live_xp > 0.5 else '$0'}  |  "
+                        f"P&L: *{live_pnl_s}*  |  "
+                        f"{live_shares} shares\n"
+                        f"Paper: {paper_entry:.3f} -> "
+                        f"{'$1' if exit_price > 0.5 else '$0'}  |  "
+                        f"P&L: *{pnl_sign}${pnl:.2f}*"
+                    )
+                elif live_status in ("filled", "partial") and live_xs > 0:
                     paper_entry = float(pos.avg_price) if pos else 0
                     live_text = (
                         f"{live_emoji} *B3 LIVE SELL — BTC {dir_str}*"
@@ -1917,10 +1934,9 @@ class RDHOrchestrator:
                         f":warning: *B3 LIVE SELL FAILED — "
                         f"BTC {dir_str}* ({exit_reason})\n"
                         f"Status: {live_status}  |  "
-                        f"0/{live_exit_info.get('live_exit_shares', '?')}"
-                        f" shares sold  |  {latency}ms\n"
-                        f"Entry was: {live_entry_price:.3f}  |  "
-                        f"Shares may be stranded!"
+                        f"{latency}ms\n"
+                        f"Entry: {live_entry_price:.3f}  |  "
+                        f"{live_shares} shares → will auto-resolve"
                     )
                 await self._slack_bot._post(b3_live_channel, text=live_text)
 

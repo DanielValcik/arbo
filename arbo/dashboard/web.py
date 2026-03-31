@@ -2346,6 +2346,7 @@ async def api_polymarket_wallet(
     _user: str = Depends(_verify_credentials),
 ) -> dict[str, Any]:
     """Live Polymarket wallet: balance, positions, P&L."""
+    import json as _json
     import os
     import ssl
     import urllib.request
@@ -2366,7 +2367,7 @@ async def api_polymarket_wallet(
         import asyncio
         data = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: json.loads(urllib.request.urlopen(req, timeout=10, context=_ssl).read()),
+            lambda: _json.loads(urllib.request.urlopen(req, timeout=10, context=_ssl).read()),
         )
         positions = []
         for pos in data:
