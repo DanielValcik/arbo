@@ -1065,8 +1065,8 @@ class RDHOrchestrator:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
-        # Auto-redeem resolved positions (gasless, every 30 min)
-        task_defs.append(("auto_redeem", self._run_auto_redeem, 1800))
+        # Auto-redeem resolved positions (gasless, every 10 min)
+        task_defs.append(("auto_redeem", self._run_auto_redeem, 600))
 
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
@@ -1725,6 +1725,13 @@ class RDHOrchestrator:
                 reasons=[r for _, r, _, _, _, _ in exits],
             )
             await self._paper_engine.sync_positions_to_db()
+
+            # Auto-redeem after resolution (wait 30s for Polymarket to process)
+            has_resolution = any(r == "resolution" for _, r, _, _, _, _ in exits)
+            if has_resolution:
+                import asyncio
+                await asyncio.sleep(30)
+                await self._run_auto_redeem()
 
     async def _notify_c2_trade_close(
         self,
