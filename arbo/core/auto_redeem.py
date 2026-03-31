@@ -112,11 +112,12 @@ async def redeem_resolved_positions() -> dict:
     if not redeemable_ids:
         return {"status": "nothing_to_redeem", "redeemed": 0}
 
-    # Step 2: Redeem only positions with value > 0
+    # Step 2: Redeem positions one by one (batch can fail on mixed states)
     try:
         logger.info("auto_redeem_attempting", count=len(redeemable_ids))
+        # Redeem each condition individually to avoid batch errors
         result = await loop.run_in_executor(
-            None, lambda: service.redeem(redeemable_ids, batch_size=10)
+            None, lambda: service.redeem(redeemable_ids, batch_size=1)
         )
 
         redeemed = len(result.success_list)
@@ -124,9 +125,13 @@ async def redeem_resolved_positions() -> dict:
 
         if redeemed > 0:
             logger.info("auto_redeem_success", redeemed=redeemed, errors=errors)
-        elif errors > 0:
-            logger.warning("auto_redeem_errors", errors=errors,
-                           error_ids=result.error_condition_ids[:3])
+        if errors > 0:
+            err_ids = getattr(result, "error_condition_ids", [])
+            logger.warning(
+                "auto_redeem_errors", errors=errors,
+                error_ids=[e[:16] for e in err_ids[:3]],
+                error_list=[str(e)[:100] for e in result.error_list[:3]],
+            )
 
         return {
             "status": "ok",
