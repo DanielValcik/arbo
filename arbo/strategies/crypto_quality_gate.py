@@ -34,6 +34,11 @@ MIN_LIQUIDITY = 0.0      # Gamma API doesn't always provide liquidity; crypto ma
 MIN_TIME_TO_EXPIRY_H = 8
 MAX_TIME_TO_EXPIRY_H = 168  # 7 days max
 
+# Trading hours (UTC) — skip night sessions with poor WR
+# Live data: 01:00 UTC = 33% WR, 22:00 = 50% WR vs 14:00-19:00 = 100% WR
+TRADING_HOURS_UTC_START = 7   # 7:00 UTC (3 AM ET)
+TRADING_HOURS_UTC_END = 21    # 21:00 UTC (5 PM ET)
+
 # Volatility model
 VOLATILITY_WINDOW = 168      # 168 hours (7 days) of price history for sigma
 VOLATILITY_METHOD = "ewma"
@@ -48,10 +53,10 @@ PROFIT_TAKE_ALSO = False     # No profit take — hold to resolution
 PROFIT_TARGET_ABS = 0.30     # Only if PROFIT_TAKE_ALSO re-enabled
 
 # Sizing
-KELLY_RAW_CAP = 0.40         # Increased from 0.30 (autoresearch v6)
-PROB_SHARPENING = 1.50       # Increased from 1.20 — best single improvement (+2.1 score)
+KELLY_RAW_CAP = 0.30         # Conservative — autoresearch showed 0.40-0.50 same WR but more risk
+PROB_SHARPENING = 1.50       # Best single improvement from autoresearch v6 (+2.1 score)
 SHRINKAGE = 0.02
-MAX_AGGREGATE_PCT = 0.90     # Increased from 0.70 — deploy more capital
+MAX_AGGREGATE_PCT = 0.70     # Conservative — keep baseline risk level
 MAX_POSITION_PCT = 0.08      # 8% per single position
 REENTRY_COOLDOWN_H = 0       # No cooldown
 
@@ -109,8 +114,19 @@ def check_signal_quality(
     if asset in EXCLUDED_ASSETS:
         return QualityDecision(False, f"excluded_asset:{asset}")
 
-    # 2. Edge range
-    min_edge = _get_threshold("min_edge", asset, MIN_EDGE)
+    # 1b. Day/Night regime — different parameters for different sessions
+    # Live data: day (07-21 UTC) = 93% WR, night (21-07 UTC) = 44% WR
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc).hour
+    is_night = now_utc < TRADING_HOURS_UTC_START or now_utc >= TRADING_HOURS_UTC_END
+
+    # Night: require higher edge + smaller position (compensate for lower WR)
+    if is_night:
+        min_edge = max(_get_threshold("min_edge", asset, MIN_EDGE), 0.15)  # 15% min at night (vs 8% day)
+    else:
+        min_edge = _get_threshold("min_edge", asset, MIN_EDGE)
+
+    # 2. Edge range (min_edge already set above with day/night adjustment)
     edge = abs(signal.edge)
     if edge < min_edge:
         return QualityDecision(False, f"edge_too_low:{edge:.3f}<{min_edge}")
