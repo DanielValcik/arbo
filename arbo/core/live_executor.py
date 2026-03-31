@@ -127,15 +127,25 @@ class LiveExecutor:
             logger.warning("positions_sync_failed", error=str(e))
 
     async def get_balance(self) -> float:
-        """Get USDC balance from wallet. Returns 0 on failure."""
+        """Get USDC balance from wallet via Data API. Returns 0 on failure."""
+        if not self._funder:
+            await self._ensure_clob()
+        if not self._funder:
+            return 0.0
         try:
-            clob = await self._ensure_clob()
+            url = f"{DATA_API}/profile?address={self._funder}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Arbo/1.0"})
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, clob.get_balance_allowance,
-            )
-            # result is {"balance": "123.45", ...}
-            return float(result.get("balance", 0)) if isinstance(result, dict) else 0.0
+            data = await loop.run_in_executor(None, lambda: json.loads(
+                urllib.request.urlopen(req, timeout=10, context=_SSL_CTX).read()
+            ))
+            # Profile returns {"portfolioValue": "123.45", ...}
+            val = float(data.get("portfolioValue", 0))
+            if val > 0:
+                return val
+            # Fallback: sum positions + cash
+            val = float(data.get("cashBalance", 0))
+            return val
         except Exception as e:
             logger.warning("balance_fetch_failed", error=str(e))
             return 0.0
