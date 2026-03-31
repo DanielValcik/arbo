@@ -76,6 +76,7 @@ class B3Position:
     live_entry_price: float = 0.0  # Actual fill price from CLOB
     live_fill_status: str = ""     # "filled", "partial", "failed", "skipped"
     live_latency_ms: int = 0       # Entry fill latency
+    live_error: str = ""           # Error reason if fill failed
 
 
 class StrategyB3:

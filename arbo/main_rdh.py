@@ -1839,14 +1839,7 @@ class RDHOrchestrator:
                                 f"Gap: {gap:+.3f}"
                             )
                             await self._slack_bot._post(b3_live_channel, text=live_text)
-                        elif st in ("failed", "error", "too_small"):
-                            live_text = (
-                                f":no_entry: *B3 LIVE BUY SKIP — "
-                                f"BTC {direction}*\n"
-                                f"Reason: {st}  |  "
-                                f"{bpos.live_latency_ms}ms"
-                            )
-                            await self._slack_bot._post(b3_live_channel, text=live_text)
+                        # Skip/failed entries: only log, don't send to Slack
                         break
 
         except Exception as e:
