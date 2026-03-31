@@ -2555,8 +2555,8 @@ class RDHOrchestrator:
                         pnl=str(pnl),
                     )
 
-                    # Slack notification
-                    if self._slack_bot is not None:
+                    # Slack notification (skip B2/B3 — they have own channels)
+                    if self._slack_bot is not None and strategy not in ("B2", "B3"):
                         market_name = getattr(market, "question", cid[:40]) or cid[:40]
                         result_status = "won" if winning else "lost"
                         try:
