@@ -3859,7 +3859,8 @@
                     const lShares = details.live_entry_shares || 0;
                     const paperEntry = t.fill_price || t.price || 0;
                     const entrySlip = lep ? (lep - paperEntry).toFixed(3) : '';
-                    liveEntryCell = `<td>${lep ? lep.toFixed(3) : '--'} <span style="font-size:9px;color:var(--text-dim)">${entrySlip ? '(' + (entrySlip >= 0 ? '+' : '') + entrySlip + ')' : ''}</span></td>`;
+                    const liveUsd = lShares > 0 && lep > 0 ? '$' + (lShares * lep).toFixed(0) : '';
+                    liveEntryCell = `<td>${lep ? lep.toFixed(3) : '--'} <span style="font-size:9px;color:var(--text-dim)">${liveUsd} ${entrySlip ? '(' + (entrySlip >= 0 ? '+' : '') + entrySlip + ')' : ''}</span></td>`;
                     if (lxp) {
                         const exitSlip = (details.live_exit_slippage || 0).toFixed(3);
                         liveExitCell = `<td>${lxp.toFixed(3)} <span style="font-size:9px;color:var(--text-dim)">(${exitSlip >= 0 ? '+' : ''}${exitSlip})</span></td>`;
