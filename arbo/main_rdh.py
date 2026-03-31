@@ -1667,6 +1667,14 @@ class RDHOrchestrator:
                     exit_reason=exit_reason,
                     paper_exit_price=exit_price,
                 )
+            elif live_shares > 0 and exit_reason == "resolution":
+                # Resolution: token auto-redeems at exit_price ($1 or $0)
+                live_exit_info = {
+                    "live_exit_price": exit_price,
+                    "live_exit_shares": live_shares,
+                    "live_exit_status": "resolution",
+                    "live_exit_latency_ms": 0,
+                }
 
             # Store live exit info in trade_details for dashboard
             if live_exit_info or live_shares > 0:
