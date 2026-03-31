@@ -1438,6 +1438,13 @@
                 </div>
             </div>
 
+            <!-- B3 LIVE Note -->
+            <div id="b3LiveNote" class="card grid-full" style="border-top:3px solid #3fb950;display:none">
+                <div style="text-align:center;padding:8px;font-size:11px;color:var(--text-dim)">
+                    <span id="lb3LiveNoteText"></span>
+                </div>
+            </div>
+
             <!-- B3 Cumulative P&L Chart (PAPER) -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Kumulativni P&L <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
@@ -4010,7 +4017,17 @@
                     if (wallet && wallet.portfolio !== undefined) {
                         const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
                         const c = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
-                        statsEl.innerHTML = `<span style="color:${c}">Skutecny P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span> <span style="color:var(--text-dim)">(graf jen orientacni — data z 1. dne neuplna)</span>`;
+                        statsEl.innerHTML = `<span style="color:${c}">P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span>`;
+                        // Show warning if chart doesn't match wallet
+                        const chartTotal = lCum;
+                        const noteEl = document.getElementById('b3LiveNote');
+                        const noteText = document.getElementById('lb3LiveNoteText');
+                        if (noteEl && noteText && Math.abs(chartTotal - realPnl) > 5) {
+                            noteEl.style.display = '';
+                            noteText.innerHTML = `Graf ukazuje pouze trady s kompletnimi daty v DB. Skutecny P&L z Polymarket walletu: <b style="color:${c}">${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</b>`;
+                        } else if (noteEl) {
+                            noteEl.style.display = 'none';
+                        }
                     }
                 }
 
