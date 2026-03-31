@@ -103,8 +103,16 @@ async def redeem_resolved_positions() -> dict:
         ))
         redeemable_ids = [
             p["conditionId"] for p in data
-            if float(p.get("currentValue", 0)) > 0 and p.get("conditionId")
+            if float(p.get("currentValue", 0)) > 0
+            and p.get("conditionId")
+            and p.get("redeemable") is True
         ]
+        logger.info(
+            "auto_redeem_scan",
+            total_positions=len(data),
+            with_value=sum(1 for p in data if float(p.get("currentValue", 0)) > 0),
+            redeemable=len(redeemable_ids),
+        )
     except Exception as e:
         logger.warning("auto_redeem_positions_check_failed", error=str(e))
         return {"status": "error", "error": str(e), "redeemed": 0}
