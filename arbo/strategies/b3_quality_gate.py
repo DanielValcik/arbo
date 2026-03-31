@@ -22,7 +22,8 @@ logger = get_logger("b3_quality_gate")
 # Volatility
 SIGMA_WINDOW = 720                # 12h of 1-min klines for realized vol
 SIGMA_METHOD = "realized"         # std(log_returns) — all 5 WF winners
-SIGMA_SCALE = 0.644               # Signal amplification (< 1.0 = more aggressive)
+SIGMA_SCALE = 0.400               # Signal amplification — live sweep winner (was 0.644)
+                                  # OOS: score 13,129 vs 11,495, +16% trades, +$4K PnL
 SIGMA_FLOOR = 0.00005             # ~2.6% annualized minimum
 
 # Entry
