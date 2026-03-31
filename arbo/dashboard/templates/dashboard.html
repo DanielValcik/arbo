@@ -4006,13 +4006,8 @@
                     const wallet = walletData.value;
                     if (wallet && wallet.portfolio !== undefined) {
                         const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
-                        const tradeCount = liveChron.length || 1;
-                        const avgPT = realPnl / tradeCount;
-                        const dates = new Set(liveChron.map(t => t.placed_at ? t.placed_at.slice(0, 10) : ''));
-                        const days = Math.max(dates.size, 1);
-                        const avgPD = realPnl / days;
                         const c = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
-                        statsEl.innerHTML = `<span style="color:${c}">${avgPT >= 0 ? '+' : ''}$${avgPT.toFixed(2)}/trade</span> | <span style="color:${c}">${avgPD >= 0 ? '+' : ''}$${avgPD.toFixed(0)}/den</span>`;
+                        statsEl.innerHTML = `<span style="color:${c}">Skutecny P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span> <span style="color:var(--text-dim)">(graf jen orientacni — data z 1. dne neuplna)</span>`;
                     }
                 }
 
