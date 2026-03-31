@@ -585,14 +585,14 @@ class StrategyB3:
     # EXIT: Check Exits
     # ═══════════════════════════════════════════════════════════════════════
 
-    async def check_exits(self) -> list[tuple[str, str, float, int]]:
+    async def check_exits(self) -> list[tuple[str, str, float, int, int, float]]:
         """Check open positions for exit triggers.
 
         Called every 10 seconds. Recomputes fair value with latest BTC price.
 
         Returns:
-            List of (token_id, reason, exit_price, live_shares) for triggered exits.
-            live_shares > 0 means there's a live position to sell.
+            List of (token_id, reason, exit_price, live_shares, direction,
+                     live_entry_price) for triggered exits.
         """
         if not self._open_positions:
             return []
@@ -605,7 +605,7 @@ class StrategyB3:
             return []
 
         now = time.time()
-        triggered: list[tuple[str, str, float, int]] = []
+        triggered: list[tuple[str, str, float, int, int, float]] = []
 
         for token_id, pos in list(self._open_positions.items()):
             elapsed_min = (now - pos.event_start_ts) / 60.0
@@ -625,7 +625,10 @@ class StrategyB3:
                     exit_price = 1.0 if won else 0.0
                 else:
                     exit_price = pos.entry_mkt_fv  # Fallback
-                triggered.append((token_id, "resolution", exit_price, pos.live_shares))
+                triggered.append((
+                    token_id, "resolution", exit_price,
+                    pos.live_shares, pos.direction, pos.live_entry_price,
+                ))
                 continue
 
             if t_remaining <= 0 or pos.btc_at_start <= 0:
@@ -678,10 +681,13 @@ class StrategyB3:
             if reason:
                 exit_price = pos_mkt_fv - SPREAD / 2  # Sell at bid
                 exit_price = max(0.01, exit_price)
-                triggered.append((token_id, reason, exit_price, pos.live_shares))
+                triggered.append((
+                    token_id, reason, exit_price,
+                    pos.live_shares, pos.direction, pos.live_entry_price,
+                ))
 
         # Process exits
-        for token_id, reason, exit_price, _live_shares in triggered:
+        for token_id, reason, exit_price, _live_shares, _dir, _lep in triggered:
             pos = self._open_positions.pop(token_id, None)
             if pos:
                 self._last_exit_time[pos.condition_id] = now
@@ -728,9 +734,16 @@ class StrategyB3:
             )
             # Track live PnL for daily kill switch
             if fill.shares_filled > 0 and live_exit_price > 0:
-                # Approximate live PnL (exit - entry for the shares sold)
-                # Actual PnL tracked via Data API balance changes
-                self._live_daily_pnl += fill.usdc_spent  # Add sell proceeds
+                self._live_daily_pnl += fill.usdc_spent
+            # Warn if shares stuck (will auto-resolve at market end)
+            stuck = fill.shares_requested - fill.shares_filled
+            if stuck > 0:
+                logger.warning(
+                    "b3_live_stranded_shares",
+                    token=token_id[:20],
+                    stuck=stuck,
+                    msg="Will auto-resolve at market end ($1 or $0)",
+                )
             return {
                 "live_exit_status": fill.status,
                 "live_exit_price": live_exit_price,

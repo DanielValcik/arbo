@@ -1633,7 +1633,7 @@ class RDHOrchestrator:
 
         exits = await self._strategy_b3.check_exits()
 
-        for token_id, exit_reason, exit_price, live_shares in (exits or []):
+        for token_id, exit_reason, exit_price, live_shares, b3_direction, live_entry_price in (exits or []):
             pos = next(
                 (p for p in self._paper_engine.open_positions
                  if p.token_id == token_id),
@@ -1702,13 +1702,15 @@ class RDHOrchestrator:
             # Slack notification
             await self._notify_b3_exit(
                 pos, exit_reason, float(pnl), exit_price, live_exit_info,
+                b3_direction=b3_direction,
+                live_entry_price=live_entry_price,
             )
 
         if exits:
             logger.info(
                 "b3_exits_processed",
                 count=len(exits),
-                reasons=[r for _, r, _, _ in exits],
+                reasons=[r for _, r, _, _, _, _ in exits],
             )
             await self._paper_engine.sync_positions_to_db()
 
@@ -1805,13 +1807,16 @@ class RDHOrchestrator:
                 for _tid, bpos in self._strategy_b3._open_positions.items():
                     if bpos.condition_id == sig.condition_id and bpos.live_fill_status:
                         if bpos.live_fill_status not in ("", "skipped"):
+                            gap = bpos.live_entry_price - sig.entry_price
                             live_text = (
-                                f":zap: *B3 LIVE ENTRY — BTC {direction}*\n"
-                                f"Status: *{bpos.live_fill_status}*  |  "
-                                f"{bpos.live_shares} shares @ {bpos.live_entry_price:.3f}  |  "
+                                f":zap: *B3 LIVE BUY — BTC {direction}*\n"
+                                f"*{bpos.live_fill_status}*  |  "
+                                f"{bpos.live_shares} shares @ "
+                                f"{bpos.live_entry_price:.3f}  |  "
+                                f"${bpos.live_shares * bpos.live_entry_price:.1f}  |  "
                                 f"{bpos.live_latency_ms}ms\n"
-                                f"Paper price: {sig.entry_price:.3f}  |  "
-                                f"Slippage: {bpos.live_entry_price - sig.entry_price:+.4f}"
+                                f"Model FV: {sig.entry_price:.3f}  |  "
+                                f"Gap: {gap:+.3f}"
                             )
                             await self._slack_bot._post(b3_live_channel, text=live_text)
                         break
@@ -1822,6 +1827,8 @@ class RDHOrchestrator:
     async def _notify_b3_exit(
         self, pos: Any, exit_reason: str, pnl: float, exit_price: float,
         live_exit_info: dict | None = None,
+        b3_direction: int = 0,
+        live_entry_price: float = 0.0,
     ) -> None:
         """Send Slack notification on B3 trade exit.
 
@@ -1833,13 +1840,10 @@ class RDHOrchestrator:
         if self._slack_bot is None:
             return
         try:
-            td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
-            if not td:
-                td = {}
-            direction = (td.get("direction", "?")).upper()
-            entry_fv = float(td.get("market_fv_up", pos.avg_price))
-            if direction == "DOWN":
-                entry_fv = 1.0 - entry_fv if entry_fv < 0.9 else float(pos.avg_price)
+            dir_str = "UP" if b3_direction == 1 else "DOWN" if b3_direction == -1 else "?"
+            if dir_str == "?":
+                td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
+                dir_str = (td.get("direction", "?")).upper() if td else "?"
             size = float(pos.size)
 
             total_pnl = await self._get_b3_total_pnl_from_db()
@@ -1854,24 +1858,48 @@ class RDHOrchestrator:
 
             # Paper exit → paper channel
             text = (
-                f"{emoji} *B3 EXIT — BTC {direction}* ({exit_reason})\n"
-                f"Entry FV: {float(pos.avg_price):.3f} → Exit: {exit_price:.3f}  |  Size: ${size:.0f}{hold_s}\n"
-                f"P&L: *{pnl_sign}${pnl:.2f}*  |  B3 Total: ${total_pnl:+.2f}"
+                f"{emoji} *B3 EXIT — BTC {dir_str}* ({exit_reason})\n"
+                f"Entry: {float(pos.avg_price):.3f} -> "
+                f"Exit: {exit_price:.3f}  |  "
+                f"Size: ${size:.0f}{hold_s}\n"
+                f"P&L: *{pnl_sign}${pnl:.2f}*  |  "
+                f"B3 Total: ${total_pnl:+.2f}"
             )
             await self._slack_bot._post(b3_paper_channel, text=text)
 
             # Live exit → live channel
-            if live_exit_info and live_exit_info.get("live_exit_status") not in (None, "error"):
-                live_price = live_exit_info.get("live_exit_price", 0)
-                slippage = live_exit_info.get("live_exit_slippage", 0)
+            if live_exit_info:
+                live_xp = live_exit_info.get("live_exit_price", 0)
+                live_xs = live_exit_info.get("live_exit_shares", 0)
+                live_status = live_exit_info.get("live_exit_status", "?")
                 latency = live_exit_info.get("live_exit_latency_ms", 0)
-                live_shares = live_exit_info.get("live_exit_shares", 0)
-                live_emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
-                live_text = (
-                    f"{live_emoji} *B3 LIVE EXIT — BTC {direction}* ({exit_reason})\n"
-                    f"Live exit: {live_price:.3f}  |  {live_shares} shares  |  {latency}ms\n"
-                    f"Paper exit: {exit_price:.3f}  |  Slippage: {slippage:+.4f}"
-                )
+
+                # Compute actual live PnL
+                live_pnl = 0.0
+                if live_entry_price > 0 and live_xp > 0 and live_xs > 0:
+                    live_pnl = (live_xp - live_entry_price) * live_xs
+                live_pnl_s = f"{'+' if live_pnl >= 0 else ''}${live_pnl:.2f}"
+                live_emoji = ":white_check_mark:" if live_pnl >= 0 else ":x:"
+
+                if live_status in ("filled", "partial") and live_xs > 0:
+                    live_text = (
+                        f"{live_emoji} *B3 LIVE SELL — BTC {dir_str}*"
+                        f" ({exit_reason})\n"
+                        f"Entry: {live_entry_price:.3f} -> "
+                        f"Exit: {live_xp:.3f}  |  "
+                        f"{live_xs} shares  |  {latency}ms\n"
+                        f"Live P&L: *{live_pnl_s}*"
+                    )
+                else:
+                    live_text = (
+                        f":warning: *B3 LIVE SELL FAILED — "
+                        f"BTC {dir_str}* ({exit_reason})\n"
+                        f"Status: {live_status}  |  "
+                        f"0/{live_exit_info.get('live_exit_shares', '?')}"
+                        f" shares sold  |  {latency}ms\n"
+                        f"Entry was: {live_entry_price:.3f}  |  "
+                        f"Shares may be stranded!"
+                    )
                 await self._slack_bot._post(b3_live_channel, text=live_text)
 
         except Exception as e:
