@@ -77,39 +77,64 @@ def _get_service():
 async def redeem_resolved_positions() -> dict:
     """Redeem all resolved positions. Returns summary dict."""
     import asyncio
+    import json as _json
+    import ssl
+    import urllib.request
 
     service = await asyncio.get_event_loop().run_in_executor(None, _get_service)
     if service is None:
         return {"status": "no_service", "redeemed": 0}
 
+    loop = asyncio.get_event_loop()
+
+    # Step 1: Find redeemable positions (value > 0) from Data API
+    funder = os.environ.get("POLY_FUNDER_ADDRESS", "")
     try:
-        loop = asyncio.get_event_loop()
+        _ssl = ssl.create_default_context()
+        try:
+            import certifi
+            _ssl = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            pass
+        url = f"https://data-api.polymarket.com/positions?user={funder}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Arbo/1.0"})
+        data = await loop.run_in_executor(None, lambda: _json.loads(
+            urllib.request.urlopen(req, timeout=10, context=_ssl).read()
+        ))
+        redeemable_ids = [
+            p["conditionId"] for p in data
+            if float(p.get("currentValue", 0)) > 0 and p.get("conditionId")
+        ]
+    except Exception as e:
+        logger.warning("auto_redeem_positions_check_failed", error=str(e))
+        return {"status": "error", "error": str(e), "redeemed": 0}
+
+    if not redeemable_ids:
+        return {"status": "nothing_to_redeem", "redeemed": 0}
+
+    # Step 2: Redeem only positions with value > 0
+    try:
+        logger.info("auto_redeem_attempting", count=len(redeemable_ids))
         result = await loop.run_in_executor(
-            None, lambda: service.redeem_all(batch_size=10)
+            None, lambda: service.redeem(redeemable_ids, batch_size=10)
         )
 
         redeemed = len(result.success_list)
         errors = len(result.error_list)
 
         if redeemed > 0:
-            logger.info(
-                "auto_redeem_success",
-                redeemed=redeemed,
-                errors=errors,
-            )
+            logger.info("auto_redeem_success", redeemed=redeemed, errors=errors)
         elif errors > 0:
-            logger.warning("auto_redeem_errors", errors=errors)
+            logger.warning("auto_redeem_errors", errors=errors,
+                           error_ids=result.error_condition_ids[:3])
 
         return {
             "status": "ok",
             "redeemed": redeemed,
             "errors": errors,
-            "tx": result.success_list[0].get("transactionHash", "") if result.success_list else "",
         }
 
     except Exception as e:
         err_msg = str(e)
-        if "No redeemable positions" in err_msg or "nothing to redeem" in err_msg.lower():
-            return {"status": "nothing_to_redeem", "redeemed": 0}
         logger.warning("auto_redeem_failed", error=err_msg)
         return {"status": "error", "error": err_msg, "redeemed": 0}
