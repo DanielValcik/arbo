@@ -122,6 +122,7 @@ class StrategyB3:
 
         # Open position tracking
         self._open_positions: dict[str, B3Position] = {}  # token_id → position
+        self._live_holding: dict[str, B3Position] = {}  # live positions waiting for resolution
         self._last_exit_time: dict[str, float] = {}  # condition_id → timestamp
 
     async def init(self) -> None:
@@ -702,6 +703,32 @@ class StrategyB3:
                     exit_fv=f"{exit_price:.3f}",
                     pnl=f"{exit_price - pos.entry_mkt_fv - SPREAD / 2:.3f}",
                     btc_change=f"{btc_change_pct:+.3f}%",
+                )
+                # Never-sell: if live has shares and paper exited early,
+                # keep tracking for resolution
+                if pos.live_shares > 0 and reason != "resolution":
+                    self._live_holding[token_id] = pos
+
+        # Check _live_holding for resolution
+        for token_id in list(self._live_holding.keys()):
+            pos = self._live_holding[token_id]
+            if now >= pos.event_end_ts and btc_price and pos.btc_at_start > 0:
+                resolved_up = btc_price >= pos.btc_at_start
+                won = (pos.direction == 1 and resolved_up) or (
+                    pos.direction == -1 and not resolved_up
+                )
+                exit_price = 1.0 if won else 0.0
+                triggered.append((
+                    token_id, "resolution", exit_price,
+                    pos.live_shares, pos.direction, pos.live_entry_price,
+                ))
+                self._live_holding.pop(token_id)
+                logger.info(
+                    "b3_live_resolved",
+                    direction="UP" if pos.direction == 1 else "DOWN",
+                    won=won,
+                    entry=f"{pos.live_entry_price:.3f}",
+                    shares=pos.live_shares,
                 )
 
         return triggered

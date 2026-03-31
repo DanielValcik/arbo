@@ -1686,25 +1686,28 @@ class RDHOrchestrator:
                  if p.token_id == token_id),
                 None,
             )
-            if pos is None:
-                continue
 
             from decimal import Decimal as D
 
-            pnl = self._paper_engine.sell_position(
-                token_id=token_id,
-                sell_price=D(str(round(exit_price, 4))),
-                exit_reason=exit_reason,
-            )
-            self._risk_manager.post_trade_update(
-                pos.market_condition_id, "crypto_5min", pos.size, pnl=pnl,
-            )
-            self._risk_manager.strategy_post_trade("B3", pos.size, pnl=pnl)
-            await self._paper_engine.update_resolved_trades_in_db(
-                token_id=token_id, pnl=pnl,
-                exit_price=D(str(round(exit_price, 4))),
-                exit_reason=exit_reason,
-            )
+            if pos is not None:
+                # Paper position still open → close it
+                pnl = self._paper_engine.sell_position(
+                    token_id=token_id,
+                    sell_price=D(str(round(exit_price, 4))),
+                    exit_reason=exit_reason,
+                )
+                self._risk_manager.post_trade_update(
+                    pos.market_condition_id, "crypto_5min", pos.size, pnl=pnl,
+                )
+                self._risk_manager.strategy_post_trade("B3", pos.size, pnl=pnl)
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id, pnl=pnl,
+                    exit_price=D(str(round(exit_price, 4))),
+                    exit_reason=exit_reason,
+                )
+            else:
+                # Paper already closed (never-sell: live held to resolution)
+                pnl = 0.0  # Paper PnL already recorded
 
             # Live: NEVER SELL — always hold to resolution
             # Validated: never-sell +$155 vs sell -$50 on March 31 data
