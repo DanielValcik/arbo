@@ -1437,6 +1437,22 @@
                 </div>
             </div>
 
+            <!-- B3 LIVE Cumulative P&L Chart -->
+            <div class="card grid-full" style="border-top:3px solid #3fb950">
+                <div class="card-title">Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b3LiveCumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- B3 LIVE Per-Trade P&L -->
+            <div class="card grid-full" style="border-top:3px solid #3fb950">
+                <div class="card-title">P&L po kazdem tradu (od $0) <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b3LiveTradeByTradeChart"></canvas>
+                </div>
+            </div>
+
             <!-- B3 Daily Bar Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L<span id="lb3AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
@@ -3936,17 +3952,76 @@
                 </tr>`;
             }).join('');
 
-            // Paper vs Live comparison card
-            // All trades where live was attempted (including fails)
+            // Compute live trade sets (used by charts + comparison card)
             const liveAttempted = closed.filter(t => {
                 const d = t.trade_details || {};
                 return d.live_fill_status && d.live_fill_status !== 'skipped';
             });
-            // Only filled trades (with actual entry price)
             const liveFilled = liveAttempted.filter(t => {
                 const d = t.trade_details || {};
                 return (d.live_fill_status === 'filled' || d.live_fill_status === 'partial') && d.live_entry_price > 0;
             });
+
+            // ── LIVE Cumulative P&L chart ──
+            if (liveFilled.length > 0 && typeof Chart !== 'undefined') {
+                const liveChron = [...liveFilled].sort((a,b) => new Date(a.placed_at) - new Date(b.placed_at));
+                let lCum = 0;
+                const lLabels = ['Start'];
+                const lValues = [0];
+                const lColors = [];
+                for (let i = 0; i < liveChron.length; i++) {
+                    const d = liveChron[i].trade_details || {};
+                    const lep = d.live_entry_price || 0;
+                    const lxp = d.live_exit_price || 0;
+                    const lsh = d.live_entry_shares || 0;
+                    let pnl = 0;
+                    if (lep > 0 && lxp > 0 && lsh > 0) pnl = (lxp - lep) * lsh;
+                    else if (lep > 0 && liveChron[i].exit_reason === 'resolution') pnl = ((liveChron[i].exit_price || 0) - lep) * lsh;
+                    lCum += pnl;
+                    lLabels.push('#' + (i + 1));
+                    lValues.push(Math.round(lCum * 100) / 100);
+                    lColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
+                }
+                const lSegColors = lValues.map((v, i) => i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149');
+                const lCumCtx = document.getElementById('b3LiveCumPnlChart');
+                if (lCumCtx) {
+                    if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
+                    window._b3LiveCumChart = new Chart(lCumCtx, {
+                        type: 'line',
+                        data: { labels: lLabels, datasets: [{ label: 'Live Kumulativni P&L', data: lValues, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', fill: true, tension: 0.1, pointRadius: lValues.length > 50 ? 1.5 : 3, pointBackgroundColor: lSegColors, borderWidth: 2, segment: { borderColor: ctx2 => ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149' } }] },
+                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.raw.toFixed(2)}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                    });
+                }
+
+                // ── LIVE Per-Trade P&L chart ──
+                const ltCtx = document.getElementById('b3LiveTradeByTradeChart');
+                if (ltCtx) {
+                    const ltLabels = [];
+                    const ltValues = [];
+                    const ltColors = [];
+                    for (let i = 0; i < liveChron.length; i++) {
+                        const d = liveChron[i].trade_details || {};
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || 0;
+                        const lsh = d.live_entry_shares || 0;
+                        let pnl = 0;
+                        if (lep > 0 && lxp > 0 && lsh > 0) pnl = (lxp - lep) * lsh;
+                        else if (lep > 0 && liveChron[i].exit_reason === 'resolution') pnl = ((liveChron[i].exit_price || 0) - lep) * lsh;
+                        const dir = (d.direction || '?').toUpperCase();
+                        ltLabels.push(`#${i+1} ${dir}`);
+                        ltValues.push(Math.round(pnl * 100) / 100);
+                        ltColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
+                    }
+                    if (window._b3LiveTbyTChart) window._b3LiveTbyTChart.destroy();
+                    window._b3LiveTbyTChart = new Chart(ltCtx, {
+                        type: 'bar',
+                        data: { labels: ltLabels, datasets: [{ label: 'Live P&L', data: ltValues, backgroundColor: ltColors, borderRadius: 3 }] },
+                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `P&L: ${c.raw >= 0 ? '+' : ''}$${c.raw.toFixed(2)}` } } }, scales: { x: { ticks: { color: '#888', font: { size: 9 } }, grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                    });
+                }
+            }
+
+            // Paper vs Live comparison card
             const compCard = document.getElementById('b3LiveComparisonCard');
             if (liveAttempted.length > 0 && compCard) {
                 compCard.style.display = '';
