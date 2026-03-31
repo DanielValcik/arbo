@@ -1065,6 +1065,9 @@ class RDHOrchestrator:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
+        # Auto-redeem resolved positions (gasless, every 30 min)
+        task_defs.append(("auto_redeem", self._run_auto_redeem, 1800))
+
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
             self._tasks[name] = state
@@ -1942,6 +1945,24 @@ class RDHOrchestrator:
 
         except Exception as e:
             logger.debug("b3_slack_exit_error", error=str(e))
+
+    async def _run_auto_redeem(self) -> None:
+        """Auto-redeem resolved Polymarket positions every 30 min."""
+        try:
+            from arbo.core.auto_redeem import redeem_resolved_positions
+            result = await redeem_resolved_positions()
+            if result.get("redeemed", 0) > 0:
+                # Notify on Slack
+                if self._slack_bot:
+                    await self._slack_bot._post(
+                        "C0APX4K8Z2N",  # B3 live channel
+                        text=(
+                            f":moneybag: *AUTO-REDEEM*\n"
+                            f"Redeemed {result['redeemed']} positions"
+                        ),
+                    )
+        except Exception as e:
+            logger.debug("auto_redeem_task_error", error=str(e))
 
     async def _sync_b3_market_to_db(self, sig: Any) -> None:
         """Sync B3 market to DB so dashboard shows question text instead of hash."""
