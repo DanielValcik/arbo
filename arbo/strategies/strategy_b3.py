@@ -704,6 +704,7 @@ class StrategyB3:
                 neg_risk=False,
                 tick_size="0.01",
                 maker_timeout_s=self._live_exit_maker_timeout_s,
+                skip_sync=True,  # B3 holds 1-3 min, Data API too slow
             )
             live_exit_price = float(fill.fill_price) if fill.fill_price else 0.0
             slippage = round(paper_exit_price - live_exit_price, 4) if live_exit_price else 0

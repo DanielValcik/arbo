@@ -243,9 +243,11 @@ class LiveExecutor:
         self, token_id: str, price: float, shares: float | None = None,
         neg_risk: bool = True, tick_size: str = "0.01",
         maker_timeout_s: int | None = None,
+        skip_sync: bool = False,
     ) -> LiveFill:
         """MAKER SELL at SELL price first, fallback to TAKER at BUY price."""
-        await self._sync_positions()
+        if not skip_sync:
+            await self._sync_positions()
         actual = self._shares_owned.get(token_id, 0)
         if actual <= 0:
             return self._fail(token_id, "SELL", price, 0, "No shares owned")
@@ -253,6 +255,10 @@ class LiveExecutor:
         buy_price, sell_price = await self._get_prices(token_id)
         if buy_price is None or sell_price is None:
             return self._fail(token_id, "SELL", price, 0, "No prices")
+
+        # Clamp prices to CLOB limits (0.01-0.99)
+        sell_price = min(sell_price, 0.99)
+        buy_price = min(buy_price, 0.99)
 
         sell_shares = actual
 
