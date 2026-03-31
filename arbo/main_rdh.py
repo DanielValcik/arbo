@@ -1951,18 +1951,19 @@ class RDHOrchestrator:
         try:
             from arbo.core.auto_redeem import redeem_resolved_positions
             result = await redeem_resolved_positions()
-            if result.get("redeemed", 0) > 0:
-                # Notify on Slack
-                if self._slack_bot:
-                    await self._slack_bot._post(
-                        "C0APX4K8Z2N",  # B3 live channel
-                        text=(
-                            f":moneybag: *AUTO-REDEEM*\n"
-                            f"Redeemed {result['redeemed']} positions"
-                        ),
-                    )
+            status = result.get("status", "?")
+            redeemed = result.get("redeemed", 0)
+            logger.info("auto_redeem_result", status=status, redeemed=redeemed)
+            if redeemed > 0 and self._slack_bot:
+                await self._slack_bot._post(
+                    "C0APX4K8Z2N",
+                    text=(
+                        f":moneybag: *AUTO-REDEEM*\n"
+                        f"Redeemed {redeemed} positions"
+                    ),
+                )
         except Exception as e:
-            logger.debug("auto_redeem_task_error", error=str(e))
+            logger.warning("auto_redeem_task_error", error=str(e))
 
     async def _sync_b3_market_to_db(self, sig: Any) -> None:
         """Sync B3 market to DB so dashboard shows question text instead of hash."""
