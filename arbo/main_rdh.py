@@ -1951,7 +1951,7 @@ class RDHOrchestrator:
                 await self._slack_bot._post(b3_live_channel, text=live_text)
 
         except Exception as e:
-            logger.debug("b3_slack_exit_error", error=str(e))
+            logger.warning("b3_slack_exit_error", error=str(e), exc=repr(e))
 
     async def _run_auto_redeem(self) -> None:
         """Auto-redeem resolved Polymarket positions every 30 min."""
