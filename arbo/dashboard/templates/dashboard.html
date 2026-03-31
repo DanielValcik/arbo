@@ -1501,6 +1501,18 @@
                 <div style="height:180px;margin-top:12px"><canvas id="b3LiveTradeBarChart"></canvas></div>
             </div>
 
+            <!-- Polymarket Wallet -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
+                <div class="card-title">Polymarket Ucet</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;text-align:center;margin-bottom:12px">
+                    <div><div style="font-size:11px;color:var(--text-dim)">Available</div><div id="lb3WalletBalance" style="font-size:20px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">V pozicich</div><div id="lb3WalletPositions" style="font-size:20px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Portfolio</div><div id="lb3WalletPortfolio" style="font-size:20px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Live sizing</div><div id="lb3WalletSizing" style="font-size:20px;font-weight:700">--</div></div>
+                </div>
+                <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim)"></div>
+            </div>
+
             <!-- B3 Open Positions -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Otevrene pozice</div>
@@ -4098,6 +4110,34 @@
                 }
             }
         }
+
+        // Polymarket wallet
+        try {
+            const wallet = await fetchJSON('/api/polymarket-wallet');
+            if (wallet && !wallet.error) {
+                const bal = wallet.balance || 0;
+                const posVal = wallet.total_value || 0;
+                const portfolio = wallet.portfolio || (bal + posVal);
+                document.getElementById('lb3WalletBalance').textContent = '$' + bal.toFixed(2);
+                document.getElementById('lb3WalletBalance').style.color = 'var(--green)';
+                document.getElementById('lb3WalletPositions').textContent = '$' + posVal.toFixed(2);
+                document.getElementById('lb3WalletPortfolio').textContent = '$' + portfolio.toFixed(2);
+                // Sizing: 6.7% of available balance
+                const sizing = Math.min(bal * 0.067, 100).toFixed(0);
+                document.getElementById('lb3WalletSizing').textContent = '~$' + sizing + '/trade';
+                // Positions list
+                const posList = wallet.positions || [];
+                if (posList.length > 0) {
+                    document.getElementById('lb3WalletPositionsList').innerHTML = posList.map(p => {
+                        const pnlColor = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                        return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05)">`
+                            + `<span>${p.title || '?'} (${p.outcome} ${p.size}sh)</span>`
+                            + `<span style="color:${pnlColor}">$${p.current_value.toFixed(2)}</span>`
+                            + `</div>`;
+                    }).join('');
+                }
+            }
+        } catch (e) { /* wallet fetch optional */ }
 
         // Open positions
         const positions = posData.value?.positions || [];

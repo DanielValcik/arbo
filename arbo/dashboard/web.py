@@ -2341,6 +2341,80 @@ async def api_expected_vs_reality_b3(
         return {"error": str(e), "too_early": True, "actual": {}, "expected": {}}
 
 
+@app.get("/api/polymarket-wallet")
+async def api_polymarket_wallet(
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Live Polymarket wallet: balance, positions, P&L."""
+    import os
+    import ssl
+    import urllib.request
+
+    funder = os.getenv("POLY_FUNDER_ADDRESS", "")
+    result: dict[str, Any] = {"balance": 0, "positions": [], "total_value": 0}
+
+    # Get positions from Data API
+    try:
+        _ssl = ssl.create_default_context()
+        try:
+            import certifi
+            _ssl = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            pass
+        url = f"https://data-api.polymarket.com/positions?user={funder}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Arbo/1.0"})
+        import asyncio
+        data = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: json.loads(urllib.request.urlopen(req, timeout=10, context=_ssl).read()),
+        )
+        positions = []
+        for pos in data:
+            size = float(pos.get("size", 0))
+            if size <= 0:
+                continue
+            cur_val = float(pos.get("currentValue", 0))
+            avg_price = float(pos.get("avgPrice", 0))
+            positions.append({
+                "title": pos.get("title", ""),
+                "outcome": pos.get("outcome", ""),
+                "size": size,
+                "avg_price": round(avg_price, 3),
+                "current_value": round(cur_val, 2),
+                "pnl": round(cur_val - size * avg_price, 2),
+            })
+        result["positions"] = positions
+        result["total_value"] = round(sum(p["current_value"] for p in positions), 2)
+    except Exception as e:
+        result["positions_error"] = str(e)
+
+    # Get USDC balance from CLOB
+    try:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import AssetType, BalanceAllowanceParams
+        import asyncio
+
+        def _get_bal():
+            c = ClobClient(
+                host="https://clob.polymarket.com", chain_id=137,
+                key=os.getenv("POLY_PRIVATE_KEY", ""), signature_type=2,
+                funder=funder or None,
+            )
+            creds = c.create_or_derive_api_creds()
+            c.set_api_creds(creds)
+            r = c.get_balance_allowance(
+                BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
+            )
+            return int(r.get("balance", 0)) / 1_000_000
+
+        result["balance"] = await asyncio.get_event_loop().run_in_executor(None, _get_bal)
+        result["portfolio"] = round(result["balance"] + result["total_value"], 2)
+    except Exception as e:
+        result["balance_error"] = str(e)
+
+    return result
+
+
 @app.get("/api/expected-vs-reality-b2")
 async def api_expected_vs_reality_b2(
     _user: str = Depends(_verify_credentials),
