@@ -1706,22 +1706,28 @@ class RDHOrchestrator:
                 exit_reason=exit_reason,
             )
 
-            # Live sell (dual mode) — skip resolution (token auto-redeems)
+            # Live: NEVER SELL — always hold to resolution
+            # Validated: never-sell +$155 vs sell -$50 on March 31 data
+            # Backtest: never-sell OOS score 13,129 vs sell 10,487
             live_exit_info = None
-            if live_shares > 0 and exit_reason != "resolution":
-                live_exit_info = await self._strategy_b3.sell_live_position(
-                    token_id=token_id,
-                    exit_reason=exit_reason,
-                    paper_exit_price=exit_price,
-                )
-            elif live_shares > 0 and exit_reason == "resolution":
-                # Resolution: token auto-redeems at exit_price ($1 or $0)
+            if live_shares > 0 and exit_reason == "resolution":
+                # Resolution: token auto-redeems at $1 (win) or $0 (loss)
                 live_exit_info = {
                     "live_exit_price": exit_price,
                     "live_exit_shares": live_shares,
                     "live_exit_status": "resolution",
                     "live_exit_latency_ms": 0,
                 }
+            elif live_shares > 0 and exit_reason != "resolution":
+                # Non-resolution exit: paper sells, live HOLDS to resolution
+                # Don't sell on live — let it auto-resolve
+                logger.info(
+                    "b3_live_hold_to_resolve",
+                    reason=exit_reason,
+                    shares=live_shares,
+                    entry_price=live_entry_price,
+                    msg="Never-sell: holding to resolution",
+                )
 
             # Store live exit info in trade_details for dashboard
             if live_exit_info or live_shares > 0:
@@ -1932,7 +1938,21 @@ class RDHOrchestrator:
             )
             await self._slack_bot._post(b3_paper_channel, text=text)
 
-            # Live exit → live channel
+            # Live: notify hold or resolution
+            if live_shares > 0 and not live_exit_info and self._slack_bot:
+                # Paper exited but live holds to resolution
+                dir_label = "UP" if b3_direction == 1 else "DOWN"
+                await self._slack_bot._post(
+                    b3_live_channel,
+                    text=(
+                        f":hourglass: *B3 LIVE HOLD — BTC {dir_label}*"
+                        f" (paper: {exit_reason})\n"
+                        f"Entry: {live_entry_price:.3f}  |  "
+                        f"{live_shares} shares  |  "
+                        f"Cekam na resolution"
+                    ),
+                )
+
             if live_exit_info:
                 live_xp = live_exit_info.get("live_exit_price", 0)
                 live_xs = live_exit_info.get("live_exit_shares", 0)
