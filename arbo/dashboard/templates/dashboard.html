@@ -3969,7 +3969,8 @@
                 xsEl.style.color = Math.abs(avgExitGap) < 0.05 ? 'var(--green)' : 'var(--gold)';
 
                 // Paper avg PnL
-                const paperAvg = closed.reduce((s,t) => s + (t.actual_pnl || 0), 0) / closed.length;
+                // Paper avg only for trades where live was attempted (fair comparison)
+                const paperAvg = liveAttempted.reduce((s,t) => s + (t.actual_pnl || 0), 0) / liveAttempted.length;
                 const paEl = document.getElementById('lb3PaperAvgPnl');
                 paEl.textContent = (paperAvg >= 0 ? '+' : '') + '$' + paperAvg.toFixed(2);
                 paEl.style.color = paperAvg >= 0 ? 'var(--green)' : 'var(--red)';
@@ -4049,6 +4050,7 @@
                             ],
                         },
                         options: {
+                            animation: false,
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
@@ -4113,6 +4115,7 @@
                             }],
                         },
                         options: {
+                            animation: false,
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
