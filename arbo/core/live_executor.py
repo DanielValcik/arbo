@@ -257,8 +257,22 @@ class LiveExecutor:
             return self._fail(token_id, "SELL", price, 0, "No prices")
 
         # Clamp prices to CLOB limits (0.01-0.99)
-        sell_price = min(sell_price, 0.99)
-        buy_price = min(buy_price, 0.99)
+        sell_price = max(0.01, min(sell_price, 0.99))
+        buy_price = max(0.01, min(buy_price, 0.99))
+
+        # If token is near-worthless, skip sell — let it resolve at $0
+        if sell_price <= 0.02 and buy_price <= 0.01:
+            logger.info("live_sell_skip_worthless", token=token_id[:20],
+                        sell_price=sell_price, buy_price=buy_price)
+            fill = LiveFill(
+                token_id=token_id, side="SELL", price=Decimal("0"),
+                size=Decimal(str(actual)), shares_requested=actual,
+                status="skipped", order_type="resolution",
+                error="Token near-zero, will auto-resolve",
+            )
+            fill.latency_ms = 0
+            self._fills.append(fill)
+            return fill
 
         sell_shares = actual
 

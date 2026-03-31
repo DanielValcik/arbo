@@ -1492,8 +1492,8 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;text-align:center;margin-bottom:16px">
                     <div><div style="font-size:11px;color:var(--text-dim)">Live tradu</div><div id="lb3LiveTradeCount" style="font-size:18px;font-weight:700">--</div></div>
                     <div><div style="font-size:11px;color:var(--text-dim)">Fill rate</div><div id="lb3LiveFillRate" style="font-size:18px;font-weight:700">--</div></div>
-                    <div><div style="font-size:11px;color:var(--text-dim)">Avg entry slippage</div><div id="lb3LiveEntrySlip" style="font-size:18px;font-weight:700">--</div></div>
-                    <div><div style="font-size:11px;color:var(--text-dim)">Avg exit slippage</div><div id="lb3LiveExitSlip" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Avg entry gap</div><div id="lb3LiveEntrySlip" style="font-size:18px;font-weight:700">--</div></div>
+                    <div><div style="font-size:11px;color:var(--text-dim)">Avg exit gap</div><div id="lb3LiveExitSlip" style="font-size:18px;font-weight:700">--</div></div>
                     <div><div style="font-size:11px;color:var(--text-dim)">Paper avg PnL</div><div id="lb3PaperAvgPnl" style="font-size:18px;font-weight:700">--</div></div>
                     <div><div style="font-size:11px;color:var(--text-dim)">Live avg PnL (norm)</div><div id="lb3LiveAvgPnl" style="font-size:18px;font-weight:700">--</div></div>
                 </div>
@@ -3890,30 +3890,36 @@
             }).join('');
 
             // Paper vs Live comparison card
-            const liveTrades = closed.filter(t => {
+            // All trades where live was attempted (including fails)
+            const liveAttempted = closed.filter(t => {
                 const d = t.trade_details || {};
                 return d.live_fill_status && d.live_fill_status !== 'skipped';
             });
+            // Only filled trades (with actual entry price)
+            const liveFilled = liveAttempted.filter(t => {
+                const d = t.trade_details || {};
+                return (d.live_fill_status === 'filled' || d.live_fill_status === 'partial') && d.live_entry_price > 0;
+            });
             const compCard = document.getElementById('b3LiveComparisonCard');
-            if (liveTrades.length > 0 && compCard) {
+            if (liveAttempted.length > 0 && compCard) {
                 compCard.style.display = '';
-                const filled = liveTrades.filter(t => t.trade_details.live_fill_status === 'filled' || t.trade_details.live_fill_status === 'partial');
-                document.getElementById('lb3LiveTradeCount').textContent = liveTrades.length;
-                document.getElementById('lb3LiveFillRate').textContent = ((filled.length / liveTrades.length) * 100).toFixed(0) + '%';
+                document.getElementById('lb3LiveTradeCount').textContent = `${liveFilled.length}/${liveAttempted.length}`;
+                document.getElementById('lb3LiveFillRate').textContent = ((liveFilled.length / liveAttempted.length) * 100).toFixed(0) + '%';
 
-                // Avg entry slippage
-                const entrySlips = filled.filter(t => t.trade_details.live_entry_price).map(t => t.trade_details.live_entry_price - (t.fill_price || 0));
-                const avgEntrySlip = entrySlips.length ? entrySlips.reduce((a,b) => a+b, 0) / entrySlips.length : 0;
+                // Avg entry gap (live CLOB price vs paper model FV)
+                const entryGaps = liveFilled.map(t => t.trade_details.live_entry_price - (t.price || 0));
+                const avgEntryGap = entryGaps.length ? entryGaps.reduce((a,b) => a+b, 0) / entryGaps.length : 0;
                 const esEl = document.getElementById('lb3LiveEntrySlip');
-                esEl.textContent = (avgEntrySlip >= 0 ? '+' : '') + avgEntrySlip.toFixed(4);
-                esEl.style.color = Math.abs(avgEntrySlip) < 0.005 ? 'var(--green)' : 'var(--red)';
+                esEl.textContent = (avgEntryGap >= 0 ? '+' : '') + avgEntryGap.toFixed(3);
+                esEl.style.color = Math.abs(avgEntryGap) < 0.05 ? 'var(--green)' : 'var(--gold)';
 
-                // Avg exit slippage
-                const exitSlips = filled.filter(t => t.trade_details.live_exit_slippage !== undefined).map(t => t.trade_details.live_exit_slippage);
-                const avgExitSlip = exitSlips.length ? exitSlips.reduce((a,b) => a+b, 0) / exitSlips.length : 0;
+                // Avg exit gap
+                const withExit = liveFilled.filter(t => t.trade_details.live_exit_price > 0);
+                const exitGaps = withExit.map(t => t.trade_details.live_exit_price - (t.exit_price || 0));
+                const avgExitGap = exitGaps.length ? exitGaps.reduce((a,b) => a+b, 0) / exitGaps.length : 0;
                 const xsEl = document.getElementById('lb3LiveExitSlip');
-                xsEl.textContent = (avgExitSlip >= 0 ? '+' : '') + avgExitSlip.toFixed(4);
-                xsEl.style.color = Math.abs(avgExitSlip) < 0.005 ? 'var(--green)' : 'var(--red)';
+                xsEl.textContent = withExit.length ? ((avgExitGap >= 0 ? '+' : '') + avgExitGap.toFixed(3)) : 'cekam';
+                xsEl.style.color = Math.abs(avgExitGap) < 0.05 ? 'var(--green)' : 'var(--gold)';
 
                 // Paper avg PnL
                 const paperAvg = closed.reduce((s,t) => s + (t.actual_pnl || 0), 0) / closed.length;
@@ -3921,21 +3927,20 @@
                 paEl.textContent = (paperAvg >= 0 ? '+' : '') + '$' + paperAvg.toFixed(2);
                 paEl.style.color = paperAvg >= 0 ? 'var(--green)' : 'var(--red)';
 
-                // Live avg PnL (normalized to paper size for fair comparison)
-                const liveWithPnl = filled.filter(t => t.trade_details.live_entry_price && (t.trade_details.live_exit_price || t.exit_price));
-                if (liveWithPnl.length > 0) {
+                // Live avg PnL (from actual CLOB entry→exit)
+                if (withExit.length > 0) {
                     let livePnlSum = 0;
-                    for (const t of liveWithPnl) {
+                    for (const t of withExit) {
                         const d = t.trade_details;
-                        const exitP = d.live_exit_price || t.exit_price || 0;
-                        const paperSize = t.size || 67;
-                        const normalizedPnl = (exitP - d.live_entry_price) * (paperSize / d.live_entry_price);
-                        livePnlSum += normalizedPnl;
+                        const lShares = d.live_entry_shares || 0;
+                        livePnlSum += (d.live_exit_price - d.live_entry_price) * lShares;
                     }
-                    const liveAvg = livePnlSum / liveWithPnl.length;
+                    const liveAvg = livePnlSum / withExit.length;
                     const laEl = document.getElementById('lb3LiveAvgPnl');
                     laEl.textContent = (liveAvg >= 0 ? '+' : '') + '$' + liveAvg.toFixed(2);
                     laEl.style.color = liveAvg >= 0 ? 'var(--green)' : 'var(--red)';
+                } else {
+                    document.getElementById('lb3LiveAvgPnl').textContent = 'cekam na exit data';
                 }
 
                 // Paper vs Live cumulative PnL chart
@@ -3943,7 +3948,7 @@
                 if (pvlCtx) {
                     // Build parallel cumulative series from trades that have live data
                     // Sort chronologically (oldest first)
-                    const chronological = [...liveTrades].sort((a,b) => new Date(a.placed_at) - new Date(b.placed_at));
+                    const chronological = [...liveFilled].sort((a,b) => new Date(a.placed_at) - new Date(b.placed_at));
                     let paperCum = 0, liveCum = 0;
                     const labels = [];
                     const paperData = [];
