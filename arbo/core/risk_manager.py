@@ -42,7 +42,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
 MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy
-STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.25")  # 25% weekly drawdown → halt strategy (1.6x backtest max DD)
+STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.50")  # 50% weekly drawdown → halt strategy (raised for live optimization phase)
 
 
 @dataclass
@@ -518,6 +518,9 @@ class RiskManager:
             logger.info("weekly_pnl_reset", previous=str(self._state.weekly_pnl))
             self._state.weekly_pnl = Decimal("0")
             self._state.weekly_reset_at = now
-            # Also reset per-strategy weekly P&L
+            # Also reset per-strategy weekly P&L and unhalt
             for ss in self._state.strategies.values():
                 ss.weekly_pnl = Decimal("0")
+                if ss.is_halted:
+                    ss.is_halted = False
+                    logger.info("strategy_unhalt_new_week", strategy=ss.name)
