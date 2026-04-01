@@ -3999,6 +3999,8 @@
                 const lLabels = ['Start'];
                 const lValues = [0];
                 const lColors = [];
+                let pendingCount = 0;
+                const isResolved = [true];  // Start point is "resolved"
                 for (let i = 0; i < liveChron.length; i++) {
                     const d = liveChron[i].trade_details || {};
                     const lep = d.live_entry_price || 0;
@@ -4007,25 +4009,33 @@
                     const lxst = d.live_exit_status || '';
                     const paperExit = liveChron[i].exit_price || 0;
                     let pnl = 0;
+                    let resolved = false;
                     if (lep > 0 && lsh > 0 && lxst === 'resolution') {
-                        // Resolution: live_exit_price is $1 (win) or $0 (loss)
                         pnl = (lxp - lep) * lsh;
+                        resolved = true;
                     } else if (lep > 0 && lxp > 0 && lsh > 0) {
-                        // Sell succeeded at lxp
                         pnl = (lxp - lep) * lsh;
+                        resolved = true;
                     } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
-                        // Paper resolution
                         pnl = (paperExit - lep) * lsh;
+                        resolved = true;
                     } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial' || lxst === 'skipped')) {
-                        // Sell failed → assume $0
                         pnl = -lep * lsh;
+                        resolved = true;
+                    } else if (lep > 0 && lsh > 0) {
+                        pendingCount++;
                     }
                     lCum += pnl;
-                    lLabels.push('#' + (i + 1));
+                    lLabels.push(resolved ? '#' + (i + 1) : '#' + (i + 1) + ' ⏳');
                     lValues.push(Math.round(lCum * 100) / 100);
-                    lColors.push(pnl >= 0 ? '#3fb950' : '#f85149');
+                    lColors.push(!resolved ? '#e3b341' : pnl >= 0 ? '#3fb950' : '#f85149');
+                    isResolved.push(resolved);
                 }
-                const lSegColors = lValues.map((v, i) => i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149');
+                const lSegColors = lValues.map((v, i) => {
+                    if (!isResolved[i]) return '#e3b34166';  // Pending = yellow translucent
+                    return i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149';
+                });
+                const lPointRadius = lValues.map((_, i) => isResolved[i] ? (lValues.length > 50 ? 1.5 : 3) : 5);
                 // Stats from Polymarket wallet (source of truth)
                 const statsEl = document.getElementById('lb3LiveCumStats');
                 if (statsEl) {
@@ -4033,7 +4043,8 @@
                     if (wallet && wallet.portfolio !== undefined) {
                         const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
                         const c = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
-                        statsEl.innerHTML = `<span style="color:${c}">P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span>`;
+                        const pendStr = pendingCount > 0 ? `<span style="color:#e3b341;margin-left:8px">⏳ ${pendingCount} ceka</span>` : '';
+                        statsEl.innerHTML = `<span style="color:${c}">P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span>${pendStr}`;
                         // Show warning if chart doesn't match wallet
                         const chartTotal = lCum;
                         const noteEl = document.getElementById('b3LiveNote');
@@ -4052,8 +4063,8 @@
                     if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
                     window._b3LiveCumChart = new Chart(lCumCtx, {
                         type: 'line',
-                        data: { labels: lLabels, datasets: [{ label: 'Live Kumulativni P&L', data: lValues, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', fill: true, tension: 0.1, pointRadius: lValues.length > 50 ? 1.5 : 3, pointBackgroundColor: lSegColors, borderWidth: 2, segment: { borderColor: ctx2 => ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149' } }] },
-                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.raw.toFixed(2)}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                        data: { labels: lLabels, datasets: [{ label: 'Live Kumulativni P&L', data: lValues, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', fill: true, tension: 0.1, pointRadius: lPointRadius, pointBackgroundColor: lSegColors, borderWidth: 2, segment: { borderColor: ctx2 => { const i = ctx2.p1DataIndex; return !isResolved[i] ? '#e3b34166' : ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149'; }, borderDash: ctx2 => !isResolved[ctx2.p1DataIndex] ? [4, 4] : [] } }] },
+                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { const idx = c.dataIndex; const pending = !isResolved[idx]; return pending ? `$${c.raw.toFixed(2)} (ceka na Chainlink)` : `$${c.raw.toFixed(2)}`; } } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
                     });
                 }
 
