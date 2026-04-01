@@ -363,9 +363,10 @@ class B3Scanner:
             entry_minute = int(elapsed_min)
             if entry_minute < MIN_ENTRY_MIN or entry_minute > MAX_ENTRY_MIN:
                 continue
-            # Only fire once per integer minute (within first 15s of that minute)
+            # Only fire once per integer minute (within first 30s of that minute)
+            # Scan cycle runs every 15-30s, so 30s window ensures at least one hit.
             frac = elapsed_min - entry_minute
-            if frac >= 0.25:  # Already checked this minute
+            if frac >= 0.50:  # Already checked this minute
                 continue
 
             if ev.btc_at_start is None:
