@@ -1988,17 +1988,13 @@ class RDHOrchestrator:
                     live_pnl = (live_xp - live_entry_price) * live_shares if live_entry_price > 0 else 0
                     live_pnl_s = f"{'+' if live_pnl >= 0 else ''}${live_pnl:.2f}"
                     res_emoji = ":white_check_mark:" if live_xp > 0.5 else ":x:"
-                    paper_entry = float(pos.avg_price) if pos else 0
                     live_text = (
                         f"{res_emoji} *B3 LIVE RESOLVE — "
                         f"BTC {dir_str}*\n"
-                        f"Live:  {live_entry_price:.3f} -> "
-                        f"{'$1' if live_xp > 0.5 else '$0'}  |  "
+                        f"Entry: {live_entry_price:.3f} -> "
+                        f"{'$1 (WIN)' if live_xp > 0.5 else '$0 (LOSS)'}  |  "
                         f"P&L: *{live_pnl_s}*  |  "
-                        f"{live_shares} shares\n"
-                        f"Paper: {paper_entry:.3f} -> "
-                        f"{'$1' if exit_price > 0.5 else '$0'}  |  "
-                        f"P&L: *{pnl_sign}${pnl:.2f}*"
+                        f"{live_shares} shares"
                     )
                 elif live_status in ("filled", "partial") and live_xs > 0:
                     paper_entry = float(pos.avg_price) if pos else 0
@@ -2036,20 +2032,30 @@ class RDHOrchestrator:
             redeemed = result.get("redeemed", 0)
             logger.info("auto_redeem_result", status=status, redeemed=redeemed)
             if redeemed > 0 and self._slack_bot:
-                # Get new balance after redeem
-                new_bal = ""
+                # Get balance + portfolio after redeem
+                bal_text = ""
                 try:
                     if self._strategy_b3 and self._strategy_b3._live_executor:
                         bal = await self._strategy_b3._live_executor.get_balance()
                         if bal > 0:
-                            new_bal = f"\nAvailable: *${bal:.2f}*"
+                            import os as _os
+                            start_cap = float(_os.getenv("B3_LIVE_STARTING_CAPITAL", "271.28"))
+                            # Portfolio = available + positions in market
+                            # After redeem, most value is in available
+                            pnl = bal - start_cap
+                            pnl_s = f"{'+' if pnl >= 0 else ''}${pnl:.2f}"
+                            pnl_c = ":chart_with_upwards_trend:" if pnl >= 0 else ":chart_with_downwards_trend:"
+                            bal_text = (
+                                f"\nAvailable: *${bal:.2f}*"
+                                f"\nPortfolio P&L: *{pnl_s}* {pnl_c}"
+                            )
                 except Exception:
                     pass
                 await self._slack_bot._post(
                     "C0APX4K8Z2N",
                     text=(
                         f":moneybag: *AUTO-REDEEM*\n"
-                        f"Redeemed {redeemed} positions{new_bal}"
+                        f"Redeemed {redeemed} positions{bal_text}"
                     ),
                 )
         except Exception as e:
