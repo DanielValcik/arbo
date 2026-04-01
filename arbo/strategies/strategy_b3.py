@@ -347,6 +347,8 @@ class StrategyB3:
                         "liq_available_usd": liq["available_usd"] if liq else None,
                         "liq_slippage": liq["slippage"] if liq else None,
                         "orderbook_spread": liq.get("spread") if liq else None,
+                        "orderbook_best_bid": liq.get("best_bid") if liq else None,
+                        "orderbook_best_ask": liq.get("best_ask") if liq else None,
                     },
                 )
 
@@ -502,8 +504,9 @@ class StrategyB3:
                 book = await resp.json()
 
             asks = book.get("asks", [])
+            bids = book.get("bids", [])
             if not asks:
-                return {"safe_size": 0, "available_usd": 0, "avg_price": 0, "slippage": 0}
+                return {"safe_size": 0, "available_usd": 0, "avg_price": 0, "slippage": 0, "spread": None}
 
             # Sort asks ascending by price
             asks_sorted = sorted(asks, key=lambda a: float(a["price"]))
@@ -575,11 +578,20 @@ class StrategyB3:
                 slippage=f"{slippage:.4f}",
             )
 
+            # Compute bid-ask spread
+            best_bid = 0.0
+            if bids:
+                best_bid = max(float(b["price"]) for b in bids)
+            spread = round(best_ask - best_bid, 4) if best_bid > 0 else None
+
             return {
                 "safe_size": safe_size,
                 "available_usd": total_available_usd,
                 "avg_price": avg_price,
                 "slippage": slippage,
+                "spread": spread,
+                "best_bid": best_bid,
+                "best_ask": best_ask,
             }
 
         except Exception as e:
