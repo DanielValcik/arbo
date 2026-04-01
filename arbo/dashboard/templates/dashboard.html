@@ -4114,29 +4114,31 @@
                 // ── Portfolio Balance Timeline ──
                 const pbCtx = document.getElementById('b3PortfolioChart');
                 if (pbCtx) {
-                    const startCap = (walletData.value && walletData.value.starting_capital) || 271.28;
+                    const startCap = (walletData.value && walletData.value.starting_capital) || 268.72;
                     const pbLabels = ['Start'];
                     const pbValues = [startCap];
+                    const pbPointColors = ['#58a6ff'];
                     let pbCum = 0;
+                    // Only resolved trades
                     for (let i = 0; i < liveChron.length; i++) {
                         const d = liveChron[i].trade_details || {};
                         const lep = d.live_entry_price || 0;
                         const lxp = d.live_exit_price || 0;
                         const lsh = d.live_entry_shares || 0;
                         const lxst = d.live_exit_status || '';
-                        let pnl = 0;
-                        if (lep > 0 && lsh > 0 && lxst === 'resolution') {
-                            pnl = (lxp - lep) * lsh;
-                        }
+                        if (!(lep > 0 && lsh > 0 && lxst === 'resolution')) continue;
+                        const pnl = (lxp - lep) * lsh;
                         pbCum += pnl;
                         pbLabels.push('#' + (i + 1));
                         pbValues.push(Math.round((startCap + pbCum) * 100) / 100);
+                        pbPointColors.push('#58a6ff');
                     }
-                    // Stats: show last computed portfolio value
-                    const lastPb = pbValues[pbValues.length - 1];
+                    // Stats: show actual Polymarket portfolio (source of truth)
+                    const wallet = walletData.value;
+                    const actualPortfolio = wallet && wallet.portfolio ? wallet.portfolio : pbValues[pbValues.length - 1];
                     const pbStatsEl = document.getElementById('lb3PortfolioStats');
                     if (pbStatsEl) {
-                        pbStatsEl.innerHTML = `$${lastPb.toFixed(2)}`;
+                        pbStatsEl.innerHTML = `$${actualPortfolio.toFixed(2)}`;
                     }
                     if (window._b3PortfolioChart) window._b3PortfolioChart.destroy();
                     window._b3PortfolioChart = new Chart(pbCtx, {
