@@ -631,27 +631,32 @@ class StrategyB3:
 
             # Resolution check: event has ended
             if now >= pos.event_end_ts:
-                # For live positions: use Polymarket oracle (Chainlink) as
-                # source of truth. Binance price can disagree for marginal cases.
-                pm_up_won = None
+                # For live positions: MUST use Polymarket oracle (Chainlink).
+                # Binance disagrees with Chainlink on 25% of trades — NEVER
+                # fall back to Binance for live. Keep retrying until confirmed.
                 if pos.live_shares > 0:
                     pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
-                    if pm_up_won is None and now < pos.event_end_ts + 120:
-                        # Oracle not ready yet — retry in 10s (up to 2 min)
-                        continue
-
-                if pm_up_won is not None:
+                    if pm_up_won is None:
+                        # Oracle not ready — retry in 10s (no timeout, wait forever)
+                        if now < pos.event_end_ts + 600:  # Log warning after 10 min
+                            continue
+                        logger.warning(
+                            "b3_oracle_slow",
+                            token=token_id[:20],
+                            wait_s=int(now - pos.event_end_ts),
+                        )
+                        continue  # Still wait — never fall back to Binance
                     won = (pos.direction == 1 and pm_up_won) or (
                         pos.direction == -1 and not pm_up_won
                     )
                 elif pos.btc_at_start > 0:
-                    # Fallback: Binance price (paper-only or oracle timeout)
+                    # Paper-only: Binance is fine (no real money)
                     resolved_up = btc_price >= pos.btc_at_start
                     won = (pos.direction == 1 and resolved_up) or (
                         pos.direction == -1 and not resolved_up
                     )
                 else:
-                    won = False  # Safety fallback
+                    won = False
                 exit_price = 1.0 if won else 0.0
                 triggered.append((
                     token_id, "resolution", exit_price,
@@ -739,22 +744,16 @@ class StrategyB3:
         for token_id in list(self._live_holding.keys()):
             pos = self._live_holding[token_id]
             if now >= pos.event_end_ts and pos.btc_at_start > 0:
-                # Use Polymarket oracle for live positions
+                # MUST use Polymarket oracle — never Binance fallback
                 pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
-                if pm_up_won is None and now < pos.event_end_ts + 120:
-                    continue  # Oracle not ready, retry in 10s
-                if pm_up_won is not None:
-                    won = (pos.direction == 1 and pm_up_won) or (
-                        pos.direction == -1 and not pm_up_won
-                    )
-                elif btc_price:
-                    # Fallback: Binance (oracle timeout >2 min)
-                    resolved_up = btc_price >= pos.btc_at_start
-                    won = (pos.direction == 1 and resolved_up) or (
-                        pos.direction == -1 and not resolved_up
-                    )
-                else:
-                    continue  # No price data, retry
+                if pm_up_won is None:
+                    if now >= pos.event_end_ts + 600:
+                        logger.warning("b3_oracle_slow_holding", token=token_id[:20],
+                                       wait_s=int(now - pos.event_end_ts))
+                    continue  # Keep retrying, never fall back
+                won = (pos.direction == 1 and pm_up_won) or (
+                    pos.direction == -1 and not pm_up_won
+                )
                 exit_price = 1.0 if won else 0.0
                 triggered.append((
                     token_id, "resolution", exit_price,
