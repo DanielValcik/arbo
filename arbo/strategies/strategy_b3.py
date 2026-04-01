@@ -596,7 +596,7 @@ class StrategyB3:
             List of (token_id, reason, exit_price, live_shares, direction,
                      live_entry_price) for triggered exits.
         """
-        if not self._open_positions:
+        if not self._open_positions and not self._live_holding:
             return []
 
         btc_price = None

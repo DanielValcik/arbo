@@ -1733,16 +1733,17 @@ class RDHOrchestrator:
                 )
 
             # Store live exit info in trade_details for dashboard
-            if live_exit_info or live_shares > 0:
+            # Only write when we have actual resolution data — not for "holding" exits
+            if live_exit_info:
                 try:
                     import sqlalchemy as _sa
 
                     from arbo.utils.db import PaperTrade, get_session_factory
                     live_upd = {
-                        "live_exit_price": live_exit_info.get("live_exit_price", 0) if live_exit_info else 0,
-                        "live_exit_shares": live_exit_info.get("live_exit_shares", 0) if live_exit_info else 0,
-                        "live_exit_status": live_exit_info.get("live_exit_status", "resolution") if live_exit_info else "resolution",
-                        "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0) if live_exit_info else 0,
+                        "live_exit_price": live_exit_info["live_exit_price"],
+                        "live_exit_shares": live_exit_info["live_exit_shares"],
+                        "live_exit_status": live_exit_info["live_exit_status"],
+                        "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0),
                     }
                     factory = get_session_factory()
                     async with factory() as session:

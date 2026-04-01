@@ -3942,7 +3942,9 @@
                         liveExitCell = '<td style="color:var(--text-dim)">auto</td>';
                     }
                     if (lep && (lxp || details.live_exit_status === 'resolution')) {
-                        const exitP = lxp || (t.exit_price || 0);
+                        // For resolution: use live_exit_price directly ($1 win, $0 loss)
+                        // For non-resolution: fallback to paper exit_price
+                        const exitP = details.live_exit_status === 'resolution' ? lxp : (lxp || (t.exit_price || 0));
                         const lPnl = (exitP - lep) * lShares;
                         const lPnlColor = lPnl >= 0 ? 'var(--green)' : 'var(--red)';
                         livePnlCell = `<td style="color:${lPnlColor};font-weight:600">${lPnl >= 0 ? '+' : ''}$${lPnl.toFixed(2)}</td>`;
