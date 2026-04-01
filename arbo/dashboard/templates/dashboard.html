@@ -1409,9 +1409,19 @@
             <!-- Polymarket Wallet (next to overview) -->
             <div class="card" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
-                <div style="text-align:center;padding:20px;color:var(--text-dim)">
-                    <div style="font-size:24px;font-weight:700" id="lb3LivePnl">--</div>
-                    <div>Live P&L</div>
+                <div style="text-align:center;padding:12px;color:var(--text-dim)">
+                    <!-- Confirmed P&L (only resolved trades) -->
+                    <div style="font-size:24px;font-weight:700" id="lb3ConfirmedPnl">--</div>
+                    <div>Potvrzeny P&L</div>
+                    <!-- Pending indicator -->
+                    <div id="lb3PendingRow" style="margin-top:6px;font-size:11px;color:#e3b341;display:none">
+                        <span id="lb3PendingText">⏳ --</span>
+                    </div>
+                    <!-- Wallet P&L (includes pending) -->
+                    <div style="margin-top:10px;font-size:13px;opacity:0.7">
+                        <span id="lb3LivePnl" style="font-weight:600">--</span>
+                        <span style="font-size:10px"> (vcetne cekajicich)</span>
+                    </div>
                     <div style="margin-top:12px;display:flex;justify-content:space-around">
                         <div><span id="lb3WalletBalance" style="font-weight:700">--</span><br>Available</div>
                         <div><span id="lb3WalletPositions" style="font-weight:700">--</span><br>V pozicich</div>
@@ -3730,6 +3740,11 @@
                 const pnlEl = document.getElementById('lb3LivePnl');
                 pnlEl.textContent = (livePnl >= 0 ? '+' : '') + '$' + livePnl.toFixed(2);
                 pnlEl.style.color = livePnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+                // Confirmed P&L = only resolved trades from DB
+                // (computed later in chart section, update here with wallet-pending split)
+                window._b3WalletPnl = livePnl;
+                window._b3PosValue = posVal;
                 document.getElementById('lb3WalletBalance').textContent = '$' + bal.toFixed(2);
                 document.getElementById('lb3WalletPositions').textContent = '$' + posVal.toFixed(2);
                 document.getElementById('lb3WalletPortfolio').textContent = '$' + portfolio.toFixed(2);
@@ -4055,6 +4070,25 @@
                         } else if (noteEl) {
                             noteEl.style.display = 'none';
                         }
+                    }
+                }
+
+                // Update Confirmed P&L card (only resolved trades)
+                const confirmedEl = document.getElementById('lb3ConfirmedPnl');
+                if (confirmedEl) {
+                    const cc = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                    confirmedEl.textContent = (lCum >= 0 ? '+' : '') + '$' + lCum.toFixed(2);
+                    confirmedEl.style.color = cc;
+                }
+                const pendingRow = document.getElementById('lb3PendingRow');
+                const pendingText = document.getElementById('lb3PendingText');
+                if (pendingRow && pendingText) {
+                    if (pendingCount > 0) {
+                        const lockedUsd = window._b3PosValue || 0;
+                        pendingRow.style.display = '';
+                        pendingText.textContent = `⏳ ${pendingCount} trade${pendingCount > 1 ? 'y' : ''} cekaji na resolution ($${lockedUsd.toFixed(0)} v pozicich)`;
+                    } else {
+                        pendingRow.style.display = 'none';
                     }
                 }
 
