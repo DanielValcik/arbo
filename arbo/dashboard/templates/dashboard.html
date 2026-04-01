@@ -1471,22 +1471,26 @@
 
             <!-- Model Info + Live Stats -->
             <div class="card" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Model: Binance-Oracle-Scalper-v1</div>
+                <div class="card-title">Model: Chainlink-Oracle-Scalper-v3</div>
                 <div style="font-size:11px">
                     <table style="width:100%">
                         <tbody>
-                            <tr><td>OOS score</td><td style="font-weight:700">6,140</td></tr>
-                            <tr><td>Win rate (OOS)</td><td>52.1%</td></tr>
-                            <tr><td>Sharpe (OOS)</td><td>22.0</td></tr>
-                            <tr><td>Max DD</td><td>33.1%</td></tr>
-                            <tr><td>Volatilita</td><td>realized 720min, scale=0.644</td></tr>
-                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.095</td></tr>
-                            <tr><td>Profit target</td><td>$0.207/share</td></tr>
-                            <tr><td>Stop loss</td><td>$0.038/share</td></tr>
-                            <tr><td>Max hold</td><td>3 min</td></tr>
+                            <tr><td colspan="2" style="font-weight:600;color:var(--green)">Autoresearch (2,400 trials, Chainlink resolution)</td></tr>
+                            <tr><td>OOS score</td><td style="font-weight:700">7,996</td></tr>
+                            <tr><td>Win rate (OOS)</td><td>70.7%</td></tr>
+                            <tr><td>Sharpe (OOS)</td><td>18.0</td></tr>
+                            <tr><td>Max DD</td><td>33.0%</td></tr>
+                            <tr><td>Volatilita</td><td>realized 1440min, scale=0.408</td></tr>
+                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.121</td></tr>
+                            <tr><td>Entry FV filter</td><td>&ge; 0.55 (cheap tokens trap)</td></tr>
+                            <tr><td>Oracle filter</td><td>Binance + Chainlink agree</td></tr>
+                            <tr><td>Entry timing</td><td>Integer minutes only (t=2, t=3)</td></tr>
+                            <tr><td>Sizing</td><td>2.9% capital, edge scale 9.5x</td></tr>
+                            <tr><td>Resolution</td><td>Chainlink oracle (never Binance)</td></tr>
+                            <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
                             <tr><td>Fee model</td><td>PostOnly maker 0% + rebate</td></tr>
                             <tr><td>Market typ</td><td>BTC 5-min Up/Down</td></tr>
-                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;color:var(--gold)">Paper Trading</td></tr>
+                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;color:var(--gold)">Live Statistiky</td></tr>
                             <tr><td>Prumerny win</td><td style="color:var(--green);font-weight:700" id="lb3AvgWin">--</td></tr>
                             <tr><td>Prumerny loss</td><td style="color:var(--red);font-weight:700" id="lb3AvgLoss">--</td></tr>
                             <tr><td>Win/Loss ratio</td><td style="font-weight:700" id="lb3WLRatio">--</td></tr>
