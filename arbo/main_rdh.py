@@ -2031,6 +2031,12 @@ class RDHOrchestrator:
             status = result.get("status", "?")
             redeemed = result.get("redeemed", 0)
             logger.info("auto_redeem_result", status=status, redeemed=redeemed)
+
+            # After redeem: update B3 trades in DB with resolution data.
+            # Redeemed positions = WINs ($1). This is faster than Gamma API.
+            redeemed_cids = result.get("redeemed_condition_ids", [])
+            if redeemed_cids:
+                await self._resolve_b3_from_redeem(redeemed_cids)
             if redeemed > 0 and self._slack_bot:
                 # Get balance + portfolio after redeem
                 bal_text = ""
@@ -2060,6 +2066,97 @@ class RDHOrchestrator:
                 )
         except Exception as e:
             logger.warning("auto_redeem_task_error", error=str(e))
+
+    async def _resolve_b3_from_redeem(self, redeemed_condition_ids: list[str]) -> None:
+        """Write resolution data to B3 trades based on auto-redeem results.
+
+        Redeemed positions = WINs (token redeemed at $1).
+        Much faster than waiting for Gamma API — Polymarket already confirmed.
+        """
+        if not redeemed_condition_ids:
+            return
+        try:
+            import sqlalchemy as _sa
+            from arbo.utils.db import PaperTrade, get_session_factory
+
+            factory = get_session_factory()
+            cid_set = set(redeemed_condition_ids)
+
+            async with factory() as session:
+                # Find B3 trades with these condition_ids that lack live exit data
+                result = await session.execute(
+                    _sa.select(PaperTrade)
+                    .where(PaperTrade.strategy == "B3")
+                    .where(PaperTrade.market_condition_id.in_(list(cid_set)))
+                    .order_by(PaperTrade.placed_at.desc())
+                )
+                updated = 0
+                for trade in result.scalars():
+                    d = trade.trade_details or {}
+                    if d.get("live_exit_status") == "resolution":
+                        continue  # Already resolved
+                    if d.get("live_fill_status") not in ("filled", "partial"):
+                        continue  # No live position
+                    if not d.get("live_entry_price"):
+                        continue
+
+                    # Redeemed = WIN ($1)
+                    trade.trade_details = {
+                        **d,
+                        "live_exit_price": 1.0,
+                        "live_exit_shares": d.get("live_entry_shares", 0),
+                        "live_exit_status": "resolution",
+                        "live_exit_latency_ms": 0,
+                        "resolution_source": "auto_redeem",
+                    }
+                    updated += 1
+
+                    # Also remove from _live_holding if present
+                    if self._strategy_b3:
+                        token_id = trade.token_id
+                        self._strategy_b3._live_holding.pop(token_id, None)
+
+                # Also mark LOSSES: B3 trades with live entry but no exit,
+                # where event ended >5 min ago and NOT in redeemed set = LOSS ($0)
+                import time as _time
+                now = _time.time()
+                loss_result = await session.execute(
+                    _sa.select(PaperTrade)
+                    .where(PaperTrade.strategy == "B3")
+                    .where(PaperTrade.status.in_(["won", "lost", "sold", "open"]))
+                    .order_by(PaperTrade.placed_at.desc())
+                    .limit(50)
+                )
+                for trade in loss_result.scalars():
+                    d = trade.trade_details or {}
+                    if d.get("live_exit_status") == "resolution":
+                        continue  # Already resolved
+                    if d.get("live_fill_status") not in ("filled", "partial"):
+                        continue
+                    if not d.get("live_entry_price"):
+                        continue
+                    event_end = d.get("event_end_ts", 0)
+                    if not event_end or now < event_end + 300:
+                        continue  # Event not ended yet or too recent
+                    # Not redeemed + event ended >5 min ago = LOSS
+                    if trade.market_condition_id not in cid_set:
+                        trade.trade_details = {
+                            **d,
+                            "live_exit_price": 0.0,
+                            "live_exit_shares": d.get("live_entry_shares", 0),
+                            "live_exit_status": "resolution",
+                            "live_exit_latency_ms": 0,
+                            "resolution_source": "auto_redeem_loss",
+                        }
+                        updated += 1
+                        if self._strategy_b3:
+                            self._strategy_b3._live_holding.pop(trade.token_id, None)
+
+                if updated > 0:
+                    await session.commit()
+                    logger.info("b3_resolved_from_redeem", count=updated)
+        except Exception as e:
+            logger.warning("b3_resolve_from_redeem_error", error=str(e))
 
     async def _sync_b3_market_to_db(self, sig: Any) -> None:
         """Sync B3 market to DB so dashboard shows question text instead of hash."""

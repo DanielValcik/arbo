@@ -145,6 +145,7 @@ async def redeem_resolved_positions() -> dict:
             "status": "ok",
             "redeemed": redeemed,
             "errors": errors,
+            "redeemed_condition_ids": redeemable_ids[:redeemed],
         }
 
     except Exception as e:
