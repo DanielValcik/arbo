@@ -1770,6 +1770,7 @@ class RDHOrchestrator:
                 pos, exit_reason, float(pnl), exit_price, live_exit_info,
                 b3_direction=b3_direction,
                 live_entry_price=live_entry_price,
+                live_shares=live_shares,
             )
 
         if exits:
@@ -1904,6 +1905,7 @@ class RDHOrchestrator:
         live_exit_info: dict | None = None,
         b3_direction: int = 0,
         live_entry_price: float = 0.0,
+        live_shares: int = 0,
     ) -> None:
         """Send Slack notification on B3 trade exit.
 
@@ -1916,10 +1918,10 @@ class RDHOrchestrator:
             return
         try:
             dir_str = "UP" if b3_direction == 1 else "DOWN" if b3_direction == -1 else "?"
-            if dir_str == "?":
+            if dir_str == "?" and pos:
                 td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
                 dir_str = (td.get("direction", "?")).upper() if td else "?"
-            size = float(pos.size)
+            size = float(pos.size) if pos else 0.0
 
             total_pnl = await self._get_b3_total_pnl_from_db()
 
@@ -1931,16 +1933,17 @@ class RDHOrchestrator:
                 delta = (datetime.now(UTC) - pos.opened_at).total_seconds()
                 hold_s = f"  |  Hold: {delta:.0f}s"
 
-            # Paper exit → paper channel
-            text = (
-                f"{emoji} *B3 EXIT — BTC {dir_str}* ({exit_reason})\n"
-                f"Entry: {float(pos.avg_price):.3f} -> "
-                f"Exit: {exit_price:.3f}  |  "
-                f"Size: ${size:.0f}{hold_s}\n"
-                f"P&L: *{pnl_sign}${pnl:.2f}*  |  "
-                f"B3 Total: ${total_pnl:+.2f}"
-            )
-            await self._slack_bot._post(b3_paper_channel, text=text)
+            # Paper exit → paper channel (skip if pos is None = live-only resolution)
+            if pos:
+                text = (
+                    f"{emoji} *B3 EXIT — BTC {dir_str}* ({exit_reason})\n"
+                    f"Entry: {float(pos.avg_price):.3f} -> "
+                    f"Exit: {exit_price:.3f}  |  "
+                    f"Size: ${size:.0f}{hold_s}\n"
+                    f"P&L: *{pnl_sign}${pnl:.2f}*  |  "
+                    f"B3 Total: ${total_pnl:+.2f}"
+                )
+                await self._slack_bot._post(b3_paper_channel, text=text)
 
             # Live: notify hold or resolution
             if live_shares > 0 and not live_exit_info and self._slack_bot:
@@ -2579,7 +2582,32 @@ class RDHOrchestrator:
                         pnl=str(pnl),
                     )
 
-                    # Individual resolution alerts disabled — daily summary only
+                    # Per-strategy Slack resolution alerts
+                    if self._slack_bot is not None and strategy not in ("B2", "B3", "C2"):
+                        _STRATEGY_CHANNELS = {
+                            "A": "C0APQSC7UJ3",
+                            "B": "C0AR0JG5D40",
+                            "C": "C0AQ6BCHQ9G",
+                        }
+                        _chan = _STRATEGY_CHANNELS.get(strategy)
+                        if _chan:
+                            market_name = getattr(market, "question", cid[:40]) or cid[:40]
+                            result_status = "won" if winning else "lost"
+                            _emoji = ":white_check_mark:" if winning else ":x:"
+                            _pnl_sign = "+" if pnl >= 0 else ""
+                            _strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
+                            _strat_label = f"{strategy} ({_strat_names.get(strategy, '?')})"
+                            _text = (
+                                f"{_emoji} *Position Resolved — {result_status.upper()}*\n"
+                                f"*Market:* {market_name[:80]}\n"
+                                f"*Strategy:* {_strat_label}  |  *Side:* {pos.side or '?'}  |  "
+                                f"*Size:* ${float(getattr(pos, 'size', 0)):.2f}\n"
+                                f"*P&L:* {_pnl_sign}${float(pnl):.2f}"
+                            )
+                            try:
+                                await self._slack_bot._post(_chan, text=_text)
+                            except Exception as slack_err:
+                                logger.warning("resolution_slack_error", error=str(slack_err))
 
                   except Exception as pos_err:
                     logger.error(
