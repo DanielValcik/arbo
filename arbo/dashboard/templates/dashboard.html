@@ -3993,15 +3993,17 @@
                     const lxst = d.live_exit_status || '';
                     const paperExit = liveChron[i].exit_price || 0;
                     let pnl = 0;
-                    if (lep > 0 && lxp > 0 && lsh > 0) {
-                        // Sell succeeded
+                    if (lep > 0 && lsh > 0 && lxst === 'resolution') {
+                        // Resolution: live_exit_price is $1 (win) or $0 (loss)
+                        pnl = (lxp - lep) * lsh;
+                    } else if (lep > 0 && lxp > 0 && lsh > 0) {
+                        // Sell succeeded at lxp
                         pnl = (lxp - lep) * lsh;
                     } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
-                        // Resolution: paper exit IS the outcome ($1 or $0)
+                        // Paper resolution
                         pnl = (paperExit - lep) * lsh;
                     } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial' || lxst === 'skipped')) {
-                        // Sell failed → stranded → assume resolved at $0 (loss)
-                        // Conservative: most stranded positions lose
+                        // Sell failed → assume $0
                         pnl = -lep * lsh;
                     }
                     lCum += pnl;
@@ -4055,7 +4057,9 @@
                         const lxst = d.live_exit_status || '';
                         const paperExit = liveChron[i].exit_price || 0;
                         let pnl = 0;
-                        if (lep > 0 && lxp > 0 && lsh > 0) {
+                        if (lep > 0 && lsh > 0 && lxst === 'resolution') {
+                            pnl = (lxp - lep) * lsh;
+                        } else if (lep > 0 && lxp > 0 && lsh > 0) {
                             pnl = (lxp - lep) * lsh;
                         } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
                             pnl = (paperExit - lep) * lsh;
