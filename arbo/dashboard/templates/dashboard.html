@@ -1430,6 +1430,14 @@
                 </div>
             </div>
 
+            <!-- B3 Portfolio Balance Timeline -->
+            <div class="card grid-full" style="border-top:3px solid #58a6ff">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Portfolio Balance <span style="background:#58a6ff;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">WALLET</span><span id="lb3PortfolioStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
+                <div class="chart-container" style="height:160px">
+                    <canvas id="b3PortfolioChart"></canvas>
+                </div>
+            </div>
+
             <!-- B3 LIVE Per-Trade P&L -->
             <div class="card grid-full" style="border-top:3px solid #3fb950">
                 <div class="card-title">P&L po kazdem tradu (od $0) <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
@@ -4045,6 +4053,45 @@
                     window._b3LiveCumChart = new Chart(lCumCtx, {
                         type: 'line',
                         data: { labels: lLabels, datasets: [{ label: 'Live Kumulativni P&L', data: lValues, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', fill: true, tension: 0.1, pointRadius: lValues.length > 50 ? 1.5 : 3, pointBackgroundColor: lSegColors, borderWidth: 2, segment: { borderColor: ctx2 => ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149' } }] },
+                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.raw.toFixed(2)}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                    });
+                }
+
+                // ── Portfolio Balance Timeline ──
+                const pbCtx = document.getElementById('b3PortfolioChart');
+                if (pbCtx) {
+                    const startCap = (walletData.value && walletData.value.starting_capital) || 271.28;
+                    const pbLabels = ['Start'];
+                    const pbValues = [startCap];
+                    let pbCum = 0;
+                    for (let i = 0; i < liveChron.length; i++) {
+                        const d = liveChron[i].trade_details || {};
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || 0;
+                        const lsh = d.live_entry_shares || 0;
+                        const lxst = d.live_exit_status || '';
+                        let pnl = 0;
+                        if (lep > 0 && lsh > 0 && lxst === 'resolution') {
+                            pnl = (lxp - lep) * lsh;
+                        }
+                        pbCum += pnl;
+                        pbLabels.push('#' + (i + 1));
+                        pbValues.push(Math.round((startCap + pbCum) * 100) / 100);
+                    }
+                    // Add current wallet as last point
+                    const wallet = walletData.value;
+                    if (wallet && wallet.portfolio) {
+                        pbLabels.push('Ted');
+                        pbValues.push(Math.round(wallet.portfolio * 100) / 100);
+                    }
+                    const pbStatsEl = document.getElementById('lb3PortfolioStats');
+                    if (pbStatsEl && wallet && wallet.portfolio) {
+                        pbStatsEl.innerHTML = `$${wallet.portfolio.toFixed(2)}`;
+                    }
+                    if (window._b3PortfolioChart) window._b3PortfolioChart.destroy();
+                    window._b3PortfolioChart = new Chart(pbCtx, {
+                        type: 'line',
+                        data: { labels: pbLabels, datasets: [{ label: 'Portfolio $', data: pbValues, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.08)', fill: true, tension: 0.2, pointRadius: pbValues.length > 50 ? 1.5 : 3, pointBackgroundColor: '#58a6ff', borderWidth: 2 }] },
                         options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `$${c.raw.toFixed(2)}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
                     });
                 }
