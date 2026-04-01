@@ -4089,15 +4089,11 @@
                         pbLabels.push('#' + (i + 1));
                         pbValues.push(Math.round((startCap + pbCum) * 100) / 100);
                     }
-                    // Add current wallet as last point
-                    const wallet = walletData.value;
-                    if (wallet && wallet.portfolio) {
-                        pbLabels.push('Ted');
-                        pbValues.push(Math.round(wallet.portfolio * 100) / 100);
-                    }
+                    // Stats: show last computed portfolio value
+                    const lastPb = pbValues[pbValues.length - 1];
                     const pbStatsEl = document.getElementById('lb3PortfolioStats');
-                    if (pbStatsEl && wallet && wallet.portfolio) {
-                        pbStatsEl.innerHTML = `$${wallet.portfolio.toFixed(2)}`;
+                    if (pbStatsEl) {
+                        pbStatsEl.innerHTML = `$${lastPb.toFixed(2)}`;
                     }
                     if (window._b3PortfolioChart) window._b3PortfolioChart.destroy();
                     window._b3PortfolioChart = new Chart(pbCtx, {
