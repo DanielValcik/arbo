@@ -616,17 +616,28 @@ class StrategyB3:
 
             # Resolution check: event has ended
             if now >= pos.event_end_ts:
-                # Event resolved — compute final FV based on whether BTC
-                # ended above or below S_start (= resolution outcome).
-                if pos.btc_at_start > 0:
+                # For live positions: use Polymarket oracle (Chainlink) as
+                # source of truth. Binance price can disagree for marginal cases.
+                pm_up_won = None
+                if pos.live_shares > 0:
+                    pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
+                    if pm_up_won is None and now < pos.event_end_ts + 120:
+                        # Oracle not ready yet — retry in 10s (up to 2 min)
+                        continue
+
+                if pm_up_won is not None:
+                    won = (pos.direction == 1 and pm_up_won) or (
+                        pos.direction == -1 and not pm_up_won
+                    )
+                elif pos.btc_at_start > 0:
+                    # Fallback: Binance price (paper-only or oracle timeout)
                     resolved_up = btc_price >= pos.btc_at_start
                     won = (pos.direction == 1 and resolved_up) or (
                         pos.direction == -1 and not resolved_up
                     )
-                    # Resolution: token redeems at $1 (won) or $0 (lost)
-                    exit_price = 1.0 if won else 0.0
                 else:
-                    exit_price = pos.entry_mkt_fv  # Fallback
+                    won = False  # Safety fallback
+                exit_price = 1.0 if won else 0.0
                 triggered.append((
                     token_id, "resolution", exit_price,
                     pos.live_shares, pos.direction, pos.live_entry_price,
@@ -712,11 +723,23 @@ class StrategyB3:
         # Check _live_holding for resolution
         for token_id in list(self._live_holding.keys()):
             pos = self._live_holding[token_id]
-            if now >= pos.event_end_ts and btc_price and pos.btc_at_start > 0:
-                resolved_up = btc_price >= pos.btc_at_start
-                won = (pos.direction == 1 and resolved_up) or (
-                    pos.direction == -1 and not resolved_up
-                )
+            if now >= pos.event_end_ts and pos.btc_at_start > 0:
+                # Use Polymarket oracle for live positions
+                pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
+                if pm_up_won is None and now < pos.event_end_ts + 120:
+                    continue  # Oracle not ready, retry in 10s
+                if pm_up_won is not None:
+                    won = (pos.direction == 1 and pm_up_won) or (
+                        pos.direction == -1 and not pm_up_won
+                    )
+                elif btc_price:
+                    # Fallback: Binance (oracle timeout >2 min)
+                    resolved_up = btc_price >= pos.btc_at_start
+                    won = (pos.direction == 1 and resolved_up) or (
+                        pos.direction == -1 and not resolved_up
+                    )
+                else:
+                    continue  # No price data, retry
                 exit_price = 1.0 if won else 0.0
                 triggered.append((
                     token_id, "resolution", exit_price,

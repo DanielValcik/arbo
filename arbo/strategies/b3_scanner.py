@@ -292,6 +292,45 @@ class B3Scanner:
             logger.warning("b3_binance_kline_error", error=str(e))
         return None
 
+    async def fetch_resolution(self, event_start_ts: float) -> bool | None:
+        """Fetch market resolution from Polymarket Gamma API (Chainlink oracle).
+
+        Returns True if UP won, False if DOWN won, None if not yet resolved.
+        """
+        if not self._session:
+            return None
+        slug = f"btc-updown-5m-{int(event_start_ts)}"
+        try:
+            async with self._session.get(
+                f"{GAMMA_URL}/events", params={"slug": slug},
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                events = await resp.json()
+            if not events:
+                return None
+            event = events[0] if isinstance(events, list) else events
+            markets = event.get("markets", [])
+            if not markets:
+                return None
+            m = markets[0]
+            if not m.get("closed"):
+                return None
+            outcomes = json.loads(m.get("outcomes", "[]"))
+            prices = json.loads(m.get("outcomePrices", "[]"))
+            for i, o in enumerate(outcomes):
+                if o.lower() == "up" and i < len(prices):
+                    if prices[i] == "1":
+                        return True   # UP won
+                    # Check if DOWN explicitly won
+                    for j, o2 in enumerate(outcomes):
+                        if o2.lower() == "down" and j < len(prices) and prices[j] == "1":
+                            return False  # DOWN won
+                    return None  # Not yet resolved (both "0")
+        except Exception as e:
+            logger.warning("b3_resolution_fetch_error", slug=slug, error=str(e))
+        return None
+
     def scan(
         self,
         btc_price: float,
