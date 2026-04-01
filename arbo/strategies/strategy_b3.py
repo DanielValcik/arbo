@@ -341,9 +341,12 @@ class StrategyB3:
                         "market_fv_up": sig.market_fv_up,
                         "edge": sig.edge,
                         "market_type": "5min_updown",
+                        "event_start_ts": sig.event_start_ts,
                         "event_end_ts": sig.event_end_ts,
+                        "entry_minutes_elapsed": round(sig.minutes_elapsed, 2),
                         "liq_available_usd": liq["available_usd"] if liq else None,
                         "liq_slippage": liq["slippage"] if liq else None,
+                        "orderbook_spread": liq.get("spread") if liq else None,
                     },
                 )
 

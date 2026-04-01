@@ -1739,11 +1739,21 @@ class RDHOrchestrator:
                     import sqlalchemy as _sa
 
                     from arbo.utils.db import PaperTrade, get_session_factory
+                    # Capture BTC prices at resolution for future analysis
+                    btc_binance_at_res = None
+                    btc_chainlink_at_res = None
+                    if self._strategy_b3 and self._strategy_b3._binance_ws:
+                        btc_binance_at_res = self._strategy_b3._binance_ws.get_price("BTCUSDT")
+                    if self._strategy_b3 and self._strategy_b3._rtds_feed:
+                        btc_chainlink_at_res = self._strategy_b3._rtds_feed.get_price("btc/usd")
+
                     live_upd = {
                         "live_exit_price": live_exit_info["live_exit_price"],
                         "live_exit_shares": live_exit_info["live_exit_shares"],
                         "live_exit_status": live_exit_info["live_exit_status"],
                         "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0),
+                        "btc_binance_at_resolution": btc_binance_at_res,
+                        "btc_chainlink_at_resolution": btc_chainlink_at_res,
                     }
                     factory = get_session_factory()
                     async with factory() as session:
