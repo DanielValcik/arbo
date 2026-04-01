@@ -357,13 +357,17 @@ class B3Scanner:
             elapsed_s = now - ev.start_ts
             elapsed_min = elapsed_s / 60.0
 
-            # Only check at the entry window
-            if elapsed_min < MIN_ENTRY_MIN or elapsed_min >= MAX_ENTRY_MIN + 1:
+            # FIX #1: Entry ONLY at integer minutes (t=2, t=3) — matches backtest.
+            # Fractional times (t=2.5) produce artificially sharp signals from
+            # smaller sqrt(t_remaining) that don't represent real edge.
+            entry_minute = int(elapsed_min)
+            if entry_minute < MIN_ENTRY_MIN or entry_minute > MAX_ENTRY_MIN:
+                continue
+            # Only fire once per integer minute (within first 15s of that minute)
+            frac = elapsed_min - entry_minute
+            if frac >= 0.25:  # Already checked this minute
                 continue
 
-            # btc_at_start must be set by fetch_events via Binance klines API.
-            # If missing (API failed), skip this event — wrong S_start causes
-            # bad FV computation and 3x larger stop losses.
             if ev.btc_at_start is None:
                 continue
 
@@ -371,7 +375,8 @@ class B3Scanner:
             if btc_start <= 0:
                 continue
 
-            t_remaining = WINDOW_MIN - elapsed_min
+            # Use INTEGER t_remaining (matches backtest exactly)
+            t_remaining = WINDOW_MIN - entry_minute
             if t_remaining <= 0:
                 continue
 

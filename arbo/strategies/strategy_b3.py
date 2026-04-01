@@ -129,6 +129,31 @@ class StrategyB3:
         """Initialize scanner and restore state."""
         await self._scanner.init()
 
+        # FIX #3: Bootstrap volatility estimator with 1440 historical klines.
+        # Without this, sigma is noisy for hours after startup (backtest always
+        # has full 1440-observation window).
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as session:
+                url = "https://api.binance.com/api/v3/klines"
+                async with session.get(url, params={
+                    "symbol": "BTCUSDT", "interval": "1m", "limit": "1440",
+                }) as resp:
+                    if resp.status == 200:
+                        klines = await resp.json()
+                        prices = [float(k[4]) for k in klines]  # close prices
+                        self._vol_estimator.load_historical("BTCUSDT", prices)
+                        sigma = self._vol_estimator.get_sigma("BTCUSDT")
+                        logger.info(
+                            "b3_sigma_bootstrapped",
+                            observations=len(prices),
+                            sigma=f"{sigma:.6f}",
+                        )
+        except Exception as e:
+            logger.warning("b3_sigma_bootstrap_error", error=str(e))
+
         # Restore B3 positions from paper engine.
         # B3 positions are ultra-short-lived (1-3 min). On restart, any open
         # B3 positions are stale (the 5-min event has already resolved).
@@ -233,6 +258,26 @@ class StrategyB3:
 
         # 5. Process signals
         for sig in signals:
+            # FIX #2: Chainlink direction filter — skip if oracles disagree.
+            # Binance is ~$31 above Chainlink systematically. When model says UP
+            # based on Binance but Chainlink shows DOWN, the trade is phantom.
+            if chainlink_price and sig.btc_at_start > 0:
+                binance_up = sig.btc_now >= sig.btc_at_start
+                chainlink_up = chainlink_price >= sig.btc_at_start
+                if binance_up != chainlink_up:
+                    logger.info(
+                        "b3_oracle_disagree",
+                        direction="UP" if sig.direction == 1 else "DOWN",
+                        binance=f"{'UP' if binance_up else 'DOWN'}",
+                        chainlink=f"{'UP' if chainlink_up else 'DOWN'}",
+                    )
+                    continue
+
+            # FIX #4: Min entry FV filter — cheap tokens (<0.55) have 44% WR
+            entry_mkt_fv = sig.market_fv_up if sig.direction == 1 else (1.0 - sig.market_fv_up)
+            if entry_mkt_fv < 0.55:
+                continue
+
             # Skip if already have position in this event
             token_id = sig.token_id_up if sig.direction == 1 else sig.token_id_down
             if token_id in self._open_positions:
