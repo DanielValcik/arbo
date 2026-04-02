@@ -92,11 +92,12 @@ class B3Event:
 class B3Scanner:
     """Discovers and tracks BTC 5-min Up/Down markets."""
 
-    def __init__(self) -> None:
+    def __init__(self, rtds_feed=None) -> None:
         self._session: aiohttp.ClientSession | None = None
         self._events: dict[str, B3Event] = {}  # condition_id → event
         self._last_fetch_ts: float = 0
         self._fetch_interval_s: float = 120  # Refetch events every 2 min
+        self._rtds_feed = rtds_feed  # Chainlink RTDS for btc_at_start
 
     async def init(self) -> None:
         """Initialize HTTP session."""
@@ -258,17 +259,30 @@ class B3Scanner:
             )
 
     async def _fetch_btc_at_start(self, event_start_ts: float) -> float | None:
-        """Fetch BTC close price at event start from Binance 1-min klines.
+        """Fetch BTC price at event start — Chainlink RTDS preferred, Binance fallback.
 
-        Matches backtest's `S_start = closes[start_idx]` — the close price
-        of the 1-minute candle at the event start timestamp.
+        Polymarket resolves using Chainlink oracle. btc_at_start MUST match
+        what Chainlink sees, not Binance. 36% of trades had wrong resolution
+        because Binance start != Chainlink start (avg $18.60 difference).
 
-        Args:
-            event_start_ts: Unix timestamp of the event start.
-
-        Returns:
-            BTC close price at event start, or None if unavailable.
+        For NEW events (started <2 min ago): use Chainlink RTDS live price.
+        For OLDER events: fall back to Binance klines (no historical CL data).
         """
+        now = time.time()
+        age = now - event_start_ts
+
+        # For fresh events (<2 min old): use Chainlink RTDS
+        if age < 120 and self._rtds_feed:
+            cl_price = self._rtds_feed.get_price("btc/usd")
+            if cl_price and cl_price > 1000:
+                logger.info(
+                    "b3_btc_start_chainlink",
+                    price=f"${cl_price:,.2f}",
+                    age_s=f"{age:.0f}",
+                )
+                return cl_price
+
+        # Fallback: Binance klines (for older events or if RTDS unavailable)
         if not self._session:
             return None
         try:
@@ -286,8 +300,14 @@ class B3Scanner:
                     return None
                 klines = await resp.json()
                 if klines and len(klines) > 0:
-                    # Kline format: [open_time, open, high, low, close, ...]
-                    return float(klines[0][4])  # close price
+                    price = float(klines[0][4])
+                    logger.info(
+                        "b3_btc_start_binance_fallback",
+                        price=f"${price:,.2f}",
+                        age_s=f"{age:.0f}",
+                        msg="RTDS unavailable, using Binance",
+                    )
+                    return price
         except Exception as e:
             logger.warning("b3_binance_kline_error", error=str(e))
         return None

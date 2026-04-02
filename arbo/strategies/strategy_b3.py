@@ -111,7 +111,7 @@ class StrategyB3:
         self._live_daily_loss_limit = float(os.getenv("B3_LIVE_DAILY_LOSS_LIMIT", "50"))
 
         # B3 scanner (manages event lifecycle)
-        self._scanner = B3Scanner()
+        self._scanner = B3Scanner(rtds_feed=rtds_feed)
 
         # Volatility estimator (per-minute realized vol from 720 klines)
         # IMPORTANT: Only feed prices once per minute to match backtest's 1-min klines.
