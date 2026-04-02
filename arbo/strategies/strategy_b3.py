@@ -329,16 +329,17 @@ class StrategyB3:
 
                 # DYNAMIC SIZING based on expected fill price (best_ask)
                 # Cheap fill = more margin = bigger position
-                # Expensive fill = less margin = smaller position
+                # Dynamic sizing: cheap fills = market disagrees = SMALL position
+                # Expensive fills = market agrees = normal position
                 expected_fill = liq.get("best_ask", entry_price)
                 if expected_fill <= 0.30:
-                    size_mult = 1.5   # 34pp+ margin → agresivní
-                elif expected_fill <= 0.45:
-                    size_mult = 1.0   # 19-34pp margin → normální
-                elif expected_fill <= 0.57:
-                    size_mult = 0.5   # 7-19pp margin → konzervativní
+                    size_mult = 0.5   # Trh prodává lacino = ví něco, co my ne
+                elif expected_fill <= 0.55:
+                    size_mult = 1.0   # Normální
+                elif expected_fill <= 0.75:
+                    size_mult = 1.0   # Trh souhlasí s naším modelem
                 else:
-                    size_mult = 0.25  # <7pp margin → minimální
+                    size_mult = 0.5   # Příliš drahé, malý profit potenciál
                 bet_size = min(bet_size * size_mult, MAX_BET_SIZE)
                 if bet_size < MIN_ORDER_SIZE:
                     continue
