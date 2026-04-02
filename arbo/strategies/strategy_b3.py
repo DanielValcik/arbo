@@ -695,15 +695,20 @@ class StrategyB3:
                 if pos.live_shares > 0:
                     pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
                     if pm_up_won is None:
-                        # Oracle not ready — retry in 10s (no timeout, wait forever)
-                        if now < pos.event_end_ts + 600:  # Log warning after 10 min
+                        wait_s = int(now - pos.event_end_ts)
+                        if wait_s > 1800:  # 30 min — force Binance fallback
+                            logger.warning("b3_oracle_timeout", token=token_id[:20],
+                                           wait_s=wait_s, msg="Falling back to Binance after 30min")
+                            resolved_up = btc_price >= pos.btc_at_start
+                            won = (pos.direction == 1 and resolved_up) or (
+                                pos.direction == -1 and not resolved_up)
+                            exit_price = 1.0 if won else 0.0
+                            triggered.append((token_id, "resolution", exit_price,
+                                pos.live_shares, pos.direction, pos.live_entry_price))
                             continue
-                        logger.warning(
-                            "b3_oracle_slow",
-                            token=token_id[:20],
-                            wait_s=int(now - pos.event_end_ts),
-                        )
-                        continue  # Still wait — never fall back to Binance
+                        if wait_s > 600:
+                            logger.warning("b3_oracle_slow", token=token_id[:20], wait_s=wait_s)
+                        continue
                     won = (pos.direction == 1 and pm_up_won) or (
                         pos.direction == -1 and not pm_up_won
                     )
@@ -802,13 +807,19 @@ class StrategyB3:
         for token_id in list(self._live_holding.keys()):
             pos = self._live_holding[token_id]
             if now >= pos.event_end_ts and pos.btc_at_start > 0:
-                # MUST use Polymarket oracle — never Binance fallback
+                # Use Polymarket oracle — timeout after 30 min (auto-redeem handles money)
                 pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
                 if pm_up_won is None:
-                    if now >= pos.event_end_ts + 600:
+                    wait_s = int(now - pos.event_end_ts)
+                    if wait_s > 1800:  # 30 min — give up, auto-redeem already handled it
+                        logger.warning("b3_holding_expired", token=token_id[:20],
+                                       wait_s=wait_s, msg="Dropping — auto-redeem handles money")
+                        self._live_holding.pop(token_id)
+                        continue
+                    if wait_s > 600:
                         logger.warning("b3_oracle_slow_holding", token=token_id[:20],
-                                       wait_s=int(now - pos.event_end_ts))
-                    continue  # Keep retrying, never fall back
+                                       wait_s=wait_s)
+                    continue
                 won = (pos.direction == 1 and pm_up_won) or (
                     pos.direction == -1 and not pm_up_won
                 )
