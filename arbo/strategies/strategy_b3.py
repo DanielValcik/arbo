@@ -448,24 +448,20 @@ class StrategyB3:
                     live_fill_status = fill.status
                     live_latency_ms = fill.latency_ms
 
-                    # MAX ENTRY PRICE check on ACTUAL fill (not model FV!)
-                    # Config #3: only keep fills under $0.483
+                    # Log if fill above max entry price (for analysis, not filtering)
+                    # We ALWAYS track filled positions — money already spent
                     if live_entry_price > MAX_ENTRY_MKT_FV and live_shares > 0:
                         logger.info(
-                            "b3_live_fill_too_expensive",
+                            "b3_live_fill_above_cap",
                             fill_price=live_entry_price,
                             max_price=MAX_ENTRY_MKT_FV,
-                            shares=live_shares,
-                            msg="Fill price > max entry, will not track",
+                            msg="Fill above target — tracking anyway",
                         )
-                        # Don't track this as a live position
-                        live_shares = 0
-                        live_fill_status = "too_expensive"
 
                     logger.info(
                         "b3_live_entry",
                         status=live_fill_status,
-                        shares=live_shares if live_fill_status != "too_expensive" else 0,
+                        shares=live_shares,
                         price=live_entry_price,
                         latency_ms=fill.latency_ms,
                         paper_price=round(entry_price, 4),
