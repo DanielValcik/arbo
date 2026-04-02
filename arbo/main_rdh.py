@@ -342,9 +342,10 @@ class RDHOrchestrator:
         self._b3_15m_shadow = None
         try:
             from arbo.strategies.b3_15m_shadow import B3_15mShadow
+            rtds = self._strategy_b3._rtds_feed if self._strategy_b3 else None
             self._b3_15m_shadow = B3_15mShadow(
                 binance_ws=self._binance_ws,
-                rtds_feed=self._rtds_feed,
+                rtds_feed=rtds,
             )
             await self._b3_15m_shadow.init()
             logger.info("b3_15m_shadow_ready")
