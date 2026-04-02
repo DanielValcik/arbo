@@ -1396,22 +1396,21 @@
                     <div style="text-align:center;padding:12px;color:var(--text-dim)">
                         <div style="font-size:28px;font-weight:700" id="lb3TotalPnl">$0.00</div>
                         <div>Live P&L</div>
-                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
                             <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
-                                <div style="font-size:16px;font-weight:700" id="lb3DailyROI">--</div>
-                                <div style="font-size:9px">Daily ROI</div>
-                            </div>
-                            <div style="background:rgba(88,166,255,0.06);border:1px dashed rgba(88,166,255,0.2);border-radius:6px;padding:8px">
-                                <div style="font-size:16px;font-weight:700" id="lb3WeeklyROI">--</div>
-                                <div style="font-size:9px;color:#58a6ff">Weekly proj.</div>
-                            </div>
-                            <div style="background:rgba(88,166,255,0.06);border:1px dashed rgba(88,166,255,0.2);border-radius:6px;padding:8px">
-                                <div style="font-size:16px;font-weight:700" id="lb3MonthlyROI">--</div>
-                                <div style="font-size:9px;color:#58a6ff">Monthly proj.</div>
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Denne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb3DailyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb3DailyProj">--</div>
                             </div>
                             <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
-                                <div style="font-size:16px;font-weight:700" id="lb3TotalROI">--</div>
-                                <div style="font-size:9px">Total ROI</div>
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Tydne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb3WeeklyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb3WeeklyProj">--</div>
+                            </div>
+                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Mesicne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb3MonthlyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb3MonthlyProj">--</div>
                             </div>
                         </div>
                         <div style="margin-top:10px;display:flex;justify-content:space-around">
@@ -4123,16 +4122,31 @@
                     };
 
                     const totalROI = lCum / startCap * 100;
-                    _sr('lb3TotalROI', totalROI, true);
-
-                    // Daily = actual if 1+ day, else total so far
-                    const dailyROI = daysSince >= 1 ? totalROI / daysSince : totalROI;
-                    _sr('lb3DailyROI', dailyROI, true);
-
-                    // Weekly + Monthly = always PROJECTION (extrapolated, blue dashed style)
                     const dailyRate = totalROI / Math.max(daysSince, 0.04);
-                    _sr('lb3WeeklyROI', dailyRate * 7, true);
-                    _sr('lb3MonthlyROI', dailyRate * 30, true);
+
+                    // ACTUAL: what we have so far (green, big)
+                    // Show total ROI in each box as "actual so far"
+                    const fmtUsd = (v) => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0);
+                    const dailyActual = daysSince >= 1 ? lCum / daysSince : lCum;
+                    const weeklyActual = daysSince >= 7 ? lCum / (daysSince/7) : lCum;
+                    const monthlyActual = daysSince >= 30 ? lCum / (daysSince/30) : lCum;
+                    _sr('lb3DailyROI', dailyActual / startCap * 100, true);
+                    _sr('lb3WeeklyROI', weeklyActual / startCap * 100, true);
+                    _sr('lb3MonthlyROI', monthlyActual / startCap * 100, true);
+
+                    // Rename actual to show $ amount
+                    const _su = (id, txt, color) => { const e = document.getElementById(id); if (e) { e.textContent = txt; e.style.color = color; } };
+                    _su('lb3DailyROI', fmtUsd(dailyActual) + ' (' + fmt(dailyActual/startCap*100) + ')', clr(dailyActual));
+                    _su('lb3WeeklyROI', fmtUsd(weeklyActual) + ' (' + fmt(weeklyActual/startCap*100) + ')', clr(weeklyActual));
+                    _su('lb3MonthlyROI', fmtUsd(monthlyActual) + ' (' + fmt(monthlyActual/startCap*100) + ')', clr(monthlyActual));
+
+                    // PROJECTION: extrapolated (blue, small below)
+                    const dailyProj = dailyRate / 100 * startCap;
+                    const weeklyProj = dailyProj * 7;
+                    const monthlyProj = dailyProj * 30;
+                    _su('lb3DailyProj', 'proj: ' + fmtUsd(dailyProj) + '/den', '#58a6ff');
+                    _su('lb3WeeklyProj', 'proj: ' + fmtUsd(weeklyProj) + '/tyd', '#58a6ff');
+                    _su('lb3MonthlyProj', 'proj: ' + fmtUsd(monthlyProj) + '/mes', '#58a6ff');
 
                     // Predictions — only meaningful after 1+ day
                     const dailyPnl = daysSince >= 1 ? lCum / daysSince : lCum / Math.max(daysSince, 0.04);
