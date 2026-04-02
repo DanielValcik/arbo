@@ -1494,45 +1494,50 @@
                 </div>
             </div>
 
-            <!-- Model Info + Expectation vs Reality -->
-            <div class="card" style="border-top:3px solid var(--gold)">
+            <!-- Model Info + Expectation vs Reality (full width, 2 columns) -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Model: Realistic-Config-3</div>
-                <div style="font-size:11px">
-                    <table style="width:100%">
-                        <tbody>
-                            <tr><td colspan="2" style="font-weight:600;color:var(--green)">Realistic Autoresearch (3,000 trials, 160 live fills)</td></tr>
-                            <tr><td>Max entry price</td><td style="font-weight:700">$0.483 (breakeven 48%)</td></tr>
-                            <tr><td>Avg fill (OOS)</td><td>$0.320 (breakeven 32%)</td></tr>
-                            <tr><td>Win rate (OOS)</td><td>64.6% (margin 32pp!)</td></tr>
-                            <tr><td>Sharpe (OOS)</td><td>69.8</td></tr>
-                            <tr><td>Max DD (OOS)</td><td>7.6%</td></tr>
-                            <tr><td>Volatilita</td><td>realized 1440min, scale=0.15</td></tr>
-                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.03</td></tr>
-                            <tr><td>Entry FV</td><td>0.274 — 0.483</td></tr>
-                            <tr><td>Sizing</td><td>4.2% capital, edge scale 6.5x</td></tr>
-                            <tr><td>Resolution</td><td>Chainlink oracle (30min timeout)</td></tr>
-                            <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
-                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:8px;font-weight:600;color:var(--gold)">Expectation vs Reality</td></tr>
-                        </tbody>
-                    </table>
-                    <div style="display:flex;gap:4px;margin-top:6px">
-                        <div style="flex:1;text-align:center;font-size:10px;color:var(--text-dim)">
-                            <div style="font-weight:600;margin-bottom:4px">OCEKAVANI</div>
-                            <div>WR: <b>65%</b></div>
-                            <div>Avg fill: <b>$0.32</b></div>
-                            <div>Avg PnL: <b>$4.27</b></div>
-                        </div>
-                        <div style="width:1px;background:var(--border)"></div>
-                        <div style="flex:1;text-align:center;font-size:10px;color:var(--text-dim)">
-                            <div style="font-weight:600;margin-bottom:4px">REALITA</div>
-                            <div>WR: <b id="lb3RealWR">--</b></div>
-                            <div>Avg fill: <b id="lb3RealFill">--</b></div>
-                            <div>Avg PnL: <b id="lb3RealAvgPnl">--</b></div>
-                        </div>
+                <div style="display:flex;gap:20px;font-size:11px">
+                    <!-- LEFT: Model parameters -->
+                    <div style="flex:0 0 auto;min-width:280px">
+                        <div style="font-weight:600;color:var(--green);margin-bottom:6px">Realistic Autoresearch (3,000 trials, 160 live fills)</div>
+                        <table style="width:100%">
+                            <tbody>
+                                <tr><td>Max entry price</td><td style="font-weight:700">$0.483 (breakeven 48%)</td></tr>
+                                <tr><td>Avg fill (OOS)</td><td>$0.320 (breakeven 32%)</td></tr>
+                                <tr><td>Win rate (OOS)</td><td>64.6% (margin 32pp!)</td></tr>
+                                <tr><td>Sharpe (OOS)</td><td>69.8</td></tr>
+                                <tr><td>Max DD (OOS)</td><td>7.6%</td></tr>
+                                <tr><td>Volatilita</td><td>realized 1440min, scale=0.15</td></tr>
+                                <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.03</td></tr>
+                                <tr><td>Entry FV</td><td>0.274 — 0.483</td></tr>
+                                <tr><td>Sizing</td><td>4.2% capital, edge scale 6.5x</td></tr>
+                                <tr><td>Resolution</td><td>Chainlink oracle (30min timeout)</td></tr>
+                                <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
+                            </tbody>
+                        </table>
                     </div>
-                    <div style="margin-top:8px;text-align:center;font-size:10px;padding:4px;border-radius:4px" id="lb3Verdict"></div>
-                    <div class="chart-container" style="height:140px;margin-top:8px">
-                        <canvas id="b3ExpVsRealChart"></canvas>
+                    <!-- RIGHT: Expectation vs Reality + Chart -->
+                    <div style="flex:1;min-width:300px">
+                        <div style="font-weight:600;color:var(--gold);margin-bottom:8px">Expectation vs Reality</div>
+                        <div style="display:flex;gap:8px;margin-bottom:8px">
+                            <div style="flex:1;text-align:center;background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:6px;padding:8px">
+                                <div style="font-weight:600;margin-bottom:4px;color:#58a6ff">OCEKAVANI</div>
+                                <div>WR: <b>65%</b></div>
+                                <div>Avg fill: <b>$0.32</b></div>
+                                <div>Avg PnL: <b>$4.27</b></div>
+                            </div>
+                            <div style="flex:1;text-align:center;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.2);border-radius:6px;padding:8px">
+                                <div style="font-weight:600;margin-bottom:4px;color:#3fb950">REALITA</div>
+                                <div>WR: <b id="lb3RealWR">--</b></div>
+                                <div>Avg fill: <b id="lb3RealFill">--</b></div>
+                                <div>Avg PnL: <b id="lb3RealAvgPnl">--</b></div>
+                            </div>
+                        </div>
+                        <div style="text-align:center;font-size:10px;padding:4px;border-radius:4px;margin-bottom:8px" id="lb3Verdict"></div>
+                        <div class="chart-container" style="height:160px">
+                            <canvas id="b3ExpVsRealChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
