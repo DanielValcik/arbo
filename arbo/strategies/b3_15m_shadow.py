@@ -196,7 +196,9 @@ class B3_15mShadow:
         sigma = self._compute_sigma()
 
         for cid, ev in list(self._events.items()):
-            if ev.get("scanned"):
+            # Record one signal per event per entry minute
+            scan_key = f"{cid}_{entry_minute}"
+            if ev.get(f"scanned_{entry_minute}"):
                 continue
             if not ev.get("btc_at_start"):
                 continue
@@ -230,7 +232,7 @@ class B3_15mShadow:
             signal_dev = signal_up - 0.50
             edge = abs(signal_dev)
 
-            if edge < 0.089:  # 15-min threshold from sweep
+            if edge < 0.02:  # Low threshold — collect ALL data for analysis
                 continue
 
             direction = 1 if signal_dev > 0 else -1
@@ -272,7 +274,7 @@ class B3_15mShadow:
             }
 
             self._signals.append(signal)
-            ev["scanned"] = True  # Only one signal per event
+            ev[f"scanned_{entry_minute}"] = True
 
             logger.info(
                 "b3_15m_shadow_signal",
