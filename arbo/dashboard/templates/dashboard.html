@@ -4088,15 +4088,17 @@
                     return i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149';
                 });
                 const lPointRadius = lValues.map((_, i) => isResolved[i] ? (lValues.length > 50 ? 1.5 : 3) : 5);
-                // Stats from Polymarket wallet (source of truth)
+                // Stats: use chart cumulative P&L (matches "Uzavrene trady" card)
                 const statsEl = document.getElementById('lb3LiveCumStats');
                 if (statsEl) {
+                    const c = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                    const pendStr = pendingCount > 0 ? `<span style="color:#e3b341;margin-left:8px">⏳ ${pendingCount} ceka</span>` : '';
+                    statsEl.innerHTML = `<span style="color:${c}">P&L: ${lCum >= 0 ? '+' : ''}$${lCum.toFixed(2)}</span>${pendStr}`;
+                }
+                {
                     const wallet = walletData.value;
                     if (wallet && wallet.portfolio !== undefined) {
                         const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
-                        const c = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
-                        const pendStr = pendingCount > 0 ? `<span style="color:#e3b341;margin-left:8px">⏳ ${pendingCount} ceka</span>` : '';
-                        statsEl.innerHTML = `<span style="color:${c}">P&L: ${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</span>${pendStr}`;
                         // Show warning if chart doesn't match wallet
                         const chartTotal = lCum;
                         const noteEl = document.getElementById('b3LiveNote');
