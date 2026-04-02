@@ -3807,18 +3807,7 @@
             const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
             _s('lb3WLRatio', ratio);
             _s('lb3AvgPnl', (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2));
-            // Expectation vs Reality card
-            const wrEl = document.getElementById('lb3RealWR');
-            const fillEl = document.getElementById('lb3RealFill');
-            const avgEl = document.getElementById('lb3RealAvgPnl');
-            const verdictEl = document.getElementById('lb3Verdict');
-            if (wrEl && act.total_resolved > 0) {
-                const wr = act.win_rate * 100;
-                wrEl.textContent = wr.toFixed(0) + '%';
-                wrEl.style.color = wr >= 60 ? 'var(--green)' : wr >= 50 ? 'var(--gold)' : 'var(--red)';
-                avgEl.textContent = (act.avg_pnl_per_trade >= 0 ? '+' : '') + '$' + (act.avg_pnl_per_trade || 0).toFixed(2);
-                avgEl.style.color = act.avg_pnl_per_trade >= 0 ? 'var(--green)' : 'var(--red)';
-            };
+            // EVR card is updated in chart section below (from liveFilled data)
         } else if (b3) {
             const pnl = b3.total_pnl || 0;
             document.getElementById('lb3TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
@@ -4119,14 +4108,31 @@
                 const resolvedFills = liveChron.filter(t => (t.trade_details||{}).live_exit_status === 'resolution' && (t.trade_details||{}).live_entry_price > 0);
                 if (resolvedFills.length > 0) {
                     const avgFill = resolvedFills.reduce((s,t) => s + (t.trade_details.live_entry_price||0), 0) / resolvedFills.length;
+                    const realWr = resolvedFills.filter(t => (t.trade_details.live_exit_price||0) > 0.5).length / resolvedFills.length * 100;
+                    const realAvgPnl = resolvedFills.reduce((s,t) => {
+                        const d = t.trade_details||{};
+                        return s + ((d.live_exit_price||0) - (d.live_entry_price||0)) * (d.live_entry_shares||0);
+                    }, 0) / resolvedFills.length;
+
+                    // Update all 3 reality fields
+                    const wrEl = document.getElementById('lb3RealWR');
                     const fillEl = document.getElementById('lb3RealFill');
+                    const avgEl = document.getElementById('lb3RealAvgPnl');
+                    if (wrEl) {
+                        wrEl.textContent = realWr.toFixed(0) + '%';
+                        wrEl.style.color = realWr >= 60 ? 'var(--green)' : realWr >= 50 ? 'var(--gold)' : 'var(--red)';
+                    }
                     if (fillEl) {
                         fillEl.textContent = '$' + avgFill.toFixed(2);
                         fillEl.style.color = avgFill <= 0.48 ? 'var(--green)' : 'var(--gold)';
                     }
+                    if (avgEl) {
+                        avgEl.textContent = (realAvgPnl >= 0 ? '+' : '') + '$' + realAvgPnl.toFixed(2);
+                        avgEl.style.color = realAvgPnl >= 0 ? 'var(--green)' : 'var(--red)';
+                    }
+
                     const verdictEl = document.getElementById('lb3Verdict');
-                    if (verdictEl && resolvedFills.length >= 5) {
-                        const realWr = resolvedFills.filter(t => (t.trade_details.live_exit_price||0) > 0.5).length / resolvedFills.length * 100;
+                    if (verdictEl && resolvedFills.length >= 3) {
                         const margin = realWr - avgFill * 100;
                         if (margin > 15) {
                             verdictEl.style.background = 'rgba(63,185,80,0.15)';
