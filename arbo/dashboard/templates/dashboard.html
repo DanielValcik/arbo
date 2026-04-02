@@ -4106,25 +4106,51 @@
                     _s('lb3WinRate', Math.round(winsCount/resolvedCount*100) + '%');
                 }
 
-                // ROI from live data
+                // ROI from live data — only show when enough time has passed
                 {
-                    const deployDate = new Date('2026-04-02T04:25:00Z');
+                    const deployDate = new Date('2026-04-02T12:15:00Z');
                     const now = new Date();
-                    const daysSince = Math.max((now - deployDate) / 86400000, 0.04);
-                    const dailyPnl = lCum / daysSince;
+                    const hoursSince = Math.max((now - deployDate) / 3600000, 0.1);
+                    const daysSince = hoursSince / 24;
                     const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
                     const clr = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
-                    const dr = dailyPnl / startCap * 100;
-                    const _sr = (id, v) => { const e = document.getElementById(id); if (e) { e.textContent = fmt(v); e.style.color = clr(v); } };
-                    _sr('lb3DailyROI', dr);
-                    _sr('lb3WeeklyROI', dr * 7);
-                    _sr('lb3MonthlyROI', dr * 30);
-                    _sr('lb3TotalROI', lCum / startCap * 100);
+                    const _sr = (id, v, show) => {
+                        const e = document.getElementById(id);
+                        if (e) {
+                            if (show) { e.textContent = fmt(v); e.style.color = clr(v); }
+                            else { e.textContent = '--'; e.style.color = 'var(--text-dim)'; }
+                        }
+                    };
 
-                    // Predictions
+                    const totalROI = lCum / startCap * 100;
+                    _sr('lb3TotalROI', totalROI, true);
+
+                    // Daily: show after 24h, otherwise show hourly rate
+                    if (daysSince >= 1) {
+                        const dailyROI = totalROI / daysSince;
+                        _sr('lb3DailyROI', dailyROI, true);
+                        _sr('lb3WeeklyROI', daysSince >= 7 ? totalROI / (daysSince/7) : dailyROI * 7, daysSince >= 1);
+                        _sr('lb3MonthlyROI', daysSince >= 30 ? totalROI / (daysSince/30) : dailyROI * 30, daysSince >= 7);
+                    } else {
+                        // Less than 1 day — show "since start" for all
+                        _sr('lb3DailyROI', totalROI, true);
+                        _sr('lb3WeeklyROI', totalROI, true);
+                        _sr('lb3MonthlyROI', totalROI, true);
+                    }
+
+                    // Update labels to show what period they represent
+                    if (daysSince < 1) {
+                        const hrs = Math.round(hoursSince);
+                        document.querySelectorAll('#lb3DailyROI,#lb3WeeklyROI,#lb3MonthlyROI').forEach(e => {
+                            const label = e.parentElement && e.parentElement.querySelector('div:last-child');
+                        });
+                    }
+
+                    // Predictions — only meaningful after 1+ day
+                    const dailyPnl = daysSince >= 1 ? lCum / daysSince : lCum / Math.max(daysSince, 0.04);
                     const daysLeftMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
                     const daysLeftWeek = Math.max(7 - now.getDay(), 1);
-                    _s('lb3PredBasis', resolvedCount + ' tradu, ' + daysSince.toFixed(1) + ' dni');
+                    _s('lb3PredBasis', resolvedCount + ' tradu, ' + (hoursSince < 24 ? hoursSince.toFixed(0) + 'h' : daysSince.toFixed(1) + ' dni'));
                     _s('lb3PredMonth', resolvedCount >= 3 ? (dailyPnl*daysLeftMonth >= 0 ? '+' : '') + '$' + (dailyPnl*daysLeftMonth).toFixed(0) : 'min 3 trady');
                     _s('lb3PredWeek', resolvedCount >= 3 ? (dailyPnl*daysLeftWeek >= 0 ? '+' : '') + '$' + (dailyPnl*daysLeftWeek).toFixed(0) : 'min 3 trady');
                 }
