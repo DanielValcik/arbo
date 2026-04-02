@@ -4020,7 +4020,7 @@
 
             // Compute live trade sets (used by charts + comparison card)
             // Never-sell v2 deployed 2026-03-31T17:25 UTC — only count trades after
-            const LIVE_V2_START = '2026-04-02T10:45';  // Pessimistic Config #1 + dynamic sizing
+            const LIVE_V2_START = '2026-04-02T04:25';  // Config #3 start, includes all today's trades
             const liveAttempted = closed.filter(t => {
                 const d = t.trade_details || {};
                 return d.live_fill_status && d.live_fill_status !== 'skipped'
