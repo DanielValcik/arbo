@@ -315,7 +315,6 @@ class StrategyB3:
                 continue
 
             # Liquidity check: fetch orderbook and compute max size
-            # where slippage < MAX_SLIPPAGE_PCT of edge
             liq = await self._check_liquidity(token_id, entry_price, bet_size)
             if liq is not None:
                 bet_size = liq["safe_size"]
@@ -326,6 +325,22 @@ class StrategyB3:
                         available_usd=f"${liq['available_usd']:.0f}",
                         safe_size=f"${bet_size:.0f}",
                     )
+                    continue
+
+                # DYNAMIC SIZING based on expected fill price (best_ask)
+                # Cheap fill = more margin = bigger position
+                # Expensive fill = less margin = smaller position
+                expected_fill = liq.get("best_ask", entry_price)
+                if expected_fill <= 0.30:
+                    size_mult = 1.5   # 34pp+ margin → agresivní
+                elif expected_fill <= 0.45:
+                    size_mult = 1.0   # 19-34pp margin → normální
+                elif expected_fill <= 0.57:
+                    size_mult = 0.5   # 7-19pp margin → konzervativní
+                else:
+                    size_mult = 0.25  # <7pp margin → minimální
+                bet_size = min(bet_size * size_mult, MAX_BET_SIZE)
+                if bet_size < MIN_ORDER_SIZE:
                     continue
 
             shares = bet_size / entry_price
