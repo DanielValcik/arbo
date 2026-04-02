@@ -416,6 +416,9 @@ class StrategyB3:
                 continue
 
             # Live execution (dual mode)
+            # Only strong signals go live (edge > 0.40)
+            # Weak signals stay paper-only for data collection
+            LIVE_MIN_EDGE = 0.40
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
@@ -425,6 +428,7 @@ class StrategyB3:
                 self._execution_mode in ("dual", "live")
                 and self._live_executor is not None
                 and self._live_daily_pnl > -self._live_daily_loss_limit
+                and sig.edge >= LIVE_MIN_EDGE  # Only strong signals go live
             ):
                 try:
                     # Refresh wallet balance every 60s
