@@ -1390,17 +1390,39 @@
     <div id="liveb3Content" class="tab-content">
         <div class="grid">
             <!-- B3 Overview -->
-            <div class="card" style="border-top:3px solid var(--gold)">
-                <div class="card-title">B3 Binance Oracle Scalper <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
+            <div class="card" style="border-top:3px solid #3fb950">
+                <div class="card-title">B3 Big Move Scalper <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
                 <div id="lb3Overview" style="font-size:12px">
-                    <div style="text-align:center;padding:20px;color:var(--text-dim)">
-                        <div style="font-size:24px;font-weight:700;color:var(--gold)" id="lb3TotalPnl">$0.00</div>
-                        <div>Total P&L</div>
-                        <div style="margin-top:12px;display:flex;justify-content:space-around">
+                    <div style="text-align:center;padding:12px;color:var(--text-dim)">
+                        <div style="font-size:28px;font-weight:700" id="lb3TotalPnl">$0.00</div>
+                        <div>Live P&L</div>
+                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:16px;font-weight:700" id="lb3DailyROI">--</div>
+                                <div style="font-size:9px">Daily ROI</div>
+                            </div>
+                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:16px;font-weight:700" id="lb3WeeklyROI">--</div>
+                                <div style="font-size:9px">Weekly ROI</div>
+                            </div>
+                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:16px;font-weight:700" id="lb3MonthlyROI">--</div>
+                                <div style="font-size:9px">Monthly ROI</div>
+                            </div>
+                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:16px;font-weight:700" id="lb3TotalROI">--</div>
+                                <div style="font-size:9px">Total ROI</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;display:flex;justify-content:space-around">
                             <div><span id="lb3Trades" style="font-weight:700">0</span><br>Trades</div>
                             <div><span id="lb3WinRate" style="font-weight:700">--</span><br>Win Rate</div>
                             <div><span id="lb3Deployed" style="font-weight:700">$0</span><br>Deployed</div>
                             <div><span id="lb3Positions" style="font-weight:700">0</span><br>Positions</div>
+                        </div>
+                        <div style="margin-top:10px;padding:8px;background:rgba(88,166,255,0.06);border-radius:6px;font-size:10px">
+                            <div style="font-weight:600;color:#58a6ff;margin-bottom:4px">Predikce (na zaklade <span id="lb3PredBasis">--</span> tradu)</div>
+                            <div>Tento mesic: <b id="lb3PredMonth">--</b> | Tento tyden: <b id="lb3PredWeek">--</b></div>
                         </div>
                     </div>
                 </div>
@@ -1516,21 +1538,7 @@
                 </div>
             </div>
 
-            <!-- B3 Cumulative P&L Chart (PAPER) -->
-            <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Kumulativni P&L <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
-                <div class="chart-container" style="height:180px">
-                    <canvas id="b3CumPnlChart"></canvas>
-                </div>
-            </div>
-
-            <!-- B3 Per-Trade Cumulative P&L (PAPER) -->
-            <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">P&L po kazdem tradu (od $0) <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
-                <div class="chart-container" style="height:220px">
-                    <canvas id="b3TradeByTradeChart"></canvas>
-                </div>
-            </div>
+            <!-- Paper charts removed — live only -->
 
             <!-- B3 Daily Bar Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
@@ -3807,6 +3815,51 @@
             const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
             _s('lb3WLRatio', ratio);
             _s('lb3AvgPnl', (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2));
+            // ROI calculations + predictions
+            // liveFilled will be computed later — use wallet data for now
+            {
+                const startCap = (walletData.value && walletData.value.starting_capital) || 270.67;
+                const wallet = walletData.value;
+                const portfolio = wallet && wallet.portfolio ? wallet.portfolio : startCap;
+                const totalPnl = portfolio - startCap;
+
+                // Time since deploy (2026-04-02T12:15 UTC)
+                const deployDate = new Date('2026-04-02T12:15:00Z');
+                const now = new Date();
+                const daysSinceDeploy = Math.max((now - deployDate) / 86400000, 0.01);
+                const dailyPnl = totalPnl / daysSinceDeploy;
+
+                const dailyROI = (dailyPnl / startCap * 100);
+                const weeklyROI = dailyROI * 7;
+                const monthlyROI = dailyROI * 30;
+                const totalROI = (totalPnl / startCap * 100);
+
+                const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+                const clr = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
+
+                const dEl = document.getElementById('lb3DailyROI');
+                const wEl = document.getElementById('lb3WeeklyROI');
+                const mEl = document.getElementById('lb3MonthlyROI');
+                const tEl = document.getElementById('lb3TotalROI');
+                if (dEl) { dEl.textContent = fmt(dailyROI); dEl.style.color = clr(dailyROI); }
+                if (wEl) { wEl.textContent = fmt(weeklyROI); wEl.style.color = clr(weeklyROI); }
+                if (mEl) { mEl.textContent = fmt(monthlyROI); mEl.style.color = clr(monthlyROI); }
+                if (tEl) { tEl.textContent = fmt(totalROI); tEl.style.color = clr(totalROI); }
+
+                // Predictions based on actual performance
+                const trades = act.total_resolved || 0;
+                const avgPnl = trades > 0 ? totalPnl / trades : 0;
+                const tradesPerDay = trades > 0 ? trades / daysSinceDeploy : 21; // default 21
+
+                const daysLeftMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+                const daysLeftWeek = 7 - now.getDay();
+                const predMonth = dailyPnl * daysLeftMonth;
+                const predWeek = dailyPnl * daysLeftWeek;
+
+                _s('lb3PredBasis', trades > 0 ? trades + ' tradu, ' + daysSinceDeploy.toFixed(1) + ' dni' : 'cekam na data');
+                _s('lb3PredMonth', trades >= 3 ? (predMonth >= 0 ? '+' : '') + '$' + predMonth.toFixed(0) : 'min 3 trady');
+                _s('lb3PredWeek', trades >= 3 ? (predWeek >= 0 ? '+' : '') + '$' + predWeek.toFixed(0) : 'min 3 trady');
+            }
             // EVR card is updated in chart section below (from liveFilled data)
         } else if (b3) {
             const pnl = b3.total_pnl || 0;
