@@ -196,10 +196,6 @@ class B3_15mShadow:
         sigma = self._compute_sigma()
 
         for cid, ev in list(self._events.items()):
-            # Record one signal per event per entry minute
-            scan_key = f"{cid}_{entry_minute}"
-            if ev.get(f"scanned_{entry_minute}"):
-                continue
             if not ev.get("btc_at_start"):
                 continue
 
@@ -208,6 +204,9 @@ class B3_15mShadow:
             # Check at integer minutes 4-11 (15-min entry window from sweep)
             entry_minute = int(elapsed_min)
             if entry_minute < 4 or entry_minute > 11:
+                continue
+            # Already scanned this minute?
+            if ev.get(f"scanned_{entry_minute}"):
                 continue
             frac = elapsed_min - entry_minute
             if frac >= 0.50:
