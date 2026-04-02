@@ -338,6 +338,19 @@ class RDHOrchestrator:
         # Strategy B3: Binance Oracle Scalper
         self._strategy_b3 = await self._init_optional("StrategyB3", self._init_strategy_b3)
 
+        # B3 15-min Shadow Scanner (data collection only)
+        self._b3_15m_shadow = None
+        try:
+            from arbo.strategies.b3_15m_shadow import B3_15mShadow
+            self._b3_15m_shadow = B3_15mShadow(
+                binance_ws=self._binance_ws,
+                rtds_feed=self._rtds_feed,
+            )
+            await self._b3_15m_shadow.init()
+            logger.info("b3_15m_shadow_ready")
+        except Exception as e:
+            logger.warning("b3_15m_shadow_init_error", error=str(e))
+
         # Restore realized P&L from DB into risk manager
         await self._restore_pnl_from_db()
 
@@ -1109,6 +1122,10 @@ class RDHOrchestrator:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
+        # B3 15-min shadow scanner (data collection, no trading)
+        if self._b3_15m_shadow is not None:
+            task_defs.append(("B3_15m_shadow", self._run_b3_15m_shadow, 30))
+
         # Auto-redeem resolved positions (gasless, every 10 min)
         task_defs.append(("auto_redeem", self._run_auto_redeem, 600))
 
@@ -1667,6 +1684,17 @@ class RDHOrchestrator:
                 # Slack notification
                 await self._notify_b3_entry(sig)
             await self._paper_engine.sync_positions_to_db()
+
+    async def _run_b3_15m_shadow(self) -> None:
+        """B3 15-min shadow scanner — collect orderbook data, no trading."""
+        if self._b3_15m_shadow is None:
+            return
+        try:
+            await self._b3_15m_shadow.fetch_events()
+            await self._b3_15m_shadow.scan()
+            await self._b3_15m_shadow.check_resolutions()
+        except Exception as e:
+            logger.warning("b3_15m_shadow_error", error=str(e))
 
     async def _run_b3_exit_check(self) -> None:
         """Check B3 positions for exit triggers every 10 seconds.
