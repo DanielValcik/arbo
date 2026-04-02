@@ -4099,13 +4099,12 @@
                     const wallet = walletData.value;
                     if (wallet && wallet.portfolio !== undefined) {
                         const realPnl = wallet.portfolio - (wallet.starting_capital || 300);
-                        // Show warning if chart doesn't match wallet
-                        const chartTotal = lCum;
                         const noteEl = document.getElementById('b3LiveNote');
                         const noteText = document.getElementById('lb3LiveNoteText');
-                        if (noteEl && noteText && Math.abs(chartTotal - realPnl) > 5) {
+                        if (noteEl && noteText && Math.abs(lCum - realPnl) > 5) {
+                            const nc = realPnl >= 0 ? 'var(--green)' : 'var(--red)';
                             noteEl.style.display = '';
-                            noteText.innerHTML = `Graf ukazuje pouze trady s kompletnimi daty v DB. Skutecny P&L z Polymarket walletu: <b style="color:${c}">${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</b>`;
+                            noteText.innerHTML = `Graf ukazuje pouze trady s kompletnimi daty v DB. Skutecny P&L z Polymarket walletu: <b style="color:${nc}">${realPnl >= 0 ? '+' : ''}$${realPnl.toFixed(2)}</b>`;
                         } else if (noteEl) {
                             noteEl.style.display = 'none';
                         }
