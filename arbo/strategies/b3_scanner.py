@@ -271,8 +271,9 @@ class B3Scanner:
         now = time.time()
         age = now - event_start_ts
 
-        # For fresh events (<2 min old): use Chainlink RTDS
-        if age < 120 and self._rtds_feed:
+        # For fresh events (started 0-120s ago): use Chainlink RTDS
+        # NOT for future events (age < 0) — wait until they actually start
+        if 0 <= age < 120 and self._rtds_feed:
             cl_price = self._rtds_feed.get_price("btc/usd")
             if cl_price and cl_price > 1000:
                 logger.info(
