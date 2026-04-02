@@ -1494,34 +1494,43 @@
                 </div>
             </div>
 
-            <!-- Model Info + Live Stats -->
+            <!-- Model Info + Expectation vs Reality -->
             <div class="card" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Model: Chainlink-Oracle-Scalper-v3</div>
+                <div class="card-title">Model: Realistic-Config-3</div>
                 <div style="font-size:11px">
                     <table style="width:100%">
                         <tbody>
-                            <tr><td colspan="2" style="font-weight:600;color:var(--green)">Autoresearch (2,400 trials, Chainlink resolution)</td></tr>
-                            <tr><td>OOS score</td><td style="font-weight:700">7,996</td></tr>
-                            <tr><td>Win rate (OOS)</td><td>70.7%</td></tr>
-                            <tr><td>Sharpe (OOS)</td><td>18.0</td></tr>
-                            <tr><td>Max DD</td><td>33.0%</td></tr>
-                            <tr><td>Volatilita</td><td>realized 1440min, scale=0.408</td></tr>
-                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.121</td></tr>
-                            <tr><td>Entry FV filter</td><td>&ge; 0.55 (cheap tokens trap)</td></tr>
-                            <tr><td>Oracle filter</td><td>Binance + Chainlink agree</td></tr>
-                            <tr><td>Entry timing</td><td>Integer minutes only (t=2, t=3)</td></tr>
-                            <tr><td>Sizing</td><td>2.9% capital, edge scale 9.5x</td></tr>
-                            <tr><td>Resolution</td><td>Chainlink oracle (never Binance)</td></tr>
+                            <tr><td colspan="2" style="font-weight:600;color:var(--green)">Realistic Autoresearch (3,000 trials, 160 live fills)</td></tr>
+                            <tr><td>Max entry price</td><td style="font-weight:700">$0.483 (breakeven 48%)</td></tr>
+                            <tr><td>Avg fill (OOS)</td><td>$0.320 (breakeven 32%)</td></tr>
+                            <tr><td>Win rate (OOS)</td><td>64.6% (margin 32pp!)</td></tr>
+                            <tr><td>Sharpe (OOS)</td><td>69.8</td></tr>
+                            <tr><td>Max DD (OOS)</td><td>7.6%</td></tr>
+                            <tr><td>Volatilita</td><td>realized 1440min, scale=0.15</td></tr>
+                            <tr><td>Entry trigger</td><td>|signal_fv - 0.50| &gt; 0.03</td></tr>
+                            <tr><td>Entry FV</td><td>0.274 — 0.483</td></tr>
+                            <tr><td>Sizing</td><td>4.2% capital, edge scale 6.5x</td></tr>
+                            <tr><td>Resolution</td><td>Chainlink oracle (30min timeout)</td></tr>
                             <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
-                            <tr><td>Fee model</td><td>PostOnly maker 0% + rebate</td></tr>
-                            <tr><td>Market typ</td><td>BTC 5-min Up/Down</td></tr>
-                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:6px;font-weight:600;color:var(--gold)">Live Statistiky</td></tr>
-                            <tr><td>Prumerny win</td><td style="color:var(--green);font-weight:700" id="lb3AvgWin">--</td></tr>
-                            <tr><td>Prumerny loss</td><td style="color:var(--red);font-weight:700" id="lb3AvgLoss">--</td></tr>
-                            <tr><td>Win/Loss ratio</td><td style="font-weight:700" id="lb3WLRatio">--</td></tr>
-                            <tr><td>Prumerny PnL/trade</td><td style="font-weight:700" id="lb3AvgPnl">--</td></tr>
+                            <tr><td colspan="2" style="border-top:1px solid var(--border);padding-top:8px;font-weight:600;color:var(--gold)">Expectation vs Reality</td></tr>
                         </tbody>
                     </table>
+                    <div style="display:flex;gap:4px;margin-top:6px">
+                        <div style="flex:1;text-align:center;font-size:10px;color:var(--text-dim)">
+                            <div style="font-weight:600;margin-bottom:4px">OCEKAVANI</div>
+                            <div>WR: <b>65%</b></div>
+                            <div>Avg fill: <b>$0.32</b></div>
+                            <div>Avg PnL: <b>$4.27</b></div>
+                        </div>
+                        <div style="width:1px;background:var(--border)"></div>
+                        <div style="flex:1;text-align:center;font-size:10px;color:var(--text-dim)">
+                            <div style="font-weight:600;margin-bottom:4px">REALITA</div>
+                            <div>WR: <b id="lb3RealWR">--</b></div>
+                            <div>Avg fill: <b id="lb3RealFill">--</b></div>
+                            <div>Avg PnL: <b id="lb3RealAvgPnl">--</b></div>
+                        </div>
+                    </div>
+                    <div style="margin-top:8px;text-align:center;font-size:10px;padding:4px;border-radius:4px" id="lb3Verdict"></div>
                 </div>
             </div>
 
@@ -3791,6 +3800,18 @@
             const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
             document.getElementById('lb3WLRatio').textContent = ratio;
             document.getElementById('lb3AvgPnl').textContent = (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2);
+            // Expectation vs Reality card
+            const wrEl = document.getElementById('lb3RealWR');
+            const fillEl = document.getElementById('lb3RealFill');
+            const avgEl = document.getElementById('lb3RealAvgPnl');
+            const verdictEl = document.getElementById('lb3Verdict');
+            if (wrEl && act.total_resolved > 0) {
+                const wr = act.win_rate * 100;
+                wrEl.textContent = wr.toFixed(0) + '%';
+                wrEl.style.color = wr >= 60 ? 'var(--green)' : wr >= 50 ? 'var(--gold)' : 'var(--red)';
+                avgEl.textContent = (act.avg_pnl_per_trade >= 0 ? '+' : '') + '$' + (act.avg_pnl_per_trade || 0).toFixed(2);
+                avgEl.style.color = act.avg_pnl_per_trade >= 0 ? 'var(--green)' : 'var(--red)';
+            };
         } else if (b3) {
             const pnl = b3.total_pnl || 0;
             document.getElementById('lb3TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
@@ -4085,6 +4106,34 @@
                 if (confirmedEl) {
                     confirmedEl.textContent = (lCum >= 0 ? '+' : '') + '$' + lCum.toFixed(2);
                     confirmedEl.style.color = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                }
+                // Update avg fill price in Expectation vs Reality
+                const resolvedFills = liveChron.filter(t => (t.trade_details||{}).live_exit_status === 'resolution' && (t.trade_details||{}).live_entry_price > 0);
+                if (resolvedFills.length > 0) {
+                    const avgFill = resolvedFills.reduce((s,t) => s + (t.trade_details.live_entry_price||0), 0) / resolvedFills.length;
+                    const fillEl = document.getElementById('lb3RealFill');
+                    if (fillEl) {
+                        fillEl.textContent = '$' + avgFill.toFixed(2);
+                        fillEl.style.color = avgFill <= 0.48 ? 'var(--green)' : 'var(--gold)';
+                    }
+                    const verdictEl = document.getElementById('lb3Verdict');
+                    if (verdictEl && resolvedFills.length >= 5) {
+                        const realWr = resolvedFills.filter(t => (t.trade_details.live_exit_price||0) > 0.5).length / resolvedFills.length * 100;
+                        const margin = realWr - avgFill * 100;
+                        if (margin > 15) {
+                            verdictEl.style.background = 'rgba(63,185,80,0.15)';
+                            verdictEl.style.color = 'var(--green)';
+                            verdictEl.textContent = `Margin ${margin.toFixed(0)}pp — model funguje!`;
+                        } else if (margin > 0) {
+                            verdictEl.style.background = 'rgba(227,179,65,0.15)';
+                            verdictEl.style.color = '#e3b341';
+                            verdictEl.textContent = `Margin ${margin.toFixed(0)}pp — tesne profitabilni`;
+                        } else {
+                            verdictEl.style.background = 'rgba(248,81,73,0.15)';
+                            verdictEl.style.color = 'var(--red)';
+                            verdictEl.textContent = `Margin ${margin.toFixed(0)}pp — pod breakeven!`;
+                        }
+                    }
                 }
                 // Update In Flight (pending trades)
                 const inFlightEl = document.getElementById('lb3InFlightValue');
