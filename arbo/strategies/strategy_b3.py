@@ -273,10 +273,8 @@ class StrategyB3:
                     )
                     continue
 
-            # Entry FV bounds from quality gate (realistic autoresearch Config #3)
+            # Min model FV check (max is checked on LIVE FILL price, not model FV)
             entry_mkt_fv = sig.market_fv_up if sig.direction == 1 else (1.0 - sig.market_fv_up)
-            if entry_mkt_fv < MIN_ENTRY_MKT_FV or entry_mkt_fv > MAX_ENTRY_MKT_FV:
-                continue
 
             # Skip if already have position in this event
             token_id = sig.token_id_up if sig.direction == 1 else sig.token_id_down
@@ -447,10 +445,25 @@ class StrategyB3:
                     live_entry_price = float(fill.fill_price) if fill.fill_price else 0.0
                     live_fill_status = fill.status
                     live_latency_ms = fill.latency_ms
+
+                    # MAX ENTRY PRICE check on ACTUAL fill (not model FV!)
+                    # Config #3: only keep fills under $0.483
+                    if live_entry_price > MAX_ENTRY_MKT_FV and live_shares > 0:
+                        logger.info(
+                            "b3_live_fill_too_expensive",
+                            fill_price=live_entry_price,
+                            max_price=MAX_ENTRY_MKT_FV,
+                            shares=live_shares,
+                            msg="Fill price > max entry, will not track",
+                        )
+                        # Don't track this as a live position
+                        live_shares = 0
+                        live_fill_status = "too_expensive"
+
                     logger.info(
                         "b3_live_entry",
-                        status=fill.status,
-                        shares=fill.shares_filled,
+                        status=live_fill_status,
+                        shares=live_shares if live_fill_status != "too_expensive" else 0,
                         price=live_entry_price,
                         latency_ms=fill.latency_ms,
                         paper_price=round(entry_price, 4),

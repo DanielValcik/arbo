@@ -415,8 +415,8 @@ class B3Scanner:
             # Entry at MARKET price
             entry_mkt_fv = market_fv_up if direction == 1 else (1.0 - market_fv_up)
 
-            # Price bounds check
-            if entry_mkt_fv < MIN_ENTRY_MKT_FV or entry_mkt_fv > MAX_ENTRY_MKT_FV:
+            # Min FV check only (max is checked AFTER live fill in strategy_b3)
+            if entry_mkt_fv < MIN_ENTRY_MKT_FV:
                 continue
 
             signals.append(B3Signal(
