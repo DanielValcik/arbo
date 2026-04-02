@@ -31,7 +31,7 @@ SIGMA_FLOOR = 0.00005             # ~2.6% annualized minimum
 # Entry
 ENTRY_THRESHOLD = 0.020           # Min |signal_fv - 0.50| to trigger
 MIN_ENTRY_MIN = 1                 # Earliest entry: minute 2
-MAX_ENTRY_MIN = 4                 # Latest entry: minute 3 (was 2)
+MAX_ENTRY_MIN = 3                 # Latest entry: minute 3 (min 4+ = 0W/2L)
 CONTRARIAN = False                # MOMENTUM: follow BTC direction
 
 # Exit — never-sell mode: all positions held to Chainlink resolution
