@@ -273,9 +273,9 @@ class StrategyB3:
                     )
                     continue
 
-            # FIX #4: Min entry FV filter — cheap tokens (<0.55) have 44% WR
+            # Entry FV bounds from quality gate (realistic autoresearch Config #3)
             entry_mkt_fv = sig.market_fv_up if sig.direction == 1 else (1.0 - sig.market_fv_up)
-            if entry_mkt_fv < 0.55:
+            if entry_mkt_fv < MIN_ENTRY_MKT_FV or entry_mkt_fv > MAX_ENTRY_MKT_FV:
                 continue
 
             # Skip if already have position in this event
