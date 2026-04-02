@@ -416,20 +416,33 @@ class StrategyB3:
                 continue
 
             # Live execution (dual mode)
-            # Only strong signals go live (edge > 0.40)
-            # Weak signals stay paper-only for data collection
+            # Only BIG MOVE signals go live:
+            # - BTC moved >$50 from event start (CLOB lag = our edge)
+            # - Edge >= 0.40 (model confirms direction)
+            # Evidence: 40 live trades with BTC>$50 → 85% WR, $4.44/trade
             LIVE_MIN_EDGE = 0.40
+            LIVE_MIN_BTC_MOVE = 50.0  # Absolute BTC move in USD
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
 
+            btc_move = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
+
             if (
                 self._execution_mode in ("dual", "live")
                 and self._live_executor is not None
                 and self._live_daily_pnl > -self._live_daily_loss_limit
-                and sig.edge >= LIVE_MIN_EDGE  # Only strong signals go live
+                and sig.edge >= LIVE_MIN_EDGE
+                and btc_move >= LIVE_MIN_BTC_MOVE
             ):
+                logger.info(
+                    "b3_live_qualified",
+                    direction="UP" if sig.direction == 1 else "DOWN",
+                    edge=f"{sig.edge:.3f}",
+                    btc_move=f"${btc_move:.0f}",
+                    model_fv=f"{entry_mkt_fv:.3f}",
+                )
                 try:
                     # Refresh wallet balance every 60s
                     if now - self._live_capital_last_check > 60:
