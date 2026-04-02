@@ -3815,51 +3815,7 @@
             const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
             _s('lb3WLRatio', ratio);
             _s('lb3AvgPnl', (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2));
-            // ROI calculations + predictions
-            // liveFilled will be computed later — use wallet data for now
-            {
-                const startCap = (walletData.value && walletData.value.starting_capital) || 270.67;
-                const wallet = walletData.value;
-                const portfolio = wallet && wallet.portfolio ? wallet.portfolio : startCap;
-                const totalPnl = portfolio - startCap;
-
-                // Time since deploy (2026-04-02T12:15 UTC)
-                const deployDate = new Date('2026-04-02T12:15:00Z');
-                const now = new Date();
-                const daysSinceDeploy = Math.max((now - deployDate) / 86400000, 0.01);
-                const dailyPnl = totalPnl / daysSinceDeploy;
-
-                const dailyROI = (dailyPnl / startCap * 100);
-                const weeklyROI = dailyROI * 7;
-                const monthlyROI = dailyROI * 30;
-                const totalROI = (totalPnl / startCap * 100);
-
-                const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
-                const clr = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
-
-                const dEl = document.getElementById('lb3DailyROI');
-                const wEl = document.getElementById('lb3WeeklyROI');
-                const mEl = document.getElementById('lb3MonthlyROI');
-                const tEl = document.getElementById('lb3TotalROI');
-                if (dEl) { dEl.textContent = fmt(dailyROI); dEl.style.color = clr(dailyROI); }
-                if (wEl) { wEl.textContent = fmt(weeklyROI); wEl.style.color = clr(weeklyROI); }
-                if (mEl) { mEl.textContent = fmt(monthlyROI); mEl.style.color = clr(monthlyROI); }
-                if (tEl) { tEl.textContent = fmt(totalROI); tEl.style.color = clr(totalROI); }
-
-                // Predictions based on actual performance
-                const trades = act.total_resolved || 0;
-                const avgPnl = trades > 0 ? totalPnl / trades : 0;
-                const tradesPerDay = trades > 0 ? trades / daysSinceDeploy : 21; // default 21
-
-                const daysLeftMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
-                const daysLeftWeek = 7 - now.getDay();
-                const predMonth = dailyPnl * daysLeftMonth;
-                const predWeek = dailyPnl * daysLeftWeek;
-
-                _s('lb3PredBasis', trades > 0 ? trades + ' tradu, ' + daysSinceDeploy.toFixed(1) + ' dni' : 'cekam na data');
-                _s('lb3PredMonth', trades >= 3 ? (predMonth >= 0 ? '+' : '') + '$' + predMonth.toFixed(0) : 'min 3 trady');
-                _s('lb3PredWeek', trades >= 3 ? (predWeek >= 0 ? '+' : '') + '$' + predWeek.toFixed(0) : 'min 3 trady');
-            }
+            // ROI is computed in chart section below where liveFilled data is available
             // EVR card is updated in chart section below (from liveFilled data)
         } else if (b3) {
             const pnl = b3.total_pnl || 0;
@@ -4155,6 +4111,41 @@
                             noteEl.style.display = 'none';
                         }
                     }
+                }
+
+                // Update main Live P&L display + ROI
+                const startCap = (walletData.value && walletData.value.starting_capital) || 270.67;
+                const resolvedCount = liveChron.filter(t => (t.trade_details||{}).live_exit_status === 'resolution').length;
+                _s('lb3TotalPnl', (lCum >= 0 ? '+$' : '-$') + Math.abs(lCum).toFixed(2));
+                const tpEl = document.getElementById('lb3TotalPnl');
+                if (tpEl) tpEl.style.color = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                _s('lb3Trades', resolvedCount);
+                if (resolvedCount > 0) {
+                    const winsCount = liveChron.filter(t => (t.trade_details||{}).live_exit_price > 0.5 && (t.trade_details||{}).live_exit_status === 'resolution').length;
+                    _s('lb3WinRate', Math.round(winsCount/resolvedCount*100) + '%');
+                }
+
+                // ROI from live data
+                {
+                    const deployDate = new Date('2026-04-02T04:25:00Z');
+                    const now = new Date();
+                    const daysSince = Math.max((now - deployDate) / 86400000, 0.04);
+                    const dailyPnl = lCum / daysSince;
+                    const fmt = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+                    const clr = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
+                    const dr = dailyPnl / startCap * 100;
+                    const _sr = (id, v) => { const e = document.getElementById(id); if (e) { e.textContent = fmt(v); e.style.color = clr(v); } };
+                    _sr('lb3DailyROI', dr);
+                    _sr('lb3WeeklyROI', dr * 7);
+                    _sr('lb3MonthlyROI', dr * 30);
+                    _sr('lb3TotalROI', lCum / startCap * 100);
+
+                    // Predictions
+                    const daysLeftMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+                    const daysLeftWeek = Math.max(7 - now.getDay(), 1);
+                    _s('lb3PredBasis', resolvedCount + ' tradu, ' + daysSince.toFixed(1) + ' dni');
+                    _s('lb3PredMonth', resolvedCount >= 3 ? (dailyPnl*daysLeftMonth >= 0 ? '+' : '') + '$' + (dailyPnl*daysLeftMonth).toFixed(0) : 'min 3 trady');
+                    _s('lb3PredWeek', resolvedCount >= 3 ? (dailyPnl*daysLeftWeek >= 0 ? '+' : '') + '$' + (dailyPnl*daysLeftWeek).toFixed(0) : 'min 3 trady');
                 }
 
                 // Update Confirmed P&L (resolved trades only)
