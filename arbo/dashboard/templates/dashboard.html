@@ -3885,8 +3885,9 @@
                 avgEl.textContent = 'prumer: ' + (avgDaily >= 0 ? '+' : '') + '$' + avgDaily.toFixed(2) + '/den';
             }
 
-            // Cumulative line chart
+            // Cumulative line chart (paper — may not exist)
             const cumCtx = document.getElementById('b3CumPnlChart');
+            if (cumCtx) {
             if (window._b3CumChart) window._b3CumChart.destroy();
             window._b3CumChart = new Chart(cumCtx, {
                 type: 'line',
@@ -3909,8 +3910,10 @@
                 }
             });
 
-            // Daily bar chart
+            }
+            // Daily bar chart (may not exist)
             const barCtx = document.getElementById('b3DailyPnlChart');
+            if (barCtx) {
             if (window._b3DailyChart) window._b3DailyChart.destroy();
             window._b3DailyChart = new Chart(barCtx, {
                 type: 'bar',
@@ -3931,6 +3934,7 @@
                     }
                 }
             });
+            }
         }
 
         // Trades table — from closed positions with strategy=B3
@@ -3957,6 +3961,7 @@
                 i === 0 ? '#e3b341' : v >= tradeValues[i-1] ? '#3fb950' : '#f85149'
             );
             const ctx = document.getElementById('b3TradeByTradeChart');
+            if (ctx) {
             if (window._b3TradeChart) window._b3TradeChart.destroy();
             window._b3TradeChart = new Chart(ctx, {
                 type: 'line',
@@ -4019,6 +4024,7 @@
                     }
                 }
             });
+            } // if (ctx) for paper trade chart
         }
 
         if (closed.length > 0) {
