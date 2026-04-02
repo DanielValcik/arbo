@@ -1531,6 +1531,9 @@
                         </div>
                     </div>
                     <div style="margin-top:8px;text-align:center;font-size:10px;padding:4px;border-radius:4px" id="lb3Verdict"></div>
+                    <div class="chart-container" style="height:140px;margin-top:8px">
+                        <canvas id="b3ExpVsRealChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -4134,6 +4137,43 @@
                             verdictEl.textContent = `Margin ${margin.toFixed(0)}pp — pod breakeven!`;
                         }
                     }
+                }
+                // Expectation vs Reality CHART
+                const evrCtx = document.getElementById('b3ExpVsRealChart');
+                if (evrCtx) {
+                    const EXP_PNL_PER_TRADE = 4.27;
+                    const n = resolvedFills.length;
+                    const maxTrades = Math.max(n, 20);
+                    const expLabels = [];
+                    const expValues = [];
+                    const realValues = [];
+                    let realCum = 0;
+                    for (let i = 0; i <= maxTrades; i++) {
+                        expLabels.push(i === 0 ? 'Start' : '#' + i);
+                        expValues.push(Math.round(i * EXP_PNL_PER_TRADE * 100) / 100);
+                        if (i <= n) {
+                            if (i === 0) { realValues.push(0); }
+                            else {
+                                const d = resolvedFills[i-1].trade_details || {};
+                                const lep = d.live_entry_price || 0;
+                                const lxp = d.live_exit_price || 0;
+                                const lsh = d.live_entry_shares || 0;
+                                if (d.live_exit_status === 'resolution') {
+                                    realCum += (lxp - lep) * lsh;
+                                }
+                                realValues.push(Math.round(realCum * 100) / 100);
+                            }
+                        }
+                    }
+                    if (window._b3EvrChart) window._b3EvrChart.destroy();
+                    window._b3EvrChart = new Chart(evrCtx, {
+                        type: 'line',
+                        data: { labels: expLabels, datasets: [
+                            { label: 'Ocekavani', data: expValues, borderColor: '#58a6ff', borderDash: [6, 3], borderWidth: 2, pointRadius: 0, fill: false, tension: 0 },
+                            { label: 'Realita', data: realValues, borderColor: '#3fb950', borderWidth: 2, pointRadius: realValues.length > 30 ? 1 : 3, pointBackgroundColor: '#3fb950', fill: false, tension: 0.1 },
+                        ]},
+                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#888' } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.raw.toFixed(2)}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                    });
                 }
                 // Update In Flight (pending trades)
                 const inFlightEl = document.getElementById('lb3InFlightValue');
