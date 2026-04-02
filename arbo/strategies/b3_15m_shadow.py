@@ -22,6 +22,7 @@ logger = get_logger("b3_15m_shadow")
 GAMMA_URL = "https://gamma-api.polymarket.com"
 CLOB_URL = "https://clob.polymarket.com"
 WINDOW_MIN = 15
+NOTIFY_AT_SIGNALS = 50  # Slack alert when enough data collected
 _SQRT2 = math.sqrt(2.0)
 
 
@@ -32,9 +33,11 @@ def _norm_cdf(x: float) -> float:
 class B3_15mShadow:
     """Shadow scanner for 15-min BTC Up/Down markets."""
 
-    def __init__(self, binance_ws=None, rtds_feed=None):
+    def __init__(self, binance_ws=None, rtds_feed=None, slack_bot=None):
         self._binance_ws = binance_ws
         self._rtds_feed = rtds_feed
+        self._slack_bot = slack_bot
+        self._notified_50 = False
         self._session: aiohttp.ClientSession | None = None
         self._events: dict[str, dict] = {}  # condition_id → event info
         self._last_fetch_ts: float = 0
@@ -345,6 +348,25 @@ class B3_15mShadow:
 
             except Exception as e:
                 logger.debug("b3_15m_resolution_error", error=str(e))
+
+        # Check if we have enough resolved signals to notify
+        resolved = [s for s in self._signals if s["resolution"]]
+        if len(resolved) >= NOTIFY_AT_SIGNALS and not self._notified_50 and self._slack_bot:
+            self._notified_50 = True
+            stats = self.get_stats()
+            try:
+                import asyncio
+                await self._slack_bot._post(
+                    "C0APX4K8Z2N",  # B3 live channel
+                    text=(
+                        f":bar_chart: *B3 15-MIN SHADOW — {stats['resolved']} signalu nasbirano!*\n"
+                        f"WR: {stats['wr']}% | Avg fill: ${stats['avg_fill']} | Avg gap: {stats['avg_gap']}\n"
+                        f"Avg BTC move: ${stats['avg_btc_move']} | Avg spread: ${stats['avg_spread']}\n"
+                        f"Data pripravena k analyze a optimalizaci."
+                    ),
+                )
+            except Exception:
+                pass
 
     async def _fetch_orderbook(self, token_id: str) -> dict:
         """Fetch orderbook for a token."""

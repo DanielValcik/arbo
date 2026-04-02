@@ -346,6 +346,7 @@ class RDHOrchestrator:
             self._b3_15m_shadow = B3_15mShadow(
                 binance_ws=self._binance_ws,
                 rtds_feed=rtds,
+                slack_bot=self._slack_bot,
             )
             await self._b3_15m_shadow.init()
             logger.info("b3_15m_shadow_ready")
