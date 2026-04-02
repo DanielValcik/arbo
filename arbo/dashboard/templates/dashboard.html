@@ -1401,13 +1401,13 @@
                                 <div style="font-size:16px;font-weight:700" id="lb3DailyROI">--</div>
                                 <div style="font-size:9px">Daily ROI</div>
                             </div>
-                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                            <div style="background:rgba(88,166,255,0.06);border:1px dashed rgba(88,166,255,0.2);border-radius:6px;padding:8px">
                                 <div style="font-size:16px;font-weight:700" id="lb3WeeklyROI">--</div>
-                                <div style="font-size:9px">Weekly ROI</div>
+                                <div style="font-size:9px;color:#58a6ff">Weekly proj.</div>
                             </div>
-                            <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
+                            <div style="background:rgba(88,166,255,0.06);border:1px dashed rgba(88,166,255,0.2);border-radius:6px;padding:8px">
                                 <div style="font-size:16px;font-weight:700" id="lb3MonthlyROI">--</div>
-                                <div style="font-size:9px">Monthly ROI</div>
+                                <div style="font-size:9px;color:#58a6ff">Monthly proj.</div>
                             </div>
                             <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
                                 <div style="font-size:16px;font-weight:700" id="lb3TotalROI">--</div>
@@ -4125,26 +4125,14 @@
                     const totalROI = lCum / startCap * 100;
                     _sr('lb3TotalROI', totalROI, true);
 
-                    // Daily: show after 24h, otherwise show hourly rate
-                    if (daysSince >= 1) {
-                        const dailyROI = totalROI / daysSince;
-                        _sr('lb3DailyROI', dailyROI, true);
-                        _sr('lb3WeeklyROI', daysSince >= 7 ? totalROI / (daysSince/7) : dailyROI * 7, daysSince >= 1);
-                        _sr('lb3MonthlyROI', daysSince >= 30 ? totalROI / (daysSince/30) : dailyROI * 30, daysSince >= 7);
-                    } else {
-                        // Less than 1 day — show "since start" for all
-                        _sr('lb3DailyROI', totalROI, true);
-                        _sr('lb3WeeklyROI', totalROI, true);
-                        _sr('lb3MonthlyROI', totalROI, true);
-                    }
+                    // Daily = actual if 1+ day, else total so far
+                    const dailyROI = daysSince >= 1 ? totalROI / daysSince : totalROI;
+                    _sr('lb3DailyROI', dailyROI, true);
 
-                    // Update labels to show what period they represent
-                    if (daysSince < 1) {
-                        const hrs = Math.round(hoursSince);
-                        document.querySelectorAll('#lb3DailyROI,#lb3WeeklyROI,#lb3MonthlyROI').forEach(e => {
-                            const label = e.parentElement && e.parentElement.querySelector('div:last-child');
-                        });
-                    }
+                    // Weekly + Monthly = always PROJECTION (extrapolated, blue dashed style)
+                    const dailyRate = totalROI / Math.max(daysSince, 0.04);
+                    _sr('lb3WeeklyROI', dailyRate * 7, true);
+                    _sr('lb3MonthlyROI', dailyRate * 30, true);
 
                     // Predictions — only meaningful after 1+ day
                     const dailyPnl = daysSince >= 1 ? lCum / daysSince : lCum / Math.max(daysSince, 0.04);
