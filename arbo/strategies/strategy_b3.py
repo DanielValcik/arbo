@@ -327,19 +327,30 @@ class StrategyB3:
                     )
                     continue
 
-                # DYNAMIC SIZING based on expected fill price (best_ask)
-                # Cheap fill = more margin = bigger position
-                # Dynamic sizing: cheap fills = market disagrees = SMALL position
-                # Expensive fills = market agrees = normal position
+                # MARKET DISAGREEMENT CHECK (before order!)
+                # If market price is >50pp away from model FV, trust the market.
+                # Evidence: 5/5 wins had gap <35pp, 1 loss had gap 77pp.
                 expected_fill = liq.get("best_ask", entry_price)
+                market_gap = abs(entry_mkt_fv - expected_fill)
+                if market_gap > 0.50:
+                    logger.info(
+                        "b3_market_disagrees",
+                        model_fv=f"{entry_mkt_fv:.3f}",
+                        market_price=f"{expected_fill:.3f}",
+                        gap=f"{market_gap:.3f}",
+                        msg="Market disagrees >50pp — skipping",
+                    )
+                    continue
+
+                # Dynamic sizing
                 if expected_fill <= 0.30:
-                    size_mult = 0.5   # Trh prodává lacino = ví něco, co my ne
+                    size_mult = 0.5   # Trh prodává lacino = opatrně
                 elif expected_fill <= 0.55:
-                    size_mult = 1.0   # Normální
+                    size_mult = 1.0
                 elif expected_fill <= 0.75:
-                    size_mult = 1.0   # Trh souhlasí s naším modelem
+                    size_mult = 1.0
                 else:
-                    size_mult = 0.5   # Příliš drahé, malý profit potenciál
+                    size_mult = 0.5   # Příliš drahé
                 bet_size = min(bet_size * size_mult, MAX_BET_SIZE)
                 if bet_size < MIN_ORDER_SIZE:
                     continue
