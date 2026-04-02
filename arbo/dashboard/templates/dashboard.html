@@ -4144,9 +4144,12 @@
                     const dailyProj = dailyRate / 100 * startCap;
                     const weeklyProj = dailyProj * 7;
                     const monthlyProj = dailyProj * 30;
-                    _su('lb3DailyProj', 'proj: ' + fmtUsd(dailyProj) + '/den', '#58a6ff');
-                    _su('lb3WeeklyProj', 'proj: ' + fmtUsd(weeklyProj) + '/tyd', '#58a6ff');
-                    _su('lb3MonthlyProj', 'proj: ' + fmtUsd(monthlyProj) + '/mes', '#58a6ff');
+                    const dPct = fmt(dailyProj / startCap * 100);
+                    const wPct = fmt(weeklyProj / startCap * 100);
+                    const mPct = fmt(monthlyProj / startCap * 100);
+                    _su('lb3DailyProj', 'proj: ' + fmtUsd(dailyProj) + '/den (' + dPct + ')', '#58a6ff');
+                    _su('lb3WeeklyProj', 'proj: ' + fmtUsd(weeklyProj) + '/tyd (' + wPct + ')', '#58a6ff');
+                    _su('lb3MonthlyProj', 'proj: ' + fmtUsd(monthlyProj) + '/mes (' + mPct + ')', '#58a6ff');
 
                     // Predictions — only meaningful after 1+ day
                     const dailyPnl = daysSince >= 1 ? lCum / daysSince : lCum / Math.max(daysSince, 0.04);
