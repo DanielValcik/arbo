@@ -4099,14 +4099,6 @@
                 _s('lb3TotalPnl', (lCum >= 0 ? '+$' : '-$') + Math.abs(lCum).toFixed(2));
                 const tpEl = document.getElementById('lb3TotalPnl');
                 if (tpEl) tpEl.style.color = lCum >= 0 ? 'var(--green)' : 'var(--red)';
-                // Ratio: how much $1 invested returned
-                const totalInvested = resolvedFills.reduce((s, t) => s + ((t.trade_details||{}).live_entry_price||0) * ((t.trade_details||{}).live_entry_shares||0), 0);
-                const ratioEl = document.getElementById('lb3Ratio');
-                if (ratioEl && totalInvested > 0) {
-                    const ratio = (totalInvested + lCum) / totalInvested;
-                    ratioEl.textContent = '(1$ → $' + ratio.toFixed(2) + ')';
-                    ratioEl.style.color = ratio >= 1 ? 'var(--green)' : 'var(--red)';
-                }
                 _s('lb3Trades', resolvedCount);
                 if (resolvedCount > 0) {
                     const winsCount = liveChron.filter(t => (t.trade_details||{}).live_exit_price > 0.5 && (t.trade_details||{}).live_exit_status === 'resolution').length;
@@ -4176,6 +4168,14 @@
                 }
                 // Update avg fill price in Expectation vs Reality
                 const resolvedFills = liveChron.filter(t => (t.trade_details||{}).live_exit_status === 'resolution' && (t.trade_details||{}).live_entry_price > 0);
+                // Investment ratio: $1 → $X
+                const totalInvested = resolvedFills.reduce((s, t) => s + ((t.trade_details||{}).live_entry_price||0) * ((t.trade_details||{}).live_entry_shares||0), 0);
+                const ratioEl = document.getElementById('lb3Ratio');
+                if (ratioEl && totalInvested > 0) {
+                    const ratio = (totalInvested + lCum) / totalInvested;
+                    ratioEl.textContent = '(1$ \u2192 $' + ratio.toFixed(2) + ')';
+                    ratioEl.style.color = ratio >= 1 ? 'var(--green)' : 'var(--red)';
+                }
                 if (resolvedFills.length > 0) {
                     const avgFill = resolvedFills.reduce((s,t) => s + (t.trade_details.live_entry_price||0), 0) / resolvedFills.length;
                     const realWr = resolvedFills.filter(t => (t.trade_details.live_exit_price||0) > 0.5).length / resolvedFills.length * 100;
