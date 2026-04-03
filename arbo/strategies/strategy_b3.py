@@ -853,9 +853,55 @@ class StrategyB3:
                 if pos.live_shares > 0 and reason != "resolution":
                     self._live_holding[token_id] = pos
 
-        # Check _live_holding for resolution
+        # Check _live_holding: Binance reversal early exit + resolution
         for token_id in list(self._live_holding.keys()):
             pos = self._live_holding[token_id]
+
+            # BINANCE REVERSAL EXIT: if Binance crossed back through CL start,
+            # Chainlink will follow → we'll lose at resolution. Sell now.
+            if (
+                btc_price
+                and pos.btc_at_start > 0
+                and pos.live_shares > 0
+                and now < pos.event_end_ts  # Before resolution
+                and now - pos.entry_time > 30  # Give it 30s to stabilize
+            ):
+                if pos.direction == 1 and btc_price < pos.btc_at_start - 10:
+                    # UP trade but Binance below start-$10 → reversal confirmed
+                    logger.info(
+                        "b3_binance_reversal",
+                        direction="UP",
+                        btc_now=f"${btc_price:,.0f}",
+                        btc_start=f"${pos.btc_at_start:,.0f}",
+                        below_by=f"${pos.btc_at_start - btc_price:,.0f}",
+                        msg="Binance reversed past start — attempting sell",
+                    )
+                    # Trigger early sell
+                    exit_price = 0.3  # Approximate — real price from CLOB
+                    triggered.append((
+                        token_id, "binance_reversal", exit_price,
+                        pos.live_shares, pos.direction, pos.live_entry_price,
+                    ))
+                    self._live_holding.pop(token_id)
+                    continue
+                elif pos.direction == -1 and btc_price > pos.btc_at_start + 10:
+                    # DOWN trade but Binance above start+$10 → reversal confirmed
+                    logger.info(
+                        "b3_binance_reversal",
+                        direction="DOWN",
+                        btc_now=f"${btc_price:,.0f}",
+                        btc_start=f"${pos.btc_at_start:,.0f}",
+                        above_by=f"${btc_price - pos.btc_at_start:,.0f}",
+                        msg="Binance reversed past start — attempting sell",
+                    )
+                    exit_price = 0.3
+                    triggered.append((
+                        token_id, "binance_reversal", exit_price,
+                        pos.live_shares, pos.direction, pos.live_entry_price,
+                    ))
+                    self._live_holding.pop(token_id)
+                    continue
+
             if now >= pos.event_end_ts and pos.btc_at_start > 0:
                 # Use Polymarket oracle — timeout after 30 min (auto-redeem handles money)
                 pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)

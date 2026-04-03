@@ -1760,6 +1760,26 @@ class RDHOrchestrator:
                     "live_exit_status": "resolution",
                     "live_exit_latency_ms": 0,
                 }
+            elif live_shares > 0 and exit_reason == "binance_reversal":
+                # BINANCE REVERSAL: BTC crossed back past start → sell immediately!
+                # This is the one exception to never-sell: Binance reversal = certain loss
+                logger.info(
+                    "b3_live_reversal_sell",
+                    shares=live_shares,
+                    entry_price=live_entry_price,
+                    msg="Binance reversed past start — selling to limit loss",
+                )
+                live_exit_info = await self._strategy_b3.sell_live_position(
+                    token_id=token_id,
+                    exit_reason="binance_reversal",
+                    paper_exit_price=exit_price,
+                )
+                if live_exit_info and live_exit_info.get("live_exit_price", 0) > 0:
+                    logger.info(
+                        "b3_reversal_sell_ok",
+                        sell_price=live_exit_info["live_exit_price"],
+                        saved=f"${live_entry_price * live_shares - live_exit_info['live_exit_price'] * live_exit_info.get('live_exit_shares', 0):.2f}",
+                    )
             elif live_shares > 0 and exit_reason != "resolution":
                 # Non-resolution exit: paper sells, live HOLDS to resolution
                 # Don't sell on live — let it auto-resolve
