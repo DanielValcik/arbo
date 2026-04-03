@@ -425,8 +425,10 @@ class StrategyB3:
                         "orderbook_best_bid": liq.get("best_bid") if liq else None,
                         "orderbook_best_ask": liq.get("best_ask") if liq else None,
                         "market_gap": round(abs(entry_mkt_fv - liq.get("best_ask", entry_price)), 3) if liq else None,
-                        "btc_abs_move": round(abs(sig.btc_now - sig.btc_at_start), 2) if sig.btc_now and sig.btc_at_start else None,
-                        "live_qualified": bool(sig.edge >= 0.40 and abs(sig.btc_now - sig.btc_at_start) >= 50) if sig.btc_now and sig.btc_at_start else False,
+                        "btc_abs_move_binance": round(abs(sig.btc_now - sig.btc_at_start), 2) if sig.btc_now and sig.btc_at_start else None,
+                        "btc_abs_move_chainlink": round(abs(chainlink_price - sig.btc_at_start), 2) if chainlink_price and sig.btc_at_start else None,
+                        "btc_abs_move": round(btc_move, 2),
+                        "live_qualified": bool(sig.edge >= 0.40 and btc_move >= 50),
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
                     },
@@ -447,7 +449,11 @@ class StrategyB3:
             live_fill_status = "skipped"
             live_latency_ms = 0
 
-            btc_move = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
+            # Use CHAINLINK move (not Binance) — resolution is CL vs CL
+            # Binance leads by $20-30, inflating move by that amount
+            btc_move_cl = abs(chainlink_price - sig.btc_at_start) if chainlink_price and sig.btc_at_start else 0
+            btc_move_bin = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
+            btc_move = btc_move_cl if btc_move_cl > 0 else btc_move_bin  # CL preferred, Binance fallback
 
             if (
                 self._execution_mode in ("dual", "live")
