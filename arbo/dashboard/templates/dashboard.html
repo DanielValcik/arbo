@@ -1395,7 +1395,7 @@
                 <div id="lb3Overview" style="font-size:12px">
                     <div style="text-align:center;padding:12px;color:var(--text-dim)">
                         <div style="font-size:28px;font-weight:700" id="lb3TotalPnl">$0.00</div>
-                        <div>Live P&L</div>
+                        <div>Live P&L <span id="lb3Ratio" style="font-size:14px;font-weight:600;margin-left:8px;color:var(--text-dim)"></span></div>
                         <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
                             <div style="background:rgba(63,185,80,0.06);border-radius:6px;padding:8px">
                                 <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Denne</div>
@@ -4099,6 +4099,14 @@
                 _s('lb3TotalPnl', (lCum >= 0 ? '+$' : '-$') + Math.abs(lCum).toFixed(2));
                 const tpEl = document.getElementById('lb3TotalPnl');
                 if (tpEl) tpEl.style.color = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                // Ratio: how much $1 invested returned
+                const totalInvested = resolvedFills.reduce((s, t) => s + ((t.trade_details||{}).live_entry_price||0) * ((t.trade_details||{}).live_entry_shares||0), 0);
+                const ratioEl = document.getElementById('lb3Ratio');
+                if (ratioEl && totalInvested > 0) {
+                    const ratio = (totalInvested + lCum) / totalInvested;
+                    ratioEl.textContent = '(1$ → $' + ratio.toFixed(2) + ')';
+                    ratioEl.style.color = ratio >= 1 ? 'var(--green)' : 'var(--red)';
+                }
                 _s('lb3Trades', resolvedCount);
                 if (resolvedCount > 0) {
                     const winsCount = liveChron.filter(t => (t.trade_details||{}).live_exit_price > 0.5 && (t.trade_details||{}).live_exit_status === 'resolution').length;
