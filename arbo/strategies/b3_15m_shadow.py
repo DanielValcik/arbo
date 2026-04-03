@@ -49,6 +49,9 @@ class B3_15mShadow:
         self._session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=10),
         )
+        # Load unresolved signals from DB (survives restarts)
+        await self._load_unresolved_from_db()
+
         # Bootstrap sigma from Binance
         try:
             async with self._session.get(
@@ -278,6 +281,9 @@ class B3_15mShadow:
             self._signals.append(signal)
             ev[f"scanned_{entry_minute}"] = True
 
+            # Persist to DB
+            await self._save_signal_to_db(signal)
+
             logger.info(
                 "b3_15m_shadow_signal",
                 direction=signal["direction"],
@@ -337,6 +343,9 @@ class B3_15mShadow:
                 sig["resolution"] = "win" if won else "loss"
                 sig["would_pnl_per_share"] = round(pnl, 4)
 
+                # Persist resolution to DB
+                await self._update_resolution_in_db(sig["event_start_ts"], sig["resolution"], sig["would_pnl_per_share"])
+
                 logger.info(
                     "b3_15m_shadow_resolved",
                     direction=direction,
@@ -367,6 +376,72 @@ class B3_15mShadow:
                 )
             except Exception:
                 pass
+
+    async def _save_signal_to_db(self, sig: dict) -> None:
+        """Persist shadow signal to PostgreSQL."""
+        try:
+            from arbo.utils.db import get_session_factory
+            import sqlalchemy as sa
+            factory = get_session_factory()
+            async with factory() as session:
+                cols = [
+                    "event_slug", "condition_id", "direction", "entry_minute",
+                    "time_remaining", "btc_at_start", "btc_now", "btc_chainlink",
+                    "btc_move", "btc_abs_move", "sigma", "model_fv", "signal_fv",
+                    "edge", "market_fv_up", "book_best_bid", "book_best_ask",
+                    "book_spread", "book_bid_depth_usd", "book_ask_depth_usd",
+                    "would_fill_at", "market_gap", "event_start_ts", "event_end_ts",
+                ]
+                vals = {c: sig.get(c) for c in cols}
+                col_str = ", ".join(cols)
+                val_str = ", ".join(f":{c}" for c in cols)
+                await session.execute(
+                    sa.text(f"INSERT INTO b3_15m_shadow_signals ({col_str}) VALUES ({val_str})"),
+                    vals,
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning("b3_15m_db_save_error", error=str(e))
+
+    async def _update_resolution_in_db(self, event_start_ts: float, resolution: str, pnl: float) -> None:
+        """Update resolution for a shadow signal in DB."""
+        try:
+            from arbo.utils.db import get_session_factory
+            import sqlalchemy as sa
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    sa.text("""
+                        UPDATE b3_15m_shadow_signals
+                        SET resolution = :res, would_pnl_per_share = :pnl
+                        WHERE event_start_ts = :ts AND resolution IS NULL
+                    """),
+                    {"res": resolution, "pnl": pnl, "ts": event_start_ts},
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning("b3_15m_db_resolution_error", error=str(e))
+
+    async def _load_unresolved_from_db(self) -> None:
+        """Load unresolved signals from DB on startup."""
+        try:
+            from arbo.utils.db import get_session_factory
+            import sqlalchemy as sa
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("SELECT * FROM b3_15m_shadow_signals WHERE resolution IS NULL ORDER BY created_at")
+                )
+                rows = result.mappings().all()
+                for row in rows:
+                    sig = dict(row)
+                    sig["resolution"] = None
+                    sig["would_pnl_per_share"] = None
+                    self._signals.append(sig)
+                if rows:
+                    logger.info("b3_15m_loaded_unresolved", count=len(rows))
+        except Exception as e:
+            logger.warning("b3_15m_db_load_error", error=str(e))
 
     async def _fetch_orderbook(self, token_id: str) -> dict:
         """Fetch orderbook for a token."""
