@@ -132,8 +132,8 @@ class B3Scanner:
             if diff < best_diff:
                 best_diff = diff
                 best = price
-        # Only use if within 30 seconds of target
-        if best_diff <= 30:
+        # Only use if within 10 seconds of target (recording every 5s)
+        if best_diff <= 10:
             return best
         return None
 

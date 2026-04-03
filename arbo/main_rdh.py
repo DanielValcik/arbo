@@ -1124,6 +1124,10 @@ class RDHOrchestrator:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
+        # B3 Chainlink price recorder (every 5s for precise btc_at_start)
+        if self._strategy_b3 is not None:
+            task_defs.append(("B3_cl_recorder", self._run_b3_cl_record, 5))
+
         # B3 15-min shadow scanner (data collection, no trading)
         if self._b3_15m_shadow is not None:
             task_defs.append(("B3_15m_shadow", self._run_b3_15m_shadow, 30))
@@ -1686,6 +1690,11 @@ class RDHOrchestrator:
                 # Slack notification
                 await self._notify_b3_entry(sig)
             await self._paper_engine.sync_positions_to_db()
+
+    async def _run_b3_cl_record(self) -> None:
+        """Record Chainlink price every 5s for precise btc_at_start."""
+        if self._strategy_b3:
+            self._strategy_b3._scanner.record_cl_price()
 
     async def _run_b3_15m_shadow(self) -> None:
         """B3 15-min shadow scanner — collect orderbook data, no trading."""
