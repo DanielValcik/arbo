@@ -427,6 +427,8 @@ class StrategyB3:
                         "market_gap": round(abs(entry_mkt_fv - liq.get("best_ask", entry_price)), 3) if liq else None,
                         "btc_abs_move": round(abs(sig.btc_now - sig.btc_at_start), 2) if sig.btc_now and sig.btc_at_start else None,
                         "live_qualified": bool(sig.edge >= 0.40 and abs(sig.btc_now - sig.btc_at_start) >= 50) if sig.btc_now and sig.btc_at_start else False,
+                        "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
+                        "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
                     },
                 )
 
