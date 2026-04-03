@@ -737,6 +737,33 @@ class StrategyB3:
             t_remaining = WINDOW_MIN - elapsed_min
             hold_min = (now - pos.entry_time) / 60.0
 
+            # BINANCE REVERSAL CHECK (before resolution, for live positions)
+            if (
+                pos.live_shares > 0
+                and btc_price
+                and pos.btc_at_start > 0
+                and now < pos.event_end_ts
+                and hold_min > 0.5  # 30s stabilization
+            ):
+                if pos.direction == 1 and btc_price < pos.btc_at_start - 10:
+                    logger.info("b3_binance_reversal", direction="UP",
+                        btc_now=f"${btc_price:,.0f}", btc_start=f"${pos.btc_at_start:,.0f}",
+                        below_by=f"${pos.btc_at_start - btc_price:,.0f}",
+                        msg="Binance reversed — triggering early exit")
+                    exit_price = max(0.05, 1.0 - (pos.btc_at_start - btc_price) / 200)
+                    triggered.append((token_id, "binance_reversal", exit_price,
+                        pos.live_shares, pos.direction, pos.live_entry_price))
+                    continue
+                elif pos.direction == -1 and btc_price > pos.btc_at_start + 10:
+                    logger.info("b3_binance_reversal", direction="DOWN",
+                        btc_now=f"${btc_price:,.0f}", btc_start=f"${pos.btc_at_start:,.0f}",
+                        above_by=f"${btc_price - pos.btc_at_start:,.0f}",
+                        msg="Binance reversed — triggering early exit")
+                    exit_price = max(0.05, 1.0 - (btc_price - pos.btc_at_start) / 200)
+                    triggered.append((token_id, "binance_reversal", exit_price,
+                        pos.live_shares, pos.direction, pos.live_entry_price))
+                    continue
+
             # Resolution check: event has ended
             if now >= pos.event_end_ts:
                 # For live positions: MUST use Polymarket oracle (Chainlink).

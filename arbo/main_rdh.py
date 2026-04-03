@@ -1813,6 +1813,8 @@ class RDHOrchestrator:
                         "live_exit_latency_ms": live_exit_info.get("live_exit_latency_ms", 0),
                         "btc_binance_at_resolution": btc_binance_at_res,
                         "btc_chainlink_at_resolution": btc_chainlink_at_res,
+                        "exit_reason_live": exit_reason,
+                        "was_reversal_exit": exit_reason == "binance_reversal",
                     }
                     factory = get_session_factory()
                     async with factory() as session:
