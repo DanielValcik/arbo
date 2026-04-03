@@ -194,6 +194,9 @@ class StrategyB3:
         """
         executed: list[B3Signal] = []
 
+        # 0. Record Chainlink price to rolling buffer (for accurate btc_at_start)
+        self._scanner.record_cl_price()
+
         # 1. Fetch events
         await self._scanner.fetch_events()
 

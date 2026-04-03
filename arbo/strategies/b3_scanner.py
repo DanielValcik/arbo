@@ -98,12 +98,44 @@ class B3Scanner:
         self._last_fetch_ts: float = 0
         self._fetch_interval_s: float = 120  # Refetch events every 2 min
         self._rtds_feed = rtds_feed  # Chainlink RTDS for btc_at_start
+        # Rolling buffer of Chainlink prices (timestamp → price)
+        # Allows looking up CL price at exact event start time
+        self._cl_price_buffer: list[tuple[float, float]] = []  # (unix_ts, price)
+        self._cl_buffer_max = 600  # Keep 10 min of prices
 
     async def init(self) -> None:
         """Initialize HTTP session."""
         self._session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=10),
         )
+
+    def record_cl_price(self) -> None:
+        """Record current Chainlink price with timestamp. Call every 15s."""
+        if not self._rtds_feed:
+            return
+        price = self._rtds_feed.get_price("btc/usd")
+        if price and price > 1000:
+            now = time.time()
+            self._cl_price_buffer.append((now, price))
+            # Trim old entries
+            cutoff = now - self._cl_buffer_max
+            self._cl_price_buffer = [(t, p) for t, p in self._cl_price_buffer if t >= cutoff]
+
+    def _lookup_cl_price(self, target_ts: float) -> float | None:
+        """Find Chainlink price closest to target timestamp from buffer."""
+        if not self._cl_price_buffer:
+            return None
+        best = None
+        best_diff = float('inf')
+        for ts, price in self._cl_price_buffer:
+            diff = abs(ts - target_ts)
+            if diff < best_diff:
+                best_diff = diff
+                best = price
+        # Only use if within 30 seconds of target
+        if best_diff <= 30:
+            return best
+        return None
 
     async def close(self) -> None:
         """Close HTTP session."""
@@ -271,9 +303,19 @@ class B3Scanner:
         now = time.time()
         age = now - event_start_ts
 
-        # For fresh events (started 0-120s ago): use Chainlink RTDS
-        # NOT for future events (age < 0) — wait until they actually start
-        if 0 <= age < 120 and self._rtds_feed:
+        # BEST: look up exact CL price at event start from rolling buffer
+        buffer_price = self._lookup_cl_price(event_start_ts)
+        if buffer_price:
+            logger.info(
+                "b3_btc_start_cl_buffer",
+                price=f"${buffer_price:,.2f}",
+                age_s=f"{age:.0f}",
+                msg="From CL price buffer (most accurate)",
+            )
+            return buffer_price
+
+        # GOOD: use current RTDS price for very fresh events
+        if 0 <= age < 30 and self._rtds_feed:
             cl_price = self._rtds_feed.get_price("btc/usd")
             if cl_price and cl_price > 1000:
                 logger.info(
