@@ -1121,7 +1121,7 @@ class RDHOrchestrator:
             task_defs.append(("strategy_B2", self._run_strategy_b2, 60))        # entry scan every 60s (faster)
             task_defs.append(("B2_exit_monitor", self._run_b2_exit_check, 30))  # exit check every 30s
         if self._strategy_b3 is not None:
-            task_defs.append(("strategy_B3", self._run_strategy_b3, 15))        # entry scan every 15s (5-min windows)
+            task_defs.append(("strategy_B3", self._run_strategy_b3, 5))         # entry scan every 5s (faster signal detection)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
 
         # B3 Chainlink price recorder (every 5s for precise btc_at_start)
