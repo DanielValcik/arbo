@@ -745,21 +745,24 @@ class StrategyB3:
                 and now < pos.event_end_ts
                 and hold_min > 0.5  # 30s stabilization
             ):
+                reversal = False
                 if pos.direction == 1 and btc_price < pos.btc_at_start - 10:
                     logger.info("b3_binance_reversal", direction="UP",
                         btc_now=f"${btc_price:,.0f}", btc_start=f"${pos.btc_at_start:,.0f}",
                         below_by=f"${pos.btc_at_start - btc_price:,.0f}",
                         msg="Binance reversed — triggering early exit")
                     exit_price = max(0.05, 1.0 - (pos.btc_at_start - btc_price) / 200)
-                    triggered.append((token_id, "binance_reversal", exit_price,
-                        pos.live_shares, pos.direction, pos.live_entry_price))
-                    continue
+                    reversal = True
                 elif pos.direction == -1 and btc_price > pos.btc_at_start + 10:
                     logger.info("b3_binance_reversal", direction="DOWN",
                         btc_now=f"${btc_price:,.0f}", btc_start=f"${pos.btc_at_start:,.0f}",
                         above_by=f"${btc_price - pos.btc_at_start:,.0f}",
                         msg="Binance reversed — triggering early exit")
                     exit_price = max(0.05, 1.0 - (btc_price - pos.btc_at_start) / 200)
+                    reversal = True
+                if reversal:
+                    # Remove from open positions and trigger exit
+                    self._open_positions.pop(token_id, None)
                     triggered.append((token_id, "binance_reversal", exit_price,
                         pos.live_shares, pos.direction, pos.live_entry_price))
                     continue
