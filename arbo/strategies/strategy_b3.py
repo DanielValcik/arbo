@@ -386,6 +386,11 @@ class StrategyB3:
             actual_size = float(decision.adjusted_size or actual_size)
             shares = actual_size / entry_price
 
+            # Compute BTC move (used in trade_details AND live qualification)
+            btc_move_cl = abs(chainlink_price - sig.btc_at_start) if chainlink_price and sig.btc_at_start else 0
+            btc_move_bin = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
+            btc_move = btc_move_cl if btc_move_cl > 0 else btc_move_bin  # CL preferred
+
             # Execute
             paper_trade = None
             if self._paper_engine:
@@ -448,12 +453,6 @@ class StrategyB3:
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
-
-            # Use CHAINLINK move (not Binance) — resolution is CL vs CL
-            # Binance leads by $20-30, inflating move by that amount
-            btc_move_cl = abs(chainlink_price - sig.btc_at_start) if chainlink_price and sig.btc_at_start else 0
-            btc_move_bin = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
-            btc_move = btc_move_cl if btc_move_cl > 0 else btc_move_bin  # CL preferred, Binance fallback
 
             if (
                 self._execution_mode in ("dual", "live")
