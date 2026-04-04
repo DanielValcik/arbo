@@ -3386,7 +3386,7 @@ class RDHOrchestrator:
         """Run anomaly checks and send Slack alerts if needed.
 
         Deduplication: each alert type is sent at most once per day.
-        State persisted to /tmp/arbo_anomaly_state.json so restarts don't re-send.
+        State persisted to /opt/arbo/logs/anomaly_state.json so restarts don't re-send.
         """
         if self._slack_bot is None:
             return
@@ -3397,6 +3397,8 @@ class RDHOrchestrator:
         from sqlalchemy import text
 
         from arbo.utils.db import get_session_factory
+
+        logger.info("anomaly_check_running")
 
         alerts: list[str] = []
         factory = get_session_factory()
@@ -3445,15 +3447,23 @@ class RDHOrchestrator:
                 )
                 sent_today["daily_loss"] = today_key
 
-        # 3. Tasks health (always check — task crash is critical)
-        stopped = [name for name, ts in self._tasks.items() if ts.task and ts.task.done()]
-        if stopped:
+        # 3. Tasks health — only alert on permanently stopped or truly crashed tasks
+        stopped = [
+            name
+            for name, ts in self._tasks.items()
+            if ts.permanent_stop or (ts.task and ts.task.done())
+        ]
+        if stopped and "stopped_tasks" not in sent_today:
             alerts.append(f":red_circle: Strategie zastaveny: {', '.join(stopped)}")
+            sent_today["stopped_tasks"] = today_key
+            logger.warning("anomaly_stopped_tasks", tasks=stopped)
 
         if alerts:
             msg = "*Anomalie detekovana:*\n" + "\n".join(alerts)
             await self._slack_bot.send_message(msg)
-            logger.warning("anomaly_alerts_sent", count=len(alerts))
+            logger.warning("anomaly_alerts_sent", count=len(alerts), alerts=alerts)
+        else:
+            logger.info("anomaly_check_ok")
 
         # Persist state to disk (survives restarts)
         try:
