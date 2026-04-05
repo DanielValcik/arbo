@@ -434,6 +434,7 @@ class StrategyB3:
                         "btc_abs_move_binance": round(abs(sig.btc_now - sig.btc_at_start), 2) if sig.btc_now and sig.btc_at_start else None,
                         "btc_abs_move_chainlink": round(abs(chainlink_price - sig.btc_at_start), 2) if chainlink_price and sig.btc_at_start else None,
                         "btc_abs_move": round(btc_move, 2),
+                        "move_risk": round(btc_move * sig.sigma_per_min * 1e6, 0),
                         "live_qualified": bool(sig.edge >= 0.40 and btc_move >= 50),
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
@@ -444,26 +445,27 @@ class StrategyB3:
                 continue
 
             # Live execution (dual mode)
-            # Only BIG MOVE signals go live:
-            # - BTC moved $50-$100 from event start (CLOB lag = our edge)
-            # - Edge >= 0.40 (model confirms direction)
-            # - Move >$100 = TOO volatile, high reversal risk (Trade 6: $132 → LOSS)
-            # Evidence: 5W on $51-$95 moves, 1L on $132 move
+            # Only BIG MOVE signals go live. Risk-adjusted filter:
+            # - move_risk = btc_move × sigma × 1e6 (captures: big move + high vol = dangerous)
+            # - 7 trades: WINs had risk 11,730-24,700. LOSS had risk 40,920 (2× any WIN)
+            # - Threshold 30,000 blocks Trade 6 (40,920) while keeping Trade 5 (24,700)
             LIVE_MIN_EDGE = 0.40
             LIVE_MIN_BTC_MOVE = 50.0  # Absolute BTC move in USD
-            LIVE_MAX_BTC_MOVE = 100.0  # Cap: extreme moves reverse too often
+            LIVE_MAX_MOVE_RISK = 30_000  # move_usd × sigma × 1e6
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
+            move_risk = btc_move * sig.sigma_per_min * 1e6
 
-            if btc_move > LIVE_MAX_BTC_MOVE and sig.edge >= LIVE_MIN_EDGE:
+            if move_risk > LIVE_MAX_MOVE_RISK and sig.edge >= LIVE_MIN_EDGE:
                 logger.info(
-                    "b3_live_move_too_large",
+                    "b3_live_risk_too_high",
                     direction="UP" if sig.direction == 1 else "DOWN",
                     btc_move=f"${btc_move:.0f}",
-                    max=f"${LIVE_MAX_BTC_MOVE:.0f}",
                     sigma=f"{sig.sigma_per_min:.6f}",
+                    move_risk=f"{move_risk:.0f}",
+                    max_risk=f"{LIVE_MAX_MOVE_RISK}",
                 )
 
             if (
@@ -472,7 +474,7 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
                 and sig.edge >= LIVE_MIN_EDGE
                 and btc_move >= LIVE_MIN_BTC_MOVE
-                and btc_move <= LIVE_MAX_BTC_MOVE
+                and move_risk <= LIVE_MAX_MOVE_RISK
             ):
                 logger.info(
                     "b3_live_qualified",
