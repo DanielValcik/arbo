@@ -447,11 +447,12 @@ class StrategyB3:
             # Live execution (dual mode)
             # Only BIG MOVE signals go live. Risk-adjusted filter:
             # - move_risk = btc_move × sigma × 1e6 (captures: big move + high vol = dangerous)
-            # - 7 trades: WINs had risk 11,730-24,700. LOSS had risk 40,920 (2× any WIN)
-            # - Threshold 30,000 blocks Trade 6 (40,920) while keeping Trade 5 (24,700)
+            # - 55 live trades: 45W/10L (82% WR), PnL +$69.6
+            # - Risk 40-50k: 71% WR, +$68.5. Risk 50k+: 74% WR, +$43.7
+            # - Threshold 50k: conservative cap, blocks extreme outliers only
             LIVE_MIN_EDGE = 0.40
             LIVE_MIN_BTC_MOVE = 50.0  # Absolute BTC move in USD
-            LIVE_MAX_MOVE_RISK = 30_000  # move_usd × sigma × 1e6
+            LIVE_MAX_MOVE_RISK = 50_000  # move_usd × sigma × 1e6
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
