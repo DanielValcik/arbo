@@ -445,29 +445,20 @@ class StrategyB3:
                 continue
 
             # Live execution (dual mode)
-            # Only BIG MOVE signals go live. Risk-adjusted filter:
-            # - move_risk = btc_move × sigma × 1e6 (captures: big move + high vol = dangerous)
-            # - 55 live trades: 45W/10L (82% WR), PnL +$69.6
-            # - Risk 40-50k: 71% WR, +$68.5. Risk 50k+: 74% WR, +$43.7
-            # - Threshold 50k: conservative cap, blocks extreme outliers only
+            # Only BIG MOVE signals go live:
+            # - BTC moved >$50 from event start (CLOB lag = our edge)
+            # - Edge >= 0.40 (model confirms direction)
+            # - NO max move/risk filter — autoresearch on 56 live trades shows
+            #   every filter loses more in missed wins than it saves on avoided losses.
+            #   Real protection = reversal exit (Binance cross-back detection).
+            # - 56 live trades: 45W/11L (80% WR), PnL +$58.9
             LIVE_MIN_EDGE = 0.40
             LIVE_MIN_BTC_MOVE = 50.0  # Absolute BTC move in USD
-            LIVE_MAX_MOVE_RISK = 50_000  # move_usd × sigma × 1e6
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
             move_risk = btc_move * sig.sigma_per_min * 1e6
-
-            if move_risk > LIVE_MAX_MOVE_RISK and sig.edge >= LIVE_MIN_EDGE:
-                logger.info(
-                    "b3_live_risk_too_high",
-                    direction="UP" if sig.direction == 1 else "DOWN",
-                    btc_move=f"${btc_move:.0f}",
-                    sigma=f"{sig.sigma_per_min:.6f}",
-                    move_risk=f"{move_risk:.0f}",
-                    max_risk=f"{LIVE_MAX_MOVE_RISK}",
-                )
 
             if (
                 self._execution_mode in ("dual", "live")
@@ -475,7 +466,6 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
                 and sig.edge >= LIVE_MIN_EDGE
                 and btc_move >= LIVE_MIN_BTC_MOVE
-                and move_risk <= LIVE_MAX_MOVE_RISK
             ):
                 logger.info(
                     "b3_live_qualified",
