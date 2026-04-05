@@ -15,6 +15,7 @@ Key differences from B2 (Crypto Price Edge):
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from dataclasses import dataclass
@@ -444,15 +445,26 @@ class StrategyB3:
 
             # Live execution (dual mode)
             # Only BIG MOVE signals go live:
-            # - BTC moved >$50 from event start (CLOB lag = our edge)
+            # - BTC moved $50-$100 from event start (CLOB lag = our edge)
             # - Edge >= 0.40 (model confirms direction)
-            # Evidence: 40 live trades with BTC>$50 → 85% WR, $4.44/trade
+            # - Move >$100 = TOO volatile, high reversal risk (Trade 6: $132 → LOSS)
+            # Evidence: 5W on $51-$95 moves, 1L on $132 move
             LIVE_MIN_EDGE = 0.40
             LIVE_MIN_BTC_MOVE = 50.0  # Absolute BTC move in USD
+            LIVE_MAX_BTC_MOVE = 100.0  # Cap: extreme moves reverse too often
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
+
+            if btc_move > LIVE_MAX_BTC_MOVE and sig.edge >= LIVE_MIN_EDGE:
+                logger.info(
+                    "b3_live_move_too_large",
+                    direction="UP" if sig.direction == 1 else "DOWN",
+                    btc_move=f"${btc_move:.0f}",
+                    max=f"${LIVE_MAX_BTC_MOVE:.0f}",
+                    sigma=f"{sig.sigma_per_min:.6f}",
+                )
 
             if (
                 self._execution_mode in ("dual", "live")
@@ -460,6 +472,7 @@ class StrategyB3:
                 and self._live_daily_pnl > -self._live_daily_loss_limit
                 and sig.edge >= LIVE_MIN_EDGE
                 and btc_move >= LIVE_MIN_BTC_MOVE
+                and btc_move <= LIVE_MAX_BTC_MOVE
             ):
                 logger.info(
                     "b3_live_qualified",
@@ -778,7 +791,14 @@ class StrategyB3:
                 # Binance disagrees with Chainlink on 25% of trades — NEVER
                 # fall back to Binance for live. Keep retrying until confirmed.
                 if pos.live_shares > 0:
-                    pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
+                    try:
+                        pm_up_won = await asyncio.wait_for(
+                            self._scanner.fetch_resolution(pos.event_start_ts),
+                            timeout=15,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("b3_resolution_timeout", token=token_id[:20])
+                        pm_up_won = None
                     if pm_up_won is None:
                         wait_s = int(now - pos.event_end_ts)
                         if wait_s > 1800:  # 30 min — force Binance fallback
@@ -939,7 +959,14 @@ class StrategyB3:
 
             if now >= pos.event_end_ts and pos.btc_at_start > 0:
                 # Use Polymarket oracle — timeout after 30 min (auto-redeem handles money)
-                pm_up_won = await self._scanner.fetch_resolution(pos.event_start_ts)
+                try:
+                    pm_up_won = await asyncio.wait_for(
+                        self._scanner.fetch_resolution(pos.event_start_ts),
+                        timeout=15,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("b3_resolution_timeout_holding", token=token_id[:20])
+                    pm_up_won = None
                 if pm_up_won is None:
                     wait_s = int(now - pos.event_end_ts)
                     if wait_s > 1800:  # 30 min — give up, auto-redeem already handled it
