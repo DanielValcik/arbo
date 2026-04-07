@@ -437,6 +437,7 @@
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
         <button class="tab-btn" onclick="switchTab('skinny')">SKINNY</button>
+        <button class="tab-btn" onclick="switchTab('echo')" style="color:#bc8cff">ECHO</button>
     </div>
 
     <div id="arboContent" class="tab-content active">
@@ -1262,6 +1263,63 @@
     </div><!-- end skinnyContent -->
 
     <!-- ============================================================ -->
+    <!-- ECHO TAB — BTC→Altcoin Lead-Lag Trading -->
+    <!-- ============================================================ -->
+    <div id="echoContent" class="tab-content">
+        <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+            <div class="card" style="border-top:3px solid #bc8cff">
+                <div class="card-title">Echo Total P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div id="echoPnl" style="font-size:32px;font-weight:700;color:#bc8cff">$0.00</div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Trades</span><span id="echoTrades">0</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Win Rate</span><span id="echoWR">0%</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Wins / Losses</span><span id="echoWL">0 / 0</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Avg PnL/Trade</span><span id="echoAvg">$0.00</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span style="color:var(--muted)">Uptime</span><span id="echoUptime">0h</span></div>
+            </div>
+            <div class="card" style="border-top:3px solid #e3b341">
+                <div class="card-title">Configuration</div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Exchange</span><span id="echoCfgExchange">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Signal</span><span id="echoCfgSignal">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Size</span><span id="echoCfgSize">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">BTC Threshold</span><span id="echoCfgThreshold">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Hold Time</span><span id="echoCfgHold">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Server</span><span id="echoCfgServer">—</span></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span style="color:var(--muted)">Pairs</span><span id="echoCfgPairs">—</span></div>
+            </div>
+            <div class="card" style="border-top:3px solid #3fb950">
+                <div class="card-title">Per Pair Performance</div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead><tr><th style="text-align:left;color:var(--muted);padding:6px">Pair</th><th style="color:var(--muted);padding:6px">PnL</th><th style="color:var(--muted);padding:6px">Trades</th><th style="color:var(--muted);padding:6px">WR</th></tr></thead>
+                    <tbody id="echoPairTable"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-title">Equity Curve</div>
+            <canvas id="echoEquityChart" height="80"></canvas>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+            <div class="card">
+                <div class="card-title">Daily P&L</div>
+                <canvas id="echoDailyChart" height="100"></canvas>
+            </div>
+            <div class="card">
+                <div class="card-title">Recent Trades</div>
+                <div style="max-height:300px;overflow-y:auto">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead><tr><th style="text-align:left;color:var(--muted);padding:6px">Time</th><th style="color:var(--muted);padding:6px">Pair</th><th style="color:var(--muted);padding:6px">Dir</th><th style="color:var(--muted);padding:6px">PnL</th><th style="color:var(--muted);padding:6px">Hold</th></tr></thead>
+                        <tbody id="echoTradesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted)">
+            <a href="http://13.212.182.85:8081" target="_blank" style="color:#bc8cff">Open standalone dashboard ↗</a>
+            &nbsp;|&nbsp; <span id="echoLastUpdate">—</span>
+        </div>
+    </div><!-- end echoContent -->
+
+    <!-- ============================================================ -->
     <!-- LIVE B2 TAB — Crypto Price Edge -->
     <!-- ============================================================ -->
     <div id="liveb2Content" class="tab-content">
@@ -1470,34 +1528,32 @@
 
             <!-- Model Info + Expectation vs Reality (full width, 2 columns) -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Model: Big-Move-Scalper</div>
+                <div class="card-title">Model: Big-Move-Scalper V6.0</div>
                 <div style="display:flex;gap:20px;font-size:11px">
                     <div style="flex:0 0 auto;min-width:280px">
-                        <div style="font-weight:600;color:var(--green);margin-bottom:6px">Live evidence: 40 trades BTC&gt;$50 → 85% WR, $4.44/trade</div>
+                        <div style="font-weight:600;color:var(--green);margin-bottom:6px">Dual Filter: velocity + dir_delta</div>
                         <table style="width:100%">
                             <tbody>
-                                <tr><td>Live filter</td><td style="font-weight:700">BTC &gt;$50 + edge &ge; 0.40</td></tr>
-                                <tr><td>Avg fill (live)</td><td>$0.731 (breakeven 73%)</td></tr>
-                                <tr><td>Win rate (live, 40 trades)</td><td style="color:var(--green)">85% (margin 12pp)</td></tr>
-                                <tr><td>Avg PnL/trade</td><td style="color:var(--green)">$4.44</td></tr>
-                                <tr><td>CLOB lag</td><td>Spread $0.01→$0.13-0.23 on big moves</td></tr>
-                                <tr><td>Volatilita</td><td>realized 1440min, scale=0.348</td></tr>
-                                <tr><td>Dynamic sizing</td><td>fill≤$0.30→1.5x, $0.45+→0.5x</td></tr>
+                                <tr><td>Live filter</td><td style="font-weight:700">BTC &gt;$50 + edge &ge; 0.40 + vel &le; 60 + dd &le; $15</td></tr>
+                                <tr><td>Velocity</td><td>move/min &le; $60 (potvrzeny pohyb)</td></tr>
+                                <tr><td>Dir delta</td><td>Bin-CL gap &le; $15 (CL potvrzuje)</td></tr>
                                 <tr><td>Resolution</td><td>Chainlink oracle + auto-redeem</td></tr>
                                 <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
-                                <tr><td>Est. trades/day</td><td>~21</td></tr>
-                                <tr><td>Capital sweet spot</td><td>$2,000-3,800</td></tr>
+                                <tr><td>Reversal exit</td><td style="color:var(--red)">Odstranen (skodil -$14)</td></tr>
+                                <tr><td>Backtest WR</td><td style="color:var(--green)">87% (15t live), 68% (38t paper)</td></tr>
+                                <tr><td>Breakeven WR</td><td>72% (margin 15pp)</td></tr>
+                                <tr><td>Odhad tradu/den</td><td>~5 (na aktivnich dnech)</td></tr>
                             </tbody>
                         </table>
                     </div>
                     <div style="flex:1;min-width:300px">
-                        <div style="font-weight:600;color:var(--gold);margin-bottom:8px">Expectation vs Reality <span style="font-weight:400;font-size:9px;color:var(--text-dim)">(Big Move Scalper, od 2.4. 12:15)</span></div>
+                        <div style="font-weight:600;color:var(--gold);margin-bottom:8px">Expectation vs Reality <span style="font-weight:400;font-size:9px;color:var(--text-dim)">(V6.0, od 6.4. 18:27)</span></div>
                         <div style="display:flex;gap:8px;margin-bottom:8px">
                             <div style="flex:1;text-align:center;background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:6px;padding:8px">
                                 <div style="font-weight:600;margin-bottom:4px;color:#58a6ff">OCEKAVANI</div>
-                                <div>WR: <b>85%</b></div>
-                                <div>Avg fill: <b>$0.73</b></div>
-                                <div>Avg PnL: <b>$4.44</b></div>
+                                <div>WR: <b>87%</b></div>
+                                <div>Avg fill: <b>$0.65</b></div>
+                                <div>Avg PnL: <b>$3.62</b></div>
                             </div>
                             <div style="flex:1;text-align:center;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.2);border-radius:6px;padding:8px">
                                 <div style="font-weight:600;margin-bottom:4px;color:#3fb950">REALITA</div>
@@ -3121,7 +3177,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-        const contentMap = { arbo: 'arboContent', liveb2: 'liveb2Content', liveb3: 'liveb3Content', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent' };
+        const contentMap = { arbo: 'arboContent', liveb2: 'liveb2Content', liveb3: 'liveb3Content', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent', echo: 'echoContent' };
         document.getElementById(contentMap[tab]).classList.add('active');
 
         if (tab === 'cryptoarb') {
@@ -3159,6 +3215,12 @@
             if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(fetchLiveB3, 10000);
         } else {
             if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
+        }
+        if (tab === 'echo') {
+            fetchEcho();
+            if (!echoRefreshInterval) echoRefreshInterval = setInterval(fetchEcho, 10000);
+        } else {
+            if (echoRefreshInterval) { clearInterval(echoRefreshInterval); echoRefreshInterval = null; }
         }
     }
 
@@ -3941,7 +4003,7 @@
 
             // Compute live trade sets (used by charts + comparison card)
             // Never-sell v2 deployed 2026-03-31T17:25 UTC — only count trades after
-            const LIVE_V2_START = '2026-04-02T17:28';  // Big Move Scalper v3 (Chainlink btc_at_start)
+            const LIVE_V2_START = '2026-04-06T18:27';  // V6.0 Dual Filter (velocity + dir_delta)
             const liveAttempted = closed.filter(t => {
                 const d = t.trade_details || {};
                 return d.live_fill_status && d.live_fill_status !== 'skipped'
@@ -4148,7 +4210,7 @@
                 // Expectation vs Reality CHART
                 const evrCtx = document.getElementById('b3ExpVsRealChart');
                 if (evrCtx) {
-                    const EXP_PNL_PER_TRADE = 4.44;  // Big Move: 40 live trades with BTC>$50, avg PnL
+                    const EXP_PNL_PER_TRADE = 3.62;  // V6.0: 15 live trades, avg PnL $3.62/trade
                     const n = resolvedFills.length;
                     const maxTrades = Math.max(n, 20);
                     const expLabels = [];
@@ -5012,6 +5074,86 @@
                 maintainAspectRatio: false,
             }
         });
+    }
+    // ===== ECHO TAB =====
+    const ECHO_API = '';  // Same origin — proxied through Arbo backend
+    let echoRefreshInterval = null;
+    let echoEqChart = null;
+    let echoDayChart = null;
+
+    async function fetchEcho() {
+        try {
+            const [statsR, tradesR, cfgR] = await Promise.allSettled([
+                fetch('/api/echo/stats', {credentials:'include'}).then(r => r.json()),
+                fetch('/api/echo/trades', {credentials:'include'}).then(r => r.json()),
+                fetch('/api/echo/config', {credentials:'include'}).then(r => r.json()),
+            ]);
+            const cfg = cfgR.status === 'fulfilled' ? cfgR.value : null;
+            if (cfg && cfg.exchange) {
+                document.getElementById('echoCfgExchange').textContent = cfg.exchange;
+                document.getElementById('echoCfgSignal').textContent = cfg.signal;
+                document.getElementById('echoCfgSize').textContent = '$' + cfg.size + '/trade';
+                document.getElementById('echoCfgThreshold').textContent = cfg.threshold.toFixed(2) + '%';
+                document.getElementById('echoCfgHold').textContent = cfg.hold_s + 's';
+                document.getElementById('echoCfgServer').textContent = cfg.server;
+                document.getElementById('echoCfgPairs').textContent = cfg.pairs.length + ' altcoins';
+            }
+            const stats = statsR.status === 'fulfilled' ? statsR.value : null;
+            const trades = tradesR.status === 'fulfilled' ? tradesR.value : [];
+            if (!stats) return;
+
+            const pnlEl = document.getElementById('echoPnl');
+            pnlEl.textContent = '$' + stats.total_pnl.toFixed(4);
+            pnlEl.style.color = stats.total_pnl >= 0 ? '#3fb950' : '#f85149';
+            document.getElementById('echoTrades').textContent = stats.total_trades;
+            document.getElementById('echoWR').textContent = (stats.win_rate * 100).toFixed(1) + '%';
+            document.getElementById('echoWL').textContent = stats.wins + ' / ' + stats.losses;
+            const avgEl = document.getElementById('echoAvg');
+            avgEl.textContent = '$' + stats.avg_pnl.toFixed(4);
+            avgEl.style.color = stats.avg_pnl >= 0 ? '#3fb950' : '#f85149';
+            document.getElementById('echoUptime').textContent = stats.uptime_hours.toFixed(1) + 'h';
+            document.getElementById('echoLastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+            // Pair table
+            const pt = document.getElementById('echoPairTable');
+            pt.innerHTML = '';
+            for (const [sym, info] of Object.entries(stats.per_pair).sort((a,b) => b[1].pnl - a[1].pnl)) {
+                const wr = info.trades > 0 ? (info.wins / info.trades * 100).toFixed(0) : '0';
+                const cls = info.pnl >= 0 ? '#3fb950' : '#f85149';
+                pt.innerHTML += `<tr><td style="font-weight:600;color:#bc8cff;padding:4px 6px">${sym}</td><td style="color:${cls};padding:4px 6px">$${info.pnl.toFixed(4)}</td><td style="padding:4px 6px">${info.trades}</td><td style="padding:4px 6px">${wr}%</td></tr>`;
+            }
+
+            // Equity chart
+            if (stats.equity_curve && stats.equity_curve.length > 0) {
+                const labels = stats.equity_curve.map(p => new Date(p.ts * 1000).toLocaleTimeString());
+                const values = stats.equity_curve.map(p => p.equity);
+                const ctx = document.getElementById('echoEquityChart');
+                if (echoEqChart) { echoEqChart.data.labels = labels; echoEqChart.data.datasets[0].data = values; echoEqChart.update('none'); } else {
+                echoEqChart = new Chart(ctx, {
+                    type: 'line', data: { labels, datasets: [{ data: values, borderColor: '#bc8cff', borderWidth: 2, fill: true, backgroundColor: 'rgba(188,140,255,0.1)', pointRadius: 0, tension: 0.3 }] },
+                    options: { animation: {duration:500}, responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', callback: v => '$' + v.toFixed(3) } } } }
+                }); }
+            }
+
+            // Daily chart
+            if (stats.daily && stats.daily.length > 0) {
+                if (echoDayChart) { echoDayChart.data.labels = stats.daily.map(x=>x.date); echoDayChart.data.datasets[0].data = stats.daily.map(x=>x.pnl); echoDayChart.data.datasets[0].backgroundColor = stats.daily.map(x=>x.pnl>=0?'#3fb950':'#f85149'); echoDayChart.update('none'); } else {
+                const ctx2 = document.getElementById('echoDailyChart');
+                echoDayChart = new Chart(ctx2, {
+                    type: 'bar', data: { labels: stats.daily.map(x => x.date), datasets: [{ data: stats.daily.map(x => x.pnl), backgroundColor: stats.daily.map(x => x.pnl >= 0 ? '#3fb950' : '#f85149'), borderRadius: 3 }] },
+                    options: { animation: {duration:500}, responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { display: false } }, y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', callback: v => '$' + v.toFixed(3) } } } }
+                }); }
+            }
+
+            // Recent trades table
+            const tt = document.getElementById('echoTradesTable');
+            tt.innerHTML = '';
+            for (const t of trades.slice(-20).reverse()) {
+                const cls = t.pnl >= 0 ? '#3fb950' : '#f85149';
+                const tm = new Date(t.timestamp * 1000).toLocaleTimeString();
+                tt.innerHTML += `<tr><td style="padding:4px 6px">${tm}</td><td style="color:#bc8cff;padding:4px 6px">${t.symbol}</td><td style="padding:4px 6px">${t.direction}</td><td style="color:${cls};padding:4px 6px">$${t.pnl.toFixed(4)}</td><td style="padding:4px 6px">${t.hold_s.toFixed(0)}s</td></tr>`;
+            }
+        } catch(e) { console.log('Echo fetch error:', e); }
     }
     </script>
 </body>
