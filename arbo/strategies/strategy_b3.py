@@ -602,6 +602,7 @@ class StrategyB3:
                         paper_trade.trade_details["sigma_norm"] = round(sig.sigma_per_min / 0.0003, 4) if sig.sigma_per_min else None
                         paper_trade.trade_details["cl_ratio"] = round(_cl_r, 4)
                         paper_trade.trade_details["fill_to_model"] = round(_ftm, 4)
+                        paper_trade.trade_details["combined_risk"] = round(velocity / LIVE_MAX_VELOCITY + abs_dir_delta / LIVE_MAX_DIR_DELTA, 3)
                         paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} dd={dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
 
             # Track position
