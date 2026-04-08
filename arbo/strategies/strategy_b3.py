@@ -435,9 +435,13 @@ class StrategyB3:
                         "btc_abs_move_chainlink": round(abs(chainlink_price - sig.btc_at_start), 2) if chainlink_price and sig.btc_at_start else None,
                         "btc_abs_move": round(btc_move, 2),
                         "move_risk": round(btc_move * sig.sigma_per_min * 1e6, 0),
-                        "live_qualified": bool(sig.edge >= 0.40 and btc_move >= 50),
+                        "live_qualified": bool(sig.edge >= 0.40 and btc_move >= 50
+                                              and velocity <= 60 and abs_dir_delta <= 15),
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
+                        "velocity_paper": round(velocity, 1),
+                        "dir_delta_paper": round(dir_delta, 2),
+                        "abs_dir_delta_paper": round(abs_dir_delta, 2),
                     },
                 )
 
@@ -459,7 +463,7 @@ class StrategyB3:
             #    Large delta = only Binance moved, CL hasn't confirmed = risky
             #
             # NO reversal exit — data: 9 exits cost $14+ (sold winning positions)
-            # NO scoring model — V5.0 scoring overfit (5/95 paper trades, 40% paper WR)
+            # NO scoring model — V5.0 scoring was overfit (5/95 paper, 40% WR). Removed.
             LIVE_MIN_EDGE = 0.40
             LIVE_MIN_BTC_MOVE = 50.0
             LIVE_MAX_VELOCITY = 60.0  # $/min — slow moves only
@@ -471,7 +475,9 @@ class StrategyB3:
             is_up = sig.direction == 1
 
             # Compute TA features
-            _cl = chainlink_price or sig.btc_now
+            # CL must be available for dir_delta check (oracle confirmation)
+            _cl = chainlink_price  # None if unavailable — will skip live
+            _cl_available = chainlink_price is not None and chainlink_price > 0
             _bin = sig.btc_now
             _em = sig.minutes_elapsed or 1.0
             velocity = btc_move / _em
@@ -501,6 +507,7 @@ class StrategyB3:
                 and sig.edge >= LIVE_MIN_EDGE
                 and btc_move >= LIVE_MIN_BTC_MOVE
                 and velocity <= LIVE_MAX_VELOCITY
+                and _cl_available  # CL must confirm (no fallback to Binance)
                 and abs_dir_delta <= LIVE_MAX_DIR_DELTA
             ):
                 logger.info(
@@ -509,6 +516,8 @@ class StrategyB3:
                     edge=f"{sig.edge:.3f}",
                     btc_move=f"${btc_move:.0f}",
                     model_fv=f"{entry_mkt_fv:.3f}",
+                    velocity=f"{velocity:.0f}",
+                    abs_dir_delta=f"{abs_dir_delta:.1f}",
                 )
                 try:
                     # Refresh wallet balance every 60s
@@ -603,7 +612,7 @@ class StrategyB3:
                         paper_trade.trade_details["cl_ratio"] = round(_cl_r, 4)
                         paper_trade.trade_details["fill_to_model"] = round(_ftm, 4)
                         paper_trade.trade_details["combined_risk"] = round(velocity / LIVE_MAX_VELOCITY + abs_dir_delta / LIVE_MAX_DIR_DELTA, 3)
-                        paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} dd={dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
+                        paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} |dd|={abs_dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
 
             # Track position
             self._open_positions[token_id] = B3Position(
@@ -803,7 +812,7 @@ class StrategyB3:
             t_remaining = WINDOW_MIN - elapsed_min
             hold_min = (now - pos.entry_time) / 60.0
 
-            # V5.0: NO reversal exit — data shows it costs $14+ (sells winning positions)
+            # V6.0: NO reversal exit — data shows it costs $14+ (sells winning positions)
             # Reversal removed 2026-04-06. Hold all live positions to resolution.
 
             # Resolution check: event has ended
@@ -929,7 +938,7 @@ class StrategyB3:
                 if pos.live_shares > 0 and reason != "resolution":
                     self._live_holding[token_id] = pos
 
-        # Check _live_holding: resolution only (no reversal exit in V5.0)
+        # Check _live_holding: resolution only (no reversal exit in V6.0)
         for token_id in list(self._live_holding.keys()):
             pos = self._live_holding[token_id]
 
