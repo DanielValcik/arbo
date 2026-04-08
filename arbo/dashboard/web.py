@@ -215,6 +215,40 @@ async def dashboard_page(
     })
 
 
+# ── Echo proxy endpoints (forward to Singapore VPS) ──
+ECHO_API = "http://13.212.182.85:8081"
+
+@app.get("/api/echo/stats")
+async def api_echo_stats(_user: str = Depends(_verify_credentials)):
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{ECHO_API}/api/stats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                return await resp.json()
+    except Exception:
+        return {"total_trades": 0, "total_pnl": 0, "win_rate": 0, "wins": 0, "losses": 0, "per_pair": {}, "daily": [], "equity_curve": [], "uptime_hours": 0}
+
+@app.get("/api/echo/config")
+async def api_echo_config(_user: str = Depends(_verify_credentials)):
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{ECHO_API}/api/config", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                return await resp.json()
+    except Exception:
+        return {}
+
+@app.get("/api/echo/trades")
+async def api_echo_trades(_user: str = Depends(_verify_credentials)):
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{ECHO_API}/api/trades", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                return await resp.json()
+    except Exception:
+        return []
+
+
 @app.get("/api/portfolio")
 async def api_portfolio(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
     """Portfolio summary: balance, P&L, snapshot history, per-category breakdown."""
@@ -1070,7 +1104,7 @@ async def api_closed_positions(
             if strategy_filter:
                 query = query.where(PaperTrade.strategy == strategy_filter)
             result = await session.execute(
-                query.order_by(PaperTrade.resolved_at.desc()).limit(200)
+                query.order_by(PaperTrade.resolved_at.desc()).limit(500)
             )
             for row in result.all():
                 trade = row[0]
