@@ -481,13 +481,15 @@ class StrategyB3:
                 dir_delta = _cl - _bin if _cl and _bin else 0  # CL lead over Binance (for DOWN)
 
             # Log skipped high-velocity or high-delta signals
+            abs_dir_delta = abs(dir_delta)
             if (sig.edge >= LIVE_MIN_EDGE and btc_move >= LIVE_MIN_BTC_MOVE
-                    and (velocity > LIVE_MAX_VELOCITY or dir_delta > LIVE_MAX_DIR_DELTA)):
+                    and (velocity > LIVE_MAX_VELOCITY or abs_dir_delta > LIVE_MAX_DIR_DELTA)):
                 logger.info(
                     "b3_live_filter_skip",
                     direction="UP" if is_up else "DOWN",
                     velocity=f"{velocity:.0f}",
                     dir_delta=f"{dir_delta:.1f}",
+                    abs_dir_delta=f"{abs_dir_delta:.1f}",
                     btc_move=f"${btc_move:.0f}",
                     reason="velocity" if velocity > LIVE_MAX_VELOCITY else "dir_delta",
                 )
@@ -499,7 +501,7 @@ class StrategyB3:
                 and sig.edge >= LIVE_MIN_EDGE
                 and btc_move >= LIVE_MIN_BTC_MOVE
                 and velocity <= LIVE_MAX_VELOCITY
-                and dir_delta <= LIVE_MAX_DIR_DELTA
+                and abs_dir_delta <= LIVE_MAX_DIR_DELTA
             ):
                 logger.info(
                     "b3_live_qualified",
