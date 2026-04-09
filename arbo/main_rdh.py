@@ -875,12 +875,18 @@ class RDHOrchestrator:
             from arbo.utils.db import PaperTrade, get_session_factory
 
             factory = get_session_factory()
+            # Dual-mode strategies: use LIVE PnL from trade_details, not paper actual_pnl
+            # Paper-only strategies: use actual_pnl from DB
+            DUAL_MODE_STRATEGIES = {"B3"}  # B3 always dual (live when qualified, paper otherwise)
+
             async with factory() as session:
                 # Total P&L per strategy (all resolved trades, excluding pre-validation)
                 _no_preval = sa.or_(
                     PaperTrade.notes.is_(None),
                     PaperTrade.notes != "pre-validation",
                 )
+
+                # Get ALL paper strategies (non-dual) total PnL
                 result = await session.execute(
                     sa.select(
                         PaperTrade.strategy,
@@ -888,6 +894,7 @@ class RDHOrchestrator:
                     )
                     .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(PaperTrade.strategy.isnot(None))
+                    .where(~PaperTrade.strategy.in_(list(DUAL_MODE_STRATEGIES)))
                     .where(_no_preval)
                     .group_by(PaperTrade.strategy)
                 )
@@ -898,6 +905,33 @@ class RDHOrchestrator:
                     if ss is not None:
                         ss.total_pnl = Decimal(str(total_pnl))
 
+                # DUAL-MODE: compute LIVE PnL from trade_details (not paper actual_pnl)
+                # Only count trades where live fill actually happened
+                for dual_strat in DUAL_MODE_STRATEGIES:
+                    result = await session.execute(
+                        sa.text("""
+                            SELECT COALESCE(SUM(
+                                ((trade_details->>'live_exit_price')::float
+                                - (trade_details->>'live_entry_price')::float)
+                                * (trade_details->>'live_entry_shares')::float
+                            ), 0) as live_pnl
+                            FROM paper_trades
+                            WHERE strategy = :strat
+                              AND status IN ('won','lost','sold')
+                              AND trade_details->>'live_entry_price' IS NOT NULL
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND (notes IS NULL OR notes != 'pre-validation')
+                        """),
+                        {"strat": dual_strat},
+                    )
+                    live_total = result.scalar() or 0
+                    ss = self._risk_manager.get_strategy_state(dual_strat)
+                    if ss is not None:
+                        ss.total_pnl = Decimal(str(live_total))
+                        logger.info("pnl_restored_live_mode",
+                                   strategy=dual_strat, live_total_pnl=str(live_total))
+
                 # Weekly P&L per strategy (resolved this ISO week)
                 from datetime import UTC, datetime, timedelta
 
@@ -905,6 +939,7 @@ class RDHOrchestrator:
                 monday = now - timedelta(days=now.weekday())
                 week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
+                # Paper strategies weekly
                 result = await session.execute(
                     sa.select(
                         PaperTrade.strategy,
@@ -912,6 +947,7 @@ class RDHOrchestrator:
                     )
                     .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(PaperTrade.strategy.isnot(None))
+                    .where(~PaperTrade.strategy.in_(list(DUAL_MODE_STRATEGIES)))
                     .where(_no_preval)
                     .where(PaperTrade.resolved_at >= week_start)
                     .group_by(PaperTrade.strategy)
@@ -922,6 +958,33 @@ class RDHOrchestrator:
                     ss = self._risk_manager.get_strategy_state(strategy)
                     if ss is not None:
                         ss.weekly_pnl = Decimal(str(weekly_pnl))
+
+                # Dual-mode weekly PnL from live fields
+                for dual_strat in DUAL_MODE_STRATEGIES:
+                    result = await session.execute(
+                        sa.text("""
+                            SELECT COALESCE(SUM(
+                                ((trade_details->>'live_exit_price')::float
+                                - (trade_details->>'live_entry_price')::float)
+                                * (trade_details->>'live_entry_shares')::float
+                            ), 0) as live_pnl
+                            FROM paper_trades
+                            WHERE strategy = :strat
+                              AND status IN ('won','lost','sold')
+                              AND trade_details->>'live_entry_price' IS NOT NULL
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND resolved_at >= :week_start
+                              AND (notes IS NULL OR notes != 'pre-validation')
+                        """),
+                        {"strat": dual_strat, "week_start": week_start},
+                    )
+                    live_weekly = result.scalar() or 0
+                    ss = self._risk_manager.get_strategy_state(dual_strat)
+                    if ss is not None:
+                        ss.weekly_pnl = Decimal(str(live_weekly))
+                        logger.info("weekly_pnl_restored_live_mode",
+                                   strategy=dual_strat, live_weekly_pnl=str(live_weekly))
 
                 # Also restore global daily/weekly P&L
                 today = now.replace(hour=0, minute=0, second=0, microsecond=0)
