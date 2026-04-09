@@ -160,8 +160,9 @@ class StrategyB3:
         # Restore B3 positions from paper engine.
         # B3 positions are ultra-short-lived (1-3 min). On restart, any open
         # B3 positions are stale (the 5-min event has already resolved).
-        # Force-resolve them as lost — they're past their event_end_ts.
-        # If we don't, the risk manager counts them and blocks new trades.
+        # Just LOG them — actual resolution happens in async cleanup_stale_positions()
+        # called by orchestrator after init. This avoids force-marking as 'lost'
+        # which would toxify data — we want REAL Gamma API resolution.
         if self._paper_engine:
             stale_b3 = [
                 pos for pos in self._paper_engine.open_positions
@@ -171,29 +172,97 @@ class StrategyB3:
                 logger.warning(
                     "b3_stale_positions_on_restart",
                     count=len(stale_b3),
-                    msg="Force-resolving stale B3 positions (past event_end_ts)",
+                    msg="Stale B3 positions detected — will be resolved via Gamma API",
                 )
-                # Force-resolve each stale position as LOST
-                # (they've been hanging open past their 5-min window)
-                for pos in stale_b3:
-                    try:
-                        token_id = getattr(pos, "token_id", None)
-                        if token_id:
-                            self._paper_engine.resolve_market(token_id, winning_outcome=False)
-                            # Also clear from risk manager exposure
-                            if self._risk_manager:
-                                cond_id = getattr(pos, "market_condition_id", None) or getattr(pos, "condition_id", None)
-                                if cond_id:
-                                    try:
-                                        self._risk_manager.close_position(cond_id)
-                                    except Exception:
-                                        pass
-                    except Exception as e:
-                        logger.warning("b3_stale_resolve_error", error=str(e))
+                # Store for async cleanup
+                self._stale_on_restart = list(stale_b3)
+            else:
+                self._stale_on_restart = []
 
     async def close(self) -> None:
         """Clean up resources."""
         await self._scanner.close()
+
+    async def cleanup_stale_on_restart(self) -> None:
+        """Resolve stale B3 positions via Gamma API after restart.
+
+        Called by orchestrator after init to ensure stuck positions don't
+        block new trades. Uses REAL Chainlink resolution from Gamma API,
+        never force-marks as lost (which would toxify data).
+        """
+        stale = getattr(self, "_stale_on_restart", [])
+        if not stale:
+            return
+        if not self._paper_engine:
+            return
+
+        logger.info("b3_cleanup_stale_starting", count=len(stale))
+        resolved_count = 0
+        skipped_count = 0
+
+        for pos in stale:
+            try:
+                token_id = getattr(pos, "token_id", None)
+                cond_id = getattr(pos, "market_condition_id", None) or getattr(pos, "condition_id", None)
+                if not token_id:
+                    continue
+
+                # Get trade_details from cache to find event_start_ts
+                td = self._paper_engine._trade_details_cache.get(token_id, {}) if hasattr(self._paper_engine, "_trade_details_cache") else {}
+                event_start_ts = td.get("event_start_ts")
+                event_end_ts = td.get("event_end_ts")
+                direction_str = td.get("direction", "")
+
+                if not event_start_ts:
+                    logger.warning("b3_stale_no_event_ts", token=token_id[:20])
+                    skipped_count += 1
+                    continue
+
+                # Check if event has actually ended
+                now = time.time()
+                if event_end_ts and now < event_end_ts:
+                    logger.info("b3_stale_not_yet_resolved", token=token_id[:20],
+                               wait_s=int(event_end_ts - now))
+                    continue  # Will be resolved by check_exits later
+
+                # Fetch real resolution from Gamma API
+                try:
+                    pm_up_won = await asyncio.wait_for(
+                        self._scanner.fetch_resolution(event_start_ts),
+                        timeout=15,
+                    )
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning("b3_stale_resolution_failed", token=token_id[:20], error=str(e))
+                    skipped_count += 1
+                    continue
+
+                if pm_up_won is None:
+                    logger.info("b3_stale_no_resolution_yet", token=token_id[:20])
+                    skipped_count += 1
+                    continue
+
+                # We have real resolution — apply it
+                direction_int = 1 if direction_str == "up" else -1
+                won = (direction_int == 1 and pm_up_won) or (direction_int == -1 and not pm_up_won)
+                self._paper_engine.resolve_market(token_id, winning_outcome=won)
+
+                # Clear from risk manager exposure
+                if self._risk_manager and cond_id:
+                    try:
+                        self._risk_manager.close_position(cond_id)
+                    except Exception:
+                        pass
+
+                resolved_count += 1
+                logger.info("b3_stale_resolved", token=token_id[:20],
+                           direction=direction_str, won=won, source="gamma_api")
+            except Exception as e:
+                logger.warning("b3_stale_cleanup_error", error=str(e))
+                skipped_count += 1
+
+        logger.info("b3_cleanup_stale_done",
+                   resolved=resolved_count, skipped=skipped_count, total=len(stale))
+        self._stale_on_restart = []
 
     # ═══════════════════════════════════════════════════════════════════════
     # ENTRY: Poll Cycle

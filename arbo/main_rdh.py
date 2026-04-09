@@ -337,6 +337,12 @@ class RDHOrchestrator:
 
         # Strategy B3: Binance Oracle Scalper
         self._strategy_b3 = await self._init_optional("StrategyB3", self._init_strategy_b3)
+        # Cleanup any stale B3 positions left from previous run (resolves via Gamma API)
+        if self._strategy_b3 is not None:
+            try:
+                await self._strategy_b3.cleanup_stale_on_restart()
+            except Exception as e:
+                logger.warning("b3_cleanup_stale_error", error=str(e))
 
         # B3 15-min Shadow Scanner (data collection only)
         self._b3_15m_shadow = None

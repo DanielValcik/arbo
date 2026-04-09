@@ -199,7 +199,10 @@ class PaperTradingEngine:
         fee = calculate_taker_fee(market_price, fee_enabled)
         edge = abs(model_prob - market_price) - fee
 
-        if edge <= Decimal("0"):
+        # Edge check: skip only if strategy didn't pre-compute sizing.
+        # When pre_computed_size is set, the strategy has already validated
+        # its own edge logic and signals (e.g. B3 uses CDF model). Trust it.
+        if edge <= Decimal("0") and pre_computed_size is None:
             logger.debug(
                 "paper_trade_no_edge",
                 token_id=token_id,
@@ -207,6 +210,13 @@ class PaperTradingEngine:
                 layer=layer,
             )
             return None
+        if edge <= Decimal("0"):
+            # Strategy provided pre_computed_size — trust strategy edge logic
+            logger.debug(
+                "paper_trade_zero_edge_pre_computed",
+                token_id=token_id,
+                strategy=strategy,
+            )
 
         if pre_computed_size is not None:
             # RDH strategies compute their own sizing (Quarter-Kelly via ladder)
