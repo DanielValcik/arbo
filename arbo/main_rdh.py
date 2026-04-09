@@ -115,6 +115,13 @@ class RDHOrchestrator:
         self._markets: list[Any] = []
         self._latest_divergence_signals: list[Any] = []
 
+        # B3 live cumulative tracker (hydrated from DB on startup, incremented
+        # on each live resolution). Drives the running total shown in Slack
+        # so users see "Trade: $-5.52 | Live total: $X (Nt)" on every fill,
+        # eliminating ambiguity between per-trade PnL and cumulative.
+        self._b3_live_total_pnl: float = 0.0
+        self._b3_live_total_trades: int = 0
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -910,11 +917,13 @@ class RDHOrchestrator:
                 for dual_strat in DUAL_MODE_STRATEGIES:
                     result = await session.execute(
                         sa.text("""
-                            SELECT COALESCE(SUM(
-                                ((trade_details->>'live_exit_price')::float
-                                - (trade_details->>'live_entry_price')::float)
-                                * (trade_details->>'live_entry_shares')::float
-                            ), 0) as live_pnl
+                            SELECT
+                                COALESCE(SUM(
+                                    ((trade_details->>'live_exit_price')::float
+                                    - (trade_details->>'live_entry_price')::float)
+                                    * (trade_details->>'live_entry_shares')::float
+                                ), 0) as live_pnl,
+                                COUNT(*) as live_trades
                             FROM paper_trades
                             WHERE strategy = :strat
                               AND status IN ('won','lost','sold')
@@ -925,12 +934,20 @@ class RDHOrchestrator:
                         """),
                         {"strat": dual_strat},
                     )
-                    live_total = result.scalar() or 0
+                    row = result.first()
+                    live_total = float(row[0] if row else 0) or 0.0
+                    live_count = int(row[1] if row else 0) or 0
                     ss = self._risk_manager.get_strategy_state(dual_strat)
                     if ss is not None:
                         ss.total_pnl = Decimal(str(live_total))
                         logger.info("pnl_restored_live_mode",
-                                   strategy=dual_strat, live_total_pnl=str(live_total))
+                                   strategy=dual_strat,
+                                   live_total_pnl=str(live_total),
+                                   live_trades=live_count)
+                    # Hydrate the in-memory running counter for Slack messages
+                    if dual_strat == "B3":
+                        self._b3_live_total_pnl = float(live_total)
+                        self._b3_live_total_trades = int(live_count)
 
                 # Weekly P&L per strategy (resolved this ISO week)
                 from datetime import UTC, datetime, timedelta
@@ -2122,23 +2139,45 @@ class RDHOrchestrator:
                     live_pnl = (live_xp - live_entry_price) * live_shares if live_entry_price > 0 else 0
                     live_pnl_s = f"{'+' if live_pnl >= 0 else ''}${live_pnl:.2f}"
                     res_emoji = ":white_check_mark:" if live_xp > 0.5 else ":x:"
+
+                    # Update running cumulative tracker (drives "Live total" line)
+                    self._b3_live_total_pnl += float(live_pnl)
+                    self._b3_live_total_trades += 1
+                    cum_s = (
+                        f"{'+' if self._b3_live_total_pnl >= 0 else ''}"
+                        f"${self._b3_live_total_pnl:.2f}"
+                    )
+
                     live_text = (
                         f"{res_emoji} *B3 LIVE RESOLVE — "
                         f"BTC {dir_str}*\n"
                         f"Entry: {live_entry_price:.3f} -> "
-                        f"{'$1 (WIN)' if live_xp > 0.5 else '$0 (LOSS)'}  |  "
-                        f"P&L: *{live_pnl_s}*  |  "
-                        f"{live_shares} shares"
+                        f"{'$1 (WIN)' if live_xp > 0.5 else '$0 (LOSS)'}\n"
+                        f"Trade: *{live_pnl_s}*  |  "
+                        f"{live_shares} shares\n"
+                        f"Live total: *{cum_s}* "
+                        f"({self._b3_live_total_trades}t)"
                     )
                 elif live_status in ("filled", "partial") and live_xs > 0:
                     paper_entry = float(pos.avg_price) if pos else 0
+
+                    # Maker sell exits also count toward live total
+                    self._b3_live_total_pnl += float(live_pnl)
+                    self._b3_live_total_trades += 1
+                    cum_s = (
+                        f"{'+' if self._b3_live_total_pnl >= 0 else ''}"
+                        f"${self._b3_live_total_pnl:.2f}"
+                    )
+
                     live_text = (
                         f"{live_emoji} *B3 LIVE SELL — BTC {dir_str}*"
                         f" ({exit_reason})\n"
                         f"Live:  {live_entry_price:.3f} -> "
-                        f"{live_xp:.3f}  |  "
-                        f"P&L: *{live_pnl_s}*  |  "
+                        f"{live_xp:.3f}\n"
+                        f"Trade: *{live_pnl_s}*  |  "
                         f"{live_xs} shares  |  {latency}ms\n"
+                        f"Live total: *{cum_s}* "
+                        f"({self._b3_live_total_trades}t)\n"
                         f"Paper: {paper_entry:.3f} -> "
                         f"{exit_price:.3f}  |  "
                         f"P&L: *{pnl_sign}${pnl:.2f}*"
@@ -2172,7 +2211,13 @@ class RDHOrchestrator:
             if redeemed_cids:
                 await self._resolve_b3_from_redeem(redeemed_cids)
             if redeemed > 0 and self._slack_bot:
-                # Get balance + portfolio after redeem
+                # After-redeem snapshot. Two distinct numbers:
+                #   1. Wallet vs start = current available USDC minus the
+                #      reference snapshot from B3_LIVE_STARTING_CAPITAL.
+                #      EXCLUDES any open positions still in market and
+                #      includes any external deposits/withdrawals.
+                #   2. Live total = sum of resolved live trade PnL from DB.
+                #      This is the source of truth for trading performance.
                 bal_text = ""
                 try:
                     if self._strategy_b3 and self._strategy_b3._live_executor:
@@ -2180,14 +2225,22 @@ class RDHOrchestrator:
                         if bal > 0:
                             import os as _os
                             start_cap = float(_os.getenv("B3_LIVE_STARTING_CAPITAL", "271.28"))
-                            # Portfolio = available + positions in market
-                            # After redeem, most value is in available
-                            pnl = bal - start_cap
-                            pnl_s = f"{'+' if pnl >= 0 else ''}${pnl:.2f}"
-                            pnl_c = ":chart_with_upwards_trend:" if pnl >= 0 else ":chart_with_downwards_trend:"
+                            wallet_pnl = bal - start_cap
+                            wallet_s = f"{'+' if wallet_pnl >= 0 else ''}${wallet_pnl:.2f}"
+                            wallet_c = ":chart_with_upwards_trend:" if wallet_pnl >= 0 else ":chart_with_downwards_trend:"
+
+                            # Use the in-memory running counter (kept in sync
+                            # with DB on startup + every resolve). This is the
+                            # cumulative live trade PnL — distinct from wallet.
+                            cum_pnl = float(self._b3_live_total_pnl)
+                            cum_n = int(self._b3_live_total_trades)
+                            cum_s = f"{'+' if cum_pnl >= 0 else ''}${cum_pnl:.2f}"
+
                             bal_text = (
                                 f"\nAvailable: *${bal:.2f}*"
-                                f"\nPortfolio P&L: *{pnl_s}* {pnl_c}"
+                                f"\nLive total: *{cum_s}* ({cum_n}t)"
+                                f"\nWallet vs start (${start_cap:.0f}): "
+                                f"*{wallet_s}* {wallet_c}"
                             )
                 except Exception:
                     pass
