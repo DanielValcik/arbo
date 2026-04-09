@@ -479,6 +479,19 @@ class StrategyB3:
             btc_move_bin = abs(sig.btc_now - sig.btc_at_start) if sig.btc_now and sig.btc_at_start else 0
             btc_move = btc_move_cl if btc_move_cl > 0 else btc_move_bin  # CL preferred
 
+            # V6.0 features (computed here so paper trade_details can log them
+            # even when live execution is skipped)
+            is_up_dir = sig.direction == 1
+            _cl_for_calc = chainlink_price  # may be None
+            _bin_for_calc = sig.btc_now
+            _em_for_calc = sig.minutes_elapsed or 1.0
+            velocity = btc_move / _em_for_calc
+            if is_up_dir:
+                dir_delta = (_bin_for_calc - _cl_for_calc) if (_bin_for_calc and _cl_for_calc) else 0
+            else:
+                dir_delta = (_cl_for_calc - _bin_for_calc) if (_bin_for_calc and _cl_for_calc) else 0
+            abs_dir_delta = abs(dir_delta)
+
             # Execute
             paper_trade = None
             if self._paper_engine:
@@ -559,22 +572,11 @@ class StrategyB3:
             live_entry_price = 0.0
             live_fill_status = "skipped"
             live_latency_ms = 0
-            is_up = sig.direction == 1
-
-            # Compute TA features
-            # CL must be available for dir_delta check (oracle confirmation)
+            is_up = is_up_dir  # already computed above
             _cl = chainlink_price  # None if unavailable — will skip live
             _cl_available = chainlink_price is not None and chainlink_price > 0
-            _bin = sig.btc_now
-            _em = sig.minutes_elapsed or 1.0
-            velocity = btc_move / _em
-            if is_up:
-                dir_delta = _bin - _cl if _bin and _cl else 0  # Binance lead over CL
-            else:
-                dir_delta = _cl - _bin if _cl and _bin else 0  # CL lead over Binance (for DOWN)
-
-            # Log skipped high-velocity or high-delta signals
-            abs_dir_delta = abs(dir_delta)
+            # velocity, dir_delta, abs_dir_delta already computed above (line ~485)
+            # Re-use them here
             if (sig.edge >= LIVE_MIN_EDGE and btc_move >= LIVE_MIN_BTC_MOVE
                     and (velocity > LIVE_MAX_VELOCITY or abs_dir_delta > LIVE_MAX_DIR_DELTA)):
                 logger.info(
