@@ -519,8 +519,8 @@ class RiskManager:
             self._state.weekly_pnl = Decimal("0")
             self._state.weekly_reset_at = now
             # Also reset per-strategy weekly P&L and unhalt
-            for ss in self._state.strategies.values():
+            for strat_name, ss in self._state.strategies.items():
                 ss.weekly_pnl = Decimal("0")
                 if ss.is_halted:
                     ss.is_halted = False
-                    logger.info("strategy_unhalt_new_week", strategy=ss.name)
+                    logger.info("strategy_unhalt_new_week", strategy=strat_name)

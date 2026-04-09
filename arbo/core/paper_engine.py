@@ -337,13 +337,21 @@ class PaperTradingEngine:
                 strategy=strategy,
             )
 
-        # Update risk manager
+        # Update risk manager (global exposure + per-strategy state)
         if self._risk_manager:
             self._risk_manager.post_trade_update(
                 market_id=market_condition_id,
                 market_category=market_category,
                 size=size,
             )
+            # CRITICAL: also increment per-strategy deployed/position_count
+            # so MAX_POSITIONS_PER_STRATEGY and allocation cap are enforced.
+            # Without this, strategies bypass their own risk limits.
+            if strategy:
+                try:
+                    self._risk_manager.strategy_post_trade(strategy, size)
+                except Exception as e:
+                    logger.warning("strategy_post_trade_error", strategy=strategy, error=str(e))
 
         diagnostic_mode = confluence_score == 1
         logger.info(

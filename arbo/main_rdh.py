@@ -846,7 +846,11 @@ class RDHOrchestrator:
         if self._paper_engine is None or self._risk_manager is None:
             return
         # Strategy → category mapping for exposure tracking
-        _strategy_category = {"C": "weather", "C2": "weather", "A": "crypto", "B": "crypto"}
+        _strategy_category = {
+            "C": "weather", "C2": "weather",
+            "A": "crypto", "B": "crypto",
+            "B2": "crypto", "B3": "crypto_5min",
+        }
         for pos in self._paper_engine.open_positions:
             strategy = getattr(pos, "strategy", "")
             category = _strategy_category.get(strategy, "other")
@@ -882,7 +886,7 @@ class RDHOrchestrator:
                         PaperTrade.strategy,
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
-                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(PaperTrade.strategy.isnot(None))
                     .where(_no_preval)
                     .group_by(PaperTrade.strategy)
@@ -906,7 +910,7 @@ class RDHOrchestrator:
                         PaperTrade.strategy,
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
-                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(PaperTrade.strategy.isnot(None))
                     .where(_no_preval)
                     .where(PaperTrade.resolved_at >= week_start)
@@ -925,7 +929,7 @@ class RDHOrchestrator:
                     sa.select(
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
-                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(_no_preval)
                     .where(PaperTrade.resolved_at >= today)
                 )
@@ -937,7 +941,7 @@ class RDHOrchestrator:
                     sa.select(
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
-                    .where(PaperTrade.status.in_(["won", "lost"]))
+                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(_no_preval)
                     .where(PaperTrade.resolved_at >= week_start)
                 )

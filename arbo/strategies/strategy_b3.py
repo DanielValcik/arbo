@@ -186,83 +186,149 @@ class StrategyB3:
     async def cleanup_stale_on_restart(self) -> None:
         """Resolve stale B3 positions via Gamma API after restart.
 
-        Called by orchestrator after init to ensure stuck positions don't
-        block new trades. Uses REAL Chainlink resolution from Gamma API,
-        never force-marks as lost (which would toxify data).
+        Called by orchestrator after init. Uses REAL Chainlink resolution
+        from Gamma API. Properly updates:
+        - paper_engine._positions (in-memory)
+        - paper_trades DB row (status, actual_pnl, exit_price, exit_reason)
+        - risk_manager.post_trade_update + strategy_post_trade
+        - paper_positions DB table (via sync_positions_to_db)
+
+        For positions that can't be resolved (Gamma API doesn't know),
+        marks them as 'sold' with exit_reason='orphaned' and actual_pnl=NULL
+        so they're excluded from analytics.
         """
         stale = getattr(self, "_stale_on_restart", [])
-        if not stale:
-            return
-        if not self._paper_engine:
+        if not stale or not self._paper_engine:
             return
 
         logger.info("b3_cleanup_stale_starting", count=len(stale))
         resolved_count = 0
-        skipped_count = 0
+        orphaned_count = 0
+        deferred_count = 0
 
         for pos in stale:
             try:
                 token_id = getattr(pos, "token_id", None)
                 cond_id = getattr(pos, "market_condition_id", None) or getattr(pos, "condition_id", None)
-                if not token_id:
+                size = getattr(pos, "size", None)
+                avg_price = getattr(pos, "avg_price", None)
+                shares = getattr(pos, "shares", None)
+                if not token_id or size is None or avg_price is None:
+                    orphaned_count += 1
                     continue
 
-                # Get trade_details from cache to find event_start_ts
+                # Get event timing from trade_details cache
                 td = self._paper_engine._trade_details_cache.get(token_id, {}) if hasattr(self._paper_engine, "_trade_details_cache") else {}
                 event_start_ts = td.get("event_start_ts")
                 event_end_ts = td.get("event_end_ts")
                 direction_str = td.get("direction", "")
 
                 if not event_start_ts:
-                    logger.warning("b3_stale_no_event_ts", token=token_id[:20])
-                    skipped_count += 1
+                    # Can't determine event — mark orphaned
+                    await self._mark_orphaned(token_id, cond_id, size)
+                    orphaned_count += 1
                     continue
 
-                # Check if event has actually ended
-                now = time.time()
-                if event_end_ts and now < event_end_ts:
+                # Check if event has ended
+                now_ts = time.time()
+                if event_end_ts and now_ts < event_end_ts:
                     logger.info("b3_stale_not_yet_resolved", token=token_id[:20],
-                               wait_s=int(event_end_ts - now))
-                    continue  # Will be resolved by check_exits later
+                               wait_s=int(event_end_ts - now_ts))
+                    deferred_count += 1
+                    continue  # check_exits will handle later
 
                 # Fetch real resolution from Gamma API
+                pm_up_won = None
                 try:
                     pm_up_won = await asyncio.wait_for(
                         self._scanner.fetch_resolution(event_start_ts),
                         timeout=15,
                     )
-                except (asyncio.TimeoutError, Exception) as e:
-                    logger.warning("b3_stale_resolution_failed", token=token_id[:20], error=str(e))
-                    skipped_count += 1
-                    continue
+                except asyncio.TimeoutError:
+                    logger.warning("b3_stale_gamma_timeout", token=token_id[:20])
+                except Exception as e:
+                    logger.warning("b3_stale_gamma_error", token=token_id[:20], error=str(e))
 
                 if pm_up_won is None:
-                    logger.info("b3_stale_no_resolution_yet", token=token_id[:20])
-                    skipped_count += 1
+                    # Gamma can't resolve — mark orphaned (NULL pnl)
+                    await self._mark_orphaned(token_id, cond_id, size)
+                    orphaned_count += 1
                     continue
 
-                # We have real resolution — apply it
+                # We have real resolution
                 direction_int = 1 if direction_str == "up" else -1
                 won = (direction_int == 1 and pm_up_won) or (direction_int == -1 and not pm_up_won)
-                self._paper_engine.resolve_market(token_id, winning_outcome=won)
+                exit_price = Decimal("1.0") if won else Decimal("0.0")
 
-                # Clear from risk manager exposure
+                # Resolve in paper engine (in-memory) — returns realized PnL
+                pnl = self._paper_engine.resolve_market(token_id, winning_outcome=won)
+
+                # Update DB row to won/lost (use winning path to preserve W/L info)
+                # NOTE: this overwrites exit_reason — we accept that to keep W/L stats clean
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id,
+                    winning=won,
+                    pnl=pnl,
+                )
+
+                # Update risk manager exposure (CRITICAL — this is what unblocks new trades)
                 if self._risk_manager and cond_id:
                     try:
-                        self._risk_manager.close_position(cond_id)
-                    except Exception:
-                        pass
+                        self._risk_manager.post_trade_update(cond_id, "crypto_5min", size, pnl=pnl)
+                        self._risk_manager.strategy_post_trade(STRATEGY_NAME, size, pnl=pnl)
+                    except Exception as e:
+                        logger.warning("b3_stale_risk_update_error", error=str(e))
 
                 resolved_count += 1
                 logger.info("b3_stale_resolved", token=token_id[:20],
-                           direction=direction_str, won=won, source="gamma_api")
+                           direction=direction_str, won=won, pnl=str(pnl))
             except Exception as e:
                 logger.warning("b3_stale_cleanup_error", error=str(e))
-                skipped_count += 1
+                orphaned_count += 1
+
+        # After cleanup, sync paper engine state to DB
+        try:
+            await self._paper_engine.sync_positions_to_db()
+        except Exception as e:
+            logger.warning("b3_stale_sync_error", error=str(e))
 
         logger.info("b3_cleanup_stale_done",
-                   resolved=resolved_count, skipped=skipped_count, total=len(stale))
+                   resolved=resolved_count, orphaned=orphaned_count,
+                   deferred=deferred_count, total=len(stale))
         self._stale_on_restart = []
+
+    async def _mark_orphaned(self, token_id: str, cond_id: str | None, size: Any) -> None:
+        """Mark a stale position as orphaned (unknown outcome).
+
+        Removes from paper engine in-memory state, updates DB row to
+        status='sold' with exit_reason='orphaned' and actual_pnl=NULL,
+        and decrements risk manager counters.
+        """
+        try:
+            # Remove from paper engine in-memory
+            if hasattr(self._paper_engine, "_positions") and token_id in self._paper_engine._positions:
+                del self._paper_engine._positions[token_id]
+
+            # Update DB row to orphaned (NULL pnl — unknown outcome)
+            await self._paper_engine.update_resolved_trades_in_db(
+                token_id=token_id,
+                winning=None,
+                pnl=None,
+                exit_price=None,
+                exit_reason="orphaned",
+            )
+
+            # Clear risk manager exposure (pnl=Decimal(0) — neutral)
+            if self._risk_manager and cond_id:
+                try:
+                    self._risk_manager.post_trade_update(cond_id, "crypto_5min", size, pnl=Decimal("0"))
+                    self._risk_manager.strategy_post_trade(STRATEGY_NAME, size, pnl=Decimal("0"))
+                except Exception:
+                    pass
+
+            logger.info("b3_stale_orphaned", token=token_id[:20])
+        except Exception as e:
+            logger.warning("b3_mark_orphaned_error", error=str(e))
 
     # ═══════════════════════════════════════════════════════════════════════
     # ENTRY: Poll Cycle
