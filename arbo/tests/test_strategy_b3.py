@@ -54,32 +54,35 @@ class TestQualityGateConstants:
     def test_window_5min(self) -> None:
         assert WINDOW_MIN == 5
 
-    def test_sigma_window_720(self) -> None:
-        assert SIGMA_WINDOW == 720
+    def test_sigma_window_realized(self) -> None:
+        # Chainlink-calibrated 24h realized vol window
+        assert SIGMA_WINDOW == 1440
 
     def test_sigma_method_realized(self) -> None:
         assert SIGMA_METHOD == "realized"
 
     def test_sigma_scale_below_1(self) -> None:
         """Sigma scale < 1.0 means signal is more aggressive than market."""
-        assert SIGMA_SCALE == 0.644
+        assert SIGMA_SCALE == 0.348
         assert SIGMA_SCALE < 1.0
 
-    def test_entry_at_minute_2(self) -> None:
-        assert MIN_ENTRY_MIN == 2
-        assert MAX_ENTRY_MIN == 2
+    def test_entry_min_window(self) -> None:
+        # V6.0 widens entry window: minutes 1-3
+        assert MIN_ENTRY_MIN == 1
+        assert MAX_ENTRY_MIN == 3
 
     def test_momentum_not_contrarian(self) -> None:
         assert CONTRARIAN is False
 
     def test_entry_threshold(self) -> None:
-        assert ENTRY_THRESHOLD == 0.095
+        assert ENTRY_THRESHOLD == 0.020
 
     def test_profit_target(self) -> None:
         assert PROFIT_TARGET == 0.207
 
-    def test_stop_loss(self) -> None:
-        assert STOP_LOSS == 0.038
+    def test_stop_loss_disabled(self) -> None:
+        # Never-sell live mode: stop_loss is paper-only and disabled
+        assert STOP_LOSS == 99.0
 
     def test_max_hold_3min(self) -> None:
         assert MAX_HOLD_MIN == 3
@@ -88,15 +91,16 @@ class TestQualityGateConstants:
         assert EDGE_EXIT == 0.076
 
     def test_spread(self) -> None:
-        assert SPREAD == 0.01
+        assert SPREAD == 0.060
 
     def test_price_bounds(self) -> None:
-        assert MIN_ENTRY_MKT_FV == 0.15
-        assert MAX_ENTRY_MKT_FV == 0.85
+        # V6.0 ITM cap: 0.570 (don't buy deep ITM, too expensive on loss)
+        assert MIN_ENTRY_MKT_FV == 0.413
+        assert MAX_ENTRY_MKT_FV == 0.570
 
     def test_sizing_constants(self) -> None:
-        assert POSITION_PCT == 0.067
-        assert EDGE_SCALING == 4.838
+        assert POSITION_PCT == 0.026
+        assert EDGE_SCALING == 10.000
         assert MAX_BET_SIZE == 100.0
 
 
@@ -172,10 +176,10 @@ class TestB3ScannerSignals:
             assert signals[0].direction == -1
 
     def test_no_signal_small_move(self) -> None:
-        """Small BTC move should not trigger entry."""
+        """Tiny move relative to vol should not trigger entry threshold."""
         scanner = self._make_scanner_with_event(btc_start=87000)
-        # Tiny move — $10 on $87K = 0.01%
-        signals = scanner.scan(btc_price=87010, sigma_per_min=0.001)
+        # $1 move on $87K with high sigma → signal_fv ≈ 0.50 → below 0.020 thresh
+        signals = scanner.scan(btc_price=87001, sigma_per_min=0.005)
         assert len(signals) == 0
 
     def test_no_signal_wrong_minute(self) -> None:
@@ -202,13 +206,15 @@ class TestB3ScannerSignals:
             market_dev = abs(sig.market_fv_up - 0.5)
             assert signal_dev > market_dev
 
-    def test_entry_price_within_bounds(self) -> None:
-        """Entry price should be within MIN/MAX_ENTRY_MKT_FV."""
+    def test_entry_price_min_bound(self) -> None:
+        """Scanner enforces MIN_ENTRY_MKT_FV; MAX is enforced in strategy_b3
+        live gate (paper trades collect data above the cap for autoresearch).
+        """
         scanner = self._make_scanner_with_event(btc_start=87000)
         signals = scanner.scan(btc_price=87200, sigma_per_min=0.0008)
         for sig in signals:
             assert sig.entry_price >= MIN_ENTRY_MKT_FV
-            assert sig.entry_price <= MAX_ENTRY_MKT_FV
+            assert sig.entry_price <= 1.0
 
     def test_mark_traded_prevents_re_entry(self) -> None:
         """After marking an event as traded, no more signals."""
@@ -314,6 +320,7 @@ class TestB3ExitLogic:
             event_start_ts=now - 120,  # Event started 2 min ago
             event_end_ts=now + 180,    # Event ends in 3 min
             btc_at_start=btc_at_start,
+            btc_at_entry=btc_at_start,  # Same as start for tests (no entry drift)
             sigma_per_min=sigma,
             shares=100,
         )
@@ -329,7 +336,7 @@ class TestB3ExitLogic:
         self._add_position(strategy, direction=1, entry_mkt_fv=0.50,
                            btc_at_start=87000.0, sigma=0.0005)
         exits = await strategy.check_exits()
-        reasons = [r for _, r, _ in exits]
+        reasons = [exit_tup[1] for exit_tup in exits]
         assert "profit" in reasons
 
     @pytest.mark.asyncio
@@ -342,7 +349,7 @@ class TestB3ExitLogic:
         self._add_position(strategy, direction=1, entry_mkt_fv=0.65,
                            btc_at_start=87000.0, sigma=0.0008)
         exits = await strategy.check_exits()
-        reasons = [r for _, r, _ in exits]
+        reasons = [exit_tup[1] for exit_tup in exits]
         assert "stop" in reasons
 
     @pytest.mark.asyncio
@@ -355,7 +362,7 @@ class TestB3ExitLogic:
                            btc_at_start=87000.0, sigma=0.0008,
                            hold_seconds=250)  # > 3 min
         exits = await strategy.check_exits()
-        reasons = [r for _, r, _ in exits]
+        reasons = [exit_tup[1] for exit_tup in exits]
         assert "time" in reasons
 
     @pytest.mark.asyncio

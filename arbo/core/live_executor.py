@@ -157,11 +157,33 @@ class LiveExecutor:
         self, token_id: str, price: float, size_usdc: float,
         neg_risk: bool = True, tick_size: str = "0.01",
         maker_timeout_s: int | None = None,
+        max_price: float | None = None,
     ) -> LiveFill:
-        """MAKER BUY at BUY price (same as paper). 0% fee + rebate."""
+        """MAKER BUY at BUY price (same as paper). 0% fee + rebate.
+
+        If `max_price` is set, fail BEFORE posting the order when the
+        current CLOB BUY price (the level we'd post the maker at) exceeds
+        the cap. This protects against CLOB drift between the strategy's
+        scan and our execution — we don't want to fill ITM tokens that
+        the strategy already considers too expensive.
+        """
         buy_price, sell_price = await self._get_prices(token_id)
         if buy_price is None or sell_price is None:
             return self._fail(token_id, "BUY", price, size_usdc, "No prices")
+
+        # CLOB drift safety: reject if current bid would exceed strategy cap.
+        # Done BEFORE posting any order — no money at risk.
+        if max_price is not None and buy_price > max_price:
+            logger.info(
+                "live_buy_clob_drift_skip",
+                buy_price=buy_price,
+                max_price=max_price,
+                token=token_id[:20],
+            )
+            return self._fail(
+                token_id, "BUY", buy_price, size_usdc,
+                f"CLOB bid {buy_price:.3f} > max_price {max_price:.3f}",
+            )
 
         # Spread check
         mid = (buy_price + sell_price) / 2

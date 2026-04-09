@@ -644,7 +644,15 @@ class StrategyB3:
             # velocity, dir_delta, abs_dir_delta already computed above (line ~485)
             # Re-use them here
             if (sig.edge >= LIVE_MIN_EDGE and btc_move >= LIVE_MIN_BTC_MOVE
-                    and (velocity > LIVE_MAX_VELOCITY or abs_dir_delta > LIVE_MAX_DIR_DELTA)):
+                    and (velocity > LIVE_MAX_VELOCITY
+                         or abs_dir_delta > LIVE_MAX_DIR_DELTA
+                         or entry_mkt_fv > MAX_ENTRY_MKT_FV)):
+                if velocity > LIVE_MAX_VELOCITY:
+                    skip_reason = "velocity"
+                elif abs_dir_delta > LIVE_MAX_DIR_DELTA:
+                    skip_reason = "dir_delta"
+                else:
+                    skip_reason = "itm_cap"
                 logger.info(
                     "b3_live_filter_skip",
                     direction="UP" if is_up else "DOWN",
@@ -652,7 +660,9 @@ class StrategyB3:
                     dir_delta=f"{dir_delta:.1f}",
                     abs_dir_delta=f"{abs_dir_delta:.1f}",
                     btc_move=f"${btc_move:.0f}",
-                    reason="velocity" if velocity > LIVE_MAX_VELOCITY else "dir_delta",
+                    entry_mkt_fv=f"{entry_mkt_fv:.3f}",
+                    max_mkt_fv=f"{MAX_ENTRY_MKT_FV:.3f}",
+                    reason=skip_reason,
                 )
 
             if (
@@ -664,6 +674,7 @@ class StrategyB3:
                 and velocity <= LIVE_MAX_VELOCITY
                 and _cl_available  # CL must confirm (no fallback to Binance)
                 and abs_dir_delta <= LIVE_MAX_DIR_DELTA
+                and entry_mkt_fv <= MAX_ENTRY_MKT_FV  # Don't buy deep ITM (too expensive on loss)
             ):
                 logger.info(
                     "b3_live_qualified",
@@ -705,20 +716,24 @@ class StrategyB3:
                         neg_risk=False,
                         tick_size="0.01",
                         maker_timeout_s=self._live_entry_timeout_s,
+                        max_price=MAX_ENTRY_MKT_FV,  # Reject if CLOB drift > ITM cap
                     )
                     live_shares = fill.shares_filled
                     live_entry_price = float(fill.fill_price) if fill.fill_price else 0.0
                     live_fill_status = fill.status
                     live_latency_ms = fill.latency_ms
 
-                    # Log if fill above max entry price (for analysis, not filtering)
-                    # We ALWAYS track filled positions — money already spent
+                    # Defense-in-depth: pre-order checks should prevent this.
+                    # If we still see a fill above the cap, something drifted
+                    # between max_price guard and actual fill — treat as a bug
+                    # signal and surface as warning. Position is real, money
+                    # already spent, so we still track it.
                     if live_entry_price > MAX_ENTRY_MKT_FV and live_shares > 0:
-                        logger.info(
+                        logger.warning(
                             "b3_live_fill_above_cap",
                             fill_price=live_entry_price,
                             max_price=MAX_ENTRY_MKT_FV,
-                            msg="Fill above target — tracking anyway",
+                            msg="UNEXPECTED: fill above cap despite pre-order guard",
                         )
 
                     logger.info(
