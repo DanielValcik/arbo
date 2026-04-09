@@ -160,7 +160,8 @@ class StrategyB3:
         # Restore B3 positions from paper engine.
         # B3 positions are ultra-short-lived (1-3 min). On restart, any open
         # B3 positions are stale (the 5-min event has already resolved).
-        # Force-close them instead of restoring — avoids btc_at_start=0 crash.
+        # Force-resolve them as lost — they're past their event_end_ts.
+        # If we don't, the risk manager counts them and blocks new trades.
         if self._paper_engine:
             stale_b3 = [
                 pos for pos in self._paper_engine.open_positions
@@ -170,8 +171,25 @@ class StrategyB3:
                 logger.warning(
                     "b3_stale_positions_on_restart",
                     count=len(stale_b3),
-                    msg="B3 positions are 1-3 min hold — stale after restart, will be resolved by market",
+                    msg="Force-resolving stale B3 positions (past event_end_ts)",
                 )
+                # Force-resolve each stale position as LOST
+                # (they've been hanging open past their 5-min window)
+                for pos in stale_b3:
+                    try:
+                        token_id = getattr(pos, "token_id", None)
+                        if token_id:
+                            self._paper_engine.resolve_market(token_id, winning_outcome=False)
+                            # Also clear from risk manager exposure
+                            if self._risk_manager:
+                                cond_id = getattr(pos, "market_condition_id", None) or getattr(pos, "condition_id", None)
+                                if cond_id:
+                                    try:
+                                        self._risk_manager.close_position(cond_id)
+                                    except Exception:
+                                        pass
+                    except Exception as e:
+                        logger.warning("b3_stale_resolve_error", error=str(e))
 
     async def close(self) -> None:
         """Clean up resources."""
