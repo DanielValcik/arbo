@@ -21,6 +21,7 @@ from arbo.strategies.b3_quality_gate import (
     EDGE_EXIT,
     EDGE_SCALING,
     ENTRY_THRESHOLD,
+    LIVE_MAX_FILL_PRICE,
     MAX_BET_SIZE,
     MAX_ENTRY_MIN,
     MAX_ENTRY_MKT_FV,
@@ -94,9 +95,11 @@ class TestQualityGateConstants:
         assert SPREAD == 0.060
 
     def test_price_bounds(self) -> None:
-        # V6.0 ITM cap: 0.570 (don't buy deep ITM, too expensive on loss)
+        # Paper scanner bounds
         assert MIN_ENTRY_MKT_FV == 0.413
         assert MAX_ENTRY_MKT_FV == 0.570
+        # Live fill price cap (from 278 live trade analysis)
+        assert LIVE_MAX_FILL_PRICE == 0.75
 
     def test_sizing_constants(self) -> None:
         assert POSITION_PCT == 0.026

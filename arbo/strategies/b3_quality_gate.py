@@ -51,9 +51,28 @@ BTC_STOP_PCT = 0.0015             # Paper-only
 SPREAD = 0.060                    # $0.005 bid-ask spread (tighter, Chainlink-calibrated)
 MAKER = True                      # PostOnly orders (0% fee + rebate)
 
-# Price bounds
+# Price bounds — paper scanner
 MIN_ENTRY_MKT_FV = 0.413          # Don't buy deep OTM (no liquidity)
-MAX_ENTRY_MKT_FV = 0.570          # Don't buy deep ITM (too expensive)
+MAX_ENTRY_MKT_FV = 0.570          # Paper scanner ITM cap (collects data for autoresearch)
+
+# LIVE fill price cap — from 278 live trade analysis (2026-04-10):
+#
+# The payout is asymmetric: buy at $0.75 → win $0.25/share, lose $0.75/share.
+# Higher fill = higher WR but WORSE risk/reward. Data shows:
+#
+#   fill ≤0.45:  39% WR, breakeven 30%, avg +$2.54/trade  → VERY profitable
+#   fill 0.46-0.57: 53% WR, breakeven 52%, avg -$0.26/trade  → breakeven
+#   fill 0.58-0.70: 61% WR, breakeven 65%, avg +$0.02/trade  → breakeven
+#   fill 0.71-0.85: 74% WR, breakeven 79%, avg -$0.22/trade  → LOSES money
+#   fill >0.85:  90% WR, breakeven 91%, avg -$0.03/trade  → LOSES money
+#
+# Cumulative PnL peaks at cap=0.75 ($175.95, 178 trades) vs uncapped
+# ($135.49, 278 trades). Fills >0.75 net lose $40 despite 78% WR.
+#
+# Why: model WR rises with fill price but NOT fast enough to overcome
+# the worsening payout ratio. At fill=0.85, you need 85% WR just to
+# break even — the model delivers 75%, a 10pp shortfall.
+LIVE_MAX_FILL_PRICE = 0.75        # Max CLOB fill price (data-optimal)
 
 # Sizing — smaller positions, more aggressive edge scaling
 POSITION_PCT = 0.026              # 2.9% of capital per trade (was 6.7%)
