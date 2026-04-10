@@ -22,7 +22,7 @@ from arbo.strategies.b3_quality_gate import (
     CONTRARIAN,
     ENTRY_THRESHOLD,
     MAX_ENTRY_MIN,
-    MAX_ENTRY_MKT_FV,
+
     MIN_ENTRY_MIN,
     MIN_ENTRY_MKT_FV,
     SIGMA_FLOOR,
