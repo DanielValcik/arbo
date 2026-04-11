@@ -111,6 +111,7 @@ class RDHOrchestrator:
         self._web_dashboard: Any = None
         self._ta_provider: Any = None  # TAFeatureProvider (background TA cache for B3/B2)
         self._adaptive_config: Any = None  # AdaptiveConfig (runtime params for Watchdog)
+        self._b3_watchdog: Any = None  # B3Watchdog (autonomous optimizer daemon)
 
         # Runtime state
         self._start_time: float = 0.0
@@ -184,6 +185,11 @@ class RDHOrchestrator:
         if self._order_flow_monitor is not None:
             with contextlib.suppress(Exception):
                 await self._order_flow_monitor.stop()
+
+        # Close B3 Watchdog
+        if self._b3_watchdog is not None:
+            with contextlib.suppress(Exception):
+                await self._b3_watchdog.stop()
 
         # Close TAFeatureProvider
         if self._ta_provider is not None:
@@ -691,6 +697,24 @@ class RDHOrchestrator:
         # Attach adaptive config after init (strategy stores reference)
         if self._adaptive_config is not None:
             s._adaptive_config = self._adaptive_config
+
+        # Initialize B3 Watchdog (autonomous optimizer)
+        if self._b3_watchdog is None and self._adaptive_config is not None:
+            try:
+                from arbo.core.b3_watchdog import B3Watchdog
+                from arbo.utils.db import get_session_factory
+
+                self._b3_watchdog = B3Watchdog(
+                    session_factory=get_session_factory(),
+                    adaptive_config=self._adaptive_config,
+                    gemini_agent=self._gemini,
+                    slack_bot=self._slack_bot,
+                    ta_provider=self._ta_provider,
+                )
+                logger.info("b3_watchdog_initialized")
+            except Exception as e:
+                logger.warning("b3_watchdog_init_failed", error=str(e))
+
         return s
 
     async def _init_gefs_background(self) -> None:
@@ -1317,6 +1341,11 @@ class RDHOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._anomaly_check_scheduler(), name="anomaly_check")
         )
+        # B3 Watchdog autonomous optimizer daemon
+        if self._b3_watchdog is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._b3_watchdog.run(), name="b3_watchdog")
+            )
         # TAFeatureProvider background cache (tradingview-ta → BTC RSI/ADX/MACD/BB)
         if self._ta_provider is not None:
             self._internal_tasks.append(
