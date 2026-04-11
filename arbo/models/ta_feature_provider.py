@@ -92,8 +92,8 @@ class TAFeatures:
 
     @property
     def is_stale(self) -> bool:
-        """Cache older than 90s is considered stale."""
-        return time.time() - self.timestamp > 90
+        """Cache older than update interval + buffer is stale."""
+        return time.time() - self.timestamp > 360
 
 
 class TAFeatureProvider:
