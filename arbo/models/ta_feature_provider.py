@@ -110,7 +110,7 @@ class TAFeatureProvider:
             rsi = ta.rsi_5m
     """
 
-    def __init__(self, update_interval: float = 60.0) -> None:
+    def __init__(self, update_interval: float = 180.0) -> None:
         self._cache: dict[str, TAFeatures] = {}
         self._update_interval = update_interval
         self._running = False
@@ -212,6 +212,9 @@ class TAFeatureProvider:
         except Exception as e:
             logger.warning("ta_fetch_5m_error", error=str(e))
 
+        # Delay between requests to avoid TradingView 429 rate limit
+        time.sleep(2)
+
         # 1-hour (context)
         try:
             h1h = TA_Handler(
@@ -227,6 +230,8 @@ class TAFeatureProvider:
         except Exception as e:
             logger.warning("ta_fetch_1h_error", error=str(e))
 
+        time.sleep(2)
+
         # 4-hour (macro)
         try:
             h4h = TA_Handler(
@@ -241,6 +246,8 @@ class TAFeatureProvider:
             result.recommend_4h = a4h.summary.get("RECOMMENDATION")
         except Exception as e:
             logger.warning("ta_fetch_4h_error", error=str(e))
+
+        time.sleep(2)
 
         # Daily (for B2)
         try:
