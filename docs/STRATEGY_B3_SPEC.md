@@ -4,6 +4,13 @@
 > **Date**: 2026-03-27
 > **Capital**: $1,000
 > **Market type**: BTC 5-min Up/Down (Polymarket)
+>
+> **Related Documents:**
+> - `B3_WATCHDOG_SPEC.md` — Plně autonomní monitoring & self-optimization
+> - `TA_INTEGRATION_SPEC.md` — TradingView TA features (RSI, ADX, MACD, BB)
+> - `STRATEGY_B3_CHAINLINK.md` — Chainlink oracle resolution
+> - `STRATEGY_B3_LIVE_SPEC.md` — Live deployment notes
+> - `TRADINGVIEW_MCP_ANALYSIS.md` — TA výzkum
 
 ---
 

@@ -1,6 +1,7 @@
 # Strategy B3 — Chainlink Oracle Calibration
 
 > Updated: 2026-04-01 (Chainlink pivot)
+> Related: `B3_WATCHDOG_SPEC.md` (autonomní monitoring), `TA_INTEGRATION_SPEC.md` (TA features)
 
 ## Problem Statement
 

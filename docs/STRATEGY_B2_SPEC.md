@@ -3,6 +3,7 @@
 > Specifikace nové strategie aplikující C2 model (EMOS + edge-based exit)
 > na crypto price prediction markets s masivní likviditou.
 > Referenční dokument pro implementaci.
+> **Future**: TA Integration plánována — viz `TA_INTEGRATION_SPEC.md` sekce 6 (probability adjustment)
 
 ## 1. Proč Crypto Price Markets
 

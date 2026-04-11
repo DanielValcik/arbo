@@ -184,3 +184,77 @@ One less process to manage on VPS. 8GB RAM on Hetzner CX22 is more than enough f
 4. Update pyproject.toml: package discovery, isort first-party, coverage source
 5. Update all imports to `arbo.*`
 6. Delete `_archive/` after Sprint 1 confirms nothing else is needed
+
+---
+
+## TD-014: B3 Watchdog — Plně Autonomní Lokální Daemon (2026-04-11)
+
+**Decision:** B3 Watchdog bude plně autonomní lokální Python daemon, ne advisory systém s CEO approval a ne Anthropic Managed Agents.
+
+**Approved by:** CEO
+
+**Rationale:**
+- **Autonomie vs Advisory**: Watchdog sám detekuje anomálie, analyzuje root cause přes Gemini Flash, rozhoduje o parametrických změnách a implementuje je za běhu. CEO dostává post-action report co se stalo a proč. Důvod: rychlost reakce (minuty ne hodiny), kontinuální optimalizace 24/7 bez čekání na lidský input.
+- **Lokální vs Managed Agents**: $1/měsíc (Gemini Flash) vs $80-100/měsíc (Claude runtime). Přímý PostgreSQL přístup (localhost, ms latence). Plná kontrola, git-versioned. Žádný vendor lock-in.
+- **Safety**: 3-tier autonomie (Tier 1: plně autonomní v bounds, Tier 2: autonomní s eskalací, Tier 3: nikdy autonomní). Auto-revert po 50 tradech pokud WR klesne o >5pp. Hardcoded bounds na každý parametr.
+
+**Alternatives rejected:**
+- Managed Agents: příliš drahé ($80/mo), latence (network), omezená kontrola
+- Advisory-only (CEO approve): příliš pomalé, B3 má 5-min horizont, čekání na schválení = ztracené příležitosti
+- No watchdog: alpha decay nedetekována dny/týdny
+
+**Implementation:** `arbo/core/b3_watchdog.py`, `arbo/core/b3_metrics.py`, `arbo/core/b3_anomaly.py`, `arbo/core/adaptive_config.py`, `arbo/agents/watchdog_agent.py`
+
+---
+
+## TD-015: TA Integration — tradingview-ta + Background Cache (2026-04-11)
+
+**Decision:** Technická analýza (RSI, ADX, MACD, BB) integrována přes `tradingview_ta` Python knihovnu jako background asyncio cache. MCP server pouze pro interaktivní research v Claude Code.
+
+**Rationale:**
+- MCP server přidává sekundy latence (Claude round-trip), B3 potřebuje <100ms
+- tradingview-ta: 0ms read z cache, 60s background update, $0 (žádné API klíče)
+- Produkce: background task + in-memory cache → strategies čtou s nulovou latencí
+- Research: tradingview-mcp-server v Claude Code pro ad-hoc BTC analýzu
+- Fallback: ccxt + pandas-ta pokud tradingview-ta endpoint selže
+
+**What this enables:**
+- B3: TA regime detection (ADX), mean-reversion risk (RSI), multi-TF alignment
+- B2: denní probability adjustment (RSI, MACD, BB na daily timeframe)
+- Watchdog: enriched context pro Gemini Flash analýzu
+
+**Implementation:** `arbo/models/ta_feature_provider.py`
+
+---
+
+## TD-016: TA Features — Logging-First (2026-04-11)
+
+**Decision:** TA features se nejdřív logují do trade_details JSONB bez filtrování. Aktivní filtering až po 100+ tradech s TA daty a data-driven validaci.
+
+**Rationale:**
+- V5.0 scoring model (10 features, 37 tradů) = overfit za hodiny → zjednodušen na V6.0 (2 pravidla)
+- Lekce: nikdy nefiltrovat bez dat. Logging-first → analýza korelace → filtering pokud Cohen's d > 0.3 a N > 30 per bucket.
+- Autonomní Watchdog sám rozhodne kdy aktivovat TA filtr na základě nasbíraných dat.
+
+**Data fields logged:** `ta_rsi_5m`, `ta_adx_5m`, `ta_macd_hist_5m`, `ta_bb_width_5m`, `ta_recommend_5m`, `ta_rsi_1h`, `ta_adx_1h`, `ta_multi_tf_aligned`, `ta_adx_regime`, `ta_rsi_zone`
+
+---
+
+## TD-017: Runtime Adaptive Config (2026-04-11)
+
+**Decision:** Watchdog mění B3 parametry za běhu přes runtime adaptive config systém (in-memory dict s audit logem v DB).
+
+**Rationale:**
+- B3 quality_gate.py obsahuje statické konstanty. Watchdog potřebuje měnit parametry bez redeploye.
+- Řešení: `adaptive_config.py` — čte default z quality_gate.py, Watchdog přepisuje runtime overrides.
+- `strategy_b3.py` čte z adaptive_config místo přímo z quality_gate.
+- Každá změna se loguje do `watchdog_decisions` DB tabulky (audit trail).
+- Restart systému → parametry se vrátí na default (safe fallback).
+- Auto-revert: pokud WR klesne o >5pp za 50 tradů po změně → automatický revert.
+
+**Safety bounds:**
+- Tier 1 (autonomní): velocity [30-100], dir_delta [5-40], edge [0.20-0.80], sizing ±50%
+- Tier 2 (autonomní+flag): sigma_scale [0.25-0.50], entry_threshold [0.01-0.05]
+- Tier 3 (nikdy): MAX_BET_SIZE, DAILY_LOSS_LIMIT, LIVE_MAX_FILL_PRICE, REQUIRE_CHAINLINK
+
+**Implementation:** `arbo/core/adaptive_config.py`, `watchdog_decisions` DB tabulka

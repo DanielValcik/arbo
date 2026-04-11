@@ -479,3 +479,94 @@
 - [ ] scripts/backup.sh — daily pg_dump
 - [ ] WebSocket heartbeat stability (PING every 10s)
 - [ ] Polymarket builder tier application (email builder@polymarket.com for Verified tier)
+
+---
+
+## Phase 5: TA Integration & Autonomní Watchdog (2026-04-11)
+
+> Přidáno po výzkumu TradingView MCP ekosystému.
+> Viz: `TA_INTEGRATION_SPEC.md`, `B3_WATCHDOG_SPEC.md`, `TRADINGVIEW_MCP_ANALYSIS.md`
+> Technical decisions: TD-014 až TD-017
+
+### TA-001: TAFeatureProvider — Background TA Cache
+- [ ] `arbo/models/ta_feature_provider.py`
+- [ ] Background asyncio task, update každých 60s
+- [ ] tradingview_ta: BTC 5m/1h/4h/1d — RSI, ADX, MACD, BB, ATR
+- [ ] In-memory cache, 0ms read, graceful degradation (None pokud stale >90s)
+- [ ] run_in_executor() pro sync→async wrapper
+- [ ] Fallback: ccxt + pandas-ta
+- [ ] `pip install tradingview_ta` na VPS
+- [ ] Integrace do main_rdh.py jako asyncio.create_task()
+- **Acceptance:** BTC TA features dostupné z cache, strategies čtou s 0ms latencí
+
+### TA-002: B3 TA Logging — trade_details Rozšíření
+- [ ] V strategy_b3.py poll_cycle(): číst z TAFeatureProvider cache
+- [ ] Logovat do trade_details JSONB: ta_rsi_5m, ta_adx_5m, ta_macd_hist_5m, ta_bb_width_5m, ta_recommend_5m, ta_rsi_1h, ta_adx_1h, ta_multi_tf_aligned, ta_adx_regime, ta_rsi_zone
+- [ ] Žádné filtrování — jen data collection
+- [ ] Pass ta_provider do StrategyB3 konstruktoru přes main_rdh.py
+- **Acceptance:** trade_details obsahuje TA fields pro nové B3 trades
+- **Dependency:** TA-001
+
+### TA-003: Adaptive Config — Runtime Parametrický Systém
+- [ ] `arbo/core/adaptive_config.py`
+- [ ] Čte default z b3_quality_gate.py, Watchdog přepisuje runtime overrides
+- [ ] strategy_b3.py čte přes adaptive_config.get(param, default)
+- [ ] `watchdog_decisions` DB tabulka (audit trail: timestamp, param, old, new, reason, outcome)
+- [ ] Alembic migrace pro novou tabulku
+- [ ] Auto-revert mechanismus (50 tradů evaluation window)
+- [ ] Tier 1/2/3 bounds enforcement (hardcoded safety limits)
+- **Acceptance:** Watchdog může měnit LIVE_MAX_VELOCITY za běhu, strategy_b3 okamžitě respektuje novou hodnotu
+- **Dependency:** Žádná (nezávislé na TA)
+
+### TA-004: Watchdog Fáze 1 — Metrics + Autonomní Sizing
+- [ ] `arbo/core/b3_watchdog.py` — Main daemon
+- [ ] `arbo/core/b3_metrics.py` — SQL queries → Pandas → rolling WR/PnL, regime breakdown
+- [ ] Integrace do main_rdh.py jako asyncio.create_task()
+- [ ] Slack INFO report každých 6h nebo 50 tradů
+- [ ] Autonomní sizing adjustment (POSITION_PCT, EDGE_SCALING) v Tier 1 bounds
+- [ ] Slack kanál #b3-watchdog
+- **Acceptance:** Periodický Slack report s regime breakdown, autonomní sizing adjustments
+- **Dependency:** TA-003 (adaptive_config)
+
+### TA-005: Watchdog Fáze 2 — Anomaly Detection + TA Regime
+- [ ] `arbo/core/b3_anomaly.py` — Trigger logic + severity routing
+- [ ] `arbo/agents/watchdog_agent.py` — Gemini Flash autonomní decision engine
+- [ ] CUSUM, BOCPD, PSI (velocity, spread, dir_delta, TA features)
+- [ ] ECE calibration monitoring
+- [ ] TA regime buckety (ADX, RSI, MTF) v metrics engine
+- [ ] Triggery T1-T20 s autonomní akce
+- [ ] Auto-pause/resume live trading při DD threshold
+- [ ] Gemini Flash verdict: APPLY | REVERT | ESCALATE | MONITOR
+- **Acceptance:** Watchdog detekuje anomálii, Gemini rozhodne, parametr se změní, Slack report
+- **Dependency:** TA-001, TA-003, TA-004
+
+### TA-006: Watchdog Fáze 3 — Self-Learning Loop
+- [ ] Auto-revert check po 50 tradech pro každou změnu
+- [ ] Self-learning: logovat decisions + outcomes, Gemini dostává historii
+- [ ] Cascade prevention (max 1 aktivní Tier 1 změna)
+- [ ] Hard reset po 3 consecutive reverts (MONITOR-ONLY 200 tradů)
+- [ ] `watchdog_decisions` DB query pro trend analýzu vlastních rozhodnutí
+- **Acceptance:** Watchdog se učí z vlastních chyb, auto-revertuje špatné změny
+- **Dependency:** TA-005
+
+### TA-007: TA→W/L Korelační Analýza (Automatická)
+- [ ] Watchdog automaticky analyzuje korelaci TA features s W/L po 100+ tradech s TA daty
+- [ ] Cohen's d per bucket, Pearson korelace s existujícími features
+- [ ] Pokud Cohen's d > 0.3 a N > 30: Watchdog autonomně aktivuje TA filtr
+- [ ] Výsledek do Slack: "Activated ADX filter — RANGING bucket WR 35% vs 72% overall"
+- **Acceptance:** Watchdog sám rozhodne o aktivaci TA filtru na základě dat
+- **Dependency:** TA-002 (100+ tradů s TA daty), TA-005 (autonomní Watchdog)
+
+### TA-008: B2 TA Integration — Probability Adjustment
+- [ ] V strategy_b2.py: TA-adjusted probability (RSI daily, MACD daily, BB daily)
+- [ ] TAFeatureProvider denní timeframe features
+- [ ] Logging-first, pak autonomní Watchdog optimalizace
+- **Acceptance:** B2 model probability adjustovaná o TA kontext
+- **Dependency:** TA-001, B2 autoresearch complete
+
+### TA-009: MCP Server Setup pro Claude Code Research
+- [ ] `pip install tradingview-mcp-server`
+- [ ] Claude Code MCP konfigurace
+- [ ] Dokumentace typických queries (BTC overview, multi-TF, regime check)
+- **Acceptance:** Claude Code může analyzovat BTC TA na vyžádání
+- **Dependency:** Žádná (nezávislé)

@@ -94,6 +94,7 @@ class StrategyB3:
         rtds_feed: Any | None = None,
         execution_mode: str = "paper",
         live_executor: Any | None = None,
+        ta_provider: Any | None = None,
     ) -> None:
         self._risk_manager = risk_manager
         self._paper_engine = paper_engine
@@ -101,6 +102,7 @@ class StrategyB3:
         self._rtds_feed = rtds_feed  # Chainlink resolution price feed
         self._execution_mode = execution_mode  # "paper", "dual", "live"
         self._live_executor = live_executor
+        self._ta_provider = ta_provider  # TAFeatureProvider (background TA cache)
 
         # Live config — capital fetched from wallet, env var as fallback
         import os
@@ -609,6 +611,8 @@ class StrategyB3:
                         "velocity_paper": round(velocity, 1),
                         "dir_delta_paper": round(dir_delta, 2),
                         "abs_dir_delta_paper": round(abs_dir_delta, 2),
+                        # TA features (from background cache, None if unavailable)
+                        **self._get_ta_trade_details(),
                     },
                 )
 
@@ -943,6 +947,35 @@ class StrategyB3:
         except Exception as e:
             logger.debug("b3_liquidity_check_error", error=str(e))
             return None  # Fallback: use desired_size
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TA Features (background cache, logging only — no filtering)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _get_ta_trade_details(self) -> dict:
+        """Read TA features from background cache for trade_details logging.
+
+        Returns dict of TA fields (all None if TA unavailable).
+        These are logged to trade_details JSONB for future Watchdog analysis.
+        No filtering happens here — just data collection.
+        """
+        if self._ta_provider is None:
+            return {}
+        ta = self._ta_provider.get("BTCUSDT")
+        if ta is None:
+            return {}
+        return {
+            "ta_rsi_5m": round(ta.rsi_5m, 1) if ta.rsi_5m is not None else None,
+            "ta_adx_5m": round(ta.adx_5m, 1) if ta.adx_5m is not None else None,
+            "ta_macd_hist_5m": round(ta.macd_hist_5m, 4) if ta.macd_hist_5m is not None else None,
+            "ta_bb_width_5m": round(ta.bb_width_5m, 4) if ta.bb_width_5m is not None else None,
+            "ta_recommend_5m": ta.recommend_5m,
+            "ta_rsi_1h": round(ta.rsi_1h, 1) if ta.rsi_1h is not None else None,
+            "ta_adx_1h": round(ta.adx_1h, 1) if ta.adx_1h is not None else None,
+            "ta_multi_tf_aligned": ta.multi_tf_aligned,
+            "ta_adx_regime": ta.adx_regime,
+            "ta_rsi_zone": ta.rsi_zone,
+        }
 
     # ═══════════════════════════════════════════════════════════════════════
     # EXIT: Check Exits

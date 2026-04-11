@@ -109,6 +109,7 @@ class RDHOrchestrator:
         self._report_generator: Any = None
         self._slack_bot: Any = None
         self._web_dashboard: Any = None
+        self._ta_provider: Any = None  # TAFeatureProvider (background TA cache for B3/B2)
 
         # Runtime state
         self._start_time: float = 0.0
@@ -182,6 +183,11 @@ class RDHOrchestrator:
         if self._order_flow_monitor is not None:
             with contextlib.suppress(Exception):
                 await self._order_flow_monitor.stop()
+
+        # Close TAFeatureProvider
+        if self._ta_provider is not None:
+            with contextlib.suppress(Exception):
+                await self._ta_provider.stop()
 
         # Close Santiment + CoinGecko clients
         if self._santiment is not None:
@@ -651,6 +657,16 @@ class RDHOrchestrator:
                 logger.warning("b3_live_executor_no_client", msg="Falling back to paper mode")
                 execution_mode = "paper"
 
+        # Initialize TAFeatureProvider (optional — continues without if unavailable)
+        if self._ta_provider is None:
+            try:
+                from arbo.models.ta_feature_provider import TAFeatureProvider
+
+                self._ta_provider = TAFeatureProvider()
+                logger.info("ta_provider_initialized")
+            except Exception as e:
+                logger.warning("ta_provider_init_failed", error=str(e))
+
         s = StrategyB3(
             risk_manager=self._risk_manager,
             paper_engine=self._paper_engine,
@@ -658,6 +674,7 @@ class RDHOrchestrator:
             rtds_feed=rtds_feed,
             execution_mode=execution_mode,
             live_executor=live_executor,
+            ta_provider=self._ta_provider,
         )
         await s.init()
         return s
@@ -1286,6 +1303,11 @@ class RDHOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._anomaly_check_scheduler(), name="anomaly_check")
         )
+        # TAFeatureProvider background cache (tradingview-ta → BTC RSI/ADX/MACD/BB)
+        if self._ta_provider is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._ta_provider.start(), name="ta_features")
+            )
         if self._web_dashboard is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._run_web_dashboard(), name="web_dashboard")
