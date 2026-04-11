@@ -132,17 +132,25 @@ class TAFeatureProvider:
 
         while self._running:
             try:
+                logger.info("ta_cycle_start")
                 loop = asyncio.get_event_loop()
                 features = await loop.run_in_executor(None, self._fetch_btc_ta)
                 if features:
                     self._cache["BTCUSDT"] = features
                     self._consecutive_failures = 0
-                    logger.debug(
+                    logger.info(
                         "ta_update_ok",
                         rsi_5m=f"{features.rsi_5m:.1f}" if features.rsi_5m else "N/A",
                         adx_5m=f"{features.adx_5m:.1f}" if features.adx_5m else "N/A",
                         regime=features.adx_regime,
                         aligned=features.multi_tf_aligned,
+                    )
+                else:
+                    self._consecutive_failures += 1
+                    logger.warning(
+                        "ta_update_no_data",
+                        failures=self._consecutive_failures,
+                        msg="All timeframes failed — will retry next cycle",
                     )
             except Exception as e:
                 self._consecutive_failures += 1
@@ -151,12 +159,13 @@ class TAFeatureProvider:
                     error=str(e),
                     failures=self._consecutive_failures,
                 )
-                if self._consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
-                    logger.error(
-                        "ta_provider_too_many_failures",
-                        msg=f"{_MAX_CONSECUTIVE_FAILURES} consecutive failures — stopping TA updates",
-                    )
-                    break
+
+            if self._consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                logger.error(
+                    "ta_provider_too_many_failures",
+                    msg=f"{_MAX_CONSECUTIVE_FAILURES} consecutive failures — stopping TA updates",
+                )
+                break
 
             # Sleep in 1-second chunks for responsive shutdown
             for _ in range(int(self._update_interval)):
