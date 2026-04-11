@@ -103,6 +103,7 @@ class StrategyB3:
         self._execution_mode = execution_mode  # "paper", "dual", "live"
         self._live_executor = live_executor
         self._ta_provider = ta_provider  # TAFeatureProvider (background TA cache)
+        self._adaptive_config: Any = None  # AdaptiveConfig (set by orchestrator)
 
         # Live config — capital fetched from wallet, env var as fallback
         import os
@@ -635,10 +636,13 @@ class StrategyB3:
             #
             # NO reversal exit — data: 9 exits cost $14+ (sold winning positions)
             # NO scoring model — V5.0 scoring was overfit (5/95 paper, 40% WR). Removed.
-            LIVE_MIN_EDGE = 0.40
-            LIVE_MIN_BTC_MOVE = 50.0
-            LIVE_MAX_VELOCITY = 60.0  # $/min — slow moves only
-            LIVE_MAX_DIR_DELTA = 15.0  # $ — CL must confirm
+            # Live params: read from adaptive_config (Watchdog can change at runtime)
+            # Falls back to defaults if no override set.
+            _ac = self._adaptive_config
+            LIVE_MIN_EDGE = _ac.get("LIVE_MIN_EDGE", 0.40) if _ac else 0.40
+            LIVE_MIN_BTC_MOVE = _ac.get("LIVE_MIN_BTC_MOVE", 50.0) if _ac else 50.0
+            LIVE_MAX_VELOCITY = _ac.get("LIVE_MAX_VELOCITY", 60.0) if _ac else 60.0
+            LIVE_MAX_DIR_DELTA = _ac.get("LIVE_MAX_DIR_DELTA", 15.0) if _ac else 15.0
             live_shares = 0
             live_entry_price = 0.0
             live_fill_status = "skipped"

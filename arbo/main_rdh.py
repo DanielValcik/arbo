@@ -110,6 +110,7 @@ class RDHOrchestrator:
         self._slack_bot: Any = None
         self._web_dashboard: Any = None
         self._ta_provider: Any = None  # TAFeatureProvider (background TA cache for B3/B2)
+        self._adaptive_config: Any = None  # AdaptiveConfig (runtime params for Watchdog)
 
         # Runtime state
         self._start_time: float = 0.0
@@ -657,6 +658,16 @@ class RDHOrchestrator:
                 logger.warning("b3_live_executor_no_client", msg="Falling back to paper mode")
                 execution_mode = "paper"
 
+        # Initialize AdaptiveConfig (runtime params for Watchdog autonomous changes)
+        if self._adaptive_config is None:
+            try:
+                from arbo.core.adaptive_config import AdaptiveConfig
+
+                self._adaptive_config = AdaptiveConfig()
+                logger.info("adaptive_config_initialized")
+            except Exception as e:
+                logger.warning("adaptive_config_init_failed", error=str(e))
+
         # Initialize TAFeatureProvider (optional — continues without if unavailable)
         if self._ta_provider is None:
             try:
@@ -677,6 +688,9 @@ class RDHOrchestrator:
             ta_provider=self._ta_provider,
         )
         await s.init()
+        # Attach adaptive config after init (strategy stores reference)
+        if self._adaptive_config is not None:
+            s._adaptive_config = self._adaptive_config
         return s
 
     async def _init_gefs_background(self) -> None:
