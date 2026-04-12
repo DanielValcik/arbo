@@ -94,8 +94,6 @@ class DPosition:
     close_price: float = 0.0   # Last price seen before resolution/exit
     clv: float = 0.0           # close_price - entry_price (for YES side)
     neg_risk: bool = False     # Critical for orderbook queries
-    model_prob: float = 0.0    # Stored for Slack alerts
-    edge: float = 0.0          # Stored for Slack alerts
     live_shares: int = 0
     live_entry_price: float = 0.0
     live_fill_status: str = ""
