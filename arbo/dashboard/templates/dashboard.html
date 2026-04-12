@@ -1573,19 +1573,35 @@
                 <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim);padding:0 12px 8px"></div>
             </div>
 
-            <!-- B3 LIVE Cumulative P&L Chart (5-min + 15-min stacked) -->
+            <!-- B3 LIVE Cumulative P&L Chart (merged chronological: 5-min + 15-min) -->
             <div class="card grid-full" style="border-top:3px solid #3fb950">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
                     Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span>
                     <span id="lb3LiveCumStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span>
                 </div>
                 <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
-                    <span style="color:#3fb950;font-weight:600">━ 5-min</span>
-                    <span style="margin-left:12px;color:#e3b341;font-weight:600">━ 15-min</span>
-                    <span style="margin-left:12px;color:var(--text-dim)">(per-point color: ● zisk · ● ztráta)</span>
+                    Chronologicky vsechny trady (5-min + 15-min kombinovane).
+                    Body: <span style="color:#3fb950">● zisk</span> · <span style="color:#f85149">● ztrata</span>.
+                    Tvar: ● 5-min · ▲ 15-min.
+                    Linka: <span style="color:#3fb950">zelena</span> kdyz roste, <span style="color:#f85149">cervena</span> kdyz klesa.
                 </div>
                 <div class="chart-container" style="height:220px">
                     <canvas id="b3LiveCumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 5-min vs 15-min performance comparison chart -->
+            <div class="card grid-full" style="border-top:3px solid #8b5cf6">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Porovnani 5-min vs 15-min
+                    <span id="lb3CompStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    Kazda strategie samostatna kumulativni krivka (vzdy od vlastni $0).
+                    X-osa: trade number per strategie.
+                </div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b3CompChart"></canvas>
                 </div>
             </div>
 
@@ -4586,54 +4602,90 @@
                     }
                 }
 
+                // ==========================================================
+                // MERGED chronological chart — 5-min + 15-min interleaved
+                // One line with per-segment color (green when rising, red
+                // when falling). Point shape: ● 5-min, ▲ 15-min. Point
+                // color: green win, red loss.
+                // ==========================================================
                 const lCumCtx = document.getElementById('b3LiveCumPnlChart');
                 if (lCumCtx) {
                     if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
-                    // 5-min line: SOLID GREEN (matches legend). Per-point colors
-                    // show win (green) / loss (red). Pending still use dashed.
-                    const final5mColor = lCum >= 0 ? '#3fb950' : '#f85149';
-                    const datasets = [{
-                        label: '5-min',
-                        data: lValues,
-                        borderColor: final5mColor,
-                        backgroundColor: lCum >= 0 ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.06)',
-                        fill: true,
-                        tension: 0.1,
-                        pointRadius: lPointRadius,
-                        pointBackgroundColor: lSegColors,
-                        borderWidth: 2,
-                    }];
-                    // Append 15-min series: pad with carry-forward to match 5-min x-axis
-                    const s15 = window._b3_15m_cum;
-                    if (s15 && Array.isArray(s15.values) && s15.values.length > 0) {
-                        const padded = [...s15.values];
-                        const lastVal = padded[padded.length - 1] ?? 0;
-                        while (padded.length < lLabels.length) {
-                            padded.push(lastVal);
+
+                    // Build 5-min chron list (strategy+time+pnl) from liveChron
+                    const chron5 = [];
+                    for (let i = 0; i < liveChron.length; i++) {
+                        const d = liveChron[i].trade_details || {};
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || 0;
+                        const lsh = d.live_entry_shares || 0;
+                        const lxst = d.live_exit_status || '';
+                        const paperExit = liveChron[i].exit_price || 0;
+                        let pnl = 0;
+                        let resolved = false;
+                        if (lep > 0 && lsh > 0 && lxst === 'resolution') {
+                            pnl = (lxp - lep) * lsh; resolved = true;
+                        } else if (lep > 0 && lxp > 0 && lsh > 0 && lxst !== 'failed') {
+                            pnl = (lxp - lep) * lsh; resolved = true;
+                        } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution' && lxst !== 'failed') {
+                            pnl = (paperExit - lep) * lsh; resolved = true;
                         }
-                        // Trim if longer than 5-min labels (shouldn't happen, but safe)
-                        const aligned = padded.slice(0, lLabels.length);
-                        const final15mColor = (lastVal >= 0) ? '#e3b341' : '#f85149';
-                        datasets.push({
-                            label: '15-min',
-                            data: aligned,
-                            borderColor: final15mColor,
-                            backgroundColor: 'rgba(227,179,65,0.08)',
-                            fill: false,
-                            tension: 0.1,
-                            pointRadius: aligned.map((v, i) => {
-                                // Highlight only actual data points, carry-forward = small
-                                if (i < s15.values.length) return 4;
-                                return 0;
-                            }),
-                            pointBackgroundColor: '#e3b341',
-                            borderWidth: 2,
+                        if (!resolved) continue;
+                        chron5.push({
+                            strategy: '5m',
+                            placed_at: liveChron[i].placed_at,
+                            resolved_at: liveChron[i].resolved_at || liveChron[i].placed_at,
+                            pnl: pnl,
                         });
                     }
-                    const labels = lLabels;
+
+                    // Merge with 15-min chron and sort by resolved_at
+                    const chron15 = window._b3_15m_chron || [];
+                    const allChron = [...chron5, ...chron15].sort(
+                        (a, b) => new Date(a.resolved_at || a.placed_at) - new Date(b.resolved_at || b.placed_at)
+                    );
+
+                    // Build merged cumulative series
+                    const mLabels = ['Start'];
+                    const mValues = [0];
+                    const mPointColors = ['#666'];  // neutral for Start
+                    const mPointStyles = ['circle'];
+                    const mSegDir = [true];  // first segment irrelevant
+                    let mCum = 0;
+                    for (const t of allChron) {
+                        mCum += t.pnl;
+                        mLabels.push(t.strategy + ' #' + mLabels.length);
+                        mValues.push(Math.round(mCum * 100) / 100);
+                        mPointColors.push(t.pnl >= 0 ? '#3fb950' : '#f85149');
+                        mPointStyles.push(t.strategy === '15m' ? 'triangle' : 'circle');
+                        mSegDir.push(t.pnl >= 0);
+                    }
+                    const finalTotalColor = mCum >= 0 ? '#3fb950' : '#f85149';
+
                     window._b3LiveCumChart = new Chart(lCumCtx, {
                         type: 'line',
-                        data: { labels: labels, datasets: datasets },
+                        data: {
+                            labels: mLabels,
+                            datasets: [{
+                                label: 'Merged',
+                                data: mValues,
+                                borderColor: finalTotalColor,
+                                backgroundColor: mCum >= 0 ? 'rgba(63,185,80,0.06)' : 'rgba(248,81,73,0.06)',
+                                fill: true,
+                                tension: 0.1,
+                                pointRadius: mValues.map((_, i) => i === 0 ? 3 : (mPointStyles[i] === 'triangle' ? 7 : 4)),
+                                pointBackgroundColor: mPointColors,
+                                pointBorderColor: mPointColors,
+                                pointStyle: mPointStyles,
+                                borderWidth: 2,
+                                segment: {
+                                    borderColor: ctx2 => {
+                                        const i = ctx2.p1DataIndex;
+                                        return mSegDir[i] ? '#3fb950' : '#f85149';
+                                    },
+                                },
+                            }],
+                        },
                         options: {
                             animation: false,
                             responsive: true,
@@ -4644,15 +4696,114 @@
                                     callbacks: {
                                         label: c => {
                                             const idx = c.dataIndex;
-                                            const ds = c.dataset.label || '';
-                                            if (ds === '5-min') {
-                                                const pending = !isResolved[idx];
-                                                return `5m: $${c.raw.toFixed(2)}` + (pending ? ' (ceka)' : '');
-                                            }
-                                            return `15m: $${c.raw.toFixed(2)}`;
+                                            if (idx === 0) return '$0 (Start)';
+                                            const t = allChron[idx - 1];
+                                            const pnlStr = (t.pnl >= 0 ? '+' : '') + '$' + t.pnl.toFixed(2);
+                                            const totStr = (c.raw >= 0 ? '+' : '') + '$' + c.raw.toFixed(2);
+                                            return `${t.strategy} trade: ${pnlStr} | cum: ${totStr}`;
                                         },
                                     },
                                 },
+                            },
+                            scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } },
+                        },
+                    });
+                }
+
+                // ==========================================================
+                // COMPARISON chart — 5-min vs 15-min separate cumulative
+                // ==========================================================
+                const compCtx = document.getElementById('b3CompChart');
+                if (compCtx) {
+                    if (window._b3CompChart) window._b3CompChart.destroy();
+
+                    // 5-min: own cumulative
+                    const chron5m = [];
+                    for (let i = 0; i < liveChron.length; i++) {
+                        const d = liveChron[i].trade_details || {};
+                        const lep = d.live_entry_price || 0;
+                        const lxp = d.live_exit_price || 0;
+                        const lsh = d.live_entry_shares || 0;
+                        const lxst = d.live_exit_status || '';
+                        const paperExit = liveChron[i].exit_price || 0;
+                        let pnl = 0;
+                        let resolved = false;
+                        if (lep > 0 && lsh > 0 && lxst === 'resolution') {
+                            pnl = (lxp - lep) * lsh; resolved = true;
+                        } else if (lep > 0 && lxp > 0 && lsh > 0 && lxst !== 'failed') {
+                            pnl = (lxp - lep) * lsh; resolved = true;
+                        } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution' && lxst !== 'failed') {
+                            pnl = (paperExit - lep) * lsh; resolved = true;
+                        }
+                        if (resolved) chron5m.push(pnl);
+                    }
+                    const cum5 = [0];
+                    let run5 = 0;
+                    for (const p of chron5m) { run5 += p; cum5.push(Math.round(run5 * 100) / 100); }
+
+                    const chron15m = window._b3_15m_chron || [];
+                    const cum15 = [0];
+                    let run15 = 0;
+                    for (const t of chron15m) { run15 += t.pnl; cum15.push(Math.round(run15 * 100) / 100); }
+
+                    // Align x-axis: use longer of the two
+                    const maxLen = Math.max(cum5.length, cum15.length);
+                    while (cum5.length < maxLen) cum5.push(cum5[cum5.length - 1] ?? 0);
+                    while (cum15.length < maxLen) cum15.push(cum15[cum15.length - 1] ?? 0);
+                    const compLabels = Array.from({length: maxLen}, (_, i) => i === 0 ? 'Start' : '#' + i);
+
+                    const color5 = run5 >= 0 ? '#3fb950' : '#f85149';
+                    const color15 = run15 >= 0 ? '#e3b341' : '#f85149';
+
+                    // Header stats
+                    const compStatsEl = document.getElementById('lb3CompStats');
+                    if (compStatsEl) {
+                        const c5 = run5 >= 0 ? 'var(--green)' : 'var(--red)';
+                        const c15 = run15 >= 0 ? '#e3b341' : 'var(--red)';
+                        compStatsEl.innerHTML = `
+                            <span style="color:${c5}">5m: ${run5 >= 0 ? '+' : ''}$${run5.toFixed(2)} (${chron5m.length}t)</span>
+                            <span style="color:var(--text-dim);margin:0 6px">·</span>
+                            <span style="color:${c15}">15m: ${run15 >= 0 ? '+' : ''}$${run15.toFixed(2)} (${chron15m.length}t)</span>`.replace(/\s+/g, ' ');
+                    }
+
+                    window._b3CompChart = new Chart(compCtx, {
+                        type: 'line',
+                        data: {
+                            labels: compLabels,
+                            datasets: [
+                                {
+                                    label: '5-min',
+                                    data: cum5,
+                                    borderColor: color5,
+                                    backgroundColor: 'transparent',
+                                    fill: false,
+                                    tension: 0.1,
+                                    pointRadius: cum5.map((_, i) => i < chron5m.length + 1 ? 3 : 0),
+                                    pointBackgroundColor: color5,
+                                    pointStyle: 'circle',
+                                    borderWidth: 2,
+                                },
+                                {
+                                    label: '15-min',
+                                    data: cum15,
+                                    borderColor: color15,
+                                    backgroundColor: 'transparent',
+                                    fill: false,
+                                    tension: 0.1,
+                                    pointRadius: cum15.map((_, i) => i < chron15m.length + 1 ? 6 : 0),
+                                    pointBackgroundColor: color15,
+                                    pointStyle: 'triangle',
+                                    borderWidth: 2,
+                                },
+                            ],
+                        },
+                        options: {
+                            animation: false,
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#aaa' } },
+                                tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.raw.toFixed(2)}` } },
                             },
                             scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } },
                         },
@@ -5108,29 +5259,23 @@
                 _su('lb315mMonthlyProj', 'proj: ' + fmtUsd(dailyProj * 30) + '/mes', '#58a6ff');
             }
 
-            // Build 15m cumulative series for shared chart (paired with 5-min)
+            // Build 15m chronological list for both merged chart and comparison chart
             const liveClosedChron = liveClosed.slice().reverse();
-            const cum15Labels = [];
-            const cum15Values = [];
-            let cum15 = 0;
-            for (let i = 0; i < liveClosedChron.length; i++) {
-                const t = liveClosedChron[i];
+            const chron15 = [];
+            for (const t of liveClosedChron) {
                 const td = t.trade_details || {};
                 const lep = parseFloat(td.live_exit_price || 0);
                 const lip = parseFloat(td.live_entry_price || 0);
                 const sh = parseFloat(td.live_entry_shares || 0);
-                cum15 += (lep - lip) * sh;
-                cum15Labels.push('#' + (i + 1) + ' (15m)');
-                cum15Values.push(Math.round(cum15 * 100) / 100);
+                const pnl = (lep - lip) * sh;
+                chron15.push({
+                    strategy: '15m',
+                    placed_at: t.placed_at,
+                    resolved_at: t.resolved_at,
+                    pnl: pnl,
+                });
             }
-            window._b3_15m_cum = { labels: cum15Labels, values: cum15Values };
-            const cumStatsEl = document.getElementById('lb315mCumStats');
-            if (cumStatsEl) {
-                const c = cum15 >= 0 ? 'var(--green)' : 'var(--red)';
-                cumStatsEl.innerHTML = resolvedCount > 0
-                    ? `<span style="color:${c}">15m PnL: ${cum15 >= 0 ? '+' : ''}$${cum15.toFixed(2)}</span>`
-                    : '<span style="color:var(--text-dim)">15m: zatim 0 tradu</span>';
-            }
+            window._b3_15m_chron = chron15;
 
             // Expectation vs Reality (15m)
             const liveFills = livePnls.map(p => p);
