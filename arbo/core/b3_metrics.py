@@ -26,19 +26,31 @@ logger = get_logger("b3_metrics")
 
 @dataclass
 class B3MetricsSnapshot:
-    """Complete metrics snapshot for Watchdog evaluation cycle."""
+    """Complete metrics snapshot for Watchdog evaluation cycle.
+
+    IMPORTANT: Primary metrics are LIVE (real money). Paper metrics are
+    secondary context. Watchdog decisions should prioritize live_* fields.
+    """
 
     timestamp: float
     total_trades: int
 
     # Rolling outcome metrics (last N trades)
     rolling_n: int
+
+    # LIVE METRICS (PRIMARY — used for Watchdog decisions)
+    rolling_n_live: int          # Count of live-filled resolved trades
+    rolling_wr_live: float       # Win rate on live trades
+    rolling_avg_pnl_live: float  # Average live PnL per trade
+    rolling_total_pnl_live: float  # Sum of live PnL
+    rolling_sharpe_live: float   # Live-only Sharpe
+    max_consecutive_losses_live: int
+
+    # PAPER METRICS (SECONDARY — context only, paper PnL is approximate)
     rolling_wr_paper: float
-    rolling_wr_live: float
     rolling_avg_pnl: float
     rolling_sharpe: float
     max_consecutive_losses_paper: int
-    max_consecutive_losses_live: int
 
     # Regime breakdown (dict of bucket_name → {wr, n, pnl})
     sigma_regime: dict[str, dict[str, float]]
@@ -77,7 +89,21 @@ _QUERY_B3_TRADES = text("""
         (trade_details->>'combined_risk')::float AS combined_risk,
         (trade_details->>'edge')::float AS edge,
         (trade_details->>'live_fill_status') AS live_status,
+        (trade_details->>'live_exit_status') AS live_exit_status,
         (trade_details->>'live_entry_price')::float AS live_fill_price,
+        (trade_details->>'live_exit_price')::float AS live_exit_price,
+        (trade_details->>'live_entry_shares')::float AS live_shares,
+        -- Live PnL computed directly from live prices (not paper actual_pnl)
+        CASE
+            WHEN (trade_details->>'live_fill_status') IN ('filled', 'partial')
+                AND (trade_details->>'live_exit_status') = 'resolution'
+                AND (trade_details->>'live_exit_price') IS NOT NULL
+                AND (trade_details->>'live_entry_shares')::float > 0
+            THEN ((trade_details->>'live_exit_price')::float
+                  - (trade_details->>'live_entry_price')::float)
+                 * (trade_details->>'live_entry_shares')::float
+            ELSE NULL
+        END AS live_pnl,
         (trade_details->>'liq_available_usd')::float AS liquidity,
         (trade_details->>'btc_binance_chainlink_delta')::float AS cl_delta,
         (trade_details->>'ta_adx_5m')::float AS ta_adx,
@@ -177,10 +203,7 @@ def _compute_metrics(
     now = time.time()
     n = len(trades)
 
-    # Basic outcome metrics
-    # B3 paper trades mostly end as status='sold' (profit/stop/edge/time exits),
-    # so we use actual_pnl > 0 as the win criterion instead of status='won'
-    # (which only applies to resolution outcomes).
+    # Paper outcome metrics (secondary — context only, paper PnL is approximate)
     pnls = [float(t["actual_pnl"]) for t in trades if t["actual_pnl"] is not None]
     wins_paper = sum(
         1 for t in trades
@@ -188,14 +211,27 @@ def _compute_metrics(
     )
     wr_paper = wins_paper / n if n > 0 else 0.0
 
-    # Live-only metrics (same logic)
-    live_trades = [t for t in trades if t.get("live_status") == "filled"]
-    live_wins = sum(
-        1 for t in live_trades
-        if t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0
-    )
+    # LIVE metrics (PRIMARY) — computed from live_pnl (real money PnL)
+    # Includes both "filled" and "partial" fill statuses, only those with resolution
+    live_trades = [
+        t for t in trades
+        if t.get("live_status") in ("filled", "partial")
+        and t.get("live_pnl") is not None
+    ]
+    live_pnls = [float(t["live_pnl"]) for t in live_trades]
+    live_wins = sum(1 for pnl in live_pnls if pnl > 0)
     live_n = len(live_trades)
     wr_live = live_wins / live_n if live_n > 0 else 0.0
+    avg_pnl_live = sum(live_pnls) / live_n if live_n > 0 else 0.0
+    total_pnl_live = sum(live_pnls) if live_pnls else 0.0
+
+    # Live Sharpe
+    if len(live_pnls) > 1:
+        mean_l = avg_pnl_live
+        std_l = math.sqrt(sum((p - mean_l) ** 2 for p in live_pnls) / (len(live_pnls) - 1))
+        sharpe_live = (mean_l / std_l) * math.sqrt(33) if std_l > 0 else 0.0
+    else:
+        sharpe_live = 0.0
 
     # Average PnL and Sharpe
     avg_pnl = sum(pnls) / len(pnls) if pnls else 0.0
@@ -254,12 +290,18 @@ def _compute_metrics(
         timestamp=now,
         total_trades=total_trades,
         rolling_n=n,
-        rolling_wr_paper=round(wr_paper, 4),
+        # LIVE metrics (primary)
+        rolling_n_live=live_n,
         rolling_wr_live=round(wr_live, 4),
+        rolling_avg_pnl_live=round(avg_pnl_live, 4),
+        rolling_total_pnl_live=round(total_pnl_live, 2),
+        rolling_sharpe_live=round(sharpe_live, 2),
+        max_consecutive_losses_live=max_consec_live,
+        # Paper metrics (secondary)
+        rolling_wr_paper=round(wr_paper, 4),
         rolling_avg_pnl=round(avg_pnl, 4),
         rolling_sharpe=round(sharpe, 2),
         max_consecutive_losses_paper=max_consec_paper,
-        max_consecutive_losses_live=max_consec_live,
         sigma_regime=sigma_regime,
         velocity_regime=velocity_regime,
         spread_regime=spread_regime,
@@ -278,13 +320,21 @@ def _compute_metrics(
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _max_consecutive_losses(trades: list[dict], live_only: bool) -> int:
-    """Find longest losing streak (by actual_pnl, not status)."""
+    """Find longest losing streak.
+
+    For live_only=True: uses live_pnl (real money).
+    For paper: uses actual_pnl.
+    """
     max_streak = 0
     current = 0
     for t in reversed(trades):  # oldest first
-        if live_only and t.get("live_status") != "filled":
-            continue
-        pnl = t.get("actual_pnl")
+        if live_only:
+            if t.get("live_status") not in ("filled", "partial"):
+                continue
+            pnl = t.get("live_pnl")
+        else:
+            pnl = t.get("actual_pnl")
+
         if pnl is not None and float(pnl) < 0:
             current += 1
             max_streak = max(max_streak, current)

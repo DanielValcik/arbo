@@ -177,29 +177,22 @@ class B3Watchdog:
         if bl is None:
             return anomalies
 
-        # T1: Rolling WR drop (paper)
-        wr_drop_paper = bl.rolling_wr_paper - metrics.rolling_wr_paper
-        if wr_drop_paper > _WR_DROP_PAPER_THRESHOLD and metrics.rolling_n >= 50:
-            anomalies.append({
-                "trigger": "T1_wr_drop_paper",
-                "severity": "WARNING",
-                "current": metrics.rolling_wr_paper,
-                "baseline": bl.rolling_wr_paper,
-                "drop": round(wr_drop_paper, 4),
-            })
+        # PRIMARY: LIVE metrics drive Watchdog decisions (real money)
 
-        # T2: Rolling WR drop (live)
+        # T2: Rolling WR drop (LIVE) — CRITICAL primary signal
         wr_drop_live = bl.rolling_wr_live - metrics.rolling_wr_live
-        if wr_drop_live > _WR_DROP_LIVE_THRESHOLD and metrics.rolling_n >= 30:
+        if (wr_drop_live > _WR_DROP_LIVE_THRESHOLD
+                and metrics.rolling_n_live >= 20):
             anomalies.append({
                 "trigger": "T2_wr_drop_live",
                 "severity": "CRITICAL",
                 "current": metrics.rolling_wr_live,
                 "baseline": bl.rolling_wr_live,
                 "drop": round(wr_drop_live, 4),
+                "n_live": metrics.rolling_n_live,
             })
 
-        # T3: Consecutive losses (live)
+        # T3: Consecutive losses (LIVE) — CRITICAL
         if metrics.max_consecutive_losses_live >= _CONSECUTIVE_LOSSES_LIVE:
             anomalies.append({
                 "trigger": "T3_consecutive_losses_live",
@@ -207,11 +200,33 @@ class B3Watchdog:
                 "streak": metrics.max_consecutive_losses_live,
             })
 
-        # T4: Consecutive losses (paper)
+        # T_LIVE_PNL_NEG: Live PnL trending negative despite N >= 20 trades
+        if (metrics.rolling_n_live >= 20
+                and metrics.rolling_total_pnl_live < -20.0):
+            anomalies.append({
+                "trigger": "T_live_pnl_negative",
+                "severity": "CRITICAL",
+                "live_pnl": metrics.rolling_total_pnl_live,
+                "n_live": metrics.rolling_n_live,
+            })
+
+        # SECONDARY: Paper metrics (context, lower severity)
+        # T1: Rolling WR drop (paper) — informational only
+        wr_drop_paper = bl.rolling_wr_paper - metrics.rolling_wr_paper
+        if wr_drop_paper > _WR_DROP_PAPER_THRESHOLD and metrics.rolling_n >= 50:
+            anomalies.append({
+                "trigger": "T1_wr_drop_paper",
+                "severity": "INFO",  # Demoted from WARNING — paper is secondary
+                "current": metrics.rolling_wr_paper,
+                "baseline": bl.rolling_wr_paper,
+                "drop": round(wr_drop_paper, 4),
+            })
+
+        # T4: Consecutive losses (paper) — informational
         if metrics.max_consecutive_losses_paper >= _CONSECUTIVE_LOSSES_PAPER:
             anomalies.append({
                 "trigger": "T4_consecutive_losses_paper",
-                "severity": "WARNING",
+                "severity": "INFO",
                 "streak": metrics.max_consecutive_losses_paper,
             })
 
@@ -303,17 +318,27 @@ class B3Watchdog:
 
         return {
             "anomalies": anomalies,
-            "current_metrics": {
+            # LIVE metrics are PRIMARY (real money) — use for all decisions.
+            # Paper metrics are context only.
+            "current_live_metrics": {
+                "n_live_trades": metrics.rolling_n_live,
+                "wr_live": metrics.rolling_wr_live,
+                "avg_pnl_live": metrics.rolling_avg_pnl_live,
+                "total_pnl_live": metrics.rolling_total_pnl_live,
+                "sharpe_live": metrics.rolling_sharpe_live,
+                "max_consecutive_losses_live": metrics.max_consecutive_losses_live,
+            },
+            "current_paper_metrics_context_only": {
                 "rolling_n": metrics.rolling_n,
                 "wr_paper": metrics.rolling_wr_paper,
-                "wr_live": metrics.rolling_wr_live,
-                "avg_pnl": metrics.rolling_avg_pnl,
-                "sharpe": metrics.rolling_sharpe,
+                "avg_pnl_paper": metrics.rolling_avg_pnl,
+                "sharpe_paper": metrics.rolling_sharpe,
                 "ece": metrics.ece,
             },
-            "baseline_metrics": {
-                "wr_paper": self._baseline.rolling_wr_paper if self._baseline else None,
+            "baseline_live_metrics": {
                 "wr_live": self._baseline.rolling_wr_live if self._baseline else None,
+                "total_pnl_live": self._baseline.rolling_total_pnl_live if self._baseline else None,
+                "n_live": self._baseline.rolling_n_live if self._baseline else None,
             },
             "regime_breakdown": {
                 "sigma": metrics.sigma_regime,
@@ -399,7 +424,9 @@ class B3Watchdog:
                 value=float(new_value),
                 reason=decision.get("root_cause", "Gemini recommendation"),
                 trade_count=metrics.total_trades,
-                wr=metrics.rolling_wr_paper,
+                # Use live WR if enough data, else paper
+                wr=(metrics.rolling_wr_live if metrics.rolling_n_live >= 10
+                    else metrics.rolling_wr_paper),
             )
 
             if success:
@@ -422,7 +449,12 @@ class B3Watchdog:
                 continue  # Not enough trades yet
 
             # Compare WR after vs before change
-            wr_now = metrics.rolling_wr_paper
+            # Use LIVE WR for auto-revert (paper is secondary context)
+            # Fall back to paper if insufficient live data (< 10 live trades)
+            if metrics.rolling_n_live >= 10:
+                wr_now = metrics.rolling_wr_live
+            else:
+                wr_now = metrics.rolling_wr_paper
             wr_at_change = change.wr_at_change
             wr_drop = wr_at_change - wr_now
 
@@ -464,13 +496,18 @@ class B3Watchdog:
 
         lines = [
             "━━━ B3 Watchdog Report ━━━",
-            f"Period: posledních {metrics.rolling_n} tradů",
+            f"Period: posledních {metrics.rolling_n} tradů ({metrics.rolling_n_live} live)",
             "",
-            f"Paper: {metrics.rolling_n}t | WR {metrics.rolling_wr_paper:.1%} "
-            f"| Avg PnL ${metrics.rolling_avg_pnl:.2f} | Sharpe {metrics.rolling_sharpe:.1f}",
+            "📊 LIVE (real money — primary):",
+            f"  {metrics.rolling_n_live}t | WR {metrics.rolling_wr_live:.1%} "
+            f"| Total ${metrics.rolling_total_pnl_live:.2f} "
+            f"| Avg ${metrics.rolling_avg_pnl_live:.2f}/trade "
+            f"| Sharpe {metrics.rolling_sharpe_live:.1f}",
+            "",
+            "📝 Paper (context):",
+            f"  {metrics.rolling_n}t | WR {metrics.rolling_wr_paper:.1%} "
+            f"| Avg ${metrics.rolling_avg_pnl:.2f}/trade",
         ]
-        if metrics.rolling_wr_live > 0:
-            lines.append(f"Live: WR {metrics.rolling_wr_live:.1%}")
 
         # Regime summary
         lines.append("")
@@ -630,22 +667,26 @@ class B3Watchdog:
 
 _GEMINI_SYSTEM_PROMPT = """Jsi quantitative strategy optimizer pro B3 (Binance Oracle Scalper na Polymarket).
 B3 je momentum scalper na 5-min BTC Up/Down markets. Vstupuje v minutě 2-3,
-drží do resolution (never-sell mode live). CDF model s Chainlink oracle.
+drží do resolution (never-sell mode). CDF model s Chainlink oracle.
 
 TY ROZHODUJEŠ. Nejsi poradce — jsi autonomní decision engine.
 
+**DŮLEŽITÉ**: `current_live_metrics` obsahuje REÁLNÉ PENÍZE. Všechna tvoje
+rozhodnutí musí být založena PRIMÁRNĚ na live datech. `current_paper_metrics`
+je pouze kontext — paper PnL neodráží reálnou strategii (má instant fills).
+
 Dostal jsi data o anomálii v B3 výkonu. Tvůj úkol:
 
-1. IDENTIFIKUJ ROOT CAUSE.
+1. IDENTIFIKUJ ROOT CAUSE z LIVE dat (ne paper).
 2. ANALYZUJ REGIME-SPECIFIC DATA — který bucket degradoval a proč?
 3. ROZHODNÍ O AKCI:
    - APPLY: Změnit parametr (musí být v available_params bounds)
    - REVERT: Vrátit předchozí změnu
    - ESCALATE: Problém mimo bounds
-   - MONITOR: Nedostatek dat
+   - MONITOR: Nedostatek LIVE dat (< 20 live tradů v bucketu)
 4. PRO APPLY specifikuj: param, new_value, expected_impact
-5. OPTIMALIZUJ PRO: vysoký WR, nízký DD, velkou obratku, stabilní edge.
-6. POKUD DATA NESTAČÍ (< 30 tradů v bucketu), zvol MONITOR.
+5. OPTIMALIZUJ PRO: vysoký LIVE WR, nízký LIVE DD, velkou obratku, stabilní edge.
+6. POKUD LIVE DATA NESTAČÍ (< 20 live tradů), zvol MONITOR.
 7. NIKDY nenavrhuj Tier 3 změny.
 
 TA Context:

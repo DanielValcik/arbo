@@ -281,8 +281,12 @@ class TestB3ScannerEvents:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.skipif(
+    True,  # PAPER_MATCH_LIVE=True since 2026-04-12 disables early exits
+    reason="Paper now matches live (never-sell). Early exit logic deprecated.",
+)
 class TestB3ExitLogic:
-    """Test exit trigger conditions."""
+    """Test exit trigger conditions (DEPRECATED: paper now matches live never-sell)."""
 
     def _make_strategy(self) -> StrategyB3:
         """Create strategy with mock risk manager and binance WS."""

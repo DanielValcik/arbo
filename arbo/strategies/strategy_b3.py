@@ -26,6 +26,7 @@ from arbo.models.volatility_model import VolatilityEstimator
 from arbo.strategies.b3_quality_gate import (
     BTC_STOP_PCT,
     EDGE_EXIT,
+    PAPER_MATCH_LIVE,
     EDGE_SCALING,
     LIVE_MAX_FILL_PRICE,
     MAX_BET_SIZE,
@@ -638,9 +639,11 @@ class StrategyB3:
             # NO scoring model — V5.0 scoring was overfit (5/95 paper, 40% WR). Removed.
             # Live params: read from adaptive_config (Watchdog can change at runtime)
             # Falls back to defaults if no override set.
+            # Defaults updated 2026-04-12 based on 256-trade sensitivity analysis.
+            # See adaptive_config._get_default() for full data.
             _ac = self._adaptive_config
-            LIVE_MIN_EDGE = _ac.get("LIVE_MIN_EDGE", 0.40) if _ac else 0.40
-            LIVE_MIN_BTC_MOVE = _ac.get("LIVE_MIN_BTC_MOVE", 50.0) if _ac else 50.0
+            LIVE_MIN_EDGE = _ac.get("LIVE_MIN_EDGE", 0.30) if _ac else 0.30
+            LIVE_MIN_BTC_MOVE = _ac.get("LIVE_MIN_BTC_MOVE", 35.0) if _ac else 35.0
             LIVE_MAX_VELOCITY = _ac.get("LIVE_MAX_VELOCITY", 60.0) if _ac else 60.0
             LIVE_MAX_DIR_DELTA = _ac.get("LIVE_MAX_DIR_DELTA", 15.0) if _ac else 15.0
             live_shares = 0
@@ -1091,23 +1094,26 @@ class StrategyB3:
 
             reason = ""
 
-            if unrealized >= PROFIT_TARGET:
-                reason = "profit"
-            elif USE_BTC_STOP:
-                # BTC-price-based stop: linear, no CDF overshoot
-                btc_change = (btc_price - pos.btc_at_entry) / pos.btc_at_entry
-                if (pos.direction == 1 and btc_change <= -BTC_STOP_PCT) or (
-                    pos.direction == -1 and btc_change >= BTC_STOP_PCT
-                ):
+            # PAPER_MATCH_LIVE=True: paper holds to resolution like live,
+            # no early exits. This makes paper PnL directly comparable to live.
+            if not PAPER_MATCH_LIVE:
+                if unrealized >= PROFIT_TARGET:
+                    reason = "profit"
+                elif USE_BTC_STOP:
+                    # BTC-price-based stop: linear, no CDF overshoot
+                    btc_change = (btc_price - pos.btc_at_entry) / pos.btc_at_entry
+                    if (pos.direction == 1 and btc_change <= -BTC_STOP_PCT) or (
+                        pos.direction == -1 and btc_change >= BTC_STOP_PCT
+                    ):
+                        reason = "stop"
+                elif unrealized <= -STOP_LOSS:
                     reason = "stop"
-            elif unrealized <= -STOP_LOSS:
-                reason = "stop"
 
-            if not reason:
-                if hold_min >= MAX_HOLD_MIN:
-                    reason = "time"
-                elif abs(pos_signal_fv - 0.50) < EDGE_EXIT and hold_min >= 0.5:
-                    reason = "edge_gone"
+                if not reason:
+                    if hold_min >= MAX_HOLD_MIN:
+                        reason = "time"
+                    elif abs(pos_signal_fv - 0.50) < EDGE_EXIT and hold_min >= 0.5:
+                        reason = "edge_gone"
 
             if reason:
                 exit_price = pos_mkt_fv - SPREAD / 2  # Sell at bid

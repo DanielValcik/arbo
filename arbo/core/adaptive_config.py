@@ -294,11 +294,30 @@ class AdaptiveConfig:
             return float(val)
 
         # Fallback defaults for live params (defined inline in strategy_b3.py)
+        # Updated 2026-04-12: Data-driven relaxation based on 256 live resolved trades.
+        #
+        # Edge sensitivity analysis (256 resolved live trades):
+        #   edge 0.25-0.30: 14t, 57% WR, avg +$3.54/trade (BEST per-trade)
+        #   edge 0.30-0.35: 14t, 64% WR, avg +$4.25/trade (BEST per-trade)
+        #   edge 0.35-0.40: 17t,  53% WR, avg +$2.00/trade
+        #   edge 0.40+ (old): 148t, 73% WR, avg +$0.11/trade (payout asymmetry)
+        # Decision: LIVE_MIN_EDGE 0.40 → 0.30 (captures +$4/trade bucket)
+        #
+        # BTC move sensitivity analysis:
+        #   move 30-40: 16t, 75% WR, avg +$2.48/trade (EXCELLENT)
+        #   move 40-50: 26t, 62% WR, avg -$2.18/trade (dead zone)
+        #   move 50-70 (old): 70t, 74% WR, avg +$1.98/trade
+        # Decision: LIVE_MIN_BTC_MOVE 50 → 35 (captures 30-40 winner bucket)
+        #
+        # Velocity/dir_delta: insufficient V6.0 data (19 trades) — keep defaults.
+        #
+        # Previous V6.0 qualified 1/114 paper signals (<1%) in 24h window.
+        # New thresholds expected: ~15-25% qualification → 15-25 live trades/day.
         defaults: dict[str, float] = {
             "LIVE_MAX_VELOCITY": 60.0,
             "LIVE_MAX_DIR_DELTA": 15.0,
-            "LIVE_MIN_EDGE": 0.40,
-            "LIVE_MIN_BTC_MOVE": 50.0,
+            "LIVE_MIN_EDGE": 0.30,        # Was 0.40 — data-driven relaxation
+            "LIVE_MIN_BTC_MOVE": 35.0,    # Was 50.0 — data-driven relaxation
         }
         return defaults.get(param, 0.0)
 

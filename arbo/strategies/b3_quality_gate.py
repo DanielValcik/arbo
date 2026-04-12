@@ -35,16 +35,25 @@ MAX_ENTRY_MIN = 3                 # Latest entry: minute 3 (min 4+ = 0W/2L)
 CONTRARIAN = False                # MOMENTUM: follow BTC direction
 
 # Exit — never-sell mode: all positions held to Chainlink resolution
-# Paper model still uses these for FV tracking, live ignores (holds to resolution)
-PROFIT_TARGET = 0.207             # Paper-only: take profit threshold
+# UPDATED 2026-04-12: PAPER_MATCH_LIVE=True makes paper behave exactly like live
+# (hold to resolution, no early exits). Paper PnL then = simulated live PnL,
+# making it directly comparable and usable for Watchdog analysis.
+#
+# Previous behavior: paper had early exits (profit/stop/time/edge_gone) which
+# produced inflated losses (-$2000 paper vs -$41 live over 7 days). These early
+# exits tested a DIFFERENT strategy than what live actually runs.
+#
+# Old early-exit constants kept for legacy support but ignored when PAPER_MATCH_LIVE=True.
+PAPER_MATCH_LIVE = True           # Paper holds to resolution like live
+PROFIT_TARGET = 0.207             # Paper-only (ignored if PAPER_MATCH_LIVE)
 STOP_LOSS = 99.0                  # Disabled (never-sell)
-MAX_HOLD_MIN = 3                  # Paper-only: max hold
-EDGE_EXIT = 0.076                 # Paper-only: edge exit
+MAX_HOLD_MIN = 3                  # Paper-only (ignored if PAPER_MATCH_LIVE)
+EDGE_EXIT = 0.076                 # Paper-only (ignored if PAPER_MATCH_LIVE)
 EXIT_BEFORE_END = 0               # Don't force exit before resolution
 ALLOW_RESOLUTION = True           # Always resolve (never-sell)
 
-# BTC-price-based stop (paper model only, live holds to resolution)
-USE_BTC_STOP = True               # Paper-only
+# BTC-price-based stop (paper model only, ignored if PAPER_MATCH_LIVE=True)
+USE_BTC_STOP = True               # Paper-only (ignored if PAPER_MATCH_LIVE)
 BTC_STOP_PCT = 0.0015             # Paper-only
 
 # Market model
