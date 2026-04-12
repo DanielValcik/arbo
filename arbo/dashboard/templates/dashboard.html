@@ -3440,9 +3440,12 @@
             if (lb2RefreshInterval) { clearInterval(lb2RefreshInterval); lb2RefreshInterval = null; }
         }
         if (tab === 'liveb3') {
-            fetchLiveB3();
-            fetchLiveB315M();
-            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(() => { fetchLiveB3(); fetchLiveB315M(); }, 10000);
+            // 15M first, then 5M — merged chart + header need 15m chron available
+            (async () => { await fetchLiveB315M(); await fetchLiveB3(); })();
+            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(async () => {
+                await fetchLiveB315M();
+                await fetchLiveB3();
+            }, 10000);
         } else {
             if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
         }
@@ -4383,11 +4386,11 @@
                 });
                 const lPointRadius = lValues.map((_, i) => isResolved[i] ? (lValues.length > 50 ? 1.5 : 3) : 5);
                 // Header stats: 5m + 15m breakdown + combined total
+                // Read 15m cumulative from _b3_15m_chron (sum of per-trade pnl)
                 const statsEl = document.getElementById('lb3LiveCumStats');
                 if (statsEl) {
-                    const s15hdr = window._b3_15m_cum;
-                    const cum15 = s15hdr && s15hdr.values && s15hdr.values.length > 0
-                        ? s15hdr.values[s15hdr.values.length - 1] : 0;
+                    const chron15hdr = window._b3_15m_chron || [];
+                    const cum15 = chron15hdr.reduce((a, t) => a + (t.pnl || 0), 0);
                     const total = lCum + cum15;
                     const cT = total >= 0 ? 'var(--green)' : 'var(--red)';
                     const c5 = lCum >= 0 ? 'var(--green)' : 'var(--red)';
@@ -4746,14 +4749,20 @@
                     let run15 = 0;
                     for (const t of chron15m) { run15 += t.pnl; cum15.push(Math.round(run15 * 100) / 100); }
 
-                    // Align x-axis: use longer of the two
+                    // Align x-axis: use longer of the two. Pad SHORTER series
+                    // with NULLs so its line ends at its last real data point
+                    // (no fake horizontal carry-forward).
                     const maxLen = Math.max(cum5.length, cum15.length);
-                    while (cum5.length < maxLen) cum5.push(cum5[cum5.length - 1] ?? 0);
-                    while (cum15.length < maxLen) cum15.push(cum15[cum15.length - 1] ?? 0);
+                    const cum5Padded = [...cum5];
+                    const cum15Padded = [...cum15];
+                    while (cum5Padded.length < maxLen) cum5Padded.push(null);
+                    while (cum15Padded.length < maxLen) cum15Padded.push(null);
                     const compLabels = Array.from({length: maxLen}, (_, i) => i === 0 ? 'Start' : '#' + i);
 
-                    const color5 = run5 >= 0 ? '#3fb950' : '#f85149';
-                    const color15 = run15 >= 0 ? '#e3b341' : '#f85149';
+                    // IDENTITY colors (stable per strategy regardless of PnL sign).
+                    // Sign is readable from the chart direction and header numbers.
+                    const IDENTITY_5M = '#3fb950';   // green for 5-min
+                    const IDENTITY_15M = '#e3b341';  // gold for 15-min
 
                     // Header stats
                     const compStatsEl = document.getElementById('lb3CompStats');
@@ -4773,27 +4782,29 @@
                             datasets: [
                                 {
                                     label: '5-min',
-                                    data: cum5,
-                                    borderColor: color5,
+                                    data: cum5Padded,
+                                    borderColor: IDENTITY_5M,
                                     backgroundColor: 'transparent',
                                     fill: false,
                                     tension: 0.1,
-                                    pointRadius: cum5.map((_, i) => i < chron5m.length + 1 ? 3 : 0),
-                                    pointBackgroundColor: color5,
+                                    pointRadius: cum5Padded.map((v, i) => (i < cum5.length && v !== null) ? 3 : 0),
+                                    pointBackgroundColor: IDENTITY_5M,
                                     pointStyle: 'circle',
                                     borderWidth: 2,
+                                    spanGaps: false,
                                 },
                                 {
                                     label: '15-min',
-                                    data: cum15,
-                                    borderColor: color15,
+                                    data: cum15Padded,
+                                    borderColor: IDENTITY_15M,
                                     backgroundColor: 'transparent',
                                     fill: false,
                                     tension: 0.1,
-                                    pointRadius: cum15.map((_, i) => i < chron15m.length + 1 ? 6 : 0),
-                                    pointBackgroundColor: color15,
+                                    pointRadius: cum15Padded.map((v, i) => (i < cum15.length && v !== null) ? 6 : 0),
+                                    pointBackgroundColor: IDENTITY_15M,
                                     pointStyle: 'triangle',
                                     borderWidth: 2,
+                                    spanGaps: false,
                                 },
                             ],
                         },
