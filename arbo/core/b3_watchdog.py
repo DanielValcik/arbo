@@ -68,12 +68,14 @@ class B3Watchdog:
         gemini_agent: Any | None = None,
         slack_bot: Any | None = None,
         ta_provider: Any | None = None,
+        strategy_name: str = "B3",
     ) -> None:
         self._session_factory = session_factory
         self._config = adaptive_config
         self._gemini = gemini_agent
         self._slack = slack_bot
         self._ta_provider = ta_provider
+        self._strategy_name = strategy_name
 
         self._running = False
         self._last_eval_time: float = 0
@@ -111,7 +113,9 @@ class B3Watchdog:
 
     async def _eval_cycle(self) -> None:
         """Single evaluation cycle: fetch metrics → detect → decide → apply."""
-        metrics = await fetch_b3_metrics(self._session_factory)
+        metrics = await fetch_b3_metrics(
+            self._session_factory, strategy=self._strategy_name,
+        )
         if metrics is None:
             return
 
@@ -284,7 +288,12 @@ class B3Watchdog:
     ) -> dict[str, Any] | None:
         """Ask Gemini Flash for analysis and decision."""
         context = self._build_gemini_context(metrics, anomalies)
-        prompt = _GEMINI_SYSTEM_PROMPT + "\n\nDATA:\n" + json.dumps(context, default=str, indent=2)
+        # Strategy-specific system prompt
+        if self._strategy_name == "B3_15M":
+            sys_prompt = _GEMINI_SYSTEM_PROMPT_B3_15M
+        else:
+            sys_prompt = _GEMINI_SYSTEM_PROMPT
+        prompt = sys_prompt + "\n\nDATA:\n" + json.dumps(context, default=str, indent=2)
 
         try:
             result = await self._gemini.raw_query(prompt)
@@ -495,7 +504,7 @@ class B3Watchdog:
             return
 
         lines = [
-            "━━━ B3 Watchdog Report ━━━",
+            f"━━━ {self._strategy_name} Watchdog Report ━━━",
             f"Period: posledních {metrics.rolling_n} tradů ({metrics.rolling_n_live} live)",
             "",
             "📊 LIVE (real money — primary):",
@@ -570,7 +579,7 @@ class B3Watchdog:
                 old_value = self._config._get_default(param)
 
         lines = [
-            f"━━━ B3 Watchdog — AUTONOMOUS {action_type} ━━━",
+            f"━━━ {self._strategy_name} Watchdog — AUTONOMOUS {action_type} ━━━",
             f"Trigger: {decision.get('root_cause', 'N/A')[:100]}",
             f"Action: {param}: {old_value} → {new_value}",
             f"Confidence: {decision.get('confidence', 'N/A')}",
@@ -593,7 +602,7 @@ class B3Watchdog:
             return
 
         lines = [
-            f"━━━ B3 Watchdog — {len(anomalies)} ANOMALIES ━━━",
+            f"━━━ {self._strategy_name} Watchdog — {len(anomalies)} ANOMALIES ━━━",
         ]
         for a in anomalies[:5]:
             lines.append(f"  {a['trigger']}: {a.get('severity', 'INFO')}")
@@ -616,7 +625,7 @@ class B3Watchdog:
             return
 
         lines = [
-            "━━━ 🔴 B3 Watchdog CRITICAL ━━━",
+            f"━━━ 🔴 {self._strategy_name} Watchdog CRITICAL ━━━",
             f"Root cause: {decision.get('root_cause', 'N/A')}",
             "Verdict: ESCALATE — outside Watchdog bounds",
             f"WR: paper {metrics.rolling_wr_paper:.1%} | live {metrics.rolling_wr_live:.1%}",
@@ -640,7 +649,7 @@ class B3Watchdog:
             return
 
         lines = [
-            "━━━ ↩️ B3 Watchdog AUTO-REVERT ━━━",
+            f"━━━ ↩️ {self._strategy_name} Watchdog AUTO-REVERT ━━━",
             f"Param: {change.param_name}: {change.new_value} → {change.old_value}",
             f"Reason: WR dropped {wr_drop:.1%} after {_AUTO_REVERT_WINDOW} trades",
             f"Current WR: {metrics.rolling_wr_paper:.1%}",
@@ -694,6 +703,49 @@ TA Context:
 - ADX < 15 = ranging → slabý momentum
 - RSI >80/<20 = mean-reversion risk
 - Multi-TF aligned = vyšší confidence
+
+Odpověz JSON:
+{
+  "verdict": "APPLY|REVERT|ESCALATE|MONITOR",
+  "root_cause": "...",
+  "evidence": ["..."],
+  "action": {"param": "...", "old_value": ..., "new_value": ..., "expected_impact": "..."},
+  "confidence": "HIGH|MEDIUM|LOW"
+}"""
+
+
+_GEMINI_SYSTEM_PROMPT_B3_15M = """Jsi quantitative strategy optimizer pro B3_15M (Binance Oracle Scalper 15-min variant na Polymarket).
+B3_15M je momentum scalper na 15-min BTC Up/Down markets. Vstupuje v minutě 4-11,
+drží do Chainlink resolution (never-sell mode). Stejná architektura jako B3 5-min,
+ale 3x delší okno, nižší signal-to-noise, 12x vyšší PnL/trade, 3-5x méně tradů.
+
+Baseline parametry (shadow autoresearch rank #1, 2026-04-12, 144 reálných signálů, 5-fold CV):
+- LIVE_MIN_EDGE = 0.30 (filtruje toxic bucket 0.10-0.20)
+- LIVE_MAX_BTC_MOVE = 80 (reversal risk nad $80 — 15-min SPECIFIC, 5-min tohle nemá)
+- LIVE_MAX_MARKET_GAP = 0.30
+- Entry minuty 4-11
+- NO fill price cap (OPAK 5-min — fill ≥0.75 je NEJLEPŠÍ bucket na 15-min, WR 86%)
+
+TY ROZHODUJEŠ. Nejsi poradce — jsi autonomní decision engine.
+
+**DŮLEŽITÉ**: `current_live_metrics` obsahuje REÁLNÉ PENÍZE. Všechna tvoje
+rozhodnutí musí být založena PRIMÁRNĚ na live datech. `current_paper_metrics`
+je pouze kontext.
+
+Dostal jsi data o anomálii v B3_15M výkonu. Tvůj úkol:
+
+1. IDENTIFIKUJ ROOT CAUSE z LIVE dat (ne paper).
+2. ANALYZUJ 15-MIN SPECIFICS — reversal nad $80? Market gap? Late entry (>11)?
+3. ROZHODNÍ O AKCI:
+   - APPLY: Změnit parametr (musí být v available_params bounds pro B3_15M)
+   - REVERT: Vrátit předchozí změnu
+   - ESCALATE: Problém mimo bounds
+   - MONITOR: Nedostatek LIVE dat (< 20 live tradů v bucketu)
+4. PRO APPLY specifikuj: param, new_value, expected_impact
+5. OPTIMALIZUJ PRO: vysoký LIVE WR, nízký LIVE DD, stabilní edge.
+6. POKUD LIVE DATA NESTAČÍ (< 20 live tradů), zvol MONITOR.
+7. NIKDY nenavrhuj Tier 3 změny.
+8. 15-MIN MÁ 3-5x MÉNĚ TRADŮ — buď trpělivější s baseline (50+ tradů místo 20).
 
 Odpověz JSON:
 {

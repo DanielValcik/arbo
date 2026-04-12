@@ -157,6 +157,7 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "B": {"name": "Reflexivity Surfer", "category": "Trending", "description": "Ride reflexive momentum in trending markets"},
     "B2": {"name": "Crypto Price Edge", "category": "Crypto", "description": "Volatility model vs Binance price on crypto prediction markets"},
     "B3": {"name": "Binance Oracle Scalper", "category": "Crypto", "description": "BTC 5-min Up/Down momentum scalper via Binance price oracle"},
+    "B3_15M": {"name": "Binance Oracle Scalper 15m", "category": "Crypto", "description": "BTC 15-min Up/Down momentum scalper — same Binance→Chainlink edge, longer window, higher PnL/trade"},
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
 }
@@ -1343,6 +1344,33 @@ async def api_strategies(_user: str = Depends(_verify_credentials)) -> dict[str,
                 "data_source": "Binance real-time price",
                 "backtest_period": "89 days (2025-12-28 → 2026-03-27)",
                 "backtest_data": "89,419 1-min klines, 17,883 windows",
+            }
+        elif sid == "B3_15M":
+            entry["model"] = {
+                "name": "B3-15m-Scalper-Shadow-Rank1",
+                "source": "shadow_autoresearch_2026-04-12",
+                "oos_trades": 49,
+                "oos_pnl": 9.89,
+                "oos_wr": 94.4,
+                "folds": 5,
+                "folds_all_positive": True,
+                "std_avg_pnl": 0.103,
+                "expected_daily_trades": "5-8",
+                "entry_trigger": "|signal_fv - 0.50| > 0.089",
+                "sigma_window": 1440,
+                "sigma_method": "realized",
+                "sigma_scale": 0.526,
+                "min_edge": 0.30,
+                "max_btc_move_usd": 80,
+                "max_market_gap": 0.30,
+                "max_fill_price": "uncapped (OPPOSITE of 5-min 0.75)",
+                "entry_minutes": "4-11",
+                "fee_model": "PostOnly maker 0% + 20% rebate",
+                "market_type": "BTC 15-min Up/Down (NOT NegRisk)",
+                "data_source": "Binance real-time + Chainlink RTDS",
+                "live_capital": 75,
+                "daily_loss_limit": 20,
+                "max_bet_size": 20,
             }
 
         strategies.append(entry)

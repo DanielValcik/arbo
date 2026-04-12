@@ -112,7 +112,7 @@ _QUERY_B3_TRADES = text("""
         (trade_details->>'ta_rsi_zone') AS ta_rsi_zone,
         (trade_details->>'ta_multi_tf_aligned') AS ta_mtf_aligned
     FROM paper_trades
-    WHERE strategy = 'B3'
+    WHERE strategy = :strategy
       AND status IN ('won', 'lost', 'sold')
       AND actual_pnl IS NOT NULL
     ORDER BY resolved_at DESC
@@ -129,7 +129,7 @@ _QUERY_DAILY_PNL = text("""
         SUM(CASE WHEN trade_details->>'live_fill_status' = 'filled'
                  AND actual_pnl > 0 THEN 1 ELSE 0 END) AS live_wins
     FROM paper_trades
-    WHERE strategy = 'B3'
+    WHERE strategy = :strategy
       AND status IN ('won', 'lost', 'sold')
       AND actual_pnl IS NOT NULL
       AND resolved_at >= NOW() - INTERVAL '7 days'
@@ -140,7 +140,7 @@ _QUERY_DAILY_PNL = text("""
 _QUERY_TRADE_COUNT = text("""
     SELECT COUNT(*) AS cnt
     FROM paper_trades
-    WHERE strategy = 'B3'
+    WHERE strategy = :strategy
       AND status IN ('won', 'lost', 'sold')
       AND actual_pnl IS NOT NULL
 """)
@@ -149,12 +149,14 @@ _QUERY_TRADE_COUNT = text("""
 async def fetch_b3_metrics(
     session_factory: Any,
     rolling_window: int = 200,
+    strategy: str = "B3",
 ) -> B3MetricsSnapshot | None:
-    """Fetch and compute all B3 metrics.
+    """Fetch and compute metrics for the given strategy (B3 or B3_15M).
 
     Args:
         session_factory: SQLAlchemy async session factory.
         rolling_window: Number of recent trades to analyze.
+        strategy: Strategy name filter for paper_trades table.
 
     Returns:
         B3MetricsSnapshot or None if insufficient data.
@@ -162,22 +164,31 @@ async def fetch_b3_metrics(
     try:
         async with session_factory() as session:
             # Get total trade count
-            result = await session.execute(_QUERY_TRADE_COUNT)
+            result = await session.execute(
+                _QUERY_TRADE_COUNT, {"strategy": strategy}
+            )
             row = result.fetchone()
             total_trades = row.cnt if row else 0
 
             if total_trades < 20:
-                logger.info("b3_metrics_insufficient_data", trades=total_trades)
+                logger.info(
+                    "b3_metrics_insufficient_data",
+                    strategy=strategy,
+                    trades=total_trades,
+                )
                 return None
 
             # Fetch recent trades
             result = await session.execute(
-                _QUERY_B3_TRADES, {"limit": rolling_window}
+                _QUERY_B3_TRADES,
+                {"limit": rolling_window, "strategy": strategy},
             )
             rows = result.fetchall()
 
             # Fetch daily PnL
-            result_daily = await session.execute(_QUERY_DAILY_PNL)
+            result_daily = await session.execute(
+                _QUERY_DAILY_PNL, {"strategy": strategy}
+            )
             daily_rows = result_daily.fetchall()
 
         if not rows:

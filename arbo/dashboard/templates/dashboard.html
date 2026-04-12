@@ -1634,6 +1634,64 @@
 
             <!-- Paper cards removed — live only -->
         </div>
+
+        <!-- ============================================================ -->
+        <!-- B3_15M section — 15-min variant, separate cards on same tab   -->
+        <!-- ============================================================ -->
+        <div style="margin-top:32px;padding-top:16px;border-top:2px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="font-size:18px;font-weight:700;color:#e3b341">B3 15-min Scalper</div>
+                <span style="background:#e3b341;color:#000;padding:2px 8px;border-radius:4px;font-size:10px">LIVE</span>
+                <span style="font-size:11px;color:var(--text-dim)">BTC 15-min Up/Down — separate model, separate Watchdog, separate capital</span>
+            </div>
+            <div class="grid">
+                <!-- B3_15M Overview -->
+                <div class="card" style="border-top:3px solid #e3b341">
+                    <div class="card-title">B3 15m Overview</div>
+                    <div id="lb315mOverview" style="font-size:12px">
+                        <div style="text-align:center;padding:12px;color:var(--text-dim)">
+                            <div style="font-size:28px;font-weight:700" id="lb315mTotalPnl">$0.00</div>
+                            <div>Live P&L (15m) <span id="lb315mRatio" style="font-size:14px;font-weight:600;margin-left:8px;color:var(--text-dim)"></span></div>
+                            <div style="margin-top:14px;display:flex;justify-content:space-around">
+                                <div><span id="lb315mTrades" style="font-weight:700">0</span><br>Trades</div>
+                                <div><span id="lb315mWinRate" style="font-weight:700">--</span><br>Win Rate</div>
+                                <div><span id="lb315mDeployed" style="font-weight:700">$0</span><br>Deployed</div>
+                                <div><span id="lb315mPositions" style="font-weight:700">0</span><br>Positions</div>
+                            </div>
+                            <div style="margin-top:10px;padding:8px;background:rgba(227,179,65,0.06);border-radius:6px;font-size:10px;text-align:left">
+                                <div style="font-weight:600;color:#e3b341;margin-bottom:4px">Model (shadow autoresearch 2026-04-12)</div>
+                                <div>min_edge ≥0.30 · btc_move ≤$80 · gap ≤0.30 · entry min 4-11</div>
+                                <div style="margin-top:2px;color:var(--text-dim)">Capital $75 · daily loss $20 · max bet $20</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- B3_15M Open Positions -->
+                <div class="card" style="border-top:3px solid #e3b341">
+                    <div class="card-title">B3 15m — Open Positions <span id="lb315mOpenCount" style="color:var(--text-dim);font-size:11px">(0)</span></div>
+                    <div id="lb315mOpenTable" style="max-height:260px;overflow-y:auto">
+                        <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné otevřené pozice</div>
+                    </div>
+                </div>
+
+                <!-- B3_15M Closed Trades -->
+                <div class="card" style="border-top:3px solid #e3b341;grid-column:span 2">
+                    <div class="card-title">B3 15m — Posledních 20 uzavřených</div>
+                    <div id="lb315mClosedTable" style="max-height:340px;overflow-y:auto">
+                        <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné uzavřené tradů</div>
+                    </div>
+                </div>
+
+                <!-- B3_15M Watchdog status -->
+                <div class="card" style="border-top:3px solid #e3b341;grid-column:span 2">
+                    <div class="card-title">B3 15m — Watchdog Status</div>
+                    <div id="lb315mWatchdog" style="padding:12px;font-size:12px">
+                        <div style="color:var(--text-dim);text-align:center">Autonomní optimizer — čeká na prvních 20 tradů pro baseline</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ============================================================ -->
@@ -3212,7 +3270,8 @@
         }
         if (tab === 'liveb3') {
             fetchLiveB3();
-            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(fetchLiveB3, 10000);
+            fetchLiveB315M();
+            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(() => { fetchLiveB3(); fetchLiveB315M(); }, 10000);
         } else {
             if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
         }
@@ -4636,6 +4695,103 @@
                     }
                 });
             }
+        }
+    }
+
+    // ===== B3_15M dashboard (15-min variant, separate cards on B3 tab) =====
+    async function fetchLiveB315M() {
+        try {
+            const [stratData, posData, closedData] = await Promise.allSettled([
+                fetchJSON('/api/strategies'),
+                fetchJSON('/api/positions?strategy=B3_15M'),
+                fetchJSON('/api/closed-positions?strategy=B3_15M&limit=20'),
+            ]);
+
+            // Overview from strategy state
+            let strat = null;
+            if (stratData.status === 'fulfilled' && Array.isArray(stratData.value?.strategies)) {
+                strat = stratData.value.strategies.find(s => s.id === 'B3_15M');
+            }
+            const pnl = strat?.total_pnl ?? 0;
+            const deployed = strat?.deployed ?? 0;
+            const pnlEl = document.getElementById('lb315mTotalPnl');
+            if (pnlEl) {
+                pnlEl.textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+                pnlEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+            }
+            const depEl = document.getElementById('lb315mDeployed');
+            if (depEl) depEl.textContent = '$' + Number(deployed).toFixed(0);
+
+            // Positions — filter client-side by strategy (endpoint returns all)
+            const allPositions = posData.status === 'fulfilled' ? (posData.value?.positions || []) : [];
+            const positions = allPositions.filter(p => p.strategy === 'B3_15M');
+            const openCountEl = document.getElementById('lb315mOpenCount');
+            if (openCountEl) openCountEl.textContent = `(${positions.length})`;
+            const posEl = document.getElementById('lb315mPositions');
+            if (posEl) posEl.textContent = positions.length;
+            const openTableEl = document.getElementById('lb315mOpenTable');
+            if (openTableEl) {
+                if (positions.length === 0) {
+                    openTableEl.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">Žádné otevřené pozice</div>';
+                } else {
+                    openTableEl.innerHTML = `<table style="width:100%;font-size:11px">
+                        <thead><tr style="background:rgba(227,179,65,0.08)"><th style="padding:6px;text-align:left">Trh</th><th>Dir</th><th>Entry</th><th>Shares</th></tr></thead>
+                        <tbody>${positions.slice(0, 20).map(p => `
+                            <tr><td style="padding:4px 6px">${(p.question || '').slice(0, 40)}</td>
+                            <td style="text-align:center">${p.direction || '--'}</td>
+                            <td style="text-align:right">${Number(p.entry_price || 0).toFixed(3)}</td>
+                            <td style="text-align:right">${Number(p.shares || 0).toFixed(0)}</td></tr>
+                        `).join('')}</tbody></table>`;
+                }
+            }
+
+            // Closed trades (win rate + table)
+            const closed = closedData.status === 'fulfilled' ? (closedData.value?.positions || []) : [];
+            const closedWithLive = closed.filter(t => t.trade_details?.live_fill_status === 'filled' || t.trade_details?.live_fill_status === 'partial');
+            const livePnls = closedWithLive.map(t => {
+                const lep = parseFloat(t.trade_details?.live_exit_price || 0);
+                const lip = parseFloat(t.trade_details?.live_entry_price || 0);
+                const sh = parseFloat(t.trade_details?.live_entry_shares || 0);
+                return (lep - lip) * sh;
+            });
+            const resolvedCount = livePnls.length;
+            const wins = livePnls.filter(p => p > 0).length;
+            const wrEl = document.getElementById('lb315mWinRate');
+            if (wrEl) wrEl.textContent = resolvedCount > 0 ? (100 * wins / resolvedCount).toFixed(0) + '%' : '--';
+            const tradesEl = document.getElementById('lb315mTrades');
+            if (tradesEl) tradesEl.textContent = resolvedCount;
+
+            const ratioEl = document.getElementById('lb315mRatio');
+            if (ratioEl) ratioEl.textContent = resolvedCount > 0 ? `(${wins}W / ${resolvedCount - wins}L)` : '';
+
+            const closedTableEl = document.getElementById('lb315mClosedTable');
+            if (closedTableEl) {
+                if (closed.length === 0) {
+                    closedTableEl.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">Žádné uzavřené tradů</div>';
+                } else {
+                    closedTableEl.innerHTML = `<table style="width:100%;font-size:11px">
+                        <thead><tr style="background:rgba(227,179,65,0.08)"><th style="padding:6px;text-align:left">Čas</th><th>Trh</th><th>Dir</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead>
+                        <tbody>${closed.slice(0, 20).map(t => {
+                            const lep = parseFloat(t.trade_details?.live_exit_price || 0);
+                            const lip = parseFloat(t.trade_details?.live_entry_price || 0);
+                            const sh = parseFloat(t.trade_details?.live_entry_shares || 0);
+                            const livePnl = (lep - lip) * sh;
+                            const pnl = sh > 0 ? livePnl : (t.actual_pnl || 0);
+                            const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                            const resolved = t.resolved_at ? new Date(t.resolved_at).toLocaleString('cs', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '--';
+                            return `<tr>
+                                <td style="padding:4px 6px">${resolved}</td>
+                                <td>${(t.question || '').slice(0, 30)}</td>
+                                <td style="text-align:center">${t.trade_details?.direction || '--'}</td>
+                                <td style="text-align:right">${Number(lip || t.entry_price || 0).toFixed(3)}</td>
+                                <td style="text-align:right">${Number(lep || 0).toFixed(2)}</td>
+                                <td style="text-align:right;color:${pnlColor};font-weight:600">${pnl >= 0 ? '+$' : '-$'}${Math.abs(pnl).toFixed(2)}</td>
+                            </tr>`;
+                        }).join('')}</tbody></table>`;
+                }
+            }
+        } catch (e) {
+            console.warn('fetchLiveB315M error', e);
         }
     }
 

@@ -90,6 +90,7 @@ class RDHOrchestrator:
         self._strategy_c2: Any = None  # EMOS + Edge Exit Fusion (weather variant)
         self._strategy_b2: Any = None  # Crypto Price Edge
         self._strategy_b3: Any = None  # Binance Oracle Scalper (5-min BTC Up/Down)
+        self._strategy_b3_15m: Any = None  # Binance Oracle Scalper (15-min BTC Up/Down)
         self._binance_ws: Any = None   # Binance WebSocket feed for B2/B3
         self._exit_manager: Any = None  # Persistent exit manager for live C2/B2
 
@@ -110,8 +111,10 @@ class RDHOrchestrator:
         self._slack_bot: Any = None
         self._web_dashboard: Any = None
         self._ta_provider: Any = None  # TAFeatureProvider (background TA cache for B3/B2)
-        self._adaptive_config: Any = None  # AdaptiveConfig (runtime params for Watchdog)
-        self._b3_watchdog: Any = None  # B3Watchdog (autonomous optimizer daemon)
+        self._adaptive_config: Any = None  # AdaptiveConfig (runtime params for Watchdog) — B3 5-min
+        self._adaptive_config_15m: Any = None  # AdaptiveConfig for B3_15M
+        self._b3_watchdog: Any = None  # B3Watchdog (autonomous optimizer daemon) — 5-min
+        self._b3_15m_watchdog: Any = None  # B3Watchdog for 15-min variant
 
         # Runtime state
         self._start_time: float = 0.0
@@ -124,6 +127,8 @@ class RDHOrchestrator:
         # eliminating ambiguity between per-trade PnL and cumulative.
         self._b3_live_total_pnl: float = 0.0
         self._b3_live_total_trades: int = 0
+        self._b3_15m_live_total_pnl: float = 0.0
+        self._b3_15m_live_total_trades: int = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -186,10 +191,15 @@ class RDHOrchestrator:
             with contextlib.suppress(Exception):
                 await self._order_flow_monitor.stop()
 
-        # Close B3 Watchdog
+        # Close B3 Watchdog (5-min)
         if self._b3_watchdog is not None:
             with contextlib.suppress(Exception):
                 await self._b3_watchdog.stop()
+
+        # Close B3_15M Watchdog
+        if self._b3_15m_watchdog is not None:
+            with contextlib.suppress(Exception):
+                await self._b3_15m_watchdog.stop()
 
         # Close TAFeatureProvider
         if self._ta_provider is not None:
@@ -364,7 +374,17 @@ class RDHOrchestrator:
             except Exception as e:
                 logger.warning("b3_cleanup_stale_error", error=str(e))
 
-        # B3 15-min Shadow Scanner (data collection only)
+        # Strategy B3_15M: Binance Oracle Scalper (15-min variant)
+        self._strategy_b3_15m = await self._init_optional(
+            "StrategyB3_15M", self._init_strategy_b3_15m,
+        )
+        if self._strategy_b3_15m is not None:
+            try:
+                await self._strategy_b3_15m.cleanup_stale_on_restart()
+            except Exception as e:
+                logger.warning("b3_15m_cleanup_stale_error", error=str(e))
+
+        # B3 15-min Shadow Scanner (data collection — keeps running to compare vs live)
         self._b3_15m_shadow = None
         try:
             from arbo.strategies.b3_15m_shadow import B3_15mShadow
@@ -717,6 +737,120 @@ class RDHOrchestrator:
 
         return s
 
+    async def _init_strategy_b3_15m(self) -> Any:
+        """Initialize Strategy B3_15M: Binance Oracle Scalper (15-min variant).
+
+        Reuses Binance WS, RTDS Chainlink, paper engine, risk manager, and
+        live executor from the 5-min B3 strategy. Creates a SEPARATE
+        AdaptiveConfig (with 15-min defaults + bounds) and a SEPARATE
+        Watchdog that filters metrics by strategy='B3_15M'.
+
+        Supports paper/dual/live modes via B3_15M_EXECUTION_MODE env var.
+        """
+        import os
+
+        from arbo.strategies.strategy_b3_15m import StrategyB315M
+
+        execution_mode = os.getenv("B3_15M_EXECUTION_MODE", "paper")
+
+        # Shared infrastructure — re-use from B3 5-min init
+        if self._binance_ws is None:
+            from arbo.connectors.binance_ws import BinanceWSFeed
+
+            self._binance_ws = BinanceWSFeed(symbols=["BTCUSDT", "ETHUSDT"])
+            await self._binance_ws.start()
+            logger.info("binance_ws_started_for_b3_15m")
+
+        rtds_feed = None
+        if self._strategy_b3 is not None:
+            # Re-use B3's RTDS feed (same Chainlink source)
+            rtds_feed = getattr(self._strategy_b3, "_rtds_feed", None)
+        if rtds_feed is None:
+            try:
+                from arbo.connectors.rtds_chainlink import RTDSChainlinkFeed
+
+                rtds_feed = RTDSChainlinkFeed()
+                await rtds_feed.start()
+                logger.info("rtds_chainlink_started_for_b3_15m")
+            except Exception as e:
+                logger.warning("rtds_chainlink_init_failed_15m", error=str(e))
+
+        # Live executor — share with B3 5-min if possible
+        live_executor = None
+        if execution_mode in ("dual", "live"):
+            if self._strategy_b3 is not None and getattr(
+                self._strategy_b3, "_live_executor", None
+            ) is not None:
+                live_executor = self._strategy_b3._live_executor
+                logger.info("b3_15m_live_executor_shared", mode=execution_mode)
+            else:
+                from arbo.core.live_executor import LiveExecutor
+
+                if self._poly_client_readonly is not None:
+                    live_executor = LiveExecutor(self._poly_client_readonly)
+                    logger.info("b3_15m_live_executor_ready", mode=execution_mode)
+                else:
+                    logger.warning(
+                        "b3_15m_live_executor_no_client",
+                        msg="Falling back to paper mode",
+                    )
+                    execution_mode = "paper"
+
+        # Separate AdaptiveConfig for B3_15M (15-min quality_gate + bounds)
+        if self._adaptive_config_15m is None:
+            try:
+                from arbo.core.adaptive_config import (
+                    AdaptiveConfig,
+                    PARAM_BOUNDS_B3_15M,
+                )
+                from arbo.strategies import b3_15m_quality_gate
+
+                self._adaptive_config_15m = AdaptiveConfig(
+                    quality_gate_module=b3_15m_quality_gate,
+                    bounds=PARAM_BOUNDS_B3_15M,
+                )
+                logger.info("adaptive_config_15m_initialized")
+            except Exception as e:
+                logger.warning("adaptive_config_15m_init_failed", error=str(e))
+
+        # TA provider is shared (background cache, strategy-agnostic)
+
+        s = StrategyB315M(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine,
+            binance_ws=self._binance_ws,
+            rtds_feed=rtds_feed,
+            execution_mode=execution_mode,
+            live_executor=live_executor,
+            ta_provider=self._ta_provider,
+        )
+        await s.init()
+        if self._adaptive_config_15m is not None:
+            s._adaptive_config = self._adaptive_config_15m
+
+        # Separate Watchdog for B3_15M
+        if (
+            self._b3_15m_watchdog is None
+            and self._adaptive_config_15m is not None
+        ):
+            try:
+                from arbo.core.b3_watchdog import B3Watchdog
+                from arbo.utils.db import get_session_factory
+
+                self._b3_15m_watchdog = B3Watchdog(
+                    session_factory=get_session_factory(),
+                    adaptive_config=self._adaptive_config_15m,
+                    gemini_agent=self._gemini,
+                    slack_bot=self._slack_bot,
+                    ta_provider=self._ta_provider,
+                    strategy_name="B3_15M",
+                )
+                logger.info("b3_15m_watchdog_initialized")
+            except Exception as e:
+                logger.warning("b3_15m_watchdog_init_failed", error=str(e))
+
+        return s
+
     async def _init_gefs_background(self) -> None:
         """Background task: download GEFS + init C1f models (takes ~3 min)."""
         try:
@@ -939,7 +1073,7 @@ class RDHOrchestrator:
             factory = get_session_factory()
             # Dual-mode strategies: use LIVE PnL from trade_details, not paper actual_pnl
             # Paper-only strategies: use actual_pnl from DB
-            DUAL_MODE_STRATEGIES = {"B3"}  # B3 always dual (live when qualified, paper otherwise)
+            DUAL_MODE_STRATEGIES = {"B3", "B3_15M"}  # Both B3 variants always dual-mode
 
             async with factory() as session:
                 # Total P&L per strategy (all resolved trades, excluding pre-validation)
@@ -1003,6 +1137,9 @@ class RDHOrchestrator:
                     if dual_strat == "B3":
                         self._b3_live_total_pnl = float(live_total)
                         self._b3_live_total_trades = int(live_count)
+                    elif dual_strat == "B3_15M":
+                        self._b3_15m_live_total_pnl = float(live_total)
+                        self._b3_15m_live_total_trades = int(live_count)
 
                 # Weekly P&L per strategy (resolved this ISO week)
                 from datetime import UTC, datetime, timedelta
@@ -1337,7 +1474,13 @@ class RDHOrchestrator:
         if self._strategy_b3 is not None:
             task_defs.append(("B3_cl_recorder", self._run_b3_cl_record, 5))
 
-        # B3 15-min shadow scanner (data collection, no trading)
+        # B3_15M — live 15-min variant (event scan + exit monitor + CL recorder)
+        if self._strategy_b3_15m is not None:
+            task_defs.append(("strategy_B3_15M", self._run_strategy_b3_15m, 10))
+            task_defs.append(("B3_15M_exit_monitor", self._run_b3_15m_exit_check, 20))
+            task_defs.append(("B3_15M_cl_recorder", self._run_b3_15m_cl_record, 5))
+
+        # B3 15-min shadow scanner (data collection, keeps running for comparison)
         if self._b3_15m_shadow is not None:
             task_defs.append(("B3_15m_shadow", self._run_b3_15m_shadow, 30))
 
@@ -1405,10 +1548,15 @@ class RDHOrchestrator:
         self._internal_tasks.append(
             asyncio.create_task(self._anomaly_check_scheduler(), name="anomaly_check")
         )
-        # B3 Watchdog autonomous optimizer daemon
+        # B3 Watchdog autonomous optimizer daemon (5-min)
         if self._b3_watchdog is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._b3_watchdog.run(), name="b3_watchdog")
+            )
+        # B3_15M Watchdog autonomous optimizer daemon (15-min)
+        if self._b3_15m_watchdog is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._b3_15m_watchdog.run(), name="b3_15m_watchdog")
             )
         # TAFeatureProvider background cache (tradingview-ta → BTC RSI/ADX/MACD/BB)
         if self._ta_provider is not None:
@@ -1915,6 +2063,85 @@ class RDHOrchestrator:
         if self._strategy_b3:
             self._strategy_b3._scanner.record_cl_price()
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # STRATEGY B3_15M: Binance Oracle Scalper — 15-min variant
+    # ═══════════════════════════════════════════════════════════════════════
+
+    async def _run_strategy_b3_15m(self) -> None:
+        """B3_15M entry scan every 10 seconds (15-min windows, less urgent)."""
+        if self._strategy_b3_15m is None:
+            return
+
+        trades = await self._strategy_b3_15m.poll_cycle()
+
+        if trades:
+            for sig in trades:
+                direction = "UP" if sig.direction == 1 else "DOWN"
+                logger.info(
+                    "b3_15m_trade_executed",
+                    direction=direction,
+                    edge=f"{sig.edge:.3f}",
+                    btc=f"${sig.btc_now:.0f}",
+                )
+                for t in reversed(self._paper_engine.trade_history):
+                    if t.market_condition_id == sig.condition_id and t.status.value == "open":
+                        try:
+                            await self._paper_engine.save_trade_to_db(t)
+                        except Exception as e:
+                            logger.warning("b3_15m_save_trade_db_error", error=str(e))
+                        break
+                await self._sync_b3_market_to_db(sig)
+                await self._notify_b3_entry(sig, strategy_label="B3_15M")
+            await self._paper_engine.sync_positions_to_db()
+
+    async def _run_b3_15m_cl_record(self) -> None:
+        """Record Chainlink price for 15-min scanner buffer."""
+        if self._strategy_b3_15m:
+            self._strategy_b3_15m._scanner.record_cl_price()
+
+    async def _run_b3_15m_exit_check(self) -> None:
+        """Check B3_15M positions for exit triggers. Resolution-only (never-sell)."""
+        if self._strategy_b3_15m is None or self._paper_engine is None:
+            return
+
+        exits = await self._strategy_b3_15m.check_exits()
+
+        for token_id, exit_reason, exit_price, live_shares, b3_direction, live_entry_price in (exits or []):
+            pos = next(
+                (p for p in self._paper_engine.open_positions
+                 if p.token_id == token_id),
+                None,
+            )
+            from decimal import Decimal as D
+
+            if pos is not None:
+                pnl = self._paper_engine.sell_position(
+                    token_id=token_id,
+                    sell_price=D(str(round(exit_price, 4))),
+                    exit_reason=exit_reason,
+                )
+                self._risk_manager.post_trade_update(
+                    pos.market_condition_id, "crypto_15min", pos.size, pnl=pnl,
+                )
+                self._risk_manager.strategy_post_trade("B3_15M", pos.size, pnl=pnl)
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id, pnl=pnl,
+                    exit_price=D(str(round(exit_price, 4))),
+                    exit_reason=exit_reason,
+                )
+
+            # Live: never-sell. Live fill already tracked on entry; resolution
+            # handled via fetch_resolution polling inside the strategy's exit check.
+            if live_shares > 0 and live_entry_price > 0:
+                logger.info(
+                    "b3_15m_live_resolution",
+                    token=token_id[:12],
+                    direction="UP" if b3_direction == 1 else "DOWN",
+                    shares=live_shares,
+                    entry=live_entry_price,
+                    exit=exit_price,
+                )
+
     async def _run_b3_15m_shadow(self) -> None:
         """B3 15-min shadow scanner — collect orderbook data, no trading."""
         if self._b3_15m_shadow is None:
@@ -2119,8 +2346,8 @@ class RDHOrchestrator:
         except Exception as e:
             logger.debug("c2_slack_notify_error", error=str(e))
 
-    async def _get_b3_total_pnl_from_db(self) -> float:
-        """Get B3 total P&L from DB (source of truth, survives restarts)."""
+    async def _get_b3_total_pnl_from_db(self, strategy: str = "B3") -> float:
+        """Get B3 (or B3_15M) total P&L from DB (source of truth, survives restarts)."""
         try:
             import sqlalchemy as _sa
 
@@ -2130,16 +2357,16 @@ class RDHOrchestrator:
             async with factory() as session:
                 result = await session.execute(
                     _sa.select(_sa.func.coalesce(_sa.func.sum(PaperTrade.actual_pnl), 0))
-                    .where(PaperTrade.strategy == "B3")
+                    .where(PaperTrade.strategy == strategy)
                     .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                 )
                 return float(result.scalar() or 0)
         except Exception:
-            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
+            ss = self._risk_manager.get_strategy_state(strategy) if self._risk_manager else None
             return float(ss.total_pnl) if ss else 0
 
-    async def _notify_b3_entry(self, sig: Any) -> None:
-        """Send Slack notification on B3 trade entry.
+    async def _notify_b3_entry(self, sig: Any, strategy_label: str = "B3") -> None:
+        """Send Slack notification on B3 or B3_15M trade entry.
 
         Paper notifications → C0APFCD4M9U (B3 paper channel)
         Live notifications  → C0APX4K8Z2N (B3 live channel)
@@ -2150,8 +2377,8 @@ class RDHOrchestrator:
             return
         try:
             direction = "UP" if sig.direction == 1 else "DOWN"
-            total_pnl = await self._get_b3_total_pnl_from_db()
-            ss = self._risk_manager.get_strategy_state("B3") if self._risk_manager else None
+            total_pnl = await self._get_b3_total_pnl_from_db(strategy=strategy_label)
+            ss = self._risk_manager.get_strategy_state(strategy_label) if self._risk_manager else None
             deployed = float(ss.deployed) if ss else 0
 
             # Compute trade size (same logic as poll_cycle)
@@ -2160,9 +2387,9 @@ class RDHOrchestrator:
             bet_size = min(available * raw_pct, 100.0)
 
             text = (
-                f":zap: *B3 ENTRY — BTC {direction}*\n"
+                f":zap: *{strategy_label} ENTRY — BTC {direction}*\n"
                 f"BTC: ${sig.btc_now:,.0f}  |  FV: {sig.entry_price:.3f}  |  Edge: {sig.edge:.1%}\n"
-                f"Size: ~${bet_size:.0f}  |  Deployed: ${deployed:.0f}  |  B3 Total: ${total_pnl:+.2f}"
+                f"Size: ~${bet_size:.0f}  |  Deployed: ${deployed:.0f}  |  {strategy_label} Total: ${total_pnl:+.2f}"
             )
             await self._slack_bot._post(b3_paper_channel, text=text)
 

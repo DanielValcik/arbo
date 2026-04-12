@@ -100,6 +100,56 @@ PARAM_BOUNDS: dict[str, ParamBounds] = {
 # REQUIRE_CHAINLINK, execution_mode, capital allocation.
 
 
+# Per-strategy Tier 1 autonomous bounds for B3_15M (15-min variant).
+# Calibrated from shadow autoresearch rank #1 (2026-04-12, 144 signals).
+# Notes vs B3 (5-min):
+#   - LIVE_MIN_EDGE: same range, different start (both 0.30)
+#   - LIVE_MIN_BTC_MOVE: wider autonomous range (0-30) — edge filter does heavy lifting
+#   - LIVE_MAX_BTC_MOVE: NEW — 15-min specific reversal cap
+#   - LIVE_MAX_VELOCITY: higher range (80-120) — 15-min absorbs faster moves
+#   - LIVE_MAX_DIR_DELTA: wider (15-35) — 15-min tolerates more CL lag
+#   - LIVE_MAX_MARKET_GAP: NEW — 15-min specific gap filter
+PARAM_BOUNDS_B3_15M: dict[str, ParamBounds] = {
+    "LIVE_MIN_EDGE": ParamBounds(
+        hard_min=0.15, hard_max=0.60, autonomous_min=0.20, autonomous_max=0.40, tier=1,
+    ),
+    "LIVE_MIN_BTC_MOVE": ParamBounds(
+        hard_min=0, hard_max=100, autonomous_min=0, autonomous_max=30, tier=1,
+    ),
+    "LIVE_MAX_BTC_MOVE": ParamBounds(
+        hard_min=50, hard_max=200, autonomous_min=70, autonomous_max=120, tier=1,
+    ),
+    "LIVE_MAX_VELOCITY": ParamBounds(
+        hard_min=60, hard_max=200, autonomous_min=80, autonomous_max=120, tier=1,
+    ),
+    "LIVE_MAX_DIR_DELTA": ParamBounds(
+        hard_min=10, hard_max=50, autonomous_min=15, autonomous_max=35, tier=1,
+    ),
+    "LIVE_MAX_MARKET_GAP": ParamBounds(
+        hard_min=0.05, hard_max=1.0, autonomous_min=0.15, autonomous_max=0.50, tier=1,
+    ),
+    "POSITION_PCT": ParamBounds(
+        hard_min=0.010, hard_max=0.10, autonomous_min=0.025, autonomous_max=0.070, tier=1,
+    ),
+    "EDGE_SCALING": ParamBounds(
+        hard_min=2.0, hard_max=20.0, autonomous_min=4.0, autonomous_max=15.0, tier=1,
+    ),
+    # Tier 2
+    "SIGMA_SCALE": ParamBounds(
+        hard_min=0.35, hard_max=0.80, autonomous_min=0.45, autonomous_max=0.65, tier=2,
+    ),
+    "ENTRY_THRESHOLD": ParamBounds(
+        hard_min=0.04, hard_max=0.15, autonomous_min=0.06, autonomous_max=0.12, tier=2,
+    ),
+    "MIN_ENTRY_MIN": ParamBounds(
+        hard_min=3, hard_max=8, autonomous_min=4, autonomous_max=7, tier=2,
+    ),
+    "MAX_ENTRY_MIN": ParamBounds(
+        hard_min=8, hard_max=13, autonomous_min=10, autonomous_max=12, tier=2,
+    ),
+}
+
+
 class AdaptiveConfig:
     """Runtime parameter overrides with safety bounds.
 
@@ -119,11 +169,27 @@ class AdaptiveConfig:
         config.revert("LIVE_MAX_VELOCITY", reason="WR dropped 6pp after change")
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        quality_gate_module: Any = None,
+        bounds: dict[str, ParamBounds] | None = None,
+    ) -> None:
+        """Create a per-strategy adaptive config.
+
+        Args:
+            quality_gate_module: Module to read default param values from.
+                Defaults to b3_quality_gate (5-min). For B3_15M, pass
+                b3_15m_quality_gate so _get_default picks the 15-min defaults.
+            bounds: Per-strategy PARAM_BOUNDS override. Defaults to the
+                module-level PARAM_BOUNDS (5-min). For B3_15M, pass
+                PARAM_BOUNDS_B3_15M.
+        """
         self._overrides: dict[str, float] = {}
         self._change_log: list[ConfigChange] = []
         self._next_change_id: int = 1
         self._paused: bool = False  # Watchdog can pause live trading
+        self._quality_gate_module = quality_gate_module
+        self._bounds = bounds if bounds is not None else PARAM_BOUNDS
 
     def get(self, param: str, default: float) -> float:
         """Read parameter value. Returns override if set, otherwise default.
@@ -174,7 +240,7 @@ class AdaptiveConfig:
         Validates against tier bounds. Tier 1 changes are applied silently.
         Tier 2 changes are applied but flagged. Tier 3 rejected outright.
         """
-        bounds = PARAM_BOUNDS.get(param)
+        bounds = self._bounds.get(param)
         if bounds is None:
             logger.warning(
                 "adaptive_config_unknown_param",
@@ -286,12 +352,17 @@ class AdaptiveConfig:
         Some live params (LIVE_MAX_VELOCITY etc.) are defined inline in
         strategy_b3.py, not in quality_gate. We keep a fallback map here.
         """
-        # First try quality_gate
-        from arbo.strategies import b3_quality_gate as qg
+        # First try the configured quality_gate module (may be 5-min or 15-min)
+        if self._quality_gate_module is not None:
+            val = getattr(self._quality_gate_module, param, None)
+            if val is not None:
+                return float(val)
+        else:
+            from arbo.strategies import b3_quality_gate as qg
 
-        val = getattr(qg, param, None)
-        if val is not None:
-            return float(val)
+            val = getattr(qg, param, None)
+            if val is not None:
+                return float(val)
 
         # Fallback defaults for live params (defined inline in strategy_b3.py)
         # Updated 2026-04-12: Data-driven relaxation based on 256 live resolved trades.
@@ -318,6 +389,9 @@ class AdaptiveConfig:
             "LIVE_MAX_DIR_DELTA": 15.0,
             "LIVE_MIN_EDGE": 0.30,        # Was 0.40 — data-driven relaxation
             "LIVE_MIN_BTC_MOVE": 35.0,    # Was 50.0 — data-driven relaxation
+            # B3_15M additional params (defaults for safety; quality_gate overrides)
+            "LIVE_MAX_BTC_MOVE": 80.0,
+            "LIVE_MAX_MARKET_GAP": 0.30,
         }
         return defaults.get(param, 0.0)
 
