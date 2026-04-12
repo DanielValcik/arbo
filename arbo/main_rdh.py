@@ -2516,9 +2516,12 @@ class RDHOrchestrator:
         exit_price: float,
         is_live: bool,
     ) -> None:
-        """Send Slack notification when C2 closes a trade."""
+        """Send Slack notification when C2 closes a LIVE trade.
+
+        Paper closes no longer notify (user request 2026-04-12).
+        """
         C2_SLACK_CHANNEL = "C0AP2QLLM2N"
-        if self._slack_bot is None:
+        if self._slack_bot is None or not is_live:
             return
         try:
             td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
@@ -2535,12 +2538,11 @@ class RDHOrchestrator:
             deployed = float(ss.deployed) if ss else 0
             available = float(ss.available) if ss else 0
 
-            mode = "LIVE" if is_live else "PAPER"
             emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
             pnl_sign = "+" if pnl >= 0 else ""
 
             text = (
-                f"{emoji} *C2 {mode} — {city.upper()}* {direction}\n"
+                f"{emoji} *C2 LIVE — {city.upper()}* {direction}\n"
                 f"Entry: ${entry:.4f} → Exit: ${exit_price:.4f} ({exit_reason})\n"
                 f"Size: ${size:.2f}  |  P&L: *{pnl_sign}${pnl:.2f}*\n"
                 f"Balance: ${total_pnl:.2f} total P&L  |  ${deployed:.0f} deployed  |  ${available:.0f} available"
@@ -2569,32 +2571,17 @@ class RDHOrchestrator:
             return float(ss.total_pnl) if ss else 0
 
     async def _notify_b3_entry(self, sig: Any, strategy_label: str = "B3") -> None:
-        """Send Slack notification on B3 or B3_15M trade entry.
+        """Send Slack notification on B3 or B3_15M LIVE trade entry only.
 
-        Paper notifications → C0APFCD4M9U (B3 paper channel)
-        Live notifications  → C0APX4K8Z2N (B3 live channel)
+        Paper entries no longer notify (user request 2026-04-12). Only live
+        fills are sent to the strategy-specific live channel.
+        Live notifications → C0APX4K8Z2N (B3 live channel)
         """
-        b3_paper_channel = "C0APFCD4M9U"
         b3_live_channel = "C0APX4K8Z2N"
         if self._slack_bot is None:
             return
         try:
             direction = "UP" if sig.direction == 1 else "DOWN"
-            total_pnl = await self._get_b3_total_pnl_from_db(strategy=strategy_label)
-            ss = self._risk_manager.get_strategy_state(strategy_label) if self._risk_manager else None
-            deployed = float(ss.deployed) if ss else 0
-
-            # Compute trade size (same logic as poll_cycle)
-            raw_pct = min(0.067, sig.edge * 4.838)
-            available = float(ss.allocated - ss.deployed) if ss else 0
-            bet_size = min(available * raw_pct, 100.0)
-
-            text = (
-                f":zap: *{strategy_label} ENTRY — BTC {direction}*\n"
-                f"BTC: ${sig.btc_now:,.0f}  |  FV: {sig.entry_price:.3f}  |  Edge: {sig.edge:.1%}\n"
-                f"Size: ~${bet_size:.0f}  |  Deployed: ${deployed:.0f}  |  {strategy_label} Total: ${total_pnl:+.2f}"
-            )
-            await self._slack_bot._post(b3_paper_channel, text=text)
 
             # Send live fill to separate channel
             if self._strategy_b3 and hasattr(self._strategy_b3, '_open_positions'):
@@ -2627,12 +2614,11 @@ class RDHOrchestrator:
         live_entry_price: float = 0.0,
         live_shares: int = 0,
     ) -> None:
-        """Send Slack notification on B3 trade exit.
+        """Send Slack notification on B3 LIVE trade exit only.
 
-        Paper notifications → C0APFCD4M9U (B3 paper channel)
-        Live notifications  → C0APX4K8Z2N (B3 live channel)
+        Paper exits no longer notify (user request 2026-04-12).
+        Live notifications → C0APX4K8Z2N (B3 live channel)
         """
-        b3_paper_channel = "C0APFCD4M9U"
         b3_live_channel = "C0APX4K8Z2N"
         if self._slack_bot is None:
             return
@@ -2641,29 +2627,9 @@ class RDHOrchestrator:
             if dir_str == "?" and pos:
                 td = self._paper_engine.get_trade_details(pos.token_id) if self._paper_engine else {}
                 dir_str = (td.get("direction", "?")).upper() if td else "?"
-            size = float(pos.size) if pos else 0.0
-
-            total_pnl = await self._get_b3_total_pnl_from_db()
 
             emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
             pnl_sign = "+" if pnl >= 0 else ""
-            hold_s = ""
-            if hasattr(pos, "opened_at") and pos.opened_at:
-                from datetime import UTC, datetime
-                delta = (datetime.now(UTC) - pos.opened_at).total_seconds()
-                hold_s = f"  |  Hold: {delta:.0f}s"
-
-            # Paper exit → paper channel (skip if pos is None = live-only resolution)
-            if pos:
-                text = (
-                    f"{emoji} *B3 EXIT — BTC {dir_str}* ({exit_reason})\n"
-                    f"Entry: {float(pos.avg_price):.3f} -> "
-                    f"Exit: {exit_price:.3f}  |  "
-                    f"Size: ${size:.0f}{hold_s}\n"
-                    f"P&L: *{pnl_sign}${pnl:.2f}*  |  "
-                    f"B3 Total: ${total_pnl:+.2f}"
-                )
-                await self._slack_bot._post(b3_paper_channel, text=text)
 
             # Live: notify hold or resolution
             if live_shares > 0 and not live_exit_info and self._slack_bot:
@@ -3441,32 +3407,10 @@ class RDHOrchestrator:
                         pnl=str(pnl),
                     )
 
-                    # Per-strategy Slack resolution alerts
-                    if self._slack_bot is not None and strategy not in ("B2", "B3", "C2"):
-                        _STRATEGY_CHANNELS = {
-                            "A": "C0APQSC7UJ3",
-                            "B": "C0AR0JG5D40",
-                            "C": "C0AQ6BCHQ9G",
-                        }
-                        _chan = _STRATEGY_CHANNELS.get(strategy)
-                        if _chan:
-                            market_name = getattr(market, "question", cid[:40]) or cid[:40]
-                            result_status = "won" if winning else "lost"
-                            _emoji = ":white_check_mark:" if winning else ":x:"
-                            _pnl_sign = "+" if pnl >= 0 else ""
-                            _strat_names = {"A": "Theta Decay", "B": "Reflexivity", "C": "Weather"}
-                            _strat_label = f"{strategy} ({_strat_names.get(strategy, '?')})"
-                            _text = (
-                                f"{_emoji} *Position Resolved — {result_status.upper()}*\n"
-                                f"*Market:* {market_name[:80]}\n"
-                                f"*Strategy:* {_strat_label}  |  *Side:* {pos.side or '?'}  |  "
-                                f"*Size:* ${float(getattr(pos, 'size', 0)):.2f}\n"
-                                f"*P&L:* {_pnl_sign}${float(pnl):.2f}"
-                            )
-                            try:
-                                await self._slack_bot._post(_chan, text=_text)
-                            except Exception as slack_err:
-                                logger.warning("resolution_slack_error", error=str(slack_err))
+                    # Per-strategy Slack resolution alerts REMOVED 2026-04-12 (user request).
+                    # Strategies A/B/C are paper-only — no live notifications needed.
+                    # B2/B3/C2 have their own live-only notifications (in respective
+                    # _notify_* methods or _run_*_exit_check blocks).
 
                   except Exception as pos_err:
                     logger.error(
