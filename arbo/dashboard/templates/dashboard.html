@@ -1582,7 +1582,7 @@
                 <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
                     <span style="color:#3fb950;font-weight:600">━ 5-min</span>
                     <span style="margin-left:12px;color:#e3b341;font-weight:600">━ 15-min</span>
-                    <span id="lb315mCumStats" style="margin-left:12px"></span>
+                    <span style="margin-left:12px;color:var(--text-dim)">(per-point color: ● zisk · ● ztráta)</span>
                 </div>
                 <div class="chart-container" style="height:220px">
                     <canvas id="b3LiveCumPnlChart"></canvas>
@@ -4366,12 +4366,25 @@
                     return i === 0 ? '#3fb950' : v >= lValues[i-1] ? '#3fb950' : '#f85149';
                 });
                 const lPointRadius = lValues.map((_, i) => isResolved[i] ? (lValues.length > 50 ? 1.5 : 3) : 5);
-                // Stats: use chart cumulative P&L (matches "Uzavrene trady" card)
+                // Header stats: 5m + 15m breakdown + combined total
                 const statsEl = document.getElementById('lb3LiveCumStats');
                 if (statsEl) {
-                    const c = lCum >= 0 ? 'var(--green)' : 'var(--red)';
-                    const pendStr = pendingCount > 0 ? `<span style="color:#e3b341;margin-left:8px">⏳ ${pendingCount} ceka</span>` : '';
-                    statsEl.innerHTML = `<span style="color:${c}">P&L: ${lCum >= 0 ? '+' : ''}$${lCum.toFixed(2)}</span>${pendStr}`;
+                    const s15hdr = window._b3_15m_cum;
+                    const cum15 = s15hdr && s15hdr.values && s15hdr.values.length > 0
+                        ? s15hdr.values[s15hdr.values.length - 1] : 0;
+                    const total = lCum + cum15;
+                    const cT = total >= 0 ? 'var(--green)' : 'var(--red)';
+                    const c5 = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                    const c15 = cum15 >= 0 ? '#e3b341' : 'var(--red)';
+                    const pendStr = pendingCount > 0 ? `<span style="color:#e3b34199;margin-left:6px;font-size:10px">⏳ ${pendingCount}</span>` : '';
+                    statsEl.innerHTML = `
+                        <span style="color:${cT}">Total: ${total >= 0 ? '+' : ''}$${total.toFixed(2)}</span>
+                        <span style="color:var(--text-dim);margin-left:6px;font-size:10px">(</span>
+                        <span style="color:${c5};font-size:11px">5m: ${lCum >= 0 ? '+' : ''}$${lCum.toFixed(2)}</span>
+                        <span style="color:var(--text-dim);font-size:10px">·</span>
+                        <span style="color:${c15};font-size:11px">15m: ${cum15 >= 0 ? '+' : ''}$${cum15.toFixed(2)}</span>
+                        <span style="color:var(--text-dim);font-size:10px">)</span>
+                        ${pendStr}`.replace(/\s+/g, ' ');
                 }
                 {
                     const wallet = walletData.value;
@@ -4576,45 +4589,48 @@
                 const lCumCtx = document.getElementById('b3LiveCumPnlChart');
                 if (lCumCtx) {
                     if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
-                    // Build combined label set: 5-min series + pad 15-min to match (or use separate x)
+                    // 5-min line: SOLID GREEN (matches legend). Per-point colors
+                    // show win (green) / loss (red). Pending still use dashed.
+                    const final5mColor = lCum >= 0 ? '#3fb950' : '#f85149';
                     const datasets = [{
                         label: '5-min',
                         data: lValues,
-                        borderColor: '#3fb950',
-                        backgroundColor: 'rgba(63,185,80,0.08)',
+                        borderColor: final5mColor,
+                        backgroundColor: lCum >= 0 ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.06)',
                         fill: true,
                         tension: 0.1,
                         pointRadius: lPointRadius,
                         pointBackgroundColor: lSegColors,
                         borderWidth: 2,
-                        segment: {
-                            borderColor: ctx2 => {
-                                const i = ctx2.p1DataIndex;
-                                return !isResolved[i] ? '#e3b34166' : ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149';
-                            },
-                            borderDash: ctx2 => !isResolved[ctx2.p1DataIndex] ? [4, 4] : [],
-                        },
                     }];
-                    // Append 15-min series if fetchLiveB315M has populated it
+                    // Append 15-min series: pad with carry-forward to match 5-min x-axis
                     const s15 = window._b3_15m_cum;
-                    let labels = lLabels;
                     if (s15 && Array.isArray(s15.values) && s15.values.length > 0) {
-                        // Align x-axis: use the longer of the two as the label set
-                        if (s15.labels && s15.labels.length > lLabels.length) {
-                            labels = s15.labels;
+                        const padded = [...s15.values];
+                        const lastVal = padded[padded.length - 1] ?? 0;
+                        while (padded.length < lLabels.length) {
+                            padded.push(lastVal);
                         }
+                        // Trim if longer than 5-min labels (shouldn't happen, but safe)
+                        const aligned = padded.slice(0, lLabels.length);
+                        const final15mColor = (lastVal >= 0) ? '#e3b341' : '#f85149';
                         datasets.push({
                             label: '15-min',
-                            data: s15.values,
-                            borderColor: '#e3b341',
-                            backgroundColor: 'rgba(227,179,65,0.06)',
+                            data: aligned,
+                            borderColor: final15mColor,
+                            backgroundColor: 'rgba(227,179,65,0.08)',
                             fill: false,
                             tension: 0.1,
-                            pointRadius: 3,
+                            pointRadius: aligned.map((v, i) => {
+                                // Highlight only actual data points, carry-forward = small
+                                if (i < s15.values.length) return 4;
+                                return 0;
+                            }),
                             pointBackgroundColor: '#e3b341',
                             borderWidth: 2,
                         });
                     }
+                    const labels = lLabels;
                     window._b3LiveCumChart = new Chart(lCumCtx, {
                         type: 'line',
                         data: { labels: labels, datasets: datasets },
