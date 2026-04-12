@@ -40,6 +40,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "B3_15M": Decimal("300"), # Binance Oracle Scalper (15-min BTC Up/Down) — smaller capital, data-driven relaxation possible after 100+ live trades
     "C": Decimal("1000"),  # Compound Weather — 50%
     "C2": Decimal("1000"), # EMOS + Edge Exit Fusion (weather variant)
+    "D": Decimal("300"),   # NBA Green Book Engine — small sizing, optimization phase
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
 MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy

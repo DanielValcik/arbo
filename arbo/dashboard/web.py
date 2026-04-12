@@ -160,6 +160,7 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "B3_15M": {"name": "Binance Oracle Scalper 15m", "category": "Crypto", "description": "BTC 15-min Up/Down momentum scalper — same Binance→Chainlink edge, longer window, higher PnL/trade"},
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
+    "D": {"name": "NBA Green Book", "category": "Sports", "description": "NBA pre-game entry, green book exit mid-game (both sides, always-close)"},
 }
 
 
@@ -2477,6 +2478,76 @@ async def api_polymarket_wallet(
         result["balance_error"] = str(e)
 
     return result
+
+
+@app.get("/api/strategy-d")
+async def api_strategy_d(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
+    """Strategy D status: open positions, recent trades, live P&L, parameters."""
+    orch = state.orchestrator
+    if orch is None or getattr(orch, "_strategy_d", None) is None:
+        return {
+            "active": False,
+            "pnl": 0.0,
+            "trades": 0,
+            "win_rate": 0.0,
+            "gb_rate": 0.0,
+            "positions": [],
+            "recent_trades": [],
+        }
+
+    d = orch._strategy_d
+    status = d.get_status()
+
+    # Load recent trades from DB (last 20)
+    recent_trades: list[dict[str, Any]] = []
+    total_trades = 0
+    wins = 0
+    green_books = 0
+    pnl = 0.0
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+        from sqlalchemy import desc, select
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                select(PaperTrade).where(PaperTrade.strategy == "D").order_by(desc(PaperTrade.created_at)).limit(100)
+            )
+            trades = result.scalars().all()
+            total_trades = len(trades)
+            for t in trades:
+                tp = _dec(t.pnl) or 0
+                pnl += tp
+                if tp > 0:
+                    wins += 1
+                details = getattr(t, "trade_details", None) or {}
+                if isinstance(details, dict) and details.get("exit_reason") == "green_book":
+                    green_books += 1
+                if len(recent_trades) < 20:
+                    recent_trades.append({
+                        "time": t.created_at.isoformat() if t.created_at else "",
+                        "market": details.get("question", "")[:60] if isinstance(details, dict) else "",
+                        "side": details.get("side", "") if isinstance(details, dict) else "",
+                        "entry_price": _dec(t.entry_price),
+                        "exit_price": _dec(t.exit_price),
+                        "exit_reason": details.get("exit_reason", "") if isinstance(details, dict) else "",
+                        "pnl": tp,
+                    })
+    except Exception as e:
+        logger.warning("strategy_d_trades_query_failed: %s", e)
+
+    return {
+        "active": True,
+        "pnl": round(pnl, 2),
+        "trades": total_trades,
+        "win_rate": round(wins / total_trades, 3) if total_trades > 0 else 0.0,
+        "gb_rate": round(green_books / total_trades, 3) if total_trades > 0 else 0.0,
+        "open_positions": status["open_positions"],
+        "trades_today": status["trades_today"],
+        "daily_pnl": status["daily_pnl"],
+        "params": status["params"],
+        "positions": status["positions"],
+        "recent_trades": recent_trades,
+    }
 
 
 @app.get("/api/expected-vs-reality-b2")

@@ -434,6 +434,7 @@
         <button class="tab-btn" onclick="switchTab('liveb2')" style="color:var(--orange)">B2</button>
         <button class="tab-btn" onclick="switchTab('liveb3')" style="color:var(--gold)">B3</button>
         <button class="tab-btn" onclick="switchTab('livec2')" style="color:var(--teal)">C2</button>
+        <button class="tab-btn" onclick="switchTab('lived')" style="color:#ff8c42">D</button>
         <button class="tab-btn" onclick="switchTab('cryptoarb')">CRYPTOARB</button>
         <button class="tab-btn" onclick="switchTab('nightcap')">NIGHTCAP</button>
         <button class="tab-btn" onclick="switchTab('skinny')">SKINNY</button>
@@ -1889,6 +1890,90 @@
         </div>
     </div><!-- end livec2Content -->
 
+    <!-- ============================================================ -->
+    <!-- STRATEGY D TAB — NBA Green Book Engine -->
+    <!-- ============================================================ -->
+    <div id="livedContent" class="tab-content">
+        <div class="grid">
+            <!-- D Overview -->
+            <div class="card" style="border-top:3px solid #ff8c42">
+                <div class="card-title">D NBA Green Book <span id="dStatusBadge" style="background:#ff8c42;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
+                <div id="dOverview" style="font-size:12px">
+                    <div style="text-align:center;padding:12px;color:var(--text-dim)">
+                        <div style="font-size:28px;font-weight:700" id="dTotalPnl">$0.00</div>
+                        <div>P&L <span id="dRatio" style="font-size:14px;font-weight:600;margin-left:8px;color:var(--text-dim)"></span></div>
+                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+                            <div style="background:rgba(255,140,66,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Trades</div>
+                                <div style="font-size:14px;font-weight:700" id="dTrades">--</div>
+                            </div>
+                            <div style="background:rgba(255,140,66,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Win Rate</div>
+                                <div style="font-size:14px;font-weight:700" id="dWinRate">--</div>
+                            </div>
+                            <div style="background:rgba(255,140,66,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">GB Rate</div>
+                                <div style="font-size:14px;font-weight:700" id="dGBRate">--</div>
+                            </div>
+                            <div style="background:rgba(255,140,66,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Max DD</div>
+                                <div style="font-size:14px;font-weight:700" id="dMaxDD">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Strategy Params -->
+            <div class="card">
+                <div class="card-title">Parametry (Sweep v4 Winner #25)</div>
+                <table style="width:100%;font-size:11px">
+                    <tr><td style="color:var(--text-dim)">Min edge</td><td style="text-align:right"><b>0.16</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Green book delta</td><td style="text-align:right"><b>0.17</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Stop loss</td><td style="text-align:right"><b>0.15</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Max hold fraction</td><td style="text-align:right"><b>0.50</b> (half-game)</td></tr>
+                    <tr><td style="color:var(--text-dim)">Oba směry (YES+NO)</td><td style="text-align:right"><b>Ano</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Kelly fraction</td><td style="text-align:right"><b>0.15</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Max position</td><td style="text-align:right"><b>3%</b></td></tr>
+                    <tr><td style="color:var(--text-dim)">Alokace</td><td style="text-align:right"><b>$300</b></td></tr>
+                    <tr><td colspan="2" style="padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim)">Backtest: +$1,665 na $1,000 za 20m<br>Sharpe 7.03, DD 13%, ROI ~100%/rok</td></tr>
+                </table>
+            </div>
+
+            <!-- Open Positions -->
+            <div class="card" style="grid-column:span 2">
+                <div class="card-title">Otevřené pozice</div>
+                <table style="width:100%;font-size:11px" id="dPositionsTable">
+                    <thead>
+                        <tr style="color:var(--text-dim);text-align:left">
+                            <th>Zápas</th><th>Strana</th><th>Vstup</th><th>Edge</th>
+                            <th>Shares</th><th>Drží</th><th>Aktuální</th><th>Unrealized P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dPositionsBody">
+                        <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:20px">Žádné pozice</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Recent Trades -->
+            <div class="card" style="grid-column:span 2">
+                <div class="card-title">Poslední trades</div>
+                <table style="width:100%;font-size:11px" id="dTradesTable">
+                    <thead>
+                        <tr style="color:var(--text-dim);text-align:left">
+                            <th>Čas</th><th>Zápas</th><th>Strana</th><th>Vstup</th>
+                            <th>Výstup</th><th>Důvod</th><th>P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dTradesBody">
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px">Čekáme na první trade</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div><!-- end livedContent -->
+
     <script>
     let pnlChart = null;
     let allocChart = null;
@@ -3290,7 +3375,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-        const contentMap = { arbo: 'arboContent', liveb2: 'liveb2Content', liveb3: 'liveb3Content', livec2: 'livec2Content', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent', echo: 'echoContent' };
+        const contentMap = { arbo: 'arboContent', liveb2: 'liveb2Content', liveb3: 'liveb3Content', livec2: 'livec2Content', lived: 'livedContent', cryptoarb: 'cryptoarbContent', nightcap: 'nightcapContent', skinny: 'skinnyContent', echo: 'echoContent' };
         document.getElementById(contentMap[tab]).classList.add('active');
 
         if (tab === 'cryptoarb') {
@@ -3336,6 +3421,62 @@
         } else {
             if (echoRefreshInterval) { clearInterval(echoRefreshInterval); echoRefreshInterval = null; }
         }
+        if (tab === 'lived') {
+            fetchLiveD();
+            if (!lvdRefreshInterval) lvdRefreshInterval = setInterval(fetchLiveD, 15000);
+        } else {
+            if (lvdRefreshInterval) { clearInterval(lvdRefreshInterval); lvdRefreshInterval = null; }
+        }
+    }
+
+    let lvdRefreshInterval = null;
+    async function fetchLiveD() {
+        try {
+            const d = await fetchJSON('/api/strategy-d');
+            if (!d) return;
+            document.getElementById('dTotalPnl').textContent = '$' + (d.pnl || 0).toFixed(2);
+            document.getElementById('dTotalPnl').style.color = (d.pnl || 0) >= 0 ? '#3fb950' : '#f85149';
+            document.getElementById('dTrades').textContent = d.trades || 0;
+            document.getElementById('dWinRate').textContent = ((d.win_rate || 0) * 100).toFixed(0) + '%';
+            document.getElementById('dGBRate').textContent = ((d.gb_rate || 0) * 100).toFixed(0) + '%';
+
+            // Positions
+            const posBody = document.getElementById('dPositionsBody');
+            if (d.positions && d.positions.length > 0) {
+                posBody.innerHTML = d.positions.map(p => `
+                    <tr>
+                        <td>${p.team_a} vs ${p.team_b}</td>
+                        <td><span style="color:${p.side === 'yes' ? '#3fb950' : '#f85149'}">${p.side.toUpperCase()}</span></td>
+                        <td>$${p.entry.toFixed(3)}</td>
+                        <td>${(p.edge * 100).toFixed(1)}%</td>
+                        <td>${p.shares}</td>
+                        <td>${p.hold_min}m</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                `).join('');
+            } else {
+                posBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:20px">Žádné pozice</td></tr>';
+            }
+
+            // Recent trades
+            const tBody = document.getElementById('dTradesBody');
+            if (d.recent_trades && d.recent_trades.length > 0) {
+                tBody.innerHTML = d.recent_trades.map(t => `
+                    <tr>
+                        <td>${t.time ? t.time.substring(0,16).replace('T',' ') : '--'}</td>
+                        <td>${t.market || '--'}</td>
+                        <td>${(t.side || '').toUpperCase()}</td>
+                        <td>$${(t.entry_price || 0).toFixed(3)}</td>
+                        <td>$${(t.exit_price || 0).toFixed(3)}</td>
+                        <td>${t.exit_reason || '--'}</td>
+                        <td style="color:${t.pnl >= 0 ? '#3fb950' : '#f85149'}">$${(t.pnl || 0).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px">Čekáme na první trade</td></tr>';
+            }
+        } catch(e) { console.error('fetchLiveD', e); }
     }
 
     // ===== CryptoArb dashboard =====
@@ -5277,7 +5418,7 @@
 
     // Restore active tab (localStorage takes priority, hash as fallback)
     const savedTab = localStorage.getItem('arbo_tab') || location.hash.replace('#', '');
-    if (['arbo', 'liveb2', 'liveb3', 'livec2', 'cryptoarb', 'nightcap', 'skinny'].includes(savedTab)) {
+    if (['arbo', 'liveb2', 'liveb3', 'livec2', 'lived', 'cryptoarb', 'nightcap', 'skinny'].includes(savedTab)) {
         switchTab(savedTab);
     }
     // Clean hash from URL

@@ -91,6 +91,7 @@ class RDHOrchestrator:
         self._strategy_b2: Any = None  # Crypto Price Edge
         self._strategy_b3: Any = None  # Binance Oracle Scalper (5-min BTC Up/Down)
         self._strategy_b3_15m: Any = None  # Binance Oracle Scalper (15-min BTC Up/Down)
+        self._strategy_d: Any = None  # NBA Green Book Engine
         self._binance_ws: Any = None   # Binance WebSocket feed for B2/B3
         self._exit_manager: Any = None  # Persistent exit manager for live C2/B2
 
@@ -374,6 +375,9 @@ class RDHOrchestrator:
             except Exception as e:
                 logger.warning("b3_cleanup_stale_error", error=str(e))
 
+        # Strategy D: NBA Green Book Engine
+        self._strategy_d = await self._init_optional("StrategyD", self._init_strategy_d)
+
         # Strategy B3_15M: Binance Oracle Scalper (15-min variant)
         self._strategy_b3_15m = await self._init_optional(
             "StrategyB3_15M", self._init_strategy_b3_15m,
@@ -588,6 +592,56 @@ class RDHOrchestrator:
         if self._exit_manager:
             s._exit_manager_ref = self._exit_manager
 
+        return s
+
+    async def _init_strategy_d(self) -> Any:
+        """Initialize Strategy D: NBA Green Book Engine.
+
+        Supports paper and live execution modes.
+        Set D_EXECUTION_MODE=live in .env to enable real CLOB trading.
+        """
+        import json
+        import os
+        import sqlite3
+        from pathlib import Path
+
+        from arbo.strategies.strategy_d_nba import StrategyDNba
+
+        execution_mode = os.getenv("D_EXECUTION_MODE", "paper")
+        live_executor = None
+
+        if execution_mode == "live":
+            from arbo.core.live_executor import LiveExecutor
+            if self._poly_client_readonly is not None:
+                live_executor = LiveExecutor(self._poly_client_readonly)
+                logger.info("d_live_executor_ready")
+            else:
+                logger.warning("d_live_executor_no_client", msg="Falling back to paper mode")
+                execution_mode = "paper"
+
+        # Load Elo ratings + Pinnacle odds from local cache
+        elo_ratings: dict[str, tuple[float, float]] = {}
+        pinnacle_odds: dict[str, tuple[float, float]] = {}
+        cache_path = Path("arbo/data/strategy_d_model.json")
+        if cache_path.exists():
+            try:
+                data = json.loads(cache_path.read_text())
+                elo_ratings = {k: tuple(v) for k, v in data.get("elo", {}).items()}
+                pinnacle_odds = {k: tuple(v) for k, v in data.get("pinnacle", {}).items()}
+                logger.info("strategy_d_model_loaded",
+                            elo_teams=len(elo_ratings), pinnacle_games=len(pinnacle_odds))
+            except Exception as e:
+                logger.warning("strategy_d_model_load_failed", error=str(e))
+
+        s = StrategyDNba(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine if execution_mode == "paper" else None,
+            live_executor=live_executor,
+            orderbook_provider=self._orderbook_provider,
+            elo_ratings=elo_ratings,
+            pinnacle_odds=pinnacle_odds,
+        )
+        logger.info("strategy_d_initialized", execution_mode=execution_mode)
         return s
 
     async def _init_strategy_b2(self) -> Any:
@@ -1469,6 +1523,9 @@ class RDHOrchestrator:
         if self._strategy_b3 is not None:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 5))         # entry scan every 5s (faster signal detection)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
+        if self._strategy_d is not None:
+            task_defs.append(("strategy_D", self._run_strategy_d, 60))          # NBA scan every 60s (fast edge detection)
+            task_defs.append(("D_exit_monitor", self._run_d_exit_check, 30))    # exit check every 30s
 
         # B3 Chainlink price recorder (every 5s for precise btc_at_start)
         if self._strategy_b3 is not None:
@@ -1736,6 +1793,56 @@ class RDHOrchestrator:
                         count=len(shadow_exits),
                         tokens=[e.token_id[:20] for e in shadow_exits],
                     )
+
+    async def _run_strategy_d(self) -> None:
+        """Run Strategy D: NBA Green Book Engine — entry scan."""
+        if self._strategy_d is None:
+            return
+
+        try:
+            nba_markets = await self._discover_nba_markets()
+        except Exception as e:
+            logger.warning("strategy_d_discover_failed", error=str(e))
+            return
+
+        if not nba_markets:
+            return
+
+        signals = self._strategy_d.generate_signals(nba_markets)
+        entered = 0
+        for sig in signals:
+            pos = await self._strategy_d.execute_entry(sig)
+            if pos is not None:
+                entered += 1
+        if entered > 0:
+            logger.info("strategy_d_entries", count=entered, signals=len(signals))
+            if self._paper_engine is not None:
+                await self._paper_engine.sync_positions_to_db()
+
+    async def _run_d_exit_check(self) -> None:
+        """Check Strategy D positions for exit every 60s."""
+        if self._strategy_d is None or not self._strategy_d._positions:
+            return
+        if self._orderbook_provider is None:
+            return
+
+        token_ids = [p.token_id for p in self._strategy_d._positions.values()]
+        snapshots = await self._orderbook_provider.get_snapshots_batch(
+            token_ids, neg_risk=False
+        )
+        current_prices: dict[str, float] = {}
+        for tid, snap in snapshots.items():
+            if snap is not None and snap.best_bid is not None:
+                current_prices[tid] = float(snap.best_bid)
+
+        exits = self._strategy_d.check_exits(current_prices)
+        if exits:
+            logger.info("strategy_d_exits", count=len(exits))
+
+    async def _discover_nba_markets(self) -> list:
+        """Discover active NBA markets on Polymarket (see strategy_d_discovery_nba.py)."""
+        from arbo.strategies.strategy_d_discovery_nba import discover_nba_markets
+        return await discover_nba_markets(self._gamma_client if hasattr(self, "_gamma_client") else None)
 
     async def _run_strategy_c2(self) -> None:
         """Run Strategy C2: EMOS + Edge Exit Fusion — entry scan only.
