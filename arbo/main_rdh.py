@@ -1250,7 +1250,15 @@ class RDHOrchestrator:
                         ss.total_pnl = Decimal(str(total_pnl))
 
                 # DUAL-MODE: compute LIVE PnL from trade_details (not paper actual_pnl)
-                # Only count trades where live fill actually happened
+                # Filter to exit_status that represents a REAL outcome:
+                #   - 'resolution': Chainlink oracle payout (token → $1 or $0)
+                #   - 'filled': successful early maker sell (pre-V6.0 legacy)
+                #   - 'partial': partial sell fill (rare)
+                # Exclude 'failed': DB artifact — paper sold but live sell failed,
+                # exit_price recorded as $0 which falsely reports -entry_cost loss.
+                # Position actually stayed held to resolution (never-sell) and was
+                # auto-redeemed later with real Chainlink outcome not reflected here.
+                # Matches runtime counter logic in _run_b3_exit_check.
                 for dual_strat in DUAL_MODE_STRATEGIES:
                     result = await session.execute(
                         sa.text("""
@@ -1267,6 +1275,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
                               AND (notes IS NULL OR notes != 'pre-validation')
                         """),
                         {"strat": dual_strat},
@@ -1316,7 +1325,7 @@ class RDHOrchestrator:
                     if ss is not None:
                         ss.weekly_pnl = Decimal(str(weekly_pnl))
 
-                # Dual-mode weekly PnL from live fields
+                # Dual-mode weekly PnL from live fields (same filter as total)
                 for dual_strat in DUAL_MODE_STRATEGIES:
                     result = await session.execute(
                         sa.text("""
@@ -1331,6 +1340,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
                               AND resolved_at >= :week_start
                               AND (notes IS NULL OR notes != 'pre-validation')
                         """),
@@ -1362,7 +1372,7 @@ class RDHOrchestrator:
                 )
                 daily_paper = float(result.scalar() or 0)
 
-                # Dual-mode strategies: live PnL from trade_details
+                # Dual-mode strategies: live PnL from trade_details (same filter)
                 daily_live = 0.0
                 for dual_strat in DUAL_MODE_STRATEGIES:
                     result = await session.execute(
@@ -1378,6 +1388,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
                               AND (notes IS NULL OR notes != 'pre-validation')
                               AND resolved_at >= :since
                         """),
@@ -1416,6 +1427,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
                               AND (notes IS NULL OR notes != 'pre-validation')
                               AND resolved_at >= :since
                         """),
@@ -2646,18 +2658,36 @@ class RDHOrchestrator:
             logger.debug("c2_slack_notify_error", error=str(e))
 
     async def _get_b3_total_pnl_from_db(self, strategy: str = "B3") -> float:
-        """Get B3 (or B3_15M) total P&L from DB (source of truth, survives restarts)."""
+        """Get B3 (or B3_15M) LIVE total P&L from DB.
+
+        Returns realized LIVE PnL (Chainlink resolutions + successful maker sells).
+        Excludes 'failed' exit status (DB artifact from pre-V6.0 where paper sold
+        but live sell failed, exit_price recorded as $0). Matches runtime counter.
+        """
         try:
             import sqlalchemy as _sa
 
-            from arbo.utils.db import PaperTrade, get_session_factory
+            from arbo.utils.db import get_session_factory
 
             factory = get_session_factory()
             async with factory() as session:
                 result = await session.execute(
-                    _sa.select(_sa.func.coalesce(_sa.func.sum(PaperTrade.actual_pnl), 0))
-                    .where(PaperTrade.strategy == strategy)
-                    .where(PaperTrade.status.in_(["won", "lost", "sold"]))
+                    _sa.text("""
+                        SELECT COALESCE(SUM(
+                            ((trade_details->>'live_exit_price')::float
+                            - (trade_details->>'live_entry_price')::float)
+                            * (trade_details->>'live_entry_shares')::float
+                        ), 0) as live_pnl
+                        FROM paper_trades
+                        WHERE strategy = :strat
+                          AND status IN ('won','lost','sold')
+                          AND trade_details->>'live_entry_price' IS NOT NULL
+                          AND (trade_details->>'live_entry_shares')::float > 0
+                          AND trade_details->>'live_exit_price' IS NOT NULL
+                          AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                          AND (notes IS NULL OR notes != 'pre-validation')
+                    """),
+                    {"strat": strategy},
                 )
                 return float(result.scalar() or 0)
         except Exception:
