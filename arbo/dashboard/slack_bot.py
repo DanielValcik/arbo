@@ -220,17 +220,42 @@ class SlackBot:
     # ------------------------------------------------------------------
 
     async def _post(self, channel: str, text: str = "", blocks: list[dict[str, Any]] | None = None) -> None:
-        """Low-level post to a specific channel."""
+        """Low-level post to a specific channel.
+
+        Logs every send (forensic 2026-04-12) so we can trace origin of
+        unexpected Slack messages. stack trace at DEBUG level for drill-down.
+        """
         if self._app is None:
             logger.warning("slack_not_connected", action="post")
             return
+
+        # Forensic logging — capture caller so we can trace "ghost" messages
+        import traceback
+        stack = traceback.extract_stack(limit=5)
+        # Skip _post itself; caller is one level up
+        caller = f"{stack[-2].filename.split('/')[-1]}:{stack[-2].lineno}:{stack[-2].name}"
+        logger.info(
+            "slack_post_send",
+            channel=channel,
+            text_preview=text[:120] if text else "",
+            has_blocks=bool(blocks),
+            caller=caller,
+        )
+
         try:
             kwargs: dict[str, Any] = {"channel": channel, "text": text or "Arbo"}
             if blocks:
                 kwargs["blocks"] = blocks
-            await self._app.client.chat_postMessage(**kwargs)
+            resp = await self._app.client.chat_postMessage(**kwargs)
+            # Log the message ts so we can correlate with Slack UI timestamps
+            logger.info(
+                "slack_post_ok",
+                channel=channel,
+                slack_ts=resp.get("ts") if hasattr(resp, "get") else None,
+                caller=caller,
+            )
         except Exception as e:
-            logger.error("slack_send_error", error=str(e), channel=channel)
+            logger.error("slack_send_error", error=str(e), channel=channel, caller=caller)
 
     # --- #daily-brief (informational, read-only) ---
 
