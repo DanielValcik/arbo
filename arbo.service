@@ -23,7 +23,11 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
-ReadWritePaths=/opt/arbo/models /opt/arbo/logs /home/arbo/.cache /home/arbo/.postgresql /opt/cryptoarb/production_data
+# /opt/arbo/arbo is required so Python can regenerate __pycache__/*.pyc after
+# git pull updates source files. Without this, stale pyc files cause running
+# service to use OLD bytecode even after deploys (silent fail on write to
+# sandbox-protected path). See forensic analysis 2026-04-12.
+ReadWritePaths=/opt/arbo/arbo /opt/arbo/models /opt/arbo/logs /home/arbo/.cache /home/arbo/.postgresql /opt/cryptoarb/production_data
 
 # Memory limit — e5-large-v2 model uses ~1.3GB, uvicorn adds ~100MB
 MemoryMax=3.5G
