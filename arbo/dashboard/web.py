@@ -2467,6 +2467,14 @@ async def api_polymarket_wallet(
             if size <= 0:
                 continue
             cur_val = float(pos.get("currentValue", 0))
+            # Skip dead loser tokens (resolved markets where our side lost
+            # and the shares are stuck at $0 forever — not pending redeem,
+            # just worthless dust). Threshold of $0.10 filters these but
+            # keeps real active positions with low prices (e.g., longshots).
+            # Only apply filter if the position is also flagged non-redeemable
+            # and has effectively zero value, to avoid filtering legit thin positions.
+            if cur_val < 0.10 and not pos.get("redeemable"):
+                continue
             avg_price = float(pos.get("avgPrice", 0))
             positions.append({
                 "title": pos.get("title", ""),
@@ -2475,6 +2483,9 @@ async def api_polymarket_wallet(
                 "avg_price": round(avg_price, 3),
                 "current_value": round(cur_val, 2),
                 "pnl": round(cur_val - size * avg_price, 2),
+                "redeemable": bool(pos.get("redeemable", False)),
+                "asset": str(pos.get("asset") or ""),
+                "condition_id": pos.get("conditionId", ""),
             })
         result["positions"] = positions
         result["total_value"] = round(sum(p["current_value"] for p in positions), 2)

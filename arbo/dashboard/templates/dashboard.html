@@ -4039,19 +4039,21 @@
             if (wallet && wallet.balance !== undefined) {
                 const bal = wallet.balance || 0;
                 const posList = wallet.positions || [];
-                // Split positions: "pending redeem" = effective price near $1 or $0
-                // (market resolved, shares waiting for auto-redeem every 10 min).
-                // "open" = still-active markets (price in the middle).
+                // Split positions using Polymarket's `redeemable` flag (authoritative):
+                //   - redeemable=true → resolved winner, waiting for auto-redeem
+                //   - active (not redeemable, value > 0) → market still running
+                // Dead losers (size > 0 but currentValue = 0 and NOT redeemable)
+                // are filtered at API level, so they don't appear here.
                 const activePositions = [];
                 const pendingPositions = [];
                 for (const p of posList) {
                     if (!(p.size > 0) || p.current_value === undefined) continue;
-                    const effPrice = p.size > 0 ? p.current_value / p.size : 0;
-                    if (effPrice >= 0.98 || effPrice <= 0.02) {
+                    if (p.redeemable === true) {
                         pendingPositions.push(p);
-                    } else {
+                    } else if (p.current_value >= 0.10) {
                         activePositions.push(p);
                     }
+                    // else: dead token with no value and not redeemable — skip
                 }
                 const openCapital = activePositions.reduce((s, p) => s + p.current_value, 0);
                 const pendingValue = pendingPositions.reduce((s, p) => s + p.current_value, 0);
@@ -4096,13 +4098,13 @@
                     document.getElementById('lb3WalletPositionsList').innerHTML = allShown
                         .map(p => {
                             const c = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
-                            const effPrice = p.size > 0 ? p.current_value / p.size : 0;
-                            const pending = effPrice >= 0.98 || effPrice <= 0.02;
-                            const tag = pending ? '<span style="color:#a855f7;font-size:9px;margin-left:4px">[redeem]</span>' : '';
+                            const tag = p.redeemable ? '<span style="color:#a855f7;font-size:9px;margin-left:4px">[redeem]</span>' : '';
                             return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05)">`
                                 + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${p.title} (${p.outcome})${tag}</span>`
                                 + `<span style="color:${c};white-space:nowrap">$${p.current_value.toFixed(2)}</span></div>`;
                         }).join('');
+                } else {
+                    document.getElementById('lb3WalletPositionsList').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:6px;font-size:11px">Zadne aktivni pozice</div>';
                 }
             }
         } catch (e) { /* wallet optional */ }
@@ -5250,8 +5252,22 @@
             if (wrEl) wrEl.textContent = resolvedCount > 0 ? (100 * wins / resolvedCount).toFixed(0) + '%' : '--';
             const tradesEl = document.getElementById('lb315mTrades');
             if (tradesEl) tradesEl.textContent = resolvedCount;
+            // 15m ratio: 1$ → $X (same format as 5-min lb3Ratio)
             const ratioEl = document.getElementById('lb315mRatio');
-            if (ratioEl) ratioEl.textContent = resolvedCount > 0 ? `(${wins}W / ${resolvedCount - wins}L)` : '';
+            if (ratioEl) {
+                const totalInvested15m = liveClosed.reduce((s, t) => {
+                    const td = t.trade_details || {};
+                    return s + parseFloat(td.live_entry_price || 0) * parseFloat(td.live_entry_shares || 0);
+                }, 0);
+                if (totalInvested15m > 0) {
+                    const ratio = (totalInvested15m + totalLivePnl) / totalInvested15m;
+                    const winsLossesStr = `${wins}W/${resolvedCount - wins}L`;
+                    ratioEl.innerHTML = `<span style="color:${ratio >= 1 ? 'var(--green)' : 'var(--red)'}">(1$ \u2192 $${ratio.toFixed(2)})</span>`
+                        + ` <span style="color:var(--text-dim);margin-left:4px">${winsLossesStr}</span>`;
+                } else {
+                    ratioEl.textContent = '';
+                }
+            }
             const posCountEl = document.getElementById('lb315mPositions');
             if (posCountEl) posCountEl.textContent = livePositions.length;
 
