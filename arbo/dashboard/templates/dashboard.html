@@ -1485,8 +1485,47 @@
                 </div>
             </div>
 
-            <!-- Polymarket Wallet (next to overview) -->
-            <div class="card" style="border-top:3px solid var(--gold)">
+            <!-- B3 15-min Overview (next to 5-min) -->
+            <div class="card" style="border-top:3px solid #e3b341">
+                <div class="card-title">B3 15m Big Move Scalper <span style="background:#e3b341;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div id="lb315mOverviewNew" style="font-size:12px">
+                    <div style="text-align:center;padding:12px;color:var(--text-dim)">
+                        <div style="font-size:28px;font-weight:700" id="lb315mTotalPnl">$0.00</div>
+                        <div>Live P&L (15m) <span id="lb315mRatio" style="font-size:14px;font-weight:600;margin-left:8px;color:var(--text-dim)"></span></div>
+                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+                            <div style="background:rgba(227,179,65,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Denne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb315mDailyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb315mDailyProj">--</div>
+                            </div>
+                            <div style="background:rgba(227,179,65,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Tydne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb315mWeeklyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb315mWeeklyProj">--</div>
+                            </div>
+                            <div style="background:rgba(227,179,65,0.06);border-radius:6px;padding:8px">
+                                <div style="font-size:9px;color:var(--text-dim);margin-bottom:2px">Mesicne</div>
+                                <div style="font-size:14px;font-weight:700" id="lb315mMonthlyROI">--</div>
+                                <div style="font-size:10px;color:#58a6ff;margin-top:2px" id="lb315mMonthlyProj">--</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;display:flex;justify-content:space-around">
+                            <div><span id="lb315mTrades" style="font-weight:700">0</span><br>Trades</div>
+                            <div><span id="lb315mWinRate" style="font-weight:700">--</span><br>Win Rate</div>
+                            <div><span id="lb315mDeployed" style="font-weight:700">$0</span><br>Deployed</div>
+                            <div><span id="lb315mPositions" style="font-weight:700">0</span><br>Positions</div>
+                        </div>
+                        <div style="margin-top:10px;padding:8px;background:rgba(227,179,65,0.06);border-radius:6px;font-size:10px;text-align:left">
+                            <div style="font-weight:600;color:#e3b341;margin-bottom:4px">15-min specifika</div>
+                            <div>Capital $75 · daily loss $20 · max bet $20</div>
+                            <div style="margin-top:2px;color:var(--text-dim)">Shadow autoresearch (144 signalu, 5-fold CV)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Polymarket Wallet (full width below both overviews) -->
+            <div class="card grid-full" style="border-top:3px solid var(--gold)">
                 <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
                 <div style="padding:12px">
                     <!-- Portfolio value -->
@@ -1518,17 +1557,25 @@
                 <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim);padding:0 12px 8px"></div>
             </div>
 
-            <!-- B3 LIVE Cumulative P&L Chart -->
+            <!-- B3 LIVE Cumulative P&L Chart (5-min + 15-min stacked) -->
             <div class="card grid-full" style="border-top:3px solid #3fb950">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span><span id="lb3LiveCumStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
-                <div class="chart-container" style="height:180px">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Kumulativni P&L <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span>
+                    <span id="lb3LiveCumStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    <span style="color:#3fb950;font-weight:600">━ 5-min</span>
+                    <span style="margin-left:12px;color:#e3b341;font-weight:600">━ 15-min</span>
+                    <span id="lb315mCumStats" style="margin-left:12px"></span>
+                </div>
+                <div class="chart-container" style="height:220px">
                     <canvas id="b3LiveCumPnlChart"></canvas>
                 </div>
             </div>
 
             <!-- Model Info + Expectation vs Reality (full width, 2 columns) -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Model: Big-Move-Scalper V6.0</div>
+                <div class="card-title">Model: Big-Move-Scalper V6.0 <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">5-min</span></div>
                 <div style="display:flex;gap:20px;font-size:11px">
                     <div style="flex:0 0 auto;min-width:280px">
                         <div style="font-weight:600;color:var(--green);margin-bottom:6px">Dual Filter: velocity + dir_delta</div>
@@ -1565,6 +1612,51 @@
                         <div style="text-align:center;font-size:10px;padding:4px;border-radius:4px;margin-bottom:8px" id="lb3Verdict"></div>
                         <div class="chart-container" style="height:160px">
                             <canvas id="b3ExpVsRealChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Info + Expectation vs Reality for B3_15M (stacked below 5-min, same layout) -->
+            <div class="card grid-full" style="border-top:3px solid #e3b341">
+                <div class="card-title">Model: B3-15m-Scalper-Shadow-Rank1 <span style="background:#e3b341;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">15-min</span></div>
+                <div style="display:flex;gap:20px;font-size:11px">
+                    <div style="flex:0 0 auto;min-width:280px">
+                        <div style="font-weight:600;color:#e3b341;margin-bottom:6px">Shadow Autoresearch Filter</div>
+                        <table style="width:100%">
+                            <tbody>
+                                <tr><td>Live filter</td><td style="font-weight:700">edge &ge; 0.30 + btc_move &le; $80 + gap &le; 0.30</td></tr>
+                                <tr><td>BTC move cap</td><td>&le; $80 (nad = reversal risk, 15m SPECIFIC)</td></tr>
+                                <tr><td>Market gap</td><td>&le; 0.30 (model vs best_ask)</td></tr>
+                                <tr><td>Fill price</td><td style="color:#e3b341">Bez capu (OPAK 5-min — vysoky fill = nejlepsi)</td></tr>
+                                <tr><td>Entry minuty</td><td>4-11 (vs 5-min 2-3)</td></tr>
+                                <tr><td>Resolution</td><td>Chainlink oracle + auto-redeem</td></tr>
+                                <tr><td>Exit mode</td><td>Never-sell (hold to resolution)</td></tr>
+                                <tr><td>Shadow WR</td><td style="color:var(--green)">94.4% (49t, 5-fold CV)</td></tr>
+                                <tr><td>Shadow avg PnL</td><td>$0.222/share (sigma 0.103)</td></tr>
+                                <tr><td>Odhad tradu/den</td><td>~5-8</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="flex:1;min-width:300px">
+                        <div style="font-weight:600;color:#e3b341;margin-bottom:8px">Expectation vs Reality <span style="font-weight:400;font-size:9px;color:var(--text-dim)">(od 12.4. 08:33)</span></div>
+                        <div style="display:flex;gap:8px;margin-bottom:8px">
+                            <div style="flex:1;text-align:center;background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:6px;padding:8px">
+                                <div style="font-weight:600;margin-bottom:4px;color:#58a6ff">OCEKAVANI</div>
+                                <div>WR: <b>94%</b></div>
+                                <div>Avg fill: <b>$0.70</b></div>
+                                <div>Avg PnL: <b>$0.22/share</b></div>
+                            </div>
+                            <div style="flex:1;text-align:center;background:rgba(227,179,65,0.08);border:1px solid rgba(227,179,65,0.2);border-radius:6px;padding:8px">
+                                <div style="font-weight:600;margin-bottom:4px;color:#e3b341">REALITA</div>
+                                <div>WR: <b id="lb315mRealWR">--</b></div>
+                                <div>Avg fill: <b id="lb315mRealFill">--</b></div>
+                                <div>Avg PnL: <b id="lb315mRealAvgPnl">--</b></div>
+                            </div>
+                        </div>
+                        <div style="text-align:center;font-size:10px;padding:4px;border-radius:4px;margin-bottom:8px" id="lb315mVerdict">Ceka na prvni live qualified trade</div>
+                        <div class="chart-container" style="height:160px">
+                            <canvas id="b315mExpVsRealChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1635,60 +1727,23 @@
             <!-- Paper cards removed — live only -->
         </div>
 
-        <!-- ============================================================ -->
-        <!-- B3_15M section — 15-min variant, separate cards on same tab   -->
-        <!-- ============================================================ -->
-        <div style="margin-top:32px;padding-top:16px;border-top:2px solid var(--border)">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                <div style="font-size:18px;font-weight:700;color:#e3b341">B3 15-min Scalper</div>
-                <span style="background:#e3b341;color:#000;padding:2px 8px;border-radius:4px;font-size:10px">LIVE</span>
-                <span style="font-size:11px;color:var(--text-dim)">BTC 15-min Up/Down — separate model, separate Watchdog, separate capital</span>
+            <!-- B3_15M Open + Closed tables (below Model card) -->
+            <div class="card" style="border-top:3px solid #e3b341">
+                <div class="card-title">B3 15m — Open Positions <span id="lb315mOpenCount" style="color:var(--text-dim);font-size:11px">(0)</span></div>
+                <div id="lb315mOpenTable" style="max-height:260px;overflow-y:auto">
+                    <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné otevřené live pozice</div>
+                </div>
             </div>
-            <div class="grid">
-                <!-- B3_15M Overview -->
-                <div class="card" style="border-top:3px solid #e3b341">
-                    <div class="card-title">B3 15m Overview</div>
-                    <div id="lb315mOverview" style="font-size:12px">
-                        <div style="text-align:center;padding:12px;color:var(--text-dim)">
-                            <div style="font-size:28px;font-weight:700" id="lb315mTotalPnl">$0.00</div>
-                            <div>Live P&L (15m) <span id="lb315mRatio" style="font-size:14px;font-weight:600;margin-left:8px;color:var(--text-dim)"></span></div>
-                            <div style="margin-top:14px;display:flex;justify-content:space-around">
-                                <div><span id="lb315mTrades" style="font-weight:700">0</span><br>Trades</div>
-                                <div><span id="lb315mWinRate" style="font-weight:700">--</span><br>Win Rate</div>
-                                <div><span id="lb315mDeployed" style="font-weight:700">$0</span><br>Deployed</div>
-                                <div><span id="lb315mPositions" style="font-weight:700">0</span><br>Positions</div>
-                            </div>
-                            <div style="margin-top:10px;padding:8px;background:rgba(227,179,65,0.06);border-radius:6px;font-size:10px;text-align:left">
-                                <div style="font-weight:600;color:#e3b341;margin-bottom:4px">Model (shadow autoresearch 2026-04-12)</div>
-                                <div>min_edge ≥0.30 · btc_move ≤$80 · gap ≤0.30 · entry min 4-11</div>
-                                <div style="margin-top:2px;color:var(--text-dim)">Capital $75 · daily loss $20 · max bet $20</div>
-                            </div>
-                        </div>
-                    </div>
+            <div class="card" style="border-top:3px solid #e3b341">
+                <div class="card-title">B3 15m — Watchdog Status</div>
+                <div id="lb315mWatchdog" style="padding:12px;font-size:12px">
+                    <div style="color:var(--text-dim);text-align:center">Autonomní optimizer — čeká na prvních 20 tradů pro baseline</div>
                 </div>
-
-                <!-- B3_15M Open Positions -->
-                <div class="card" style="border-top:3px solid #e3b341">
-                    <div class="card-title">B3 15m — Open Positions <span id="lb315mOpenCount" style="color:var(--text-dim);font-size:11px">(0)</span></div>
-                    <div id="lb315mOpenTable" style="max-height:260px;overflow-y:auto">
-                        <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné otevřené pozice</div>
-                    </div>
-                </div>
-
-                <!-- B3_15M Closed Trades -->
-                <div class="card" style="border-top:3px solid #e3b341;grid-column:span 2">
-                    <div class="card-title">B3 15m — Posledních 20 uzavřených</div>
-                    <div id="lb315mClosedTable" style="max-height:340px;overflow-y:auto">
-                        <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné uzavřené tradů</div>
-                    </div>
-                </div>
-
-                <!-- B3_15M Watchdog status -->
-                <div class="card" style="border-top:3px solid #e3b341;grid-column:span 2">
-                    <div class="card-title">B3 15m — Watchdog Status</div>
-                    <div id="lb315mWatchdog" style="padding:12px;font-size:12px">
-                        <div style="color:var(--text-dim);text-align:center">Autonomní optimizer — čeká na prvních 20 tradů pro baseline</div>
-                    </div>
+            </div>
+            <div class="card grid-full" style="border-top:3px solid #e3b341">
+                <div class="card-title">B3 15m — Posledních 20 uzavřených (LIVE only)</div>
+                <div id="lb315mClosedTable" style="max-height:340px;overflow-y:auto">
+                    <div style="color:var(--text-dim);text-align:center;padding:20px">Žádné live uzavřené tradů (čeká na první qualified signál)</div>
                 </div>
             </div>
         </div>
@@ -4321,10 +4376,70 @@
                 const lCumCtx = document.getElementById('b3LiveCumPnlChart');
                 if (lCumCtx) {
                     if (window._b3LiveCumChart) window._b3LiveCumChart.destroy();
+                    // Build combined label set: 5-min series + pad 15-min to match (or use separate x)
+                    const datasets = [{
+                        label: '5-min',
+                        data: lValues,
+                        borderColor: '#3fb950',
+                        backgroundColor: 'rgba(63,185,80,0.08)',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: lPointRadius,
+                        pointBackgroundColor: lSegColors,
+                        borderWidth: 2,
+                        segment: {
+                            borderColor: ctx2 => {
+                                const i = ctx2.p1DataIndex;
+                                return !isResolved[i] ? '#e3b34166' : ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149';
+                            },
+                            borderDash: ctx2 => !isResolved[ctx2.p1DataIndex] ? [4, 4] : [],
+                        },
+                    }];
+                    // Append 15-min series if fetchLiveB315M has populated it
+                    const s15 = window._b3_15m_cum;
+                    let labels = lLabels;
+                    if (s15 && Array.isArray(s15.values) && s15.values.length > 0) {
+                        // Align x-axis: use the longer of the two as the label set
+                        if (s15.labels && s15.labels.length > lLabels.length) {
+                            labels = s15.labels;
+                        }
+                        datasets.push({
+                            label: '15-min',
+                            data: s15.values,
+                            borderColor: '#e3b341',
+                            backgroundColor: 'rgba(227,179,65,0.06)',
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#e3b341',
+                            borderWidth: 2,
+                        });
+                    }
                     window._b3LiveCumChart = new Chart(lCumCtx, {
                         type: 'line',
-                        data: { labels: lLabels, datasets: [{ label: 'Live Kumulativni P&L', data: lValues, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', fill: true, tension: 0.1, pointRadius: lPointRadius, pointBackgroundColor: lSegColors, borderWidth: 2, segment: { borderColor: ctx2 => { const i = ctx2.p1DataIndex; return !isResolved[i] ? '#e3b34166' : ctx2.p1.parsed.y >= ctx2.p0.parsed.y ? '#3fb950' : '#f85149'; }, borderDash: ctx2 => !isResolved[ctx2.p1DataIndex] ? [4, 4] : [] } }] },
-                        options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { const idx = c.dataIndex; const pending = !isResolved[idx]; return pending ? `$${c.raw.toFixed(2)} (ceka na Chainlink)` : `$${c.raw.toFixed(2)}`; } } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } } },
+                        data: { labels: labels, datasets: datasets },
+                        options: {
+                            animation: false,
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: c => {
+                                            const idx = c.dataIndex;
+                                            const ds = c.dataset.label || '';
+                                            if (ds === '5-min') {
+                                                const pending = !isResolved[idx];
+                                                return `5m: $${c.raw.toFixed(2)}` + (pending ? ' (ceka)' : '');
+                                            }
+                                            return `15m: $${c.raw.toFixed(2)}`;
+                                        },
+                                    },
+                                },
+                            },
+                            scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } },
+                        },
                     });
                 }
 
@@ -4752,6 +4867,133 @@
             if (ratioEl) ratioEl.textContent = resolvedCount > 0 ? `(${wins}W / ${resolvedCount - wins}L)` : '';
             const posCountEl = document.getElementById('lb315mPositions');
             if (posCountEl) posCountEl.textContent = livePositions.length;
+
+            // ROI (based on $75 capital, deploy date 2026-04-12 08:33 UTC)
+            {
+                const startCap15m = 75;
+                const deployDate = new Date('2026-04-12T08:33:00Z');
+                const now = new Date();
+                const hoursSince = Math.max((now - deployDate) / 3600000, 0.1);
+                const daysSince = hoursSince / 24;
+                const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+                const fmtUsd = v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0);
+                const clr = v => v >= 0 ? 'var(--green)' : 'var(--red)';
+                const _su = (id, txt, color) => { const e = document.getElementById(id); if (e) { e.textContent = txt; e.style.color = color; } };
+                const dailyActual = daysSince >= 1 ? totalLivePnl / daysSince : totalLivePnl;
+                const weeklyActual = daysSince >= 7 ? totalLivePnl / (daysSince/7) : totalLivePnl;
+                const monthlyActual = daysSince >= 30 ? totalLivePnl / (daysSince/30) : totalLivePnl;
+                _su('lb315mDailyROI', fmtUsd(dailyActual) + ' (' + fmt(dailyActual/startCap15m*100) + ')', clr(dailyActual));
+                _su('lb315mWeeklyROI', fmtUsd(weeklyActual) + ' (' + fmt(weeklyActual/startCap15m*100) + ')', clr(weeklyActual));
+                _su('lb315mMonthlyROI', fmtUsd(monthlyActual) + ' (' + fmt(monthlyActual/startCap15m*100) + ')', clr(monthlyActual));
+                const dailyRate = (totalLivePnl / startCap15m * 100) / Math.max(daysSince, 0.04);
+                const dailyProj = dailyRate / 100 * startCap15m;
+                _su('lb315mDailyProj', 'proj: ' + fmtUsd(dailyProj) + '/den', '#58a6ff');
+                _su('lb315mWeeklyProj', 'proj: ' + fmtUsd(dailyProj * 7) + '/tyd', '#58a6ff');
+                _su('lb315mMonthlyProj', 'proj: ' + fmtUsd(dailyProj * 30) + '/mes', '#58a6ff');
+            }
+
+            // Build 15m cumulative series for shared chart (paired with 5-min)
+            const liveClosedChron = liveClosed.slice().reverse();
+            const cum15Labels = [];
+            const cum15Values = [];
+            let cum15 = 0;
+            for (let i = 0; i < liveClosedChron.length; i++) {
+                const t = liveClosedChron[i];
+                const td = t.trade_details || {};
+                const lep = parseFloat(td.live_exit_price || 0);
+                const lip = parseFloat(td.live_entry_price || 0);
+                const sh = parseFloat(td.live_entry_shares || 0);
+                cum15 += (lep - lip) * sh;
+                cum15Labels.push('#' + (i + 1) + ' (15m)');
+                cum15Values.push(Math.round(cum15 * 100) / 100);
+            }
+            window._b3_15m_cum = { labels: cum15Labels, values: cum15Values };
+            const cumStatsEl = document.getElementById('lb315mCumStats');
+            if (cumStatsEl) {
+                const c = cum15 >= 0 ? 'var(--green)' : 'var(--red)';
+                cumStatsEl.innerHTML = resolvedCount > 0
+                    ? `<span style="color:${c}">15m PnL: ${cum15 >= 0 ? '+' : ''}$${cum15.toFixed(2)}</span>`
+                    : '<span style="color:var(--text-dim)">15m: zatim 0 tradu</span>';
+            }
+
+            // Expectation vs Reality (15m)
+            const liveFills = livePnls.map(p => p);
+            const fillPrices = liveClosed.map(t => parseFloat(t.trade_details?.live_entry_price || 0)).filter(f => f > 0);
+            const avgFill = fillPrices.length > 0 ? fillPrices.reduce((a, b) => a + b, 0) / fillPrices.length : 0;
+            // avg PnL per share (15m expectation is $0.22/share from shadow)
+            const avgPnlPerShare = (() => {
+                if (liveClosed.length === 0) return 0;
+                const shares = liveClosed.reduce((a, t) => a + parseFloat(t.trade_details?.live_entry_shares || 0), 0);
+                return shares > 0 ? totalLivePnl / shares : 0;
+            })();
+            const wr15 = resolvedCount > 0 ? (100 * wins / resolvedCount) : null;
+            const _se = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+            _se('lb315mRealWR', wr15 !== null ? wr15.toFixed(0) + '%' : '--');
+            _se('lb315mRealFill', avgFill > 0 ? '$' + avgFill.toFixed(2) : '--');
+            _se('lb315mRealAvgPnl', resolvedCount > 0 ? '$' + avgPnlPerShare.toFixed(3) + '/share' : '--');
+            const verdictEl = document.getElementById('lb315mVerdict');
+            if (verdictEl) {
+                if (resolvedCount === 0) {
+                    verdictEl.textContent = 'Ceka na prvni live qualified trade';
+                    verdictEl.style.color = 'var(--text-dim)';
+                    verdictEl.style.background = 'transparent';
+                } else {
+                    const margin = wr15 - 94;  // 94% is expected WR
+                    if (margin >= -7) {
+                        verdictEl.textContent = 'WR v ocekavani (margin ' + margin.toFixed(0) + 'pp)';
+                        verdictEl.style.color = 'var(--green)';
+                        verdictEl.style.background = 'rgba(63,185,80,0.08)';
+                    } else {
+                        verdictEl.textContent = 'WR pod ocekavanim (' + margin.toFixed(0) + 'pp)';
+                        verdictEl.style.color = 'var(--red)';
+                        verdictEl.style.background = 'rgba(248,81,73,0.08)';
+                    }
+                }
+            }
+
+            // Expectation vs Reality chart (15m)
+            const evr15Ctx = document.getElementById('b315mExpVsRealChart');
+            if (evr15Ctx) {
+                const EXP_PNL_PER_SHARE = 0.22;
+                const n = resolvedCount;
+                const maxTrades = Math.max(n, 20);
+                const expLabels = [];
+                const expValues = [];
+                const realValues = [];
+                let realCum = 0;
+                const avgShares = liveClosed.length > 0
+                    ? liveClosed.reduce((a, t) => a + parseFloat(t.trade_details?.live_entry_shares || 0), 0) / liveClosed.length
+                    : 20;
+                for (let i = 0; i <= maxTrades; i++) {
+                    expLabels.push(i === 0 ? 'Start' : '#' + i);
+                    expValues.push(Math.round(i * EXP_PNL_PER_SHARE * avgShares * 100) / 100);
+                    if (i === 0) { realValues.push(0); }
+                    else if (i <= n) {
+                        realCum += livePnls[i - 1];
+                        realValues.push(Math.round(realCum * 100) / 100);
+                    } else {
+                        realValues.push(null);
+                    }
+                }
+                if (window._b315mExpVsRealChart) window._b315mExpVsRealChart.destroy();
+                window._b315mExpVsRealChart = new Chart(evr15Ctx, {
+                    type: 'line',
+                    data: {
+                        labels: expLabels,
+                        datasets: [
+                            { label: 'Ocekavani', data: expValues, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.06)', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2, borderDash: [5, 5] },
+                            { label: 'Realita', data: realValues, borderColor: '#e3b341', backgroundColor: 'rgba(227,179,65,0.08)', fill: true, tension: 0.1, pointRadius: 2, borderWidth: 2 },
+                        ],
+                    },
+                    options: {
+                        animation: false,
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, position: 'top', labels: { color: '#888', font: { size: 10 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.raw?.toFixed(2) || '--'}` } } },
+                        scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v } } },
+                    },
+                });
+            }
 
             // Open live positions table
             const openCountEl = document.getElementById('lb315mOpenCount');
