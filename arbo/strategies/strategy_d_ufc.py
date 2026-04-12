@@ -34,16 +34,17 @@ class StrategyDUfc(StrategyDCore):
     STRATEGY_NAME = "D_UFC"
     STRATEGY_LABEL = "UFC Green Book"
 
-    # Sweep winner #7 params
+    # Sweep v2 winner #8 (post match-fix): score=38.4, +$178, 355 trades
+    # DD 3%, Sharpe 14.07, WR 59%, GB rate 59%
     MIN_EDGE = 0.05          # Lower than NBA (0.16) — UFC has subtle edges
-    MAX_EDGE = 0.30          # Wider max (UFC market is less efficient)
+    MAX_EDGE = 0.30
     MIN_PRICE = 0.20
     MAX_PRICE = 0.70
 
-    GREEN_BOOK_DELTA = 0.20  # Optimal from sweep (avg $19 vs $9/$6/$1)
+    GREEN_BOOK_DELTA = 0.20  # Optimal — UFC round swings are bigger
     STOP_LOSS_DELTA = 0.25   # Wider SL needed for UFC volatility
-    MAX_HOLD_FRACTION = 0.40 # Exit early — sweep showed 0.4/0.5/0.6 similar
-    GAME_DURATION_HOURS = 1.5  # Avg UFC fight window
+    MAX_HOLD_FRACTION = 1.0  # Hold to resolution — Pinnacle accurate, few fights
+    GAME_DURATION_HOURS = 1.5
 
     BOTH_SIDES = True
     MAX_CONCURRENT = 4

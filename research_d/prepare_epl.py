@@ -1,14 +1,20 @@
-"""Strategy D UFC — Backtest Harness.
+"""Strategy D EPL — Backtest Harness.
 
-UFC-specific backtest based on prepare.py (NBA). Key differences:
-  - Fighter name parsing (last-name key, not team abbrev)
-  - Pinnacle-only model (UFC has no Elo ratings)
-  - UFC-specific keywords filter
-  - Shorter GAME_DURATION (fights ~1.5h vs NBA 2.5h)
+EPL (English Premier League) moneyline + draw green booking.
+
+Key differences from NBA/UFC:
+  - 3-way outcomes: home_win / draw / away_win
+  - Polymarket splits into binary markets per outcome
+  - Question formats:
+    * "Will X beat Y?" — X wins (home or away team A)
+    * "Will X win on DATE?" — X wins (single-team question)
+    * "Will X vs Y end in a draw?" — draw outcome
+  - REAL game dates (unlike UFC's 2025-01-01 placeholder)
+  - Pinnacle from football-data.co.uk (1,940 games, free historical)
 
 Usage:
-    PYTHONPATH=. python3 research_d/prepare_ufc.py
-    PYTHONPATH=. python3 research_d/prepare_ufc.py --limit 5000
+    PYTHONPATH=. python3 research_d/prepare_epl.py
+    PYTHONPATH=. python3 research_d/prepare_epl.py --limit 5000
 """
 
 from __future__ import annotations
@@ -18,8 +24,9 @@ import re
 import sqlite3
 import sys
 import time
+import unicodedata
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -27,122 +34,114 @@ DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_DB_PATH = DATA_DIR / "sports_backtest.sqlite"
 TIME_BUDGET = 7200
 
-# ── UFC parsing ───────────────────────────────────────────────────────
-
-_FIGHT_RE = [
-    re.compile(r"^(?:UFC\s+(?:Fight\s+Night|\d+|\w+)\s*:\s*)?(.+?)\s+vs?\.?\s+(.+?)(?:\s*\([^)]*\))?[\?\s]*$", re.IGNORECASE),
-]
-
 
 def _name_key(name: str) -> str:
-    """Normalize full fighter name for matching.
-
-    - Unicode NFD decomposition (Édgar → Edgar)
-    - Lowercase, strip non-alphanumeric
-    """
+    """Normalize team name (unicode, lowercase, alphanum)."""
     if not name:
         return ""
-    import unicodedata
-    normalized = unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode("ASCII")
-    return re.sub(r"[^a-z]", "", normalized.lower())
+    normalized = unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode()
+    # Strip common suffixes: FC, F.C., United, City, etc. (keep only unique part)
+    normalized = re.sub(r"\b(f\.?c\.?|fc)\b", "", normalized.lower())
+    return re.sub(r"[^a-z]", "", normalized)
 
-_NON_FIGHT_KEYWORDS = [
-    "o/u", "rounds", "method", "round ", "won by", "distance",
-    "submission", "ko or tko", "decision", "fight of the night",
-    "retirement", "belt", "title",
+
+# Question patterns (in priority order)
+_BEAT_RE = re.compile(r"[Ww]ill\s+(.+?)\s+beat\s+(.+?)[\?\s]*$")
+_SINGLE_WIN_RE = re.compile(r"[Ww]ill\s+(.+?)\s+win\s+on\s+\d{4}-\d{2}-\d{2}[\?\s]*$")
+_VS_DRAW_RE = re.compile(r"[Ww]ill\s+(.+?)\s+vs\.?\s+(.+?)\s+end\s+in\s+(?:a\s+)?draw[\?\s]*$")
+
+_NON_GAME_KEYWORDS = [
+    "mvp", "top scorer", "golden boot", "ballon d'or",
+    "relegation", "champions league spot", "title race",
+    "make the top 4", "finish", "total wins", "winner of",
 ]
 
 
-def _fighter_key(name: str) -> str:
-    """Normalize fighter name to uppercase last name."""
-    if not name:
-        return ""
-    # Strip parentheses and weightclass
-    cleaned = re.sub(r"\([^)]*\)", "", name)
-    cleaned = re.sub(r"[^a-zA-Z\s-]", "", cleaned).strip()
-    parts = cleaned.split()
-    if not parts:
-        return ""
-    # Use last word (last name), uppercase
-    last = parts[-1].upper()
-    # Reject generic words
-    if last in {"CARD", "PRELIMS", "MAIN", "EVENT", "UFC", "FIGHT", "NIGHT"}:
-        # Try second-to-last
-        if len(parts) >= 2:
-            return parts[-2].upper()
-        return ""
-    return last
-
-
-def _parse_ufc_fighters(question: str) -> tuple[str, str, str, str] | None:
-    """Returns (last_name_a, last_name_b, fullname_key_a, fullname_key_b)."""
+def _is_game_market(question: str) -> bool:
     if not question:
-        return None
+        return False
     lower = question.lower()
-    if any(kw in lower for kw in _NON_FIGHT_KEYWORDS):
-        return None
-    q = question.strip().rstrip("?").strip()
+    return not any(kw in lower for kw in _NON_GAME_KEYWORDS)
 
-    for pat in _FIGHT_RE:
-        m = pat.match(q)
-        if not m or not m.group(2):
-            continue
-        a_raw = m.group(1).strip()
-        b_raw = m.group(2).strip()
-        if len(a_raw) > 60 or len(b_raw) > 60:
-            continue
-        a = _fighter_key(a_raw)
-        b = _fighter_key(b_raw)
-        fk_a = _name_key(a_raw)
-        fk_b = _name_key(b_raw)
-        if a and b and a != b and len(a) >= 3 and len(b) >= 3:
-            return a, b, fk_a, fk_b
-    return None
-
-
-# ── Data structures ───────────────────────────────────────────────────
 
 @dataclass
-class UFCMarket:
+class EPLMarket:
     token_id: str
     game_id: str
     question: str
     won: int
     game_date: str
-    fighter_a: str        # Last name uppercase (e.g., "EMMETT")
-    fighter_b: str
-    fullname_key_a: str   # Normalized full name (e.g., "joshemmett")
-    fullname_key_b: str
-    prices: list[tuple[int, float]]
+    team_a: str          # Normalized team key
+    team_b: str          # Empty for single-team questions
+    outcome_type: str    # "team_a_wins", "draw", "single_team"
+    prices: list = None  # [(ts, price), ...]
+    def __post_init__(self):
+        if self.prices is None:
+            self.prices = []
+
+
+def _parse_epl_market(question: str) -> tuple[str, str, str] | None:
+    """Returns (team_a_key, team_b_key, outcome_type) or None."""
+    if not question or not _is_game_market(question):
+        return None
+    q = question.strip().rstrip("?").strip()
+
+    # Draw markets: "Will X vs Y end in a draw?"
+    m = _VS_DRAW_RE.search(q)
+    if m:
+        a = _name_key(m.group(1))
+        b = _name_key(m.group(2))
+        if a and b and a != b and len(a) >= 3 and len(b) >= 3:
+            return a, b, "draw"
+        return None
+
+    # Beat markets: "Will X beat Y?"
+    m = _BEAT_RE.search(q)
+    if m:
+        a = _name_key(m.group(1))
+        b = _name_key(m.group(2))
+        if a and b and a != b and len(a) >= 3 and len(b) >= 3:
+            return a, b, "team_a_wins"
+        return None
+
+    # Single team: "Will X win on DATE?"
+    m = _SINGLE_WIN_RE.search(q)
+    if m:
+        a = _name_key(m.group(1))
+        if a and len(a) >= 3:
+            return a, "", "single_team"
+        return None
+
+    return None
 
 
 # ── Data loading ──────────────────────────────────────────────────────
 
-def iter_ufc_markets(conn, min_prices: int):
-    """Stream UFC markets."""
+def iter_epl_markets(conn, min_prices: int):
     t0 = time.time()
     rows = conn.execute("""
         SELECT m.token_id, m.game_id, m.question, m.won, g.game_date
         FROM markets m JOIN games g ON m.game_id = g.game_id
-        WHERE m.won IS NOT NULL AND g.sport = 'ufc'
+        WHERE m.won IS NOT NULL AND g.sport = 'epl'
     """).fetchall()
-    print(f"  UFC resolved markets: {len(rows)}", flush=True)
+    print(f"  EPL resolved markets: {len(rows)}", flush=True)
 
     candidates = []
     for token_id, game_id, question, won, game_date in rows:
-        fighters = _parse_ufc_fighters(question)
-        if not fighters:
+        parsed = _parse_epl_market(question)
+        if not parsed:
             continue
-        candidates.append((token_id, game_id, question, won, game_date, *fighters))
-    print(f"  With parsed fighters: {len(candidates)}", flush=True)
+        ta, tb, outcome = parsed
+        candidates.append((token_id, game_id, question, won, game_date, ta, tb, outcome))
+    print(f"  Parsed: {len(candidates)}", flush=True)
 
     def _gen():
         loaded = 0
         skipped = 0
-        for token_id, game_id, question, won, game_date, fa, fb, fk_a, fk_b in candidates:
+        for tid, gid, q, won, gd, ta, tb, outcome in candidates:
             price_rows = conn.execute(
                 "SELECT ts, price FROM prices WHERE token_id = ? ORDER BY ts",
-                (token_id,),
+                (tid,),
             ).fetchall()
             prices = [(ts, p) for ts, p in price_rows if p and 0 < p < 1]
             if len(prices) < min_prices:
@@ -151,73 +150,136 @@ def iter_ufc_markets(conn, min_prices: int):
             loaded += 1
             if loaded % 500 == 0:
                 print(f"  ... {loaded} loaded ({time.time()-t0:.0f}s)", flush=True)
-            yield UFCMarket(
-                token_id=token_id, game_id=game_id, question=question,
-                won=won, game_date=game_date,
-                fighter_a=fa, fighter_b=fb,
-                fullname_key_a=fk_a, fullname_key_b=fk_b,
+            yield EPLMarket(
+                token_id=tid, game_id=gid, question=q, won=won,
+                game_date=gd, team_a=ta, team_b=tb, outcome_type=outcome,
                 prices=prices,
             )
-        print(f"  Done: {loaded} markets, {skipped} skipped (no prices), {time.time()-t0:.0f}s", flush=True)
+        print(f"  Done: {loaded} markets, {skipped} no-prices, {time.time()-t0:.0f}s", flush=True)
 
     return len(candidates), _gen()
 
 
-def load_pinnacle_ufc(conn) -> dict:
-    """Load UFC Pinnacle odds indexed by fighter pair (DATE-AGNOSTIC).
+def load_pinnacle_epl(conn) -> dict:
+    """Load EPL Pinnacle 3-way odds (home_win, away_win, draw).
 
-    PMD stores UFC markets with placeholder date 2025-01-01. Pinnacle has real
-    dates. Match by fighter name pair only.
+    Keyed by (team_a_key, team_b_key, date) — date helps disambiguate
+    multiple matches between same teams across season.
 
-    Returns: {(fk_a, fk_b): (prob_a, prob_b)} — both orderings stored.
+    Returns: {(key_a, key_b): [(date, home_prob, away_prob, draw_prob?), ...]}
     """
     import json
     rows = conn.execute("""
-        SELECT p.game_id, p.home_prob_novig, p.away_prob_novig, g.extra_json
+        SELECT p.game_id, p.home_prob_novig, p.away_prob_novig, p.draw_odds,
+               g.game_date, g.extra_json
         FROM pinnacle_odds p JOIN games g ON p.game_id = g.game_id
-        WHERE g.sport = 'ufc' AND p.home_prob_novig IS NOT NULL
+        WHERE g.sport = 'epl' AND p.home_prob_novig IS NOT NULL
     """).fetchall()
-    pin = {}
-    for gid, hp, ap, extra in rows:
+    pin = defaultdict(list)
+    for gid, hp, ap, draw_odds, gdate, extra in rows:
         if not (hp and ap and hp > 0 and ap > 0 and extra):
             continue
         try:
             ext = json.loads(extra)
         except Exception:
             continue
-        home_full = ext.get("home_full", "")
-        away_full = ext.get("away_full", "")
+        home_full = ext.get("home_team_full", "") or ext.get("home_full", "")
+        away_full = ext.get("away_team_full", "") or ext.get("away_full", "")
         if not home_full or not away_full:
             continue
         fk_home = _name_key(home_full)
         fk_away = _name_key(away_full)
         if not fk_home or not fk_away:
             continue
-        pin[(fk_home, fk_away)] = (float(hp), float(ap))
-        pin[(fk_away, fk_home)] = (float(ap), float(hp))
-    print(f"  UFC Pinnacle pair keys: {len(pin)} ({len(pin)//2} unique fights)", flush=True)
-    return pin
+        # Approx draw probability from remaining mass (if 2-way), or from draw_odds
+        # For football-data.co.uk, they provide home/draw/away odds. Let's check.
+        sum_2way = hp + ap
+        draw_prob = max(0.0, 1.0 - sum_2way)  # Default inferred from 2-way
+
+        entry = {
+            "date": gdate,
+            "home_prob": float(hp),
+            "away_prob": float(ap),
+            "draw_prob": draw_prob,
+        }
+        pin[(fk_home, fk_away)].append(entry)
+        # Also store reversed for lookups
+        pin[(fk_away, fk_home)].append({
+            "date": gdate,
+            "home_prob": float(ap),
+            "away_prob": float(hp),
+            "draw_prob": draw_prob,
+        })
+
+    print(f"  EPL Pinnacle pairs: {len(pin)} ({len(pin)//2} unique fixtures)", flush=True)
+    return dict(pin)
 
 
-# ── Model (Pinnacle-only for UFC) ─────────────────────────────────────
+# ── Model ─────────────────────────────────────────────────────────────
 
-def model_prob_ufc(game_date: str, fullname_key_a: str, fullname_key_b: str,
-                   pinnacle: dict) -> float | None:
-    """Pinnacle-only model. Match by fighter pair (date-agnostic, fuzzy substring)."""
-    if not fullname_key_a or not fullname_key_b:
+def model_prob_epl(market: EPLMarket, pinnacle: dict) -> float | None:
+    """Return probability that the YES side of market resolves true."""
+    ta, tb = market.team_a, market.team_b
+    outcome = market.outcome_type
+
+    if outcome == "single_team":
+        # "Will X win on DATE?" — need to find X as either home or away
+        # Search pinnacle for any fixture with X on given date
+        for (pk_a, pk_b), entries in pinnacle.items():
+            if ta != pk_a:
+                continue
+            for e in entries:
+                if e["date"] == market.game_date:
+                    # X is "home" side in our stored orientation (pk_a)
+                    # Return home_prob (which is ta winning when ta is first)
+                    return e["home_prob"]
+        # Fuzzy fallback: date-agnostic if team name substring matches
+        for (pk_a, pk_b), entries in pinnacle.items():
+            if ta in pk_a or pk_a in ta:
+                if entries and len(ta) >= 4 and len(pk_a) >= 4:
+                    # Prefer closest-date entry
+                    closest = min(entries, key=lambda e: abs(_date_diff(e["date"], market.game_date)))
+                    if _date_diff(closest["date"], market.game_date) <= 3:
+                        return closest["home_prob"]
         return None
-    # 1. Try exact pair match
-    p = pinnacle.get((fullname_key_a, fullname_key_b))
-    if p:
-        return p[0]
-    # 2. Fuzzy: substring match (either direction)
-    if len(fullname_key_a) >= 4 and len(fullname_key_b) >= 4:
-        for (pk_a, pk_b), (pa, pb) in pinnacle.items():
-            a_match = fullname_key_a in pk_a or pk_a in fullname_key_a
-            b_match = fullname_key_b in pk_b or pk_b in fullname_key_b
-            if a_match and b_match:
-                return pa
+
+    # Two-team markets
+    if not ta or not tb:
+        return None
+    # Try exact pair match first
+    entries = pinnacle.get((ta, tb), [])
+    if not entries:
+        # Fuzzy substring match
+        for (pk_a, pk_b), e_list in pinnacle.items():
+            a_match = ta in pk_a or pk_a in ta
+            b_match = tb in pk_b or pk_b in tb
+            if a_match and b_match and len(ta) >= 4 and len(tb) >= 4:
+                entries = e_list
+                break
+    if not entries:
+        return None
+
+    # Pick closest date
+    closest = min(entries, key=lambda e: abs(_date_diff(e["date"], market.game_date)))
+    if _date_diff(closest["date"], market.game_date) > 3:
+        return None  # Too far — probably wrong match
+
+    if outcome == "team_a_wins":
+        return closest["home_prob"]
+    elif outcome == "draw":
+        return closest["draw_prob"]
     return None
+
+
+def _date_diff(date1: str, date2: str) -> int:
+    """Absolute day difference."""
+    from datetime import datetime
+    try:
+        d1 = datetime.strptime(date1, "%Y-%m-%d")
+        d2 = datetime.strptime(date2, "%Y-%m-%d")
+        return abs((d1 - d2).days)
+    except Exception:
+        return 9999
 
 
 # ── Kelly sizing ──────────────────────────────────────────────────────
@@ -235,13 +297,14 @@ def kelly_size(edge: float, price: float, capital: float, params: dict) -> float
     return min(size, capital * params["max_position_pct"])
 
 
-# ── Trade simulation ──────────────────────────────────────────────────
+# ── Simulation ────────────────────────────────────────────────────────
 
 @dataclass
 class TradeResult:
     game_date: str
-    fighter_a: str
-    fighter_b: str
+    team_a: str
+    team_b: str
+    outcome_type: str
     side: str
     entry_price: float
     exit_price: float
@@ -252,17 +315,14 @@ class TradeResult:
     green_booked: bool
     stopped_out: bool
     time_exited: bool
-    hold_fraction: float
 
 
-def simulate_ufc_trade(market: UFCMarket, prob: float, capital: float, params: dict):
+def simulate_epl_trade(market: EPLMarket, prob: float, capital: float, params: dict):
     prices = market.prices
     if len(prices) < 2:
         return None
 
     entry_price = prices[0][1]
-
-    # Determine side (YES=fighter_a wins)
     raw_edge = prob - entry_price
     both = params.get("both_sides", False)
 
@@ -300,25 +360,22 @@ def simulate_ufc_trade(market: UFCMarket, prob: float, capital: float, params: d
 
     max_hold_idx = int(len(prices) * mhf) if mhf < 1.0 else len(prices)
 
-    gb = False
-    stopped = False
-    timed = False
+    gb = stopped = timed = False
     exit_price = entry_price
-    exit_idx = len(prices) - 1
 
     for idx, (ts, price) in enumerate(prices[1:], 1):
         if side == "yes":
             if price >= target:
-                gb = True; exit_price = price; exit_idx = idx; break
+                gb = True; exit_price = price; break
             if sl_on and price <= stop:
-                stopped = True; exit_price = price; exit_idx = idx; break
+                stopped = True; exit_price = price; break
         else:
             if price <= target:
-                gb = True; exit_price = price; exit_idx = idx; break
+                gb = True; exit_price = price; break
             if sl_on and price >= stop:
-                stopped = True; exit_price = price; exit_idx = idx; break
+                stopped = True; exit_price = price; break
         if idx >= max_hold_idx:
-            timed = True; exit_price = price; exit_idx = idx; break
+            timed = True; exit_price = price; break
     else:
         exit_price = prices[-1][1]
 
@@ -331,12 +388,11 @@ def simulate_ufc_trade(market: UFCMarket, prob: float, capital: float, params: d
             pnl = n * entry_price if market.won == 0 else -cost
 
     return TradeResult(
-        game_date=market.game_date,
-        fighter_a=market.fighter_a, fighter_b=market.fighter_b,
+        game_date=market.game_date, team_a=market.team_a, team_b=market.team_b,
+        outcome_type=market.outcome_type,
         side=side, entry_price=entry_price, exit_price=exit_price,
         edge=edge, position_usd=cost, n_contracts=n, pnl=pnl,
         green_booked=gb, stopped_out=stopped, time_exited=timed,
-        hold_fraction=exit_idx / max(len(prices) - 1, 1),
     )
 
 
@@ -397,15 +453,15 @@ def compute_metrics(trades, initial_capital):
 DEFAULT_PARAMS = {
     "min_edge": 0.05,
     "max_edge": 0.30,
-    "min_price": 0.20,
+    "min_price": 0.15,
     "max_price": 0.70,
     "min_prices": 10,
     "green_book_enabled": True,
-    "green_book_delta": 0.20,
+    "green_book_delta": 0.15,
     "stop_loss_enabled": True,
     "stop_loss_delta": 0.20,
     "max_hold_fraction": 0.50,
-    "kelly_fraction": 0.15,
+    "kelly_fraction": 0.12,
     "kelly_raw_cap": 0.10,
     "max_position_pct": 0.03,
     "initial_capital": 1000.0,
@@ -416,27 +472,27 @@ DEFAULT_PARAMS = {
 def evaluate(params=None, db_path=None, limit=0):
     params = params or DEFAULT_PARAMS
     db_path = db_path or DEFAULT_DB_PATH
-
     t0 = time.time()
-    print(f"Loading UFC data from {db_path}...", flush=True)
+    print(f"Loading EPL data from {db_path}...", flush=True)
     conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True, timeout=60)
 
-    pinnacle = load_pinnacle_ufc(conn)
-    n_candidates, market_gen = iter_ufc_markets(conn, params["min_prices"])
+    pinnacle = load_pinnacle_epl(conn)
+    n_candidates, market_gen = iter_epl_markets(conn, params["min_prices"])
 
     if n_candidates == 0:
         conn.close()
-        return {"score": 0, "n_trades": 0, "total_pnl": 0,
-                "win_rate": 0, "green_book_rate": 0, "sharpe": 0,
-                "max_drawdown": 0, "profit_factor": 0, "turnover": 0,
-                "avg_edge": 0, "skipped": {"no_model": 0, "no_edge": 0}}
+        return {"score": 0, "n_trades": 0, "total_pnl": 0, "win_rate": 0,
+                "green_book_rate": 0, "sharpe": 0, "max_drawdown": 0,
+                "profit_factor": 0, "turnover": 0, "avg_edge": 0,
+                "skipped": {"no_model": 0, "no_edge": 0}}
 
-    print(f"\nRunning UFC backtest on {n_candidates} markets...", flush=True)
+    print(f"\nRunning EPL backtest on {n_candidates} markets...", flush=True)
     capital = params["initial_capital"]
     trades = []
     skipped = {"no_model": 0, "no_edge": 0}
     count = 0
 
+    # Attach prices to market
     for market in market_gen:
         count += 1
         if limit > 0 and count > limit:
@@ -446,17 +502,17 @@ def evaluate(params=None, db_path=None, limit=0):
             print(f"  TIME BUDGET exceeded", flush=True)
             break
 
-        prob = model_prob_ufc(market.game_date, market.fullname_key_a, market.fullname_key_b, pinnacle)
+        prob = model_prob_epl(market, pinnacle)
         if prob is None:
             skipped["no_model"] += 1
             continue
-        result = simulate_ufc_trade(market, prob, capital, params)
+        result = simulate_epl_trade(market, prob, capital, params)
         if result is None:
             skipped["no_edge"] += 1
             continue
         trades.append(result)
         capital += result.pnl
-        market.prices = []  # free memory
+        market.prices = []
 
     conn.close()
     metrics = compute_metrics(trades, params["initial_capital"])

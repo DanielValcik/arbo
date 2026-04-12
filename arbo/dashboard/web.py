@@ -161,7 +161,8 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
     "D": {"name": "NBA Green Book", "category": "Sports", "description": "NBA pre-game entry, green book exit mid-game (both sides, always-close)"},
-    "D_UFC": {"name": "UFC Green Book", "category": "Sports", "description": "UFC fight green book — baseline params, pending UFC sweep"},
+    "D_UFC": {"name": "UFC Green Book", "category": "Sports", "description": "UFC fight green book — sweep v2 winner (355 trades, DD 3%, Sharpe 14)"},
+    "D_EPL": {"name": "EPL Green Book", "category": "Sports", "description": "EPL + cups green book — sweep winner (100% profitable, WR 64%, DD 3%)"},
 }
 
 
