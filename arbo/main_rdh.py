@@ -2940,15 +2940,18 @@ class RDHOrchestrator:
             token_set = set(redeemed_token_ids or [])
 
             async with factory() as session:
-                # All B3 trades for these condition_ids. Decide WIN vs LOSS
-                # per-trade based on whether trade.token_id is in token_set.
+                # All B3 + B3_15M trades for these condition_ids. Decide WIN
+                # vs LOSS per-trade based on whether trade.token_id is in
+                # token_set. Both strategies share the same Polymarket wallet,
+                # so auto-redeem resolves positions across both.
                 result = await session.execute(
                     _sa.select(PaperTrade)
-                    .where(PaperTrade.strategy == "B3")
+                    .where(PaperTrade.strategy.in_(("B3", "B3_15M")))
                     .where(PaperTrade.market_condition_id.in_(list(cid_set)))
                     .order_by(PaperTrade.placed_at.desc())
                 )
                 updated = 0
+                by_strategy: dict[str, int] = {}
                 for trade in result.scalars():
                     d = trade.trade_details or {}
                     if d.get("live_exit_status") == "resolution":
@@ -2963,11 +2966,9 @@ class RDHOrchestrator:
                         exit_price = 1.0  # Our token won
                         source = "auto_redeem_win"
                     elif not token_set:
-                        # Backward-compat: if no token_ids available, skip
-                        # (don't guess — let check_exits resolve via Gamma).
-                        continue
+                        continue  # Don't guess — let check_exits resolve
                     else:
-                        exit_price = 0.0  # Our token lost (other side won)
+                        exit_price = 0.0  # Our token lost
                         source = "auto_redeem_loss"
 
                     trade.trade_details = {
@@ -2979,15 +2980,20 @@ class RDHOrchestrator:
                         "resolution_source": source,
                     }
                     updated += 1
+                    by_strategy[trade.strategy] = by_strategy.get(trade.strategy, 0) + 1
 
+                    # Remove from _live_holding (both strategies)
                     if self._strategy_b3:
                         self._strategy_b3._live_holding.pop(trade.token_id, None)
+                    if self._strategy_b3_15m:
+                        self._strategy_b3_15m._live_holding.pop(trade.token_id, None)
 
                 if updated > 0:
                     await session.commit()
                     logger.info(
                         "b3_resolved_from_redeem",
                         count=updated,
+                        by_strategy=by_strategy,
                         redeemed_tokens=len(token_set),
                     )
         except Exception as e:
