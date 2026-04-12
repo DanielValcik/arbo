@@ -1525,34 +1525,49 @@
                 </div>
             </div>
 
-            <!-- Polymarket Wallet (full width below both overviews) -->
+            <!-- Polymarket Wallet — 4-state breakdown (shared mezi B3 5-min a 15-min) -->
             <div class="card grid-full" style="border-top:3px solid var(--gold)">
-                <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span></div>
+                <div class="card-title">Polymarket Ucet <span style="background:#3fb950;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">LIVE</span> <span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:6px">(shared B3 5-min + 15-min)</span></div>
                 <div style="padding:12px">
-                    <!-- Portfolio value -->
-                    <div style="text-align:center">
+                    <!-- Portfolio total (big) -->
+                    <div style="text-align:center;margin-bottom:4px">
                         <div style="font-size:28px;font-weight:700" id="lb3WalletPortfolio">--</div>
-                        <div style="font-size:11px;color:var(--text-dim)">Portfolio</div>
+                        <div style="font-size:11px;color:var(--text-dim)">Portfolio total (wallet + open + pending)</div>
                     </div>
-                    <!-- Two columns: Resolved vs In Flight -->
-                    <div style="display:flex;margin-top:14px;gap:12px">
-                        <div style="flex:1;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.2);border-radius:8px;padding:10px;text-align:center">
+                    <!-- 4 explicit state boxes: Available / V tradech / Ceka redeem / Realized PnL -->
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px">
+                        <div style="background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.25);border-radius:8px;padding:10px;text-align:center" title="Volné USDC v Polymarket walletu — k dispozici pro nové trady">
+                            <div style="font-size:18px;font-weight:700;color:#58a6ff" id="lb3WalletBalance">--</div>
+                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Available USDC</div>
+                            <div style="font-size:9px;color:var(--text-dim);margin-top:2px">idle — k novym tradum</div>
+                        </div>
+                        <div style="background:rgba(227,179,65,0.08);border:1px solid rgba(227,179,65,0.25);border-radius:8px;padding:10px;text-align:center" title="Kapitál v otevřených pozicích (event ještě neresolved)">
+                            <div style="font-size:18px;font-weight:700;color:#e3b341" id="lb3OpenCapital">--</div>
+                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">V tradech</div>
+                            <div style="font-size:9px;color:var(--text-dim);margin-top:2px"><span id="lb3OpenCount">0</span> pozic, caka na resolution</div>
+                        </div>
+                        <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:8px;padding:10px;text-align:center" title="Resolved pozice čekající na auto-redeem (probehne kazdych 10 min)">
+                            <div style="font-size:18px;font-weight:700;color:#a855f7" id="lb3PendingRedeem">--</div>
+                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Ceka redeem</div>
+                            <div style="font-size:9px;color:var(--text-dim);margin-top:2px"><span id="lb3PendingCount">0</span> resolved, auto-redeem &le; 10 min</div>
+                        </div>
+                        <div style="background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.25);border-radius:8px;padding:10px;text-align:center" title="Kumulativni realized PnL od zacatku (live resolution + filled sells)">
                             <div style="font-size:18px;font-weight:700" id="lb3ConfirmedPnl">--</div>
-                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Uzavrene trady</div>
-                        </div>
-                        <div style="flex:1;background:rgba(227,179,65,0.08);border:1px solid rgba(227,179,65,0.2);border-radius:8px;padding:10px;text-align:center">
-                            <div style="font-size:18px;font-weight:700;color:#e3b341" id="lb3InFlightValue">--</div>
-                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px" id="lb3InFlightLabel">V letu</div>
+                            <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Realized PnL</div>
+                            <div style="font-size:9px;color:var(--text-dim);margin-top:2px"><span id="lb3ResolvedCount">0</span> resolved trades all-time</div>
                         </div>
                     </div>
-                    <!-- Bottom row -->
-                    <div style="margin-top:12px;display:flex;justify-content:space-around;text-align:center;font-size:11px;color:var(--text-dim)">
-                        <div><span id="lb3WalletBalance" style="font-weight:700;font-size:13px">--</span><br>Available</div>
-                        <div><span id="lb3WalletSizing" style="font-weight:700;font-size:13px">--</span><br>Sizing</div>
+                    <!-- Bottom row: sizing + start vs now -->
+                    <div style="margin-top:12px;display:flex;justify-content:space-around;text-align:center;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px">
+                        <div><span id="lb3WalletSizing" style="font-weight:700;font-size:13px">--</span><br>Sizing (5-min)</div>
+                        <div><span id="lb3WalletSizing15m" style="font-weight:700;font-size:13px">--</span><br>Sizing (15-min)</div>
+                        <div><span id="lb3WalletStartVsNow" style="font-weight:700;font-size:13px">--</span><br>vs Start</div>
                     </div>
-                    <!-- Hidden fields for JS compatibility -->
+                    <!-- Hidden legacy fields (JS compat) -->
                     <span id="lb3WalletPositions" style="display:none">--</span>
                     <span id="lb3LivePnl" style="display:none">--</span>
+                    <span id="lb3InFlightValue" style="display:none">--</span>
+                    <span id="lb3InFlightLabel" style="display:none">--</span>
                     <div id="lb3PendingRow" style="display:none"><span id="lb3PendingText"></span></div>
                 </div>
                 <div id="lb3WalletPositionsList" style="font-size:11px;color:var(--text-dim);padding:0 12px 8px"></div>
@@ -3999,38 +4014,74 @@
             fetchJSON('/api/polymarket-wallet'),
         ]);
 
-        // Polymarket wallet card (fetch early, independent of charts)
+        // Polymarket wallet card — 4-state breakdown
         try {
             const wallet = walletData.value;
             if (wallet && wallet.balance !== undefined) {
                 const bal = wallet.balance || 0;
-                const posVal = wallet.total_value || 0;
-                const portfolio = wallet.portfolio || (bal + posVal);
-                // Live P&L = portfolio - starting capital
-                const startingCapital = wallet.starting_capital || 300;
-                const livePnl = portfolio - startingCapital;
-                const pnlEl = document.getElementById('lb3LivePnl');
-                pnlEl.textContent = (livePnl >= 0 ? '+' : '') + '$' + livePnl.toFixed(2);
-                pnlEl.style.color = livePnl >= 0 ? 'var(--green)' : 'var(--red)';
-
-                // Confirmed P&L = only resolved trades from DB
-                // (computed later in chart section, update here with wallet-pending split)
-                window._b3WalletPnl = livePnl;
-                window._b3PosValue = posVal;
-                document.getElementById('lb3WalletBalance').textContent = '$' + bal.toFixed(2);
-                document.getElementById('lb3WalletPositions').textContent = '$' + posVal.toFixed(2);
-                document.getElementById('lb3WalletPortfolio').textContent = '$' + portfolio.toFixed(2);
-                const sizing = Math.min(bal * 0.067, 100).toFixed(0);
-                document.getElementById('lb3WalletSizing').textContent = '~$' + sizing + '/trade';
                 const posList = wallet.positions || [];
-                if (posList.length > 0) {
-                    document.getElementById('lb3WalletPositionsList').innerHTML = posList
-                        .filter(p => p.current_value > 0)
-                        .slice(0, 10)
+                // Split positions: "pending redeem" = effective price near $1 or $0
+                // (market resolved, shares waiting for auto-redeem every 10 min).
+                // "open" = still-active markets (price in the middle).
+                const activePositions = [];
+                const pendingPositions = [];
+                for (const p of posList) {
+                    if (!(p.size > 0) || p.current_value === undefined) continue;
+                    const effPrice = p.size > 0 ? p.current_value / p.size : 0;
+                    if (effPrice >= 0.98 || effPrice <= 0.02) {
+                        pendingPositions.push(p);
+                    } else {
+                        activePositions.push(p);
+                    }
+                }
+                const openCapital = activePositions.reduce((s, p) => s + p.current_value, 0);
+                const pendingValue = pendingPositions.reduce((s, p) => s + p.current_value, 0);
+                const portfolio = bal + openCapital + pendingValue;
+                const startingCapital = wallet.starting_capital || 300;
+                const startVsNow = portfolio - startingCapital;
+
+                // Backward-compat hidden fields
+                window._b3WalletPnl = startVsNow;
+                window._b3PosValue = openCapital + pendingValue;
+                const livePnlHidden = document.getElementById('lb3LivePnl');
+                if (livePnlHidden) livePnlHidden.textContent = (startVsNow >= 0 ? '+' : '') + '$' + startVsNow.toFixed(2);
+                const posHidden = document.getElementById('lb3WalletPositions');
+                if (posHidden) posHidden.textContent = '$' + (openCapital + pendingValue).toFixed(2);
+
+                // 4-state explicit display
+                document.getElementById('lb3WalletPortfolio').textContent = '$' + portfolio.toFixed(2);
+                document.getElementById('lb3WalletBalance').textContent = '$' + bal.toFixed(2);
+                document.getElementById('lb3OpenCapital').textContent = '$' + openCapital.toFixed(2);
+                document.getElementById('lb3OpenCount').textContent = activePositions.length;
+                document.getElementById('lb3PendingRedeem').textContent = '$' + pendingValue.toFixed(2);
+                document.getElementById('lb3PendingCount').textContent = pendingPositions.length;
+
+                // Sizing: 5-min = 0.067 × balance (capped $100), 15-min = 0.044 × balance (capped $20)
+                const sizing5m = Math.min(bal * 0.067, 100).toFixed(0);
+                const sizing15m = Math.min(bal * 0.044, 20).toFixed(0);
+                document.getElementById('lb3WalletSizing').textContent = '~$' + sizing5m + '/trade';
+                document.getElementById('lb3WalletSizing15m').textContent = '~$' + sizing15m + '/trade';
+
+                // Start vs now
+                const svn = document.getElementById('lb3WalletStartVsNow');
+                if (svn) {
+                    svn.textContent = (startVsNow >= 0 ? '+' : '') + '$' + startVsNow.toFixed(2) + ' ($' + startingCapital + ')';
+                    svn.style.color = startVsNow >= 0 ? 'var(--green)' : 'var(--red)';
+                }
+
+                // Position list (both active and pending, sorted by value)
+                const allShown = [...activePositions, ...pendingPositions]
+                    .sort((a, b) => b.current_value - a.current_value)
+                    .slice(0, 10);
+                if (allShown.length > 0) {
+                    document.getElementById('lb3WalletPositionsList').innerHTML = allShown
                         .map(p => {
                             const c = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                            const effPrice = p.size > 0 ? p.current_value / p.size : 0;
+                            const pending = effPrice >= 0.98 || effPrice <= 0.02;
+                            const tag = pending ? '<span style="color:#a855f7;font-size:9px;margin-left:4px">[redeem]</span>' : '';
                             return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05)">`
-                                + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${p.title} (${p.outcome})</span>`
+                                + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%">${p.title} (${p.outcome})${tag}</span>`
                                 + `<span style="color:${c};white-space:nowrap">$${p.current_value.toFixed(2)}</span></div>`;
                         }).join('');
                 }
@@ -4287,19 +4338,21 @@
                     const paperExit = liveChron[i].exit_price || 0;
                     let pnl = 0;
                     let resolved = false;
+                    // Only count PnL for clean exit states. Exclude 'failed' exits —
+                    // these are pre-V6.0 DB artifacts where paper sold but live sell
+                    // failed (exit_price=0 stored); position actually held to Chainlink
+                    // but real outcome not recorded. Same filter as main_rdh counter.
                     if (lep > 0 && lsh > 0 && lxst === 'resolution') {
                         pnl = (lxp - lep) * lsh;
                         resolved = true;
-                    } else if (lep > 0 && lxp > 0 && lsh > 0) {
+                    } else if (lep > 0 && lxp > 0 && lsh > 0 && lxst !== 'failed') {
                         pnl = (lxp - lep) * lsh;
                         resolved = true;
-                    } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution') {
+                    } else if (lep > 0 && lsh > 0 && liveChron[i].exit_reason === 'resolution' && lxst !== 'failed') {
                         pnl = (paperExit - lep) * lsh;
                         resolved = true;
-                    } else if (lep > 0 && lsh > 0 && (lxst === 'failed' || lxst === 'partial' || lxst === 'skipped')) {
-                        pnl = -lep * lsh;
-                        resolved = true;
                     } else if (lep > 0 && lsh > 0) {
+                        // 'failed' exits and still-open trades → pending (exclude from PnL)
                         pendingCount++;
                     }
                     lCum += pnl;
@@ -4403,11 +4456,17 @@
                     _s('lb3PredWeek', resolvedCount >= 3 ? (dailyPnl*daysLeftWeek >= 0 ? '+' : '') + '$' + (dailyPnl*daysLeftWeek).toFixed(0) : 'min 3 trady');
                 }
 
-                // Update Confirmed P&L (resolved trades only)
+                // Update Realized PnL (live resolved trades, clean filter — matches Slack counter)
                 const confirmedEl = document.getElementById('lb3ConfirmedPnl');
                 if (confirmedEl) {
                     confirmedEl.textContent = (lCum >= 0 ? '+' : '') + '$' + lCum.toFixed(2);
                     confirmedEl.style.color = lCum >= 0 ? 'var(--green)' : 'var(--red)';
+                }
+                // Update Resolved count (all clean live-resolved trades contributing to lCum)
+                const resolvedCountEl = document.getElementById('lb3ResolvedCount');
+                if (resolvedCountEl) {
+                    const cleanResolved = isResolved.filter((r, i) => r && i > 0).length;
+                    resolvedCountEl.textContent = cleanResolved;
                 }
                 // Update avg fill price in Expectation vs Reality
                 const resolvedFills = liveChron.filter(t => (t.trade_details||{}).live_exit_status === 'resolution' && (t.trade_details||{}).live_entry_price > 0);
