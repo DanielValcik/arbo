@@ -1906,6 +1906,50 @@ class RDHOrchestrator:
                         tokens=[e.token_id[:20] for e in shadow_exits],
                     )
 
+    # Strategy D Slack channel (shared across NBA/UFC/EPL variants)
+    D_SLACK_CHANNEL = "C0ARXNGKE1M"
+
+    async def _notify_d_entry(self, pos, sport_label: str) -> None:
+        """Slack notification on Strategy D entry."""
+        if self._slack_bot is None or pos is None:
+            return
+        try:
+            is_live = bool(pos.live_shares > 0)
+            kind = "LIVE BUY" if is_live else "PAPER BUY"
+            emoji = ":zap:" if is_live else ":pencil:"
+            shares = pos.live_shares if is_live else pos.shares
+            price = pos.live_entry_price if is_live else pos.entry_price
+            text = (
+                f"{emoji} *{pos.sport.upper()} {kind}* — {pos.side.upper()} "
+                f"{pos.team_a} vs {pos.team_b}\n"
+                f"*{sport_label}*  |  {shares} shares @ {price:.3f}  |  "
+                f"${shares * price:.1f}\n"
+                f"Model: {pos.model_prob:.3f}  |  Edge: {pos.edge*100:+.1f}¢"
+            )
+            await self._slack_bot._post(self.D_SLACK_CHANNEL, text=text)
+        except Exception as e:
+            logger.debug("d_slack_entry_error", error=str(e))
+
+    async def _notify_d_exit(self, pos) -> None:
+        """Slack notification on Strategy D exit."""
+        if self._slack_bot is None or pos is None:
+            return
+        try:
+            is_live = bool(pos.live_shares > 0)
+            win = pos.pnl > 0
+            emoji = ":white_check_mark:" if win else ":x:"
+            kind = "LIVE EXIT" if is_live else "PAPER EXIT"
+            shares = pos.live_shares if is_live else pos.shares
+            text = (
+                f"{emoji} *{pos.sport.upper()} {kind}* — {pos.exit_reason}\n"
+                f"{pos.team_a} vs {pos.team_b}  |  {pos.side.upper()}\n"
+                f"Entry: {pos.entry_price:.3f} → Exit: {pos.exit_price:.3f}\n"
+                f"P&L: ${pos.pnl:+.2f}  |  CLV: {pos.clv*100:+.1f}¢  |  {shares} shares"
+            )
+            await self._slack_bot._post(self.D_SLACK_CHANNEL, text=text)
+        except Exception as e:
+            logger.debug("d_slack_exit_error", error=str(e))
+
     async def _run_strategy_d(self) -> None:
         """Run Strategy D: NBA Green Book Engine — entry scan."""
         if self._strategy_d is None:
@@ -1926,6 +1970,7 @@ class RDHOrchestrator:
             pos = await self._strategy_d.execute_entry(sig)
             if pos is not None:
                 entered += 1
+                await self._notify_d_entry(pos, "NBA")
         if entered > 0:
             logger.info("strategy_d_entries", count=entered, signals=len(signals))
             if self._paper_engine is not None:
@@ -1938,18 +1983,23 @@ class RDHOrchestrator:
         if self._orderbook_provider is None:
             return
 
-        token_ids = [p.token_id for p in self._strategy_d._positions.values()]
-        snapshots = await self._orderbook_provider.get_snapshots_batch(
-            token_ids, neg_risk=False
-        )
+        # Group tokens by neg_risk flag (critical for correct orderbook queries)
+        nr_tokens = [p.token_id for p in self._strategy_d._positions.values() if p.neg_risk]
+        std_tokens = [p.token_id for p in self._strategy_d._positions.values() if not p.neg_risk]
         current_prices: dict[str, float] = {}
-        for tid, snap in snapshots.items():
-            if snap is not None and snap.best_bid is not None:
-                current_prices[tid] = float(snap.best_bid)
+        for tokens, nr in [(nr_tokens, True), (std_tokens, False)]:
+            if not tokens:
+                continue
+            snapshots = await self._orderbook_provider.get_snapshots_batch(tokens, neg_risk=nr)
+            for tid, snap in snapshots.items():
+                if snap is not None and snap.best_bid is not None:
+                    current_prices[tid] = float(snap.best_bid)
 
         exits = self._strategy_d.check_exits(current_prices)
         if exits:
             logger.info("strategy_d_exits", count=len(exits))
+            for pos in exits:
+                await self._notify_d_exit(pos)
 
     async def _discover_nba_markets(self) -> list:
         """Discover active NBA markets on Polymarket (see strategy_d_discovery_nba.py)."""
@@ -1978,6 +2028,7 @@ class RDHOrchestrator:
             pos = await self._strategy_d_ufc.execute_entry(sig)
             if pos is not None:
                 entered += 1
+                await self._notify_d_entry(pos, "UFC")
         if entered > 0:
             logger.info("strategy_d_ufc_entries", count=entered, signals=len(signals))
             if self._paper_engine is not None:
@@ -1989,17 +2040,21 @@ class RDHOrchestrator:
             return
         if self._orderbook_provider is None:
             return
-        token_ids = [p.token_id for p in self._strategy_d_ufc._positions.values()]
-        snapshots = await self._orderbook_provider.get_snapshots_batch(
-            token_ids, neg_risk=False
-        )
+        nr_tokens = [p.token_id for p in self._strategy_d_ufc._positions.values() if p.neg_risk]
+        std_tokens = [p.token_id for p in self._strategy_d_ufc._positions.values() if not p.neg_risk]
         current_prices: dict[str, float] = {}
-        for tid, snap in snapshots.items():
-            if snap is not None and snap.best_bid is not None:
-                current_prices[tid] = float(snap.best_bid)
+        for tokens, nr in [(nr_tokens, True), (std_tokens, False)]:
+            if not tokens:
+                continue
+            snapshots = await self._orderbook_provider.get_snapshots_batch(tokens, neg_risk=nr)
+            for tid, snap in snapshots.items():
+                if snap is not None and snap.best_bid is not None:
+                    current_prices[tid] = float(snap.best_bid)
         exits = self._strategy_d_ufc.check_exits(current_prices)
         if exits:
             logger.info("strategy_d_ufc_exits", count=len(exits))
+            for pos in exits:
+                await self._notify_d_exit(pos)
 
     async def _discover_epl_markets(self) -> list:
         """Discover active EPL markets on Polymarket."""
@@ -2023,6 +2078,7 @@ class RDHOrchestrator:
             pos = await self._strategy_d_epl.execute_entry(sig)
             if pos is not None:
                 entered += 1
+                await self._notify_d_entry(pos, "EPL")
         if entered > 0:
             logger.info("strategy_d_epl_entries", count=entered, signals=len(signals))
             if self._paper_engine is not None:
@@ -2034,17 +2090,21 @@ class RDHOrchestrator:
             return
         if self._orderbook_provider is None:
             return
-        token_ids = [p.token_id for p in self._strategy_d_epl._positions.values()]
-        snapshots = await self._orderbook_provider.get_snapshots_batch(
-            token_ids, neg_risk=False
-        )
+        nr_tokens = [p.token_id for p in self._strategy_d_epl._positions.values() if p.neg_risk]
+        std_tokens = [p.token_id for p in self._strategy_d_epl._positions.values() if not p.neg_risk]
         current_prices: dict[str, float] = {}
-        for tid, snap in snapshots.items():
-            if snap is not None and snap.best_bid is not None:
-                current_prices[tid] = float(snap.best_bid)
+        for tokens, nr in [(nr_tokens, True), (std_tokens, False)]:
+            if not tokens:
+                continue
+            snapshots = await self._orderbook_provider.get_snapshots_batch(tokens, neg_risk=nr)
+            for tid, snap in snapshots.items():
+                if snap is not None and snap.best_bid is not None:
+                    current_prices[tid] = float(snap.best_bid)
         exits = self._strategy_d_epl.check_exits(current_prices)
         if exits:
             logger.info("strategy_d_epl_exits", count=len(exits))
+            for pos in exits:
+                await self._notify_d_exit(pos)
 
     async def _run_strategy_c2(self) -> None:
         """Run Strategy C2: EMOS + Edge Exit Fusion — entry scan only.

@@ -93,6 +93,9 @@ class DPosition:
     # Research: CLV > 2¢ over 500 trades = long-term profitable strategy.
     close_price: float = 0.0   # Last price seen before resolution/exit
     clv: float = 0.0           # close_price - entry_price (for YES side)
+    neg_risk: bool = False     # Critical for orderbook queries
+    model_prob: float = 0.0    # Stored for Slack alerts
+    edge: float = 0.0          # Stored for Slack alerts
     live_shares: int = 0
     live_entry_price: float = 0.0
     live_fill_status: str = ""
@@ -302,6 +305,7 @@ class StrategyDCore:
             game_date=signal.market.game_date,
             max_price=signal.entry_price,
             min_price=signal.entry_price,
+            neg_risk=bool(signal.market.neg_risk),
         )
 
         if self._paper:
@@ -335,19 +339,31 @@ class StrategyDCore:
 
         if self._live:
             try:
-                result = await self._live.execute_entry(
+                # Use LiveExecutor.buy() — MAKER order at best buy price (0% fee + rebate)
+                neg_risk = bool(signal.market.neg_risk)
+                size_usdc = shares * signal.entry_price
+                fill = await self._live.buy(
                     token_id=signal.token_id,
                     price=signal.entry_price,
-                    size=shares,
-                    strategy=self.STRATEGY_NAME,
+                    size_usdc=size_usdc,
+                    neg_risk=neg_risk,
+                    tick_size="0.01",
+                    max_price=signal.entry_price + 0.02,  # 2¢ slippage cap
                 )
-                if result:
-                    position.live_shares = result.get("filled_shares", 0)
-                    position.live_entry_price = result.get("fill_price", signal.entry_price)
-                    position.live_fill_status = result.get("status", "unknown")
+                if fill and getattr(fill, "filled_shares", 0) > 0:
+                    position.live_shares = int(fill.filled_shares)
+                    position.live_entry_price = float(fill.fill_price)
+                    position.live_fill_status = fill.status
                     self._logger.info(
                         "entry_live", sport=self.SPORT_NAME, side=signal.side,
                         price=position.live_entry_price, shares=position.live_shares,
+                        status=fill.status,
+                    )
+                else:
+                    position.live_fill_status = "skipped"
+                    self._logger.info(
+                        "entry_live_skipped", sport=self.SPORT_NAME,
+                        reason=getattr(fill, "status", "no_fill"),
                     )
             except Exception as e:
                 self._logger.error("live_entry_error", error=str(e))
