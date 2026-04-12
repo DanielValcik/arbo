@@ -2467,13 +2467,14 @@ async def api_polymarket_wallet(
             if size <= 0:
                 continue
             cur_val = float(pos.get("currentValue", 0))
-            # Skip dead loser tokens (resolved markets where our side lost
-            # and the shares are stuck at $0 forever — not pending redeem,
-            # just worthless dust). Threshold of $0.10 filters these but
-            # keeps real active positions with low prices (e.g., longshots).
-            # Only apply filter if the position is also flagged non-redeemable
-            # and has effectively zero value, to avoid filtering legit thin positions.
-            if cur_val < 0.10 and not pos.get("redeemable"):
+            # Skip dead loser tokens. IMPORTANT: Polymarket's `redeemable` flag
+            # is TRUE for both winners AND losers (it means "market resolved,
+            # redeem tx is possible"). Not an indicator of payout > 0.
+            # The real discriminator is currentValue = size × curPrice:
+            #   - Winner: curPrice=1 → currentValue = size (full value)
+            #   - Loser:  curPrice=0 → currentValue = 0 (dust, skip)
+            #   - Active: 0 < curPrice < 1 → currentValue partial
+            if cur_val < 0.10:
                 continue
             avg_price = float(pos.get("avgPrice", 0))
             positions.append({
