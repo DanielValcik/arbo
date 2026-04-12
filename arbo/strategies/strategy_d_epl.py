@@ -8,10 +8,16 @@ v2 improvements (Dixon-Coles 1997):
   - Simulate 8x8 score grid with τ(x,y) correction for draws
   - Result: CLV 0.6¢ → 3.15¢ (+425%), Sharpe 6.76 → 8.81 (+30%)
 
-Latest backtest (v2 Dixon-Coles, single_team trades only):
-  - Score: 5.3, +$162 on $1K over 20 months
-  - 82 trades, WR 65%, DD 2.4%, Sharpe 8.81
-  - CLV +3.15¢ — MUCH better edge per trade than v1
+Sweep v2 winner #18 (240 experiments, 100% profitable):
+  - Score: 11.1, +$252 on $1K over 20 months
+  - 96 trades, WR 67%, DD 4%, Sharpe 9.05
+  - **CLV +4.06¢** — 2x research benchmark of 2¢ for long-term profit
+
+Sweep patterns:
+  - min_edge=0.02 optimal (DC has enough signal for small edges)
+  - delta=0.20 sweet spot across all mhf values
+  - SL=0.30 safer than tighter SL
+  - mhf=1.0 dominant (hold to resolution) — DC + Pinnacle very accurate
 
 Key characteristics:
   - 3-way outcomes: home_win / draw / away_win
@@ -97,16 +103,16 @@ class StrategyDEpl(StrategyDCore):
     STRATEGY_NAME = "D_EPL"
     STRATEGY_LABEL = "EPL Green Book"
 
-    # Sweep winner #12 params
-    MIN_EDGE = 0.03          # Lower edge — EPL has small but consistent edges
+    # Sweep v2 winner #18 params (Dixon-Coles sweep, CLV +4.06¢)
+    MIN_EDGE = 0.02          # Very low — DC gives us high-quality signal
     MAX_EDGE = 0.30
     MIN_PRICE = 0.15
     MAX_PRICE = 0.70
 
-    GREEN_BOOK_DELTA = 0.15  # Smaller than UFC (0.20) — EPL has gradual moves
-    STOP_LOSS_DELTA = 0.25   # Wide SL (robust across 288 experiments)
-    MAX_HOLD_FRACTION = 1.0  # Hold to resolution — EPL Pinnacle very accurate
-    GAME_DURATION_HOURS = 2.0  # 90min match + stoppage + pre-game window
+    GREEN_BOOK_DELTA = 0.20  # Up from 0.15 — sweep optimal
+    STOP_LOSS_DELTA = 0.30   # Up from 0.25 — safer SL in volatile markets
+    MAX_HOLD_FRACTION = 1.0  # Hold to resolution — DC + Pinnacle very accurate
+    GAME_DURATION_HOURS = 2.0
 
     BOTH_SIDES = True
     MAX_CONCURRENT = 6        # Multiple matches per gameweek
