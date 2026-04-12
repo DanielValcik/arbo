@@ -88,6 +88,11 @@ class DPosition:
     exit_time: float = 0.0
     exit_reason: str = ""
     pnl: float = 0.0
+    # CLV (Closing Line Value) — measures edge vs market's final price.
+    # Positive CLV = entry was cheaper than close → real edge.
+    # Research: CLV > 2¢ over 500 trades = long-term profitable strategy.
+    close_price: float = 0.0   # Last price seen before resolution/exit
+    clv: float = 0.0           # close_price - entry_price (for YES side)
     live_shares: int = 0
     live_entry_price: float = 0.0
     live_fill_status: str = ""
@@ -396,19 +401,27 @@ class StrategyDCore:
                 continue
 
             pos.exit_time = now
+            pos.close_price = price  # Last observed price = proxy for closing line
             if pos.side == "yes":
                 pos.pnl = pos.shares * (pos.exit_price - pos.entry_price)
+                pos.clv = price - pos.entry_price  # Positive = entry was underpriced
             else:
                 pos.pnl = pos.shares * (pos.entry_price - pos.exit_price)
+                pos.clv = pos.entry_price - price
 
             exits.append(pos)
             del self._positions[cid]
             self._daily_pnl += pos.pnl
 
+            # Persist exit details + CLV to PaperTrade row directly
+            if self._paper is not None:
+                self._persist_exit_clv(pos, now)
+
             self._logger.info(
                 "exit", sport=self.SPORT_NAME, reason=pos.exit_reason, side=pos.side,
                 entry=f"{pos.entry_price:.3f}", exit_p=f"{pos.exit_price:.3f}",
-                pnl=f"${pos.pnl:.2f}", team_a=pos.team_a, team_b=pos.team_b,
+                pnl=f"${pos.pnl:.2f}", clv=f"{pos.clv*100:+.2f}c",
+                team_a=pos.team_a, team_b=pos.team_b,
                 hold_min=f"{(now - pos.entry_time)/60:.0f}",
             )
 
@@ -451,3 +464,59 @@ class StrategyDCore:
         """Reset daily counters (called at midnight)."""
         self._trades_today = 0
         self._daily_pnl = 0.0
+
+    def _persist_exit_clv(self, pos: DPosition, now: float) -> None:
+        """Update PaperTrade row with exit details + CLV (best-effort, sync).
+
+        Finds the open trade for this token_id and updates it with exit_price,
+        exit_reason, actual_pnl, and CLV in trade_details.
+        """
+        try:
+            from decimal import Decimal
+            import json as _json
+            from sqlalchemy import select, update
+            from arbo.utils.db import PaperTrade, get_session_factory
+
+            factory = get_session_factory()
+
+            async def _do_update():
+                async with factory() as session:
+                    result = await session.execute(
+                        select(PaperTrade)
+                        .where(PaperTrade.token_id == pos.token_id)
+                        .where(PaperTrade.status == "open")
+                        .order_by(PaperTrade.placed_at.desc())
+                        .limit(1)
+                    )
+                    row = result.scalar_one_or_none()
+                    if row is None:
+                        return
+                    details = dict(row.trade_details) if row.trade_details else {}
+                    details.update({
+                        "sport": pos.sport,
+                        "close_price": pos.close_price,
+                        "clv": pos.clv,
+                        "hold_min": round((now - pos.entry_time) / 60),
+                    })
+                    await session.execute(
+                        update(PaperTrade)
+                        .where(PaperTrade.id == row.id)
+                        .values(
+                            status="sold" if pos.exit_reason != "stop_loss" else "sold",
+                            exit_price=Decimal(str(pos.exit_price)),
+                            exit_reason=pos.exit_reason,
+                            actual_pnl=Decimal(str(pos.pnl)),
+                            resolved_at=__import__("datetime").datetime.fromtimestamp(now, tz=__import__("datetime").timezone.utc),
+                            trade_details=details,
+                        )
+                    )
+                    await session.commit()
+
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(_do_update())
+            else:
+                loop.run_until_complete(_do_update())
+        except Exception as e:
+            self._logger.warning("persist_exit_clv_failed", error=str(e))

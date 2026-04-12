@@ -2523,72 +2523,145 @@ async def api_polymarket_wallet(
 
 @app.get("/api/strategy-d")
 async def api_strategy_d(_user: str = Depends(_verify_credentials)) -> dict[str, Any]:
-    """Strategy D status: open positions, recent trades, live P&L, parameters."""
+    """Strategy D status across all sport variants (NBA, UFC, EPL) + CLV tracking.
+
+    CLV = Closing Line Value. Measures entry price vs market's final price.
+    Positive CLV = entry was cheaper than close → real edge.
+    Research: CLV > 2¢ over 500 trades = long-term profitable strategy.
+    """
     orch = state.orchestrator
-    if orch is None or getattr(orch, "_strategy_d", None) is None:
-        return {
-            "active": False,
-            "pnl": 0.0,
-            "trades": 0,
-            "win_rate": 0.0,
-            "gb_rate": 0.0,
-            "positions": [],
-            "recent_trades": [],
-        }
+    if orch is None:
+        return {"active": False, "variants": {}, "aggregated": {}}
 
-    d = orch._strategy_d
-    status = d.get_status()
+    # Per-variant status (from in-memory positions)
+    variants: dict[str, Any] = {}
+    for attr, sid in [
+        ("_strategy_d", "D"),
+        ("_strategy_d_ufc", "D_UFC"),
+        ("_strategy_d_epl", "D_EPL"),
+    ]:
+        strat = getattr(orch, attr, None)
+        if strat is None:
+            continue
+        variants[sid] = strat.get_status()
 
-    # Load recent trades from DB (last 20)
+    # Aggregated trades from DB across all D variants
     recent_trades: list[dict[str, Any]] = []
+    per_strategy: dict[str, dict[str, Any]] = {}
     total_trades = 0
     wins = 0
     green_books = 0
-    pnl = 0.0
+    total_pnl = 0.0
+    clv_values: list[float] = []
+
     try:
         from arbo.utils.db import PaperTrade, get_session_factory
-        from sqlalchemy import desc, select
+        from sqlalchemy import desc, select, or_
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                select(PaperTrade).where(PaperTrade.strategy == "D").order_by(desc(PaperTrade.placed_at)).limit(100)
+                select(PaperTrade)
+                .where(or_(
+                    PaperTrade.strategy == "D",
+                    PaperTrade.strategy == "D_UFC",
+                    PaperTrade.strategy == "D_EPL",
+                ))
+                .order_by(desc(PaperTrade.placed_at)).limit(200)
             )
             trades = result.scalars().all()
             total_trades = len(trades)
             for t in trades:
-                tp = _dec(t.actual_pnl) or 0
-                pnl += tp
+                tp = float(_dec(t.actual_pnl) or 0)
+                total_pnl += tp
                 if tp > 0:
                     wins += 1
+
                 details = getattr(t, "trade_details", None) or {}
                 exit_reason = t.exit_reason or (details.get("exit_reason", "") if isinstance(details, dict) else "")
                 if exit_reason == "green_book":
                     green_books += 1
-                if len(recent_trades) < 20:
+
+                # Extract CLV from trade_details if stored
+                clv = details.get("clv", None) if isinstance(details, dict) else None
+                if clv is not None:
+                    clv_values.append(float(clv))
+
+                # Per-strategy breakdown
+                sname = t.strategy or "D"
+                if sname not in per_strategy:
+                    per_strategy[sname] = {"trades": 0, "pnl": 0.0, "wins": 0, "gb": 0, "clv_sum": 0.0, "clv_n": 0}
+                ps = per_strategy[sname]
+                ps["trades"] += 1
+                ps["pnl"] += tp
+                if tp > 0: ps["wins"] += 1
+                if exit_reason == "green_book": ps["gb"] += 1
+                if clv is not None:
+                    ps["clv_sum"] += float(clv)
+                    ps["clv_n"] += 1
+
+                if len(recent_trades) < 30:
                     recent_trades.append({
                         "time": t.placed_at.isoformat() if t.placed_at else "",
+                        "strategy": sname,
                         "market": (details.get("question", "") if isinstance(details, dict) else "")[:60],
                         "side": details.get("side", "") if isinstance(details, dict) else t.side,
                         "entry_price": _dec(t.price),
                         "exit_price": _dec(t.exit_price),
                         "exit_reason": exit_reason,
                         "pnl": tp,
+                        "clv": float(clv) if clv is not None else None,
                     })
     except Exception as e:
         logger.warning("strategy_d_trades_query_failed: %s", e)
 
+    # Finalize per-strategy avg CLV
+    for sname, ps in per_strategy.items():
+        ps["win_rate"] = round(ps["wins"] / max(ps["trades"], 1), 3)
+        ps["gb_rate"] = round(ps["gb"] / max(ps["trades"], 1), 3)
+        ps["avg_clv"] = round(ps["clv_sum"] / max(ps["clv_n"], 1), 4) if ps["clv_n"] > 0 else None
+        ps["pnl"] = round(ps["pnl"], 2)
+        del ps["clv_sum"]
+        del ps["clv_n"]
+
+    avg_clv = (sum(clv_values) / len(clv_values)) if clv_values else None
+
+    # CLV health status
+    clv_health = "no_data"
+    if len(clv_values) >= 50:
+        if avg_clv >= 0.02:
+            clv_health = "excellent"   # >2¢ avg CLV
+        elif avg_clv >= 0.01:
+            clv_health = "good"
+        elif avg_clv >= 0.0:
+            clv_health = "marginal"
+        else:
+            clv_health = "warning"      # Negative CLV = losing edge
+
     return {
         "active": True,
-        "pnl": round(pnl, 2),
+        "variants": variants,
+        "aggregated": {
+            "pnl": round(total_pnl, 2),
+            "trades": total_trades,
+            "win_rate": round(wins / total_trades, 3) if total_trades > 0 else 0.0,
+            "gb_rate": round(green_books / total_trades, 3) if total_trades > 0 else 0.0,
+            "avg_clv": round(avg_clv, 4) if avg_clv is not None else None,
+            "avg_clv_cents": round(avg_clv * 100, 2) if avg_clv is not None else None,
+            "clv_sample_size": len(clv_values),
+            "clv_health": clv_health,
+        },
+        "per_strategy": per_strategy,
+        "recent_trades": recent_trades,
+        # Backward-compat fields (for existing JS)
+        "pnl": round(total_pnl, 2),
         "trades": total_trades,
         "win_rate": round(wins / total_trades, 3) if total_trades > 0 else 0.0,
         "gb_rate": round(green_books / total_trades, 3) if total_trades > 0 else 0.0,
-        "open_positions": status["open_positions"],
-        "trades_today": status["trades_today"],
-        "daily_pnl": status["daily_pnl"],
-        "params": status["params"],
-        "positions": status["positions"],
-        "recent_trades": recent_trades,
+        "open_positions": sum(v.get("open_positions", 0) for v in variants.values()),
+        "trades_today": sum(v.get("trades_today", 0) for v in variants.values()),
+        "daily_pnl": sum(v.get("daily_pnl", 0) for v in variants.values()),
+        "params": variants.get("D", {}).get("params", {}),
+        "positions": [p for v in variants.values() for p in v.get("positions", [])],
     }
 
 
