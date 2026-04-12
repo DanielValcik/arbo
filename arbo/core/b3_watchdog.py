@@ -518,10 +518,24 @@ class B3Watchdog:
             return
 
         action = decision.get("action", {})
+        param = action.get("param", "N/A")
+        new_value = action.get("new_value", "?")
+
+        # Prefer actual old_value from adaptive_config audit log
+        # (Gemini sometimes omits old_value from its response)
+        old_value = action.get("old_value")
+        if old_value is None and param != "N/A":
+            latest = self._config.get_active_change_for(param)
+            if latest is not None:
+                old_value = latest.old_value
+            else:
+                # Fall back to current default
+                old_value = self._config._get_default(param)
+
         lines = [
             f"━━━ B3 Watchdog — AUTONOMOUS {action_type} ━━━",
             f"Trigger: {decision.get('root_cause', 'N/A')[:100]}",
-            f"Action: {action.get('param', 'N/A')}: {action.get('old_value', '?')} → {action.get('new_value', '?')}",
+            f"Action: {param}: {old_value} → {new_value}",
             f"Confidence: {decision.get('confidence', 'N/A')}",
             f"Auto-revert check: po {_AUTO_REVERT_WINDOW} tradech",
             f"\nCurrent WR: paper {metrics.rolling_wr_paper:.1%} | live {metrics.rolling_wr_live:.1%}",

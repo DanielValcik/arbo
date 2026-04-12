@@ -97,11 +97,11 @@ _QUERY_DAILY_PNL = text("""
     SELECT
         DATE(resolved_at) AS trade_date,
         COUNT(*) AS trades,
-        SUM(CASE WHEN status = 'won' THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN actual_pnl > 0 THEN 1 ELSE 0 END) AS wins,
         SUM(actual_pnl) AS daily_pnl,
         SUM(CASE WHEN trade_details->>'live_fill_status' = 'filled' THEN 1 ELSE 0 END) AS live_trades,
         SUM(CASE WHEN trade_details->>'live_fill_status' = 'filled'
-                 AND status = 'won' THEN 1 ELSE 0 END) AS live_wins
+                 AND actual_pnl > 0 THEN 1 ELSE 0 END) AS live_wins
     FROM paper_trades
     WHERE strategy = 'B3'
       AND status IN ('won', 'lost', 'sold')
@@ -178,13 +178,22 @@ def _compute_metrics(
     n = len(trades)
 
     # Basic outcome metrics
+    # B3 paper trades mostly end as status='sold' (profit/stop/edge/time exits),
+    # so we use actual_pnl > 0 as the win criterion instead of status='won'
+    # (which only applies to resolution outcomes).
     pnls = [float(t["actual_pnl"]) for t in trades if t["actual_pnl"] is not None]
-    wins_paper = sum(1 for t in trades if t["status"] == "won")
+    wins_paper = sum(
+        1 for t in trades
+        if t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0
+    )
     wr_paper = wins_paper / n if n > 0 else 0.0
 
-    # Live-only metrics
+    # Live-only metrics (same logic)
     live_trades = [t for t in trades if t.get("live_status") == "filled"]
-    live_wins = sum(1 for t in live_trades if t["status"] == "won")
+    live_wins = sum(
+        1 for t in live_trades
+        if t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0
+    )
     live_n = len(live_trades)
     wr_live = live_wins / live_n if live_n > 0 else 0.0
 
@@ -269,16 +278,17 @@ def _compute_metrics(
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _max_consecutive_losses(trades: list[dict], live_only: bool) -> int:
-    """Find longest losing streak."""
+    """Find longest losing streak (by actual_pnl, not status)."""
     max_streak = 0
     current = 0
     for t in reversed(trades):  # oldest first
         if live_only and t.get("live_status") != "filled":
             continue
-        if t["status"] in ("lost", "sold") and float(t.get("actual_pnl") or 0) < 0:
+        pnl = t.get("actual_pnl")
+        if pnl is not None and float(pnl) < 0:
             current += 1
             max_streak = max(max_streak, current)
-        else:
+        elif pnl is not None and float(pnl) > 0:
             current = 0
     return max_streak
 
@@ -299,7 +309,10 @@ def _bucket_regime(
         if n == 0:
             result[name] = {"wr": 0, "n": 0, "pnl": 0}
             continue
-        wins = sum(1 for t in bucket_trades if t["status"] == "won")
+        wins = sum(
+            1 for t in bucket_trades
+            if t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0
+        )
         pnl = sum(float(t.get("actual_pnl") or 0) for t in bucket_trades)
         result[name] = {
             "wr": round(wins / n, 4),
@@ -324,7 +337,10 @@ def _bucket_regime_categorical(
     result: dict[str, dict[str, float]] = {}
     for name, bucket_trades in buckets.items():
         n = len(bucket_trades)
-        wins = sum(1 for t in bucket_trades if t["status"] == "won")
+        wins = sum(
+            1 for t in bucket_trades
+            if t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0
+        )
         pnl = sum(float(t.get("actual_pnl") or 0) for t in bucket_trades)
         result[name] = {
             "wr": round(wins / n, 4),
@@ -413,7 +429,10 @@ def _compute_ece(trades: list[dict], n_bins: int = 5) -> float:
     ECE < 0.05: excellent. 0.05-0.10: acceptable. > 0.15: problem.
     """
     edges = [float(t["edge"]) for t in trades if t.get("edge") is not None]
-    outcomes = [1.0 if t["status"] == "won" else 0.0 for t in trades if t.get("edge") is not None]
+    outcomes = [
+        1.0 if (t.get("actual_pnl") is not None and float(t["actual_pnl"]) > 0) else 0.0
+        for t in trades if t.get("edge") is not None
+    ]
 
     if len(edges) < 20:
         return 0.0

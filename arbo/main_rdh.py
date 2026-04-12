@@ -1059,30 +1059,94 @@ class RDHOrchestrator:
                                    strategy=dual_strat, live_weekly_pnl=str(live_weekly))
 
                 # Also restore global daily/weekly P&L
+                # IMPORTANT: For dual-mode strategies (B3), exclude paper actual_pnl
+                # and use LIVE PnL instead. Otherwise paper losses wrongly trigger
+                # global emergency shutdown (e.g. B3 paper -$2000 but live -$41).
                 today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                dual_list = list(DUAL_MODE_STRATEGIES)
+
+                # Non-dual strategies: paper actual_pnl
                 result = await session.execute(
                     sa.select(
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
                     .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(_no_preval)
+                    .where(~PaperTrade.strategy.in_(dual_list))
                     .where(PaperTrade.resolved_at >= today)
                 )
-                daily_total = result.scalar()
+                daily_paper = float(result.scalar() or 0)
+
+                # Dual-mode strategies: live PnL from trade_details
+                daily_live = 0.0
+                for dual_strat in DUAL_MODE_STRATEGIES:
+                    result = await session.execute(
+                        sa.text("""
+                            SELECT COALESCE(SUM(
+                                ((trade_details->>'live_exit_price')::float
+                                - (trade_details->>'live_entry_price')::float)
+                                * (trade_details->>'live_entry_shares')::float
+                            ), 0)
+                            FROM paper_trades
+                            WHERE strategy = :strat
+                              AND status IN ('won','lost','sold')
+                              AND trade_details->>'live_entry_price' IS NOT NULL
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND resolved_at >= :since
+                        """),
+                        {"strat": dual_strat, "since": today},
+                    )
+                    daily_live += float(result.scalar() or 0)
+
+                daily_total = daily_paper + daily_live
                 if daily_total:
                     self._risk_manager._state.daily_pnl = Decimal(str(daily_total))
 
+                # Weekly: same split
                 result = await session.execute(
                     sa.select(
                         sa.func.coalesce(sa.func.sum(PaperTrade.actual_pnl), 0),
                     )
                     .where(PaperTrade.status.in_(["won", "lost", "sold"]))
                     .where(_no_preval)
+                    .where(~PaperTrade.strategy.in_(dual_list))
                     .where(PaperTrade.resolved_at >= week_start)
                 )
-                weekly_total = result.scalar()
-                if weekly_total:
-                    self._risk_manager._state.weekly_pnl = Decimal(str(weekly_total))
+                weekly_paper = float(result.scalar() or 0)
+
+                weekly_live = 0.0
+                for dual_strat in DUAL_MODE_STRATEGIES:
+                    result = await session.execute(
+                        sa.text("""
+                            SELECT COALESCE(SUM(
+                                ((trade_details->>'live_exit_price')::float
+                                - (trade_details->>'live_entry_price')::float)
+                                * (trade_details->>'live_entry_shares')::float
+                            ), 0)
+                            FROM paper_trades
+                            WHERE strategy = :strat
+                              AND status IN ('won','lost','sold')
+                              AND trade_details->>'live_entry_price' IS NOT NULL
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND resolved_at >= :since
+                        """),
+                        {"strat": dual_strat, "since": week_start},
+                    )
+                    weekly_live += float(result.scalar() or 0)
+
+                weekly_total = weekly_paper + weekly_live
+                self._risk_manager._state.weekly_pnl = Decimal(str(weekly_total))
+                logger.info(
+                    "global_pnl_restored",
+                    daily_paper=daily_paper,
+                    daily_live=daily_live,
+                    weekly_paper=weekly_paper,
+                    weekly_live=weekly_live,
+                )
 
             logger.info(
                 "pnl_restored_from_db",

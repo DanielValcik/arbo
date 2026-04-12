@@ -196,9 +196,15 @@ class AdaptiveConfig:
 
         old_value = self._overrides.get(param, self._get_default(param))
 
-        # Skip if no change
+        # Skip if no change (same as default or existing override)
         if abs(old_value - value) < 1e-9:
-            return True
+            logger.info(
+                "adaptive_config_noop",
+                param=param,
+                value=value,
+                msg="No change — value equals current. Not logging as change.",
+            )
+            return False  # Signal to Watchdog: no actual change applied
 
         # Apply
         self._overrides[param] = value
