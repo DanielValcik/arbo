@@ -161,6 +161,7 @@ _STRATEGY_META: dict[str, dict[str, str]] = {
     "C": {"name": "Compound Weather", "category": "Weather", "description": "Weather temperature ladder trades"},
     "C2": {"name": "EMOS Exit Fusion", "category": "Weather", "description": "EMOS adaptive probability + edge-based early exit"},
     "D": {"name": "NBA Green Book", "category": "Sports", "description": "NBA pre-game entry, green book exit mid-game (both sides, always-close)"},
+    "D_UFC": {"name": "UFC Green Book", "category": "Sports", "description": "UFC fight green book — baseline params, pending UFC sweep"},
 }
 
 
@@ -2510,26 +2511,27 @@ async def api_strategy_d(_user: str = Depends(_verify_credentials)) -> dict[str,
         factory = get_session_factory()
         async with factory() as session:
             result = await session.execute(
-                select(PaperTrade).where(PaperTrade.strategy == "D").order_by(desc(PaperTrade.created_at)).limit(100)
+                select(PaperTrade).where(PaperTrade.strategy == "D").order_by(desc(PaperTrade.placed_at)).limit(100)
             )
             trades = result.scalars().all()
             total_trades = len(trades)
             for t in trades:
-                tp = _dec(t.pnl) or 0
+                tp = _dec(t.actual_pnl) or 0
                 pnl += tp
                 if tp > 0:
                     wins += 1
                 details = getattr(t, "trade_details", None) or {}
-                if isinstance(details, dict) and details.get("exit_reason") == "green_book":
+                exit_reason = t.exit_reason or (details.get("exit_reason", "") if isinstance(details, dict) else "")
+                if exit_reason == "green_book":
                     green_books += 1
                 if len(recent_trades) < 20:
                     recent_trades.append({
-                        "time": t.created_at.isoformat() if t.created_at else "",
-                        "market": details.get("question", "")[:60] if isinstance(details, dict) else "",
-                        "side": details.get("side", "") if isinstance(details, dict) else "",
-                        "entry_price": _dec(t.entry_price),
+                        "time": t.placed_at.isoformat() if t.placed_at else "",
+                        "market": (details.get("question", "") if isinstance(details, dict) else "")[:60],
+                        "side": details.get("side", "") if isinstance(details, dict) else t.side,
+                        "entry_price": _dec(t.price),
                         "exit_price": _dec(t.exit_price),
-                        "exit_reason": details.get("exit_reason", "") if isinstance(details, dict) else "",
+                        "exit_reason": exit_reason,
                         "pnl": tp,
                     })
     except Exception as e:

@@ -41,6 +41,7 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "C": Decimal("1000"),  # Compound Weather — 50%
     "C2": Decimal("1000"), # EMOS + Edge Exit Fusion (weather variant)
     "D": Decimal("300"),   # NBA Green Book Engine — small sizing, optimization phase
+    "D_UFC": Decimal("200"),  # UFC Green Book — smaller (baseline params, pending UFC sweep)
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
 MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy

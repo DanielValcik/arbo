@@ -38,48 +38,55 @@ def main() -> None:
         print(f"ERROR: DB not found: {db_path}")
         sys.exit(1)
 
-    conn = sqlite3.connect(str(db_path), timeout=60)
-    conn.execute("PRAGMA busy_timeout=60000")
+    # Read-only URI mode (works even if DB is mounted readonly)
+    # Immutable mode — treats DB as read-only AND doesn't touch -wal/-shm files
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True, timeout=60)
 
-    # Get latest Elo per team (NBA only)
+    # Load for all supported sports (current + future)
+    sports = ["nba", "ufc", "nfl", "epl"]
     elo: dict[str, list[float]] = {}
-    rows = conn.execute("""
-        SELECT team, MAX(date) as latest_date, elo, glicko_rating
-        FROM ratings
-        WHERE sport = 'nba'
-        GROUP BY team
-    """).fetchall()
-    for team, date, elo_val, glicko_val in rows:
-        if elo_val is not None:
-            elo[team] = [float(elo_val), float(glicko_val or elo_val)]
-    print(f"Elo teams: {len(elo)}")
-
-    # Get Pinnacle odds — keyed by simple "nba_team_a_team_b" pattern
-    # ESPN game_id format: nba_YYYYMMDD_AWAY_HOME
     pinnacle: dict[str, list[float]] = {}
-    rows = conn.execute("""
-        SELECT p.game_id, p.home_prob_novig, p.away_prob_novig
-        FROM pinnacle_odds p
-        JOIN games g ON p.game_id = g.game_id
-        WHERE g.sport = 'nba' AND p.home_prob_novig IS NOT NULL
-        ORDER BY p.ts DESC
-    """).fetchall()
 
-    for game_id, hp, ap in rows:
-        if hp and ap and hp > 0 and ap > 0:
-            # Extract teams from game_id: nba_YYYYMMDD_AWAY_HOME
-            parts = game_id.split("_")
-            if len(parts) >= 4:
-                away, home = parts[2], parts[3]
-                # Store under both orderings for flexible lookup
-                key1 = f"nba_{home}_{away}"    # home listed first
-                key2 = f"nba_{away}_{home}"    # away listed first
-                if key1 not in pinnacle:
-                    pinnacle[key1] = [float(hp), float(ap)]
-                if key2 not in pinnacle:
-                    pinnacle[key2] = [float(ap), float(hp)]
+    for sport in sports:
+        # Elo per team
+        rows = conn.execute(f"""
+            SELECT team, MAX(date) as latest_date, elo, glicko_rating
+            FROM ratings
+            WHERE sport = '{sport}'
+            GROUP BY team
+        """).fetchall()
+        n_elo = 0
+        for team, date, elo_val, glicko_val in rows:
+            if elo_val is not None:
+                # Keys are unqualified (NBA "LAL", UFC "MAKHACHEV") — sport implied by variant's use
+                elo[team] = [float(elo_val), float(glicko_val or elo_val)]
+                n_elo += 1
+        print(f"{sport} Elo teams: {n_elo}")
 
-    print(f"Pinnacle games: {len(pinnacle)}")
+        # Pinnacle keyed by "<sport>_<team_a>_<team_b>"
+        rows = conn.execute(f"""
+            SELECT p.game_id, p.home_prob_novig, p.away_prob_novig
+            FROM pinnacle_odds p
+            JOIN games g ON p.game_id = g.game_id
+            WHERE g.sport = '{sport}' AND p.home_prob_novig IS NOT NULL
+            ORDER BY p.ts DESC
+        """).fetchall()
+        n_pin = 0
+        for game_id, hp, ap in rows:
+            if hp and ap and hp > 0 and ap > 0:
+                parts = game_id.split("_")
+                if len(parts) >= 4:
+                    away, home = parts[2], parts[3]
+                    key1 = f"{sport}_{home}_{away}"
+                    key2 = f"{sport}_{away}_{home}"
+                    if key1 not in pinnacle:
+                        pinnacle[key1] = [float(hp), float(ap)]
+                        n_pin += 1
+                    if key2 not in pinnacle:
+                        pinnacle[key2] = [float(ap), float(hp)]
+        print(f"{sport} Pinnacle games: {n_pin}")
+
+    print(f"Total Elo: {len(elo)}, Pinnacle: {len(pinnacle)}")
 
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)

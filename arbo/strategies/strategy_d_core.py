@@ -300,6 +300,15 @@ class StrategyDCore:
         )
 
         if self._paper:
+            trade_details = {
+                "sport": self.SPORT_NAME,
+                "side": signal.side,
+                "team_a": signal.market.team_a,
+                "team_b": signal.market.team_b,
+                "question": signal.market.question,
+                "edge": round(signal.edge, 4),
+                "game_date": signal.market.game_date,
+            }
             trade = self._paper.place_trade(
                 market_condition_id=signal.market.condition_id,
                 token_id=signal.token_id,
@@ -309,6 +318,7 @@ class StrategyDCore:
                 layer=self.RISK_LAYER,
                 market_category="Sports",
                 strategy=self.STRATEGY_NAME,
+                trade_details=trade_details,
             )
             if trade:
                 position.live_fill_status = "paper"

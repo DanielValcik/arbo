@@ -92,6 +92,7 @@ class RDHOrchestrator:
         self._strategy_b3: Any = None  # Binance Oracle Scalper (5-min BTC Up/Down)
         self._strategy_b3_15m: Any = None  # Binance Oracle Scalper (15-min BTC Up/Down)
         self._strategy_d: Any = None  # NBA Green Book Engine
+        self._strategy_d_ufc: Any = None  # UFC Green Book Engine
         self._binance_ws: Any = None   # Binance WebSocket feed for B2/B3
         self._exit_manager: Any = None  # Persistent exit manager for live C2/B2
 
@@ -378,6 +379,9 @@ class RDHOrchestrator:
         # Strategy D: NBA Green Book Engine
         self._strategy_d = await self._init_optional("StrategyD", self._init_strategy_d)
 
+        # Strategy D UFC variant
+        self._strategy_d_ufc = await self._init_optional("StrategyD_UFC", self._init_strategy_d_ufc)
+
         # Strategy B3_15M: Binance Oracle Scalper (15-min variant)
         self._strategy_b3_15m = await self._init_optional(
             "StrategyB3_15M", self._init_strategy_b3_15m,
@@ -642,6 +646,50 @@ class RDHOrchestrator:
             pinnacle_odds=pinnacle_odds,
         )
         logger.info("strategy_d_initialized", execution_mode=execution_mode)
+        return s
+
+    async def _init_strategy_d_ufc(self) -> Any:
+        """Initialize Strategy D UFC variant (baseline params pending UFC sweep)."""
+        import json
+        import os
+        from pathlib import Path
+
+        from arbo.strategies.strategy_d_ufc import StrategyDUfc
+
+        execution_mode = os.getenv("D_UFC_EXECUTION_MODE", "paper")
+        live_executor = None
+        if execution_mode == "live":
+            from arbo.core.live_executor import LiveExecutor
+            if self._poly_client_readonly is not None:
+                live_executor = LiveExecutor(self._poly_client_readonly)
+                logger.info("d_ufc_live_executor_ready")
+            else:
+                execution_mode = "paper"
+
+        elo_ratings: dict[str, tuple[float, float]] = {}
+        pinnacle_odds: dict[str, tuple[float, float]] = {}
+        cache_path = Path("arbo/data/strategy_d_model.json")
+        if cache_path.exists():
+            try:
+                data = json.loads(cache_path.read_text())
+                elo_ratings = {k: tuple(v) for k, v in data.get("elo", {}).items()}
+                # Only use UFC-prefixed Pinnacle keys
+                pinnacle_odds = {k: tuple(v) for k, v in data.get("pinnacle", {}).items()
+                                 if k.startswith("ufc_")}
+                logger.info("strategy_d_ufc_model_loaded",
+                            elo_teams=len(elo_ratings), pinnacle_games=len(pinnacle_odds))
+            except Exception as e:
+                logger.warning("strategy_d_ufc_model_load_failed", error=str(e))
+
+        s = StrategyDUfc(
+            risk_manager=self._risk_manager,
+            paper_engine=self._paper_engine if execution_mode == "paper" else None,
+            live_executor=live_executor,
+            orderbook_provider=self._orderbook_provider,
+            elo_ratings=elo_ratings,
+            pinnacle_odds=pinnacle_odds,
+        )
+        logger.info("strategy_d_ufc_initialized", execution_mode=execution_mode)
         return s
 
     async def _init_strategy_b2(self) -> Any:
@@ -1526,6 +1574,9 @@ class RDHOrchestrator:
         if self._strategy_d is not None:
             task_defs.append(("strategy_D", self._run_strategy_d, 60))          # NBA scan every 60s (fast edge detection)
             task_defs.append(("D_exit_monitor", self._run_d_exit_check, 30))    # exit check every 30s
+        if self._strategy_d_ufc is not None:
+            task_defs.append(("strategy_D_UFC", self._run_strategy_d_ufc, 120)) # UFC scan every 2min (fewer fights)
+            task_defs.append(("D_UFC_exit_monitor", self._run_d_ufc_exit_check, 30))
 
         # B3 Chainlink price recorder (every 5s for precise btc_at_start)
         if self._strategy_b3 is not None:
@@ -1843,6 +1894,51 @@ class RDHOrchestrator:
         """Discover active NBA markets on Polymarket (see strategy_d_discovery_nba.py)."""
         from arbo.strategies.strategy_d_discovery_nba import discover_nba_markets
         return await discover_nba_markets(self._gamma_client if hasattr(self, "_gamma_client") else None)
+
+    async def _discover_ufc_markets(self) -> list:
+        """Discover active UFC markets on Polymarket (see strategy_d_discovery_ufc.py)."""
+        from arbo.strategies.strategy_d_discovery_ufc import discover_ufc_markets
+        return await discover_ufc_markets(self._gamma_client if hasattr(self, "_gamma_client") else None)
+
+    async def _run_strategy_d_ufc(self) -> None:
+        """Run Strategy D UFC — entry scan."""
+        if self._strategy_d_ufc is None:
+            return
+        try:
+            ufc_markets = await self._discover_ufc_markets()
+        except Exception as e:
+            logger.warning("strategy_d_ufc_discover_failed", error=str(e))
+            return
+        if not ufc_markets:
+            return
+        signals = self._strategy_d_ufc.generate_signals(ufc_markets)
+        entered = 0
+        for sig in signals:
+            pos = await self._strategy_d_ufc.execute_entry(sig)
+            if pos is not None:
+                entered += 1
+        if entered > 0:
+            logger.info("strategy_d_ufc_entries", count=entered, signals=len(signals))
+            if self._paper_engine is not None:
+                await self._paper_engine.sync_positions_to_db()
+
+    async def _run_d_ufc_exit_check(self) -> None:
+        """Check UFC positions for exit every 30s."""
+        if self._strategy_d_ufc is None or not self._strategy_d_ufc._positions:
+            return
+        if self._orderbook_provider is None:
+            return
+        token_ids = [p.token_id for p in self._strategy_d_ufc._positions.values()]
+        snapshots = await self._orderbook_provider.get_snapshots_batch(
+            token_ids, neg_risk=False
+        )
+        current_prices: dict[str, float] = {}
+        for tid, snap in snapshots.items():
+            if snap is not None and snap.best_bid is not None:
+                current_prices[tid] = float(snap.best_bid)
+        exits = self._strategy_d_ufc.check_exits(current_prices)
+        if exits:
+            logger.info("strategy_d_ufc_exits", count=len(exits))
 
     async def _run_strategy_c2(self) -> None:
         """Run Strategy C2: EMOS + Edge Exit Fusion — entry scan only.
