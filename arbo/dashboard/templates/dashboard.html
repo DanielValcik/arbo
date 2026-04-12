@@ -4186,9 +4186,18 @@
             }
         }
 
-        // Trades table — from closed positions with strategy=B3
-        const closedResp = await fetchJSON('/api/closed-positions?strategy=B3');
-        const closed = closedResp?.positions || []
+        // Trades — only LIVE-filled trades for B3 (paper dominates volume,
+        // so without live_only filter the LIMIT drops old live trades).
+        const closedResp = await fetchJSON('/api/closed-positions?strategy=B3&live_only=1&limit=1000');
+        const allClosedB3 = closedResp?.positions || [];
+        // Filter to V6.0 era (current strategy) — deploy at 2026-04-06 18:27 UTC.
+        // Pre-V6.0 trades are different strategy (had early exits) and would
+        // mix architectures in same chart.
+        const B3_V6_DEPLOY_MS = Date.parse('2026-04-06T18:27:00Z');
+        const closed = allClosedB3.filter(t => {
+            const ts = Date.parse(t.placed_at || '');
+            return ts >= B3_V6_DEPLOY_MS;
+        });
 
         // Per-trade cumulative P&L chart (starting from $0)
         if (closed.length > 0 && typeof Chart !== 'undefined') {
@@ -5196,7 +5205,7 @@
         try {
             const [posData, closedData] = await Promise.allSettled([
                 fetchJSON('/api/positions?strategy=B3_15M'),
-                fetchJSON('/api/closed-positions?strategy=B3_15M&limit=200'),
+                fetchJSON('/api/closed-positions?strategy=B3_15M&live_only=1&limit=500'),
             ]);
 
             const hasLiveFill = (td) => {

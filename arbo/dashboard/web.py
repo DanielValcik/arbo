@@ -1086,8 +1086,23 @@ async def api_closed_positions(
     request: Request,
     _user: str = Depends(_verify_credentials),
 ) -> dict[str, Any]:
-    """Closed (resolved) positions — won and lost trades."""
+    """Closed (resolved) positions — won and lost trades.
+
+    Query params:
+      strategy: filter by strategy name (e.g. "B3", "B3_15M")
+      live_only: "1" → return only trades with live_entry_shares > 0
+                 (prevents live trades from being dropped by LIMIT when
+                 paper trades dominate volume, e.g., B3 with 825 paper
+                 since V6.0 but only 20 live fills)
+      limit: max trades to return (default 500, capped 10000)
+    """
     strategy_filter = request.query_params.get("strategy")
+    live_only = request.query_params.get("live_only") == "1"
+    try:
+        limit = int(request.query_params.get("limit") or 500)
+    except ValueError:
+        limit = 500
+    limit = max(1, min(limit, 10000))
     trades: list[dict[str, Any]] = []
     try:
         from arbo.utils.db import Market, PaperTrade, get_session_factory
@@ -1107,8 +1122,20 @@ async def api_closed_positions(
             )
             if strategy_filter:
                 query = query.where(PaperTrade.strategy == strategy_filter)
+            if live_only:
+                # Only trades with actual live position: live_entry_price set
+                # and live_entry_shares > 0. Uses JSONB operators.
+                query = query.where(
+                    sa.and_(
+                        PaperTrade.trade_details["live_entry_price"].isnot(None),
+                        sa.cast(
+                            PaperTrade.trade_details["live_entry_shares"].astext,
+                            sa.Float,
+                        ) > 0,
+                    )
+                )
             result = await session.execute(
-                query.order_by(PaperTrade.resolved_at.desc()).limit(500)
+                query.order_by(PaperTrade.resolved_at.desc()).limit(limit)
             )
             for row in result.all():
                 trade = row[0]
