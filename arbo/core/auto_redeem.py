@@ -101,12 +101,21 @@ async def redeem_resolved_positions() -> dict:
         data = await loop.run_in_executor(None, lambda: _json.loads(
             urllib.request.urlopen(req, timeout=10, context=_ssl).read()
         ))
-        redeemable_ids = [
-            p["conditionId"] for p in data
+        # Collect both condition_id and token_id (asset) for each redeemable.
+        # token_id matching prevents the fake-WIN bug where losing side of a
+        # resolved market was incorrectly marked as WIN via condition_id match.
+        redeemable_entries: list[dict] = [
+            {
+                "condition_id": p["conditionId"],
+                "token_id": str(p.get("asset") or ""),
+                "outcome": p.get("outcome"),
+            }
+            for p in data
             if float(p.get("currentValue", 0)) > 0
             and p.get("conditionId")
             and p.get("redeemable") is True
         ]
+        redeemable_ids = [e["condition_id"] for e in redeemable_entries]
         logger.info(
             "auto_redeem_scan",
             total_positions=len(data),
@@ -146,6 +155,8 @@ async def redeem_resolved_positions() -> dict:
             "redeemed": redeemed,
             "errors": errors,
             "redeemed_condition_ids": redeemable_ids[:redeemed],
+            "redeemed_token_ids": [e["token_id"] for e in redeemable_entries[:redeemed] if e["token_id"]],
+            "redeemed_entries": redeemable_entries[:redeemed],
         }
 
     except Exception as e:

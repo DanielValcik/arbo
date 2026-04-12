@@ -2855,10 +2855,14 @@ class RDHOrchestrator:
             logger.info("auto_redeem_result", status=status, redeemed=redeemed)
 
             # After redeem: update B3 trades in DB with resolution data.
-            # Redeemed positions = WINs ($1). This is faster than Gamma API.
+            # Match by token_id (= winning side). Matching by condition_id
+            # was a bug — events have 2 token_ids (UP+DOWN) and blindly
+            # setting exit=1.0 for all trades on that cid falsely marked
+            # losing-side trades as wins. See audit report (2026-04-12).
+            redeemed_tokens = result.get("redeemed_token_ids", [])
             redeemed_cids = result.get("redeemed_condition_ids", [])
-            if redeemed_cids:
-                await self._resolve_b3_from_redeem(redeemed_cids)
+            if redeemed_tokens or redeemed_cids:
+                await self._resolve_b3_from_redeem(redeemed_cids, redeemed_tokens)
             if redeemed > 0 and self._slack_bot:
                 # After-redeem snapshot. Two distinct numbers:
                 #   1. Wallet vs start = current available USDC minus the
@@ -2903,11 +2907,27 @@ class RDHOrchestrator:
         except Exception as e:
             logger.warning("auto_redeem_task_error", error=str(e))
 
-    async def _resolve_b3_from_redeem(self, redeemed_condition_ids: list[str]) -> None:
+    async def _resolve_b3_from_redeem(
+        self,
+        redeemed_condition_ids: list[str],
+        redeemed_token_ids: list[str] | None = None,
+    ) -> None:
         """Write resolution data to B3 trades based on auto-redeem results.
 
-        Redeemed positions = WINs (token redeemed at $1).
-        Much faster than waiting for Gamma API — Polymarket already confirmed.
+        Match by TOKEN_ID (the specific winning-side token) — not condition_id.
+        Matching by condition_id was a bug: a Polymarket event has 2 token_ids
+        (UP + DOWN). When one side wins, data-api returns the winning
+        condition_id + winning token_id (asset). If we had trades on the
+        LOSING side with the same condition_id, matching on condition_id
+        falsely marked them as WIN ($1) instead of LOSS ($0).
+
+        Logic:
+          - trade.token_id IN redeemed_token_ids → WIN (exit=$1)
+          - trade.market_condition_id IN redeemed_condition_ids
+              but trade.token_id NOT IN redeemed_token_ids → LOSS (exit=$0)
+              (we held the losing side of this market)
+          - Other trades (event ended, not redeemed, no cid match) are left
+              alone here; strategy_b3.check_exits handles them via Gamma API.
         """
         if not redeemed_condition_ids:
             return
@@ -2917,9 +2937,11 @@ class RDHOrchestrator:
 
             factory = get_session_factory()
             cid_set = set(redeemed_condition_ids)
+            token_set = set(redeemed_token_ids or [])
 
             async with factory() as session:
-                # Find B3 trades with these condition_ids that lack live exit data
+                # All B3 trades for these condition_ids. Decide WIN vs LOSS
+                # per-trade based on whether trade.token_id is in token_set.
                 result = await session.execute(
                     _sa.select(PaperTrade)
                     .where(PaperTrade.strategy == "B3")
@@ -2930,67 +2952,44 @@ class RDHOrchestrator:
                 for trade in result.scalars():
                     d = trade.trade_details or {}
                     if d.get("live_exit_status") == "resolution":
-                        continue  # Already resolved
+                        continue  # Already resolved correctly by check_exits
                     if d.get("live_fill_status") not in ("filled", "partial"):
                         continue  # No live position
                     if not d.get("live_entry_price"):
                         continue
 
-                    # Redeemed = WIN ($1)
+                    # Decide exit price by token_id match
+                    if str(trade.token_id) in token_set:
+                        exit_price = 1.0  # Our token won
+                        source = "auto_redeem_win"
+                    elif not token_set:
+                        # Backward-compat: if no token_ids available, skip
+                        # (don't guess — let check_exits resolve via Gamma).
+                        continue
+                    else:
+                        exit_price = 0.0  # Our token lost (other side won)
+                        source = "auto_redeem_loss"
+
                     trade.trade_details = {
                         **d,
-                        "live_exit_price": 1.0,
+                        "live_exit_price": exit_price,
                         "live_exit_shares": d.get("live_entry_shares", 0),
                         "live_exit_status": "resolution",
                         "live_exit_latency_ms": 0,
-                        "resolution_source": "auto_redeem",
+                        "resolution_source": source,
                     }
                     updated += 1
 
-                    # Also remove from _live_holding if present
                     if self._strategy_b3:
-                        token_id = trade.token_id
-                        self._strategy_b3._live_holding.pop(token_id, None)
-
-                # Also mark LOSSES: B3 trades with live entry but no exit,
-                # where event ended >5 min ago and NOT in redeemed set = LOSS ($0)
-                import time as _time
-                now = _time.time()
-                loss_result = await session.execute(
-                    _sa.select(PaperTrade)
-                    .where(PaperTrade.strategy == "B3")
-                    .where(PaperTrade.status.in_(["won", "lost", "sold", "open"]))
-                    .order_by(PaperTrade.placed_at.desc())
-                    .limit(50)
-                )
-                for trade in loss_result.scalars():
-                    d = trade.trade_details or {}
-                    if d.get("live_exit_status") == "resolution":
-                        continue  # Already resolved
-                    if d.get("live_fill_status") not in ("filled", "partial"):
-                        continue
-                    if not d.get("live_entry_price"):
-                        continue
-                    event_end = d.get("event_end_ts", 0)
-                    if not event_end or now < event_end + 300:
-                        continue  # Event not ended yet or too recent
-                    # Not redeemed + event ended >5 min ago = LOSS
-                    if trade.market_condition_id not in cid_set:
-                        trade.trade_details = {
-                            **d,
-                            "live_exit_price": 0.0,
-                            "live_exit_shares": d.get("live_entry_shares", 0),
-                            "live_exit_status": "resolution",
-                            "live_exit_latency_ms": 0,
-                            "resolution_source": "auto_redeem_loss",
-                        }
-                        updated += 1
-                        if self._strategy_b3:
-                            self._strategy_b3._live_holding.pop(trade.token_id, None)
+                        self._strategy_b3._live_holding.pop(trade.token_id, None)
 
                 if updated > 0:
                     await session.commit()
-                    logger.info("b3_resolved_from_redeem", count=updated)
+                    logger.info(
+                        "b3_resolved_from_redeem",
+                        count=updated,
+                        redeemed_tokens=len(token_set),
+                    )
         except Exception as e:
             logger.warning("b3_resolve_from_redeem_error", error=str(e))
 
