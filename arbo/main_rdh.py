@@ -4132,16 +4132,38 @@ class RDHOrchestrator:
                 )
                 sent_today["daily_loss"] = today_key
 
-        # 3. Tasks health — only alert on permanently stopped or truly crashed tasks
-        stopped = [
-            name
-            for name, ts in self._tasks.items()
-            if ts.permanent_stop or (ts.task and ts.task.done())
-        ]
-        if stopped and "stopped_tasks" not in sent_today:
-            alerts.append(f":red_circle: Strategie zastaveny: {', '.join(stopped)}")
-            sent_today["stopped_tasks"] = today_key
-            logger.warning("anomaly_stopped_tasks", tasks=stopped)
+        # 3. Tasks health — only alert on truly broken tasks.
+        # FIXED 2026-04-12: was false-positive during service restarts.
+        # Old logic used `task.done()` which is true transiently during:
+        #   - Normal service restart (old tasks exit, new ones haven't spawned yet)
+        #   - _restart_task race window (cancel → await → recreate)
+        # New logic (3 safeguards):
+        #   a) Skip anomaly check if service uptime < 10 min (tasks still initializing)
+        #   b) Only alert on `permanent_stop=True` (set after 3 errors in 10min window)
+        #   c) Ignore disabled tasks
+        # Rationale: permanent_stop is an EXPLICIT signal from _run_task_loop that
+        # the task hit the error threshold. `task.done()` without permanent_stop
+        # means health_monitor will auto-restart (no alert needed).
+        uptime_gate_s = 600  # 10 min minimum before task-health alerts
+        if self.uptime_s < uptime_gate_s:
+            logger.info(
+                "anomaly_check_skip_task_health",
+                uptime_s=int(self.uptime_s),
+                min_uptime_s=uptime_gate_s,
+                msg="Service too young — skipping task-health check",
+            )
+        else:
+            stopped = [
+                name
+                for name, ts in self._tasks.items()
+                if ts.permanent_stop and ts.enabled
+            ]
+            if stopped and "stopped_tasks" not in sent_today:
+                alerts.append(
+                    f":red_circle: Strategie permanentně zastaveny: {', '.join(stopped)}"
+                )
+                sent_today["stopped_tasks"] = today_key
+                logger.warning("anomaly_stopped_tasks", tasks=stopped)
 
         if alerts:
             msg = "*Anomalie detekovana:*\n" + "\n".join(alerts)
