@@ -362,11 +362,41 @@ class B315MScanner:
         self,
         btc_price: float,
         sigma_per_min: float,
+        *,
+        params: dict | None = None,
+        variant_id: str = "default",
     ) -> list[B315MSignal]:
-        """Scan active events for entry signals (15-min variant, minutes 4-11)."""
+        """Scan active events for entry signals (15-min variant, minutes 4-11).
+
+        Args:
+            btc_price: current BTC mid price (Binance).
+            sigma_per_min: realized per-minute volatility.
+            params: optional override dict — keys mirror module-level constants
+                (SIGMA_FLOOR, SIGMA_SCALE, ENTRY_THRESHOLD, MIN_ENTRY_MIN,
+                MAX_ENTRY_MIN, CONTRARIAN, MIN_ENTRY_MKT_FV). If None, falls
+                back to module constants (champion's params, backward compat).
+            variant_id: identifier so multiple variants can scan the same event
+                without colliding in `_minute_fired` deduplication. Champion
+                uses "default"; ShadowOrchestrator passes per-variant IDs.
+
+        Returns the list of B315MSignal objects this variant would have fired.
+        Mutates `_minute_fired[(cond_id, minute, variant_id)] = True` for each
+        emitted signal so we don't re-fire the same minute for the same variant.
+        """
+        # Resolve per-variant params (fall back to module constants for champion)
+        p = params or {}
+        sigma_floor_eff = p.get("SIGMA_FLOOR", SIGMA_FLOOR)
+        sigma_scale_eff = p.get("SIGMA_SCALE", SIGMA_SCALE)
+        entry_threshold_eff = p.get("ENTRY_THRESHOLD", ENTRY_THRESHOLD)
+        min_entry_min_eff = p.get("MIN_ENTRY_MIN", MIN_ENTRY_MIN)
+        max_entry_min_eff = p.get("MAX_ENTRY_MIN", MAX_ENTRY_MIN)
+        contrarian_eff = p.get("CONTRARIAN", CONTRARIAN)
+        min_entry_mkt_fv_eff = p.get("MIN_ENTRY_MKT_FV", MIN_ENTRY_MKT_FV)
+        # WINDOW_MIN is a strategy-level constant, not variant-overridable
+
         now = time.time()
         signals: list[B315MSignal] = []
-        sigma_per_min = max(sigma_per_min, SIGMA_FLOOR)
+        sigma_per_min = max(sigma_per_min, sigma_floor_eff)
 
         for ev in self._events.values():
             if ev.traded:
@@ -376,10 +406,12 @@ class B315MScanner:
             elapsed_min = elapsed_s / 60.0
 
             entry_minute = int(elapsed_min)
-            if entry_minute < MIN_ENTRY_MIN or entry_minute > MAX_ENTRY_MIN:
+            if entry_minute < min_entry_min_eff or entry_minute > max_entry_min_eff:
                 continue
-            # Fire once per integer minute per event
-            key = (ev.condition_id, entry_minute)
+            # Fire once per integer minute per event PER VARIANT
+            # (variant_id in key prevents collision when champion + challengers
+            # scan the same event in parallel)
+            key = (ev.condition_id, entry_minute, variant_id)
             if self._minute_fired.get(key):
                 continue
             frac = elapsed_min - entry_minute
@@ -406,7 +438,7 @@ class B315MScanner:
                 market_fv_up = 1.0 if log_ratio > 0 else (0.0 if log_ratio < 0 else 0.5)
             market_fv_up = max(0.02, min(0.98, market_fv_up))
 
-            sigma_rem_model = sigma_per_min * SIGMA_SCALE * sqrt_t
+            sigma_rem_model = sigma_per_min * sigma_scale_eff * sqrt_t
             if sigma_rem_model > 1e-12:
                 signal_fv_up = _norm_cdf(log_ratio / sigma_rem_model)
             else:
@@ -414,18 +446,18 @@ class B315MScanner:
             signal_fv_up = max(0.01, min(0.99, signal_fv_up))
 
             signal_dev = signal_fv_up - 0.50
-            if abs(signal_dev) < ENTRY_THRESHOLD:
+            if abs(signal_dev) < entry_threshold_eff:
                 continue
 
             direction = (
                 (-1 if signal_dev > 0 else 1)
-                if CONTRARIAN
+                if contrarian_eff
                 else (1 if signal_dev > 0 else -1)
             )
 
             entry_mkt_fv = market_fv_up if direction == 1 else (1.0 - market_fv_up)
 
-            if entry_mkt_fv < MIN_ENTRY_MKT_FV:
+            if entry_mkt_fv < min_entry_mkt_fv_eff:
                 continue
 
             self._minute_fired[key] = True
