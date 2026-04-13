@@ -1694,14 +1694,14 @@
                 </div>
             </div>
 
-            <!-- Variant Leaderboard — B3 5-min (Phase A: champion-only) -->
+            <!-- Variant Leaderboard — B3 5-min -->
             <div class="card grid-full" style="border-top:3px solid #3fb950">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
                     Variant Leaderboard — B3 5-min
-                    <span id="lb3VariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase A — champion only</span>
+                    <span id="lb3VariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase 2C — auto-challenger + promotion</span>
                 </div>
                 <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
-                    Spec: <code>docs/VARIANT_LEADERBOARD_SPEC.md</code> · Pool: <code>config/variants/b3/</code>
+                    Pool: <code>config/variants/b3/</code> · Champion + 3 challengers shadow-evaluated per signal · auto-challenger via Gemini, promotion via Slack
                 </div>
                 <div style="overflow-x:auto">
                     <table style="width:100%;font-size:11px">
@@ -1725,14 +1725,14 @@
                 </div>
             </div>
 
-            <!-- Variant Leaderboard — B3 15-min (Phase A: champion-only) -->
+            <!-- Variant Leaderboard — B3 15-min -->
             <div class="card grid-full" style="border-top:3px solid #e3b341">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
                     Variant Leaderboard — B3 15-min
-                    <span id="lb315mVariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase A — champion only</span>
+                    <span id="lb315mVariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase 2C — auto-challenger + promotion</span>
                 </div>
                 <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
-                    Spec: <code>docs/VARIANT_LEADERBOARD_SPEC.md</code> · Pool: <code>config/variants/b3_15m/</code> (3 challengers defined, not yet wired)
+                    Pool: <code>config/variants/b3_15m/</code> · Champion + 3 challengers shadow-evaluated per signal · "(s)" = shadow counterfactual stats · 🆙 = pending promotion · [auto] = Gemini-generated
                 </div>
                 <div style="overflow-x:auto">
                     <table style="width:100%;font-size:11px">
@@ -5320,6 +5320,8 @@
                 const sQual = v.shadow_n_qualified || 0;
                 const sSig = v.shadow_n_signals || 0;
                 const shadowAvail = sResolved > 0 || sQual > 0;
+                // Even if 0 qualified, show signal count so user knows scanner is running
+                const shadowSeen = sSig > 0;
 
                 // Use live stats if available (n_live>0 for champion, or challenger promoted live);
                 // otherwise use shadow stats with "(shadow)" marker.
@@ -5340,7 +5342,8 @@
                 const nCell = useLive
                     ? `${v.n_live} <span style="color:var(--text-dim);font-size:9px">/${v.n_total}</span>`
                     : shadowAvail ? `<span title="shadow qualified/signals">${sQual}<span style="color:var(--text-dim);font-size:9px">/${sSig} s</span></span>`
-                    : '0';
+                    : shadowSeen ? `<span title="0 qualified out of ${sSig} candidate signals" style="color:var(--text-dim)">0<span style="font-size:9px">/${sSig} s</span></span>`
+                    : '<span style="color:var(--text-dim)">—</span>';
 
                 const driftIcon = v.drift_status === 'firing' ? '🔴' : v.drift_status === 'warning' ? '🟡' : '🟢';
                 const capCell = v.capital_pct > 0 ? `${v.capital_pct.toFixed(0)}%` : '—';
