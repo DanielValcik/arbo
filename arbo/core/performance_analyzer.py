@@ -171,7 +171,7 @@ class PerformanceAnalyzer:
                 FROM paper_trades
                 WHERE strategy = :s
                   AND trade_details->>'variant_id' = :v
-                  AND entry_ts >= :cutoff
+                  AND placed_at >= :cutoff
             """),
             {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
         )
@@ -234,7 +234,7 @@ class PerformanceAnalyzer:
                       AND trade_details->>'variant_id' = :v
                       AND trade_details->>'mid_at_60s' IS NOT NULL
                       AND trade_details->>'live_entry_price' IS NOT NULL
-                      AND entry_ts >= :cutoff
+                      AND placed_at >= :cutoff
                 """),
                 {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
             )
@@ -267,7 +267,7 @@ class PerformanceAnalyzer:
                           AND trade_details->>'mid_at_60s' IS NOT NULL
                           AND trade_details->>'live_entry_price' IS NOT NULL
                           AND trade_details->>'live_exit_price' IS NOT NULL
-                          AND entry_ts >= :cutoff
+                          AND placed_at >= :cutoff
                     """),
                     {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
                 )
@@ -365,7 +365,7 @@ class PerformanceAnalyzer:
                   AND trade_details->>'live_fill_status' IN ('filled','partial')
                   AND (trade_details->>'live_entry_shares')::float > 0
                   AND trade_details->>'live_exit_price' IS NOT NULL
-                  AND entry_ts >= :cutoff
+                  AND placed_at >= :cutoff
             """),
             {"s": self.strategy, "v": champion_id, "cutoff": cutoff},
         )
@@ -393,7 +393,7 @@ class PerformanceAnalyzer:
                           AND trade_details->>'live_fill_status' IN ('filled','partial')
                           AND (trade_details->>'live_entry_shares')::float > 0
                           AND trade_details->>'live_exit_price' IS NOT NULL
-                          AND entry_ts >= :cutoff
+                          AND placed_at >= :cutoff
                           AND {pred}
                     """),
                     {"s": self.strategy, "v": champion_id, "cutoff": cutoff},

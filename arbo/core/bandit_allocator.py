@@ -105,7 +105,7 @@ async def get_allocations(
                     FROM paper_trades
                     WHERE strategy = :s
                       AND trade_details->>'variant_id' = :v
-                      AND entry_ts >= :c
+                      AND placed_at >= :c
                 """),
                 {"s": strategy, "v": v.variant_id, "c": cutoff},
             )
