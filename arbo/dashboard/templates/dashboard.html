@@ -5303,13 +5303,45 @@
                 const isChamp = v.status === 'champion';
                 const isRetired = v.status === 'retired';
                 const rankCell = isChamp ? '🏆' : isRetired ? '💀' : (idx + 1);
-                const wrCell = v.wr_pct !== null ? `${v.wr_pct.toFixed(1)}%` : '—';
-                const wrColor = v.wr_pct === null ? 'var(--text-dim)'
+
+                // Live stats (champion)
+                const liveWrCell = v.wr_pct !== null ? `${v.wr_pct.toFixed(1)}%` : '—';
+                const liveWrColor = v.wr_pct === null ? 'var(--text-dim)'
                     : v.wr_pct >= 70 ? 'var(--green)'
                     : v.wr_pct >= 50 ? '#e3b341'
                     : 'var(--red)';
-                const pnlColor = v.total_pnl > 0 ? 'var(--green)' : v.total_pnl < 0 ? 'var(--red)' : 'var(--text-dim)';
-                const pnlSign = v.total_pnl >= 0 ? '+' : '';
+                const livePnlColor = v.total_pnl > 0 ? 'var(--green)' : v.total_pnl < 0 ? 'var(--red)' : 'var(--text-dim)';
+                const livePnlSign = v.total_pnl >= 0 ? '+' : '';
+
+                // Shadow stats (challengers) — counterfactual "would-have-filled"
+                const sWr = v.shadow_wr_pct;
+                const sResolved = v.shadow_n_resolved || 0;
+                const sPnl = v.shadow_pnl_per_share || 0;
+                const sQual = v.shadow_n_qualified || 0;
+                const sSig = v.shadow_n_signals || 0;
+                const shadowAvail = sResolved > 0 || sQual > 0;
+
+                // Use live stats if available (n_live>0 for champion, or challenger promoted live);
+                // otherwise use shadow stats with "(shadow)" marker.
+                const useLive = v.n_live > 0;
+                const wrCell = useLive ? liveWrCell
+                    : shadowAvail ? (sWr !== null ? `<span title="shadow counterfactual">${sWr.toFixed(1)}%<span style="color:var(--text-dim);font-size:9px"> (s)</span></span>` : '—')
+                    : '—';
+                const wrColor = useLive ? liveWrColor
+                    : sWr === null ? 'var(--text-dim)'
+                    : sWr >= 70 ? 'var(--green)'
+                    : sWr >= 50 ? '#e3b341'
+                    : 'var(--red)';
+                const pnlDisplay = useLive ? `${livePnlSign}$${v.total_pnl.toFixed(2)}`
+                    : shadowAvail ? `<span title="shadow $/share">${sPnl >= 0 ? '+' : ''}$${sPnl.toFixed(3)}<span style="color:var(--text-dim);font-size:9px">/sh</span></span>`
+                    : '—';
+                const pnlColor = useLive ? livePnlColor
+                    : sPnl > 0 ? 'var(--green)' : sPnl < 0 ? 'var(--red)' : 'var(--text-dim)';
+                const nCell = useLive
+                    ? `${v.n_live} <span style="color:var(--text-dim);font-size:9px">/${v.n_total}</span>`
+                    : shadowAvail ? `<span title="shadow qualified/signals">${sQual}<span style="color:var(--text-dim);font-size:9px">/${sSig} s</span></span>`
+                    : '0';
+
                 const driftIcon = v.drift_status === 'firing' ? '🔴' : v.drift_status === 'warning' ? '🟡' : '🟢';
                 const capCell = v.capital_pct > 0 ? `${v.capital_pct.toFixed(0)}%` : '—';
                 const diffStr = Object.entries(v.params_summary || {})
@@ -5320,9 +5352,9 @@
                     <td style="padding:6px;font-weight:600">${rankCell}</td>
                     <td style="padding:6px;font-family:monospace">${v.variant_id}</td>
                     <td style="padding:6px;font-size:10px;color:var(--text-dim)">${v.status}</td>
-                    <td style="padding:6px;text-align:right">${v.n_live} <span style="color:var(--text-dim);font-size:9px">/${v.n_total}</span></td>
+                    <td style="padding:6px;text-align:right">${nCell}</td>
                     <td style="padding:6px;text-align:right;color:${wrColor}">${wrCell}</td>
-                    <td style="padding:6px;text-align:right;color:${pnlColor}">${pnlSign}$${v.total_pnl.toFixed(2)}</td>
+                    <td style="padding:6px;text-align:right;color:${pnlColor}">${pnlDisplay}</td>
                     <td style="padding:6px;text-align:right">${capCell}</td>
                     <td style="padding:6px;text-align:center">${driftIcon}</td>
                     <td style="padding:6px;font-size:10px">${diffStr}</td>

@@ -2375,6 +2375,45 @@ async def api_variants(
                 wr = (100.0 * wins / resolved) if resolved > 0 else None
                 pnl = float(row.total_pnl) if row else 0.0
 
+                # Phase 2A.5: shadow stats from shadow_variant_signals.
+                # Challengers have no paper_trades — their performance is
+                # inferred from counterfactual "would-have-filled" PnL.
+                shadow_stmt = sa.text("""
+                    SELECT
+                        COUNT(*) AS n_signals,
+                        COUNT(*) FILTER (WHERE qualified) AS n_qualified,
+                        COUNT(*) FILTER (
+                            WHERE qualified AND resolution_outcome IS NOT NULL
+                        ) AS n_resolved,
+                        COUNT(*) FILTER (
+                            WHERE qualified AND would_pnl_per_share > 0
+                        ) AS s_wins,
+                        COUNT(*) FILTER (
+                            WHERE qualified AND would_pnl_per_share < 0
+                        ) AS s_losses,
+                        COALESCE(SUM(would_pnl_per_share) FILTER (
+                            WHERE qualified AND would_pnl_per_share IS NOT NULL
+                        ), 0) AS shadow_pnl_per_share
+                    FROM shadow_variant_signals
+                    WHERE strategy = :strat
+                      AND variant_id = :vid
+                """)
+                s_result = await session.execute(
+                    shadow_stmt, {"strat": strategy, "vid": v.variant_id}
+                )
+                s_row = s_result.first()
+                shadow_n_sig = int(s_row.n_signals) if s_row else 0
+                shadow_n_qual = int(s_row.n_qualified) if s_row else 0
+                shadow_n_resolved = int(s_row.n_resolved) if s_row else 0
+                shadow_wins = int(s_row.s_wins) if s_row else 0
+                shadow_losses = int(s_row.s_losses) if s_row else 0
+                shadow_decided = shadow_wins + shadow_losses
+                shadow_wr = (
+                    100.0 * shadow_wins / shadow_decided
+                    if shadow_decided > 0 else None
+                )
+                shadow_pnl = float(s_row.shadow_pnl_per_share) if s_row else 0.0
+
                 # Capital allocation: 100% to champion in Phase 1 (no MAB yet)
                 cap_pct = 100.0 if v.status == "champion" else 0.0
 
@@ -2394,6 +2433,12 @@ async def api_variants(
                     "notes": v.notes,
                     "parent_variant": v.parent_variant,
                     "params_summary": _variant_params_diff(v, pool),
+                    # Shadow counterfactual stats (challenger readiness signal)
+                    "shadow_n_signals": shadow_n_sig,
+                    "shadow_n_qualified": shadow_n_qual,
+                    "shadow_n_resolved": shadow_n_resolved,
+                    "shadow_wr_pct": round(shadow_wr, 1) if shadow_wr is not None else None,
+                    "shadow_pnl_per_share": round(shadow_pnl, 4),
                 })
     except Exception as e:
         logger.warning("api_variants_query_error", strategy=strategy, error=str(e))
