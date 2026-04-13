@@ -1756,6 +1756,68 @@
                 </div>
             </div>
 
+            <!-- Variant Leaderboard — B2 (crypto price edge) -->
+            <div class="card grid-full" style="border-top:3px solid #f78166">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Variant Leaderboard — B2 (crypto price)
+                    <span id="lb2VariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Project PARALLEL — shadow only</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    Pool: <code>config/variants/b2/</code> · Champion + 3 challengers · "(s)" = shadow counterfactual · 🆙 = pending promotion · [auto] = Gemini-generated
+                </div>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;font-size:11px">
+                        <thead style="background:rgba(247,129,102,0.08)">
+                            <tr>
+                                <th style="text-align:left;padding:6px">Rank</th>
+                                <th style="text-align:left">Variant</th>
+                                <th style="text-align:left">Status</th>
+                                <th style="text-align:right">N (live)</th>
+                                <th style="text-align:right">WR</th>
+                                <th style="text-align:right">PnL</th>
+                                <th style="text-align:right">Cap %</th>
+                                <th style="text-align:center">Drift</th>
+                                <th style="text-align:left">Δ vs champion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb2VariantsBody">
+                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center;padding:8px">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Variant Leaderboard — D (NBA Green Book) -->
+            <div class="card grid-full" style="border-top:3px solid #d2a8ff">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Variant Leaderboard — D (NBA Green Book)
+                    <span id="ldVariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Project PARALLEL — shadow only</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    Pool: <code>config/variants/d/</code> · Champion + 3 challengers · "(s)" = shadow counterfactual · 🆙 = pending promotion · [auto] = Gemini-generated · NBA games sparse — accumulation slower than B3
+                </div>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;font-size:11px">
+                        <thead style="background:rgba(210,168,255,0.08)">
+                            <tr>
+                                <th style="text-align:left;padding:6px">Rank</th>
+                                <th style="text-align:left">Variant</th>
+                                <th style="text-align:left">Status</th>
+                                <th style="text-align:right">N (live)</th>
+                                <th style="text-align:right">WR</th>
+                                <th style="text-align:right">PnL</th>
+                                <th style="text-align:right">Cap %</th>
+                                <th style="text-align:center">Drift</th>
+                                <th style="text-align:left">Δ vs champion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ldVariantsBody">
+                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center;padding:8px">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- B3 Portfolio Balance Timeline -->
             <div class="card grid-full" style="border-top:3px solid #58a6ff">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Portfolio Balance <span style="background:#58a6ff;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">WALLET</span><span id="lb3PortfolioStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
@@ -3512,6 +3574,8 @@
             // Variant leaderboards — independent of the above (no shared state)
             fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
             fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
+            fetchVariantLeaderboard('B2', 'lb2VariantsBody', 'lb2VariantsHeader');
+            fetchVariantLeaderboard('D', 'ldVariantsBody', 'ldVariantsHeader');
 
             if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(() => {
                 (async () => {
@@ -3520,6 +3584,8 @@
                 })();
                 fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
                 fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
+                fetchVariantLeaderboard('B2', 'lb2VariantsBody', 'lb2VariantsHeader');
+                fetchVariantLeaderboard('D', 'ldVariantsBody', 'ldVariantsHeader');
             }, 10000);
         } else {
             if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
