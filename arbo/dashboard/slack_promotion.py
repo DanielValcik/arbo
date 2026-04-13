@@ -19,10 +19,14 @@ from arbo.utils.logger import get_logger
 
 logger = get_logger("slack_promotion")
 
-# Default channels per strategy (fallback if none set on SlackBot)
+# Default channels per strategy (fallback if none set on SlackBot).
+# B2 has no dedicated channel yet — uses bot default (CEO can assign
+# a dedicated channel later by editing this dict).
 STRATEGY_CHANNELS = {
-    "B3":     "C0APX4K8Z2N",
-    "B3_15M": "C0APX4K8Z2N",
+    "B3":     "C0APX4K8Z2N",  # B3 live
+    "B3_15M": "C0APX4K8Z2N",  # B3 live (shared with 5-min)
+    "D":      "C0ARXNGKE1M",  # Strategy D (shared NBA/UFC/EPL)
+    # "B2": TBD — using SlackBot default channel until assigned
 }
 
 
