@@ -161,6 +161,9 @@ class StrategyDCore:
         self._last_trade_time: float = 0.0
         self._trades_today: int = 0
         self._daily_pnl: float = 0.0
+        # Cooldown per market: don't re-enter same condition_id for 4 hours
+        # (one NBA game is 2.5h; by 4h any signal should be stale)
+        self._recent_exits: dict[str, float] = {}  # condition_id → exit_time
 
         self._logger = get_logger(f"strategy_d_{self.SPORT_NAME}")
         self._logger.info(
@@ -199,12 +202,48 @@ class StrategyDCore:
 
     # ── Signal Generation ─────────────────────────────────────────────
 
+    # Cooldown: don't re-enter same market for this many seconds after exit
+    REENTRY_COOLDOWN_S = 4 * 3600  # 4 hours (covers any sport game duration)
+
+    def _is_market_resolved_or_stale(self, market: MarketData) -> bool:
+        """Detect markets that look resolved/broken.
+
+        Polymarket resolved markets show yes+no = 1.01 with one side = 0.01
+        (loser) and other = 0.99 (winner). Healthy live market: sum ≈ 1.00
+        but both sides > 0.03.
+        """
+        yes_p = market.yes_price
+        no_p = market.no_price
+        # Either side at minimum tick = resolved
+        if yes_p <= 0.02 or no_p <= 0.02:
+            return True
+        if yes_p >= 0.98 or no_p >= 0.98:
+            return True
+        # Sum far from 1.0 = broken / stale orderbook
+        if not (0.95 <= yes_p + no_p <= 1.05):
+            return True
+        return False
+
     def generate_signals(self, markets: list[MarketData]) -> list[DSignal]:
         """Scan markets for entry signals."""
         signals: list[DSignal] = []
+        now = time.time()
+        stale_count = 0
+        cooldown_count = 0
 
         for market in markets:
             if market.condition_id in self._positions:
+                continue
+
+            # Cooldown: skip if we recently exited this market
+            last_exit = self._recent_exits.get(market.condition_id)
+            if last_exit and now - last_exit < self.REENTRY_COOLDOWN_S:
+                cooldown_count += 1
+                continue
+
+            # Skip resolved/broken markets
+            if self._is_market_resolved_or_stale(market):
+                stale_count += 1
                 continue
 
             prob = self.compute_model_prob(market.team_a, market.team_b)
@@ -238,7 +277,9 @@ class StrategyDCore:
 
         self._logger.info(
             "scan_complete", sport=self.SPORT_NAME,
-            markets=len(markets), signals=len(signals), positions=len(self._positions),
+            markets=len(markets), signals=len(signals),
+            positions=len(self._positions),
+            stale=stale_count, cooldown=cooldown_count,
         )
         return signals
 
@@ -416,6 +457,17 @@ class StrategyDCore:
 
             pos.exit_time = now
             pos.close_price = price  # Last observed price = proxy for closing line
+
+            # Sanity: if exit at resolution tick, market was already closed
+            # — the green_book/stop_loss triggered on bogus data. Flag it.
+            if price <= 0.015 or price >= 0.985:
+                pos.exit_reason = f"{pos.exit_reason}_RESOLVED"
+                self._logger.warning(
+                    "exit_at_resolution_tick", sport=self.SPORT_NAME,
+                    entry=pos.entry_price, exit_p=price, token=pos.token_id[:20],
+                    team_a=pos.team_a, team_b=pos.team_b,
+                    note="Market was already resolved at entry — discovery bug",
+                )
             if pos.side == "yes":
                 pos.pnl = pos.shares * (pos.exit_price - pos.entry_price)
                 pos.clv = price - pos.entry_price  # Positive = entry was underpriced
@@ -425,7 +477,12 @@ class StrategyDCore:
 
             exits.append(pos)
             del self._positions[cid]
+            self._recent_exits[cid] = now  # Cooldown: don't re-enter for REENTRY_COOLDOWN_S
             self._daily_pnl += pos.pnl
+
+            # Clean old cooldown entries (> 24h) to avoid memory growth
+            cutoff = now - 86400
+            self._recent_exits = {k: t for k, t in self._recent_exits.items() if t > cutoff}
 
             # Persist exit details + CLV to PaperTrade row directly
             if self._paper is not None:
