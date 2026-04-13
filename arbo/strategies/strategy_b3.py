@@ -133,6 +133,12 @@ class StrategyB3:
         self._live_holding: dict[str, B3Position] = {}  # live positions waiting for resolution
         self._last_exit_time: dict[str, float] = {}  # condition_id → timestamp
 
+        # Phase 2B: variant pool cache (champion + challengers)
+        self._variants_cache: list = []
+        self._variants_cache_ts: float = 0.0
+        # Dedupe shadow writes per (condition_id, entry_minute_int)
+        self._shadow_written: set[tuple[str, int]] = set()
+
     async def init(self) -> None:
         """Initialize scanner and restore state."""
         await self._scanner.init()
@@ -374,6 +380,246 @@ class StrategyB3:
             logger.warning("b3_mark_orphaned_error", error=str(e))
 
     # ═══════════════════════════════════════════════════════════════════════
+    # Phase 2B — Shadow variant evaluation (champion + challengers)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _get_variants(self) -> list:
+        """Return active B3 variants, refreshed every 60s."""
+        import time as _t
+        now = _t.time()
+        if now - self._variants_cache_ts > 60:
+            try:
+                from arbo.core.variant_pool import get_active_variants
+                self._variants_cache = get_active_variants("B3")
+                self._variants_cache_ts = now
+            except Exception as e:
+                logger.warning("b3_variant_load_error", error=str(e))
+        return self._variants_cache
+
+    @staticmethod
+    def _b3_gates(
+        *,
+        edge: float,
+        btc_move: float,
+        velocity: float,
+        abs_dir_delta: float,
+        fill_price: float | None,
+        entry_minute: int,
+        entry_mkt_fv: float,
+        params: dict,
+    ) -> tuple[bool, str | None]:
+        """Apply per-variant B3 5-min live gates."""
+        if edge < params.get("LIVE_MIN_EDGE", 0.30):
+            return False, "edge_below_min"
+        if btc_move < params.get("LIVE_MIN_BTC_MOVE", 35.0):
+            return False, "btc_move_below_min"
+        if velocity > params.get("LIVE_MAX_VELOCITY", 60.0):
+            return False, "velocity_above_max"
+        if abs_dir_delta > params.get("LIVE_MAX_DIR_DELTA", 15.0):
+            return False, "dir_delta_above_max"
+        if fill_price is not None:
+            if fill_price > params.get("LIVE_MAX_FILL_PRICE", 0.75):
+                return False, "fill_above_max"
+            if fill_price <= 0:
+                return False, "no_orderbook"
+        if entry_minute < params.get("MIN_ENTRY_MIN", 1):
+            return False, "minute_below_min"
+        if entry_minute > params.get("MAX_ENTRY_MIN", 3):
+            return False, "minute_above_max"
+        if entry_mkt_fv < params.get("MIN_ENTRY_MKT_FV", 0.0):
+            return False, "fv_below_min"
+        if entry_mkt_fv > params.get("MAX_ENTRY_MKT_FV", 1.0):
+            return False, "fv_above_max"
+        return True, None
+
+    async def _evaluate_shadow_variants(
+        self,
+        *,
+        sig: B3Signal,
+        btc_move: float,
+        velocity: float,
+        dir_delta: float,
+        abs_dir_delta: float,
+        entry_mkt_fv: float,
+        fill_price: float | None,
+        market_gap: float | None,
+        token_id: str,
+    ) -> None:
+        """Write one row per active variant to shadow_variant_signals.
+
+        Dedupes per (condition_id, entry_minute_int) so a candidate re-evaluated
+        inside the same minute is not written twice.
+        """
+        variants = self._get_variants()
+        if not variants:
+            return
+
+        entry_min = int(sig.minutes_elapsed or 0)
+        dedupe_key = (sig.condition_id, entry_min)
+        if dedupe_key in self._shadow_written:
+            return
+        self._shadow_written.add(dedupe_key)
+        # Prune dedupe set if it grows
+        if len(self._shadow_written) > 5000:
+            self._shadow_written.clear()
+
+        import time as _t
+        from datetime import datetime, timezone
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+
+        signal_dt = datetime.fromtimestamp(_t.time(), tz=timezone.utc)
+        direction_s = "up" if sig.direction == 1 else "down"
+
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                for v in variants:
+                    qualified, skip_reason = self._b3_gates(
+                        edge=sig.edge,
+                        btc_move=btc_move,
+                        velocity=velocity,
+                        abs_dir_delta=abs_dir_delta,
+                        fill_price=fill_price,
+                        entry_minute=entry_min,
+                        entry_mkt_fv=entry_mkt_fv,
+                        params=v.params,
+                    )
+                    row = {
+                        "strategy": "B3",
+                        "variant_id": v.variant_id,
+                        "condition_id": sig.condition_id,
+                        "token_id": token_id,
+                        "signal_ts": signal_dt,
+                        "qualified": qualified,
+                        "skip_reason": skip_reason,
+                        "direction": direction_s,
+                        "entry_price": fill_price,
+                        "edge": sig.edge,
+                        "sigma": sig.sigma_per_min,
+                        "btc_at_start": sig.btc_at_start,
+                        "btc_now": sig.btc_now,
+                        "btc_move": btc_move,
+                        "market_gap": market_gap,
+                        "velocity": velocity,
+                        "dir_delta": dir_delta,
+                        "would_fill_at": fill_price,
+                        "event_start_ts": sig.event_start_ts,
+                        "event_end_ts": sig.event_end_ts,
+                    }
+                    try:
+                        await session.execute(
+                            sa.text("""
+                                INSERT INTO shadow_variant_signals
+                                  (strategy, variant_id, condition_id, token_id, signal_ts,
+                                   qualified, skip_reason, direction, entry_price, edge, sigma,
+                                   btc_at_start, btc_now, btc_move, market_gap, velocity,
+                                   dir_delta, would_fill_at, event_start_ts, event_end_ts)
+                                VALUES
+                                  (:strategy, :variant_id, :condition_id, :token_id, :signal_ts,
+                                   :qualified, :skip_reason, :direction, :entry_price, :edge, :sigma,
+                                   :btc_at_start, :btc_now, :btc_move, :market_gap, :velocity,
+                                   :dir_delta, :would_fill_at, :event_start_ts, :event_end_ts)
+                                ON CONFLICT (strategy, variant_id, condition_id, signal_ts)
+                                DO NOTHING
+                            """),
+                            row,
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            "b3_shadow_insert_error",
+                            variant_id=v.variant_id,
+                            error=str(e),
+                        )
+                await session.commit()
+        except Exception as e:
+            logger.warning("b3_shadow_evaluate_error", error=str(e))
+
+    async def _sweep_shadow_resolutions(self) -> None:
+        """Resolve any B3 shadow_variant_signals rows past their event_end_ts.
+
+        Runs once per poll_cycle. For each unresolved condition_id with
+        event ended > 30s ago, fetches Gamma resolution and updates all
+        rows (qualified = fill-based PnL, unqualified = outcome only).
+        """
+        import time as _t
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+
+        now_ts = _t.time()
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT DISTINCT condition_id, event_start_ts, event_end_ts
+                        FROM shadow_variant_signals
+                        WHERE strategy = 'B3'
+                          AND resolution_outcome IS NULL
+                          AND event_end_ts IS NOT NULL
+                          AND event_end_ts < :now - 30
+                        LIMIT 20
+                    """),
+                    {"now": now_ts},
+                )
+                pending = list(result.mappings())
+        except Exception as e:
+            logger.debug("b3_shadow_sweep_query_error", error=str(e))
+            return
+
+        if not pending:
+            return
+
+        for row in pending:
+            cid = row["condition_id"]
+            event_start = row["event_start_ts"]
+            try:
+                import asyncio
+                up_won = await asyncio.wait_for(
+                    self._scanner.fetch_resolution(event_start),
+                    timeout=10.0,
+                )
+            except Exception:
+                continue
+            if up_won is None:
+                continue
+            try:
+                factory = get_session_factory()
+                async with factory() as session:
+                    await session.execute(
+                        sa.text("""
+                            UPDATE shadow_variant_signals
+                            SET resolution_outcome = :up_won,
+                                resolution_ts = NOW()
+                            WHERE strategy = 'B3'
+                              AND condition_id = :cid
+                              AND resolution_outcome IS NULL
+                        """),
+                        {"up_won": bool(up_won), "cid": cid},
+                    )
+                    await session.execute(
+                        sa.text("""
+                            UPDATE shadow_variant_signals
+                            SET would_pnl_per_share = CASE
+                                WHEN (direction = 'up'   AND :up_won = true)
+                                  OR (direction = 'down' AND :up_won = false)
+                                THEN 1.0 - would_fill_at
+                                ELSE -would_fill_at
+                            END
+                            WHERE strategy = 'B3'
+                              AND condition_id = :cid
+                              AND qualified = true
+                              AND would_pnl_per_share IS NULL
+                              AND would_fill_at IS NOT NULL
+                              AND would_fill_at > 0
+                        """),
+                        {"up_won": bool(up_won), "cid": cid},
+                    )
+                    await session.commit()
+            except Exception as e:
+                logger.debug("b3_shadow_sweep_update_error", cid=cid, error=str(e))
+
+    # ═══════════════════════════════════════════════════════════════════════
     # ENTRY: Poll Cycle
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -393,6 +639,13 @@ class StrategyB3:
 
         # 0. Record Chainlink price to rolling buffer (for accurate btc_at_start)
         self._scanner.record_cl_price()
+
+        # Phase 2B: sweep resolutions for any B3 shadow_variant_signals past
+        # event_end_ts. Runs best-effort; never blocks main flow.
+        try:
+            await self._sweep_shadow_resolutions()
+        except Exception as _e:
+            logger.debug("b3_shadow_sweep_error", error=str(_e))
 
         # 1. Fetch events
         await self._scanner.fetch_events()
@@ -600,6 +853,25 @@ class StrategyB3:
             else:
                 dir_delta = (_cl_for_calc - _bin_for_calc) if (_bin_for_calc and _cl_for_calc) else 0
             abs_dir_delta = abs(dir_delta)
+
+            # Phase 2B: shadow evaluation of all B3 variants on this candidate.
+            # Writes one row per variant to shadow_variant_signals (decision
+            # + all features). Champion's row is counterfactual-of-itself
+            # for paired-sample comparison vs challengers.
+            try:
+                await self._evaluate_shadow_variants(
+                    sig=sig,
+                    btc_move=btc_move,
+                    velocity=velocity,
+                    dir_delta=dir_delta,
+                    abs_dir_delta=abs_dir_delta,
+                    entry_mkt_fv=entry_mkt_fv,
+                    fill_price=float(expected_fill) if 'expected_fill' in locals() else None,
+                    market_gap=market_gap if 'market_gap' in locals() else None,
+                    token_id=token_id,
+                )
+            except Exception as _e:
+                logger.debug("b3_shadow_variant_error", error=str(_e))
 
             # Execute
             paper_trade = None

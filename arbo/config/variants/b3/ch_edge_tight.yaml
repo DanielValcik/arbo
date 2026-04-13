@@ -1,0 +1,52 @@
+# B3 5-min Challenger: edge filter tighter
+#
+# Hypothesis: live data shows WR 67.9% at edge≥0.30 (champion V6.0, N=28),
+# 4pp below breakeven 72%. Tighter edge filter sacrifices volume for
+# precision. 15m variant ch_edge_tight tests same hypothesis in parallel;
+# comparing results across both markets helps isolate whether edge-based
+# quality is oracle-lag-dependent or universal.
+#
+# Status: challenger (Phase 2B — shadow only, no capital)
+
+variant_id: ch_edge_tight
+strategy: B3
+status: challenger
+parent_variant: champion_v1
+notes: |
+  LIVE_MIN_EDGE 0.30 → 0.40. All other params identical to champion_v1.
+  Expected: fewer trades, higher WR. Target: recover margin above breakeven.
+
+params:
+  SIGMA_WINDOW: 1440
+  SIGMA_METHOD: realized
+  SIGMA_SCALE: 0.348
+  SIGMA_FLOOR: 0.00005
+  ENTRY_THRESHOLD: 0.020
+  MIN_ENTRY_MIN: 1
+  MAX_ENTRY_MIN: 3
+  CONTRARIAN: false
+  PAPER_MATCH_LIVE: true
+  PROFIT_TARGET: 0.207
+  STOP_LOSS: 99.0
+  MAX_HOLD_MIN: 3
+  EDGE_EXIT: 0.076
+  EXIT_BEFORE_END: 0
+  ALLOW_RESOLUTION: true
+  USE_BTC_STOP: true
+  BTC_STOP_PCT: 0.0015
+  SPREAD: 0.060
+  MAKER: true
+  MIN_ENTRY_MKT_FV: 0.413
+  MAX_ENTRY_MKT_FV: 0.570
+  LIVE_MIN_EDGE: 0.40             # ← CHANGED (was 0.30)
+  LIVE_MIN_BTC_MOVE: 35.0
+  LIVE_MAX_VELOCITY: 60.0
+  LIVE_MAX_DIR_DELTA: 15.0
+  LIVE_MAX_FILL_PRICE: 0.75
+  POSITION_PCT: 0.026
+  EDGE_SCALING: 10.0
+  MAX_BET_SIZE: 100.0
+  MAX_SHARES: 500
+  MIN_ORDER_SIZE: 5.0
+  WINDOW_MIN: 5
+  REENTRY_COOLDOWN: 2
