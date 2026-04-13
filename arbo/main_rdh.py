@@ -3698,7 +3698,9 @@ class RDHOrchestrator:
                         f"{verdict_emoji} *Health Check: {report.verdict.upper()}*\n"
                         + "\n".join(f"• {n}" for n in report.notes)
                     )
-                    await self._slack_bot.send_message(msg, channel="review-queue")
+                    # send_alert routes to the review_queue channel and
+                    # prefixes :rotating_light: — correct for health degradations
+                    await self._slack_bot.send_alert(msg)
 
             except Exception as e:
                 logger.error("health_check_scheduler_error", error=str(e))

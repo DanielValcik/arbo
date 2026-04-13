@@ -174,8 +174,11 @@ class StrategyDCore:
         self._trades_today: int = 0
         self._daily_pnl: float = 0.0
         # Cooldown per market: don't re-enter same condition_id for 4 hours
-        # (one NBA game is 2.5h; by 4h any signal should be stale)
-        self._recent_exits: dict[str, float] = {}  # condition_id → exit_time
+        # (one NBA game is 2.5h; by 4h any signal should be stale).
+        # Persisted to JSON across restarts — fixes POR/PHX-style restart
+        # loop where gamma cache serves stale prices for recently-resolved
+        # markets.
+        self._recent_exits: dict[str, float] = self._load_recent_exits()
         # Live balance cache (updated externally by orchestrator every 5 min)
         # None = use fallback allocation from risk_manager
         self._live_balance_usdc: float | None = None
@@ -234,6 +237,46 @@ class StrategyDCore:
 
     # Cooldown: don't re-enter same market for this many seconds after exit
     REENTRY_COOLDOWN_S = 4 * 3600  # 4 hours (covers any sport game duration)
+
+    # ── Recent-exits persistence (restart-safe cooldown) ──────────────
+
+    def _recent_exits_path(self) -> str:
+        """Per-sport cooldown state file on disk."""
+        import os
+        base = os.environ.get("ARBO_STATE_DIR", "/tmp/arbo_state")
+        os.makedirs(base, exist_ok=True)
+        return os.path.join(base, f"d_recent_exits_{self.SPORT_NAME}.json")
+
+    def _load_recent_exits(self) -> dict[str, float]:
+        """Load persisted cooldown map; prune stale entries."""
+        import json
+        import os
+        path = self._recent_exits_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            now = time.time()
+            cutoff = now - self.REENTRY_COOLDOWN_S
+            return {k: float(t) for k, t in data.items() if float(t) > cutoff}
+        except Exception:
+            return {}
+
+    def _persist_recent_exits(self) -> None:
+        """Write cooldown map to disk (best-effort)."""
+        import json
+        import os
+        try:
+            path = self._recent_exits_path()
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(self._recent_exits, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        except Exception:
+            pass  # Best-effort — don't break trading flow on disk error
 
     def _is_market_resolved_or_stale(self, market: MarketData) -> bool:
         """Detect markets that look resolved/broken.
@@ -835,6 +878,7 @@ class StrategyDCore:
             exits.append(pos)
             del self._positions[cid]
             self._recent_exits[cid] = now  # Cooldown: don't re-enter for REENTRY_COOLDOWN_S
+            self._persist_recent_exits()
             self._daily_pnl += pos.pnl
 
             # Clean old cooldown entries (> 24h) to avoid memory growth
