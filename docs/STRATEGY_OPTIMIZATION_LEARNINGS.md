@@ -337,6 +337,32 @@ When the framework itself needs updating based on empirical evidence, log the am
 | Date | Amendment | Rationale |
 |---|---|---|
 | 2026-04-12 | v1.0 created | Initial authoritative doc |
+| 2026-04-13 | v2.0 — added §11 Rapid Mode + VARIANT_LEADERBOARD_SPEC.md | Serial mode alone = 10-14 days per iteration; too slow for 5+ strategies. Research into hedge fund techniques (RAPID_MODEL_DISCOVERY.md) identified champion-challenger, BO, MAB, drift detectors as 5-10× speedup. Integration preserves all serial-mode gates (DSR, PBO, revert triggers) but runs 8× more hypotheses in parallel. Dashboard leaderboard card made MANDATORY — variants without visibility = invisible failures. |
+
+### v2.0 upgrade details (2026-04-13)
+
+**What was added to framework:**
+- §11 Rapid Mode — 16 subsections covering champion-challenger, Bayesian optimization, multi-armed bandit (Thompson Sampling), Page-Hinkley drift detection, composite mid-trade reward, block bootstrap, HRP ensemble, hypothesis factory FSM, tooling, what NOT to use (GANs, RL, stacking), dashboard requirement, decision addendum to §10.4, 4-phase implementation plan.
+- §11.11 introduced MANDATORY Variant Leaderboard card requirement.
+
+**What was explicitly rejected from rapid discovery study:**
+- GAN / diffusion synthetic market data (TimeGAN, QuantGAN) — fail to capture stylized facts, would cause false DSR.
+- Full reinforcement learning — wrong-sized for $175 live capital, bandit + BO gets 80% benefit at 10% complexity.
+- Complex ensemble (stacking, meta-learners) — for 5-10 variant pool, HRP + quorum rule outperforms empirically.
+- Real-time BO during trading — BO belongs in weekly autoresearch, not live loop.
+
+**Skill upgraded**: `/optimize` skill now has Step 1.5 (serial vs rapid routing) and enforces Variant Leaderboard card before allowing multi-variant deployment.
+
+**Not yet implemented (todo when user requests)**:
+- `arbo/core/strategy_orchestrator.py` (generic multi-variant orchestrator)
+- `arbo/core/bandit_allocator.py` (MABWiser wrapper)
+- `arbo/core/drift_monitor.py` (river Page-Hinkley/ADWIN)
+- `arbo/core/variant_pool.py` (declarative YAML config per variant)
+- `arbo/dashboard/variant_leaderboard.py` (dashboard card backend)
+- Optuna replacement for grid sweeps in `research/innovations/sweep_*.py`
+
+**Pipeline from here**: user will invoke `/optimize` to apply framework on specific strategy; rapid mode will be chosen where appropriate (multi-variant exploration); serial mode where singular decision.
+
 | _(next)_ | | |
 
 ---

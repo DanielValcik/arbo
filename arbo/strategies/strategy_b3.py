@@ -620,6 +620,11 @@ class StrategyB3:
                     pre_computed_size=Decimal(str(round(actual_size, 2))),
                     clob_fill_price=Decimal(str(round(entry_price, 4))),
                     trade_details={
+                        # Variant identity (Rapid Mode §11). Current V6.0 live config
+                        # is the single champion per config/variants/b3/champion_v1.yaml.
+                        # When multi-variant orchestrator activates (Phase 2+), this
+                        # field will be set per-variant by ShadowOrchestrator.
+                        "variant_id": "champion_v1",
                         "asset": "BTC",
                         "direction": "up" if sig.direction == 1 else "down",
                         "btc_at_start": sig.btc_at_start,

@@ -1,0 +1,55 @@
+# B3_15M Challenger: fill cap 0.75 (per 5-min success)
+#
+# Hypothesis: 5-min B3 has LIVE_MAX_FILL_PRICE=0.75 based on 278-trade data
+# analysis showing fill>0.75 loses money. 15-min champion is uncapped because
+# shadow autoresearch said "high fill = best bucket" (92% WR N=36). Live data
+# (N=7 fill>0.75) contradicts: 57% WR. Too early to confirm/deny — test via
+# challenger in parallel.
+#
+# Status: challenger (Phase 1 — file only, not yet wired)
+
+variant_id: ch_fill_cap_075
+strategy: B3_15M
+status: challenger
+parent_variant: champion_v1
+notes: |
+  LIVE_MAX_FILL_PRICE 1.01 → 0.75. All other params identical to champion_v1.
+  Tests whether live data's "high fill loses" pattern from 5-min applies to 15m.
+  Expected: fewer trades (blocks ~50% of current), higher WR if hypothesis correct.
+
+params:
+  SIGMA_WINDOW: 1440
+  SIGMA_METHOD: realized
+  SIGMA_SCALE: 0.526
+  SIGMA_FLOOR: 0.00005
+  ENTRY_THRESHOLD: 0.089
+  MIN_ENTRY_MIN: 4
+  MAX_ENTRY_MIN: 11
+  CONTRARIAN: false
+  PAPER_MATCH_LIVE: true
+  PROFIT_TARGET: 0.207
+  STOP_LOSS: 99.0
+  MAX_HOLD_MIN: 12
+  EDGE_EXIT: 0.076
+  EXIT_BEFORE_END: 0
+  ALLOW_RESOLUTION: true
+  USE_BTC_STOP: true
+  BTC_STOP_PCT: 0.0025
+  SPREAD: 0.010
+  MAKER: true
+  MIN_ENTRY_MKT_FV: 0.30
+  MAX_ENTRY_MKT_FV: 0.95
+  LIVE_MIN_EDGE: 0.30
+  LIVE_MIN_BTC_MOVE: 0.0
+  LIVE_MAX_BTC_MOVE: 80.0
+  LIVE_MAX_MARKET_GAP: 0.30
+  LIVE_MAX_FILL_PRICE: 0.75      # ← CHANGED (was 1.01 uncapped)
+  LIVE_MAX_VELOCITY: 100.0
+  LIVE_MAX_DIR_DELTA: 25.0
+  POSITION_PCT: 0.044
+  EDGE_SCALING: 6.757
+  MAX_BET_SIZE: 20.0
+  MAX_SHARES: 500
+  MIN_ORDER_SIZE: 5.0
+  WINDOW_MIN: 15
+  REENTRY_COOLDOWN: 3

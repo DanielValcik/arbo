@@ -1,0 +1,53 @@
+# B3_15M Challenger: market gap filter tighter
+#
+# Hypothesis: shadow autoresearch showed that market_gap<=0.15 bucket had
+# WR 87.5% (+$6.39 on 32 trades) vs overall ~78%. Current champion uses
+# gap<=0.30 (looser). Tighter gap may identify "clear consensus" trades
+# where oracle lag is the dominant edge, filtering noisy divergence.
+#
+# Status: challenger (Phase 1 — file only, not yet wired)
+
+variant_id: ch_gap_tight
+strategy: B3_15M
+status: challenger
+parent_variant: champion_v1
+notes: |
+  LIVE_MAX_MARKET_GAP 0.30 → 0.15. All other params identical to champion_v1.
+  Shadow data's top sub-bucket. Tests whether gap discipline improves live WR.
+
+params:
+  SIGMA_WINDOW: 1440
+  SIGMA_METHOD: realized
+  SIGMA_SCALE: 0.526
+  SIGMA_FLOOR: 0.00005
+  ENTRY_THRESHOLD: 0.089
+  MIN_ENTRY_MIN: 4
+  MAX_ENTRY_MIN: 11
+  CONTRARIAN: false
+  PAPER_MATCH_LIVE: true
+  PROFIT_TARGET: 0.207
+  STOP_LOSS: 99.0
+  MAX_HOLD_MIN: 12
+  EDGE_EXIT: 0.076
+  EXIT_BEFORE_END: 0
+  ALLOW_RESOLUTION: true
+  USE_BTC_STOP: true
+  BTC_STOP_PCT: 0.0025
+  SPREAD: 0.010
+  MAKER: true
+  MIN_ENTRY_MKT_FV: 0.30
+  MAX_ENTRY_MKT_FV: 0.95
+  LIVE_MIN_EDGE: 0.30
+  LIVE_MIN_BTC_MOVE: 0.0
+  LIVE_MAX_BTC_MOVE: 80.0
+  LIVE_MAX_MARKET_GAP: 0.15      # ← CHANGED (was 0.30)
+  LIVE_MAX_FILL_PRICE: 1.01
+  LIVE_MAX_VELOCITY: 100.0
+  LIVE_MAX_DIR_DELTA: 25.0
+  POSITION_PCT: 0.044
+  EDGE_SCALING: 6.757
+  MAX_BET_SIZE: 20.0
+  MAX_SHARES: 500
+  MIN_ORDER_SIZE: 5.0
+  WINDOW_MIN: 15
+  REENTRY_COOLDOWN: 3
