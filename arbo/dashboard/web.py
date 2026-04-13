@@ -209,7 +209,7 @@ async def dashboard_page(
     """Serve the main dashboard HTML page."""
     orch = state.orchestrator
     mode = orch._mode if orch else "unknown"
-    return templates.TemplateResponse("dashboard.html", {
+    response = templates.TemplateResponse("dashboard.html", {
         "request": request,
         "mode": mode,
         "nightcap_api_url": os.environ.get("NIGHTCAP_API_URL", ""),
@@ -217,6 +217,12 @@ async def dashboard_page(
         "skinny_api_url": os.environ.get("SKINNY_API_URL", ""),
         "skinny_api_key": os.environ.get("SKINNY_API_KEY", ""),
     })
+    # Force fresh HTML on every load — dashboard updates frequently and
+    # users were getting stale cached cards after deploys (Phase 1 lesson).
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 # ── Echo proxy endpoints (forward to Singapore VPS) ──
