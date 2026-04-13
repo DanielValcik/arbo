@@ -338,6 +338,7 @@ When the framework itself needs updating based on empirical evidence, log the am
 |---|---|---|
 | 2026-04-12 | v1.0 created | Initial authoritative doc |
 | 2026-04-13 | v2.0 — added §11 Rapid Mode + VARIANT_LEADERBOARD_SPEC.md | Serial mode alone = 10-14 days per iteration; too slow for 5+ strategies. Research into hedge fund techniques (RAPID_MODEL_DISCOVERY.md) identified champion-challenger, BO, MAB, drift detectors as 5-10× speedup. Integration preserves all serial-mode gates (DSR, PBO, revert triggers) but runs 8× more hypotheses in parallel. Dashboard leaderboard card made MANDATORY — variants without visibility = invisible failures. |
+| 2026-04-13 | Phase 1 implementation COMPLETE (commits f64b409 + 43253ed) | Variant pool infrastructure live: `arbo/core/variant_pool.py` loads YAML configs, 2 champion YAMLs (b3 + b3_15m) + 3 b3_15m challenger YAMLs, `trade_details.variant_id` written on every new B3/B3_15M trade, `/api/variants` endpoint live, Variant Leaderboard cards rendered on B3 tab, `ShadowOrchestrator` skeleton class. Zero regression. Champion-only display per Phase A spec. Phase 2 next: wire orchestrator, add Optuna BO, MABWiser allocator. |
 
 ### v2.0 upgrade details (2026-04-13)
 
@@ -362,6 +363,46 @@ When the framework itself needs updating based on empirical evidence, log the am
 - Optuna replacement for grid sweeps in `research/innovations/sweep_*.py`
 
 **Pipeline from here**: user will invoke `/optimize` to apply framework on specific strategy; rapid mode will be chosen where appropriate (multi-variant exploration); serial mode where singular decision.
+
+### 2026-04-13 — Project PARALLEL Phase 1 COMPLETE
+
+**Goal**: deploy infrastructure for multi-variant champion-challenger exploration (declarative configs, per-trade attribution, dashboard visibility) without disrupting existing live B3 5-min and B3_15M strategies.
+
+**Delivered (3 commits over batches A/B/C)**:
+
+| Component | File | Status |
+|---|---|---|
+| VariantConfig dataclass + YAML loader | `arbo/core/variant_pool.py` | live |
+| YAML pool root | `arbo/config/variants/` | populated |
+| B3 5-min champion YAML (V6.0 mirror) | `b3/champion_v1.yaml` | live |
+| B3_15M champion YAML (shadow rank #1 mirror) | `b3_15m/champion_v1.yaml` | live |
+| B3_15M challenger YAMLs (3 ideas, inert) | `ch_edge_tight`, `ch_fill_cap_075`, `ch_gap_tight` | files only — no orchestrator wired yet |
+| `trade_details.variant_id` injection | `strategy_b3.py` L622, `strategy_b3_15m.py` L620 | live, ✓ verified on trade 4248 |
+| `/api/variants?strategy=<s>` endpoint | `web.py` L2291 | live, returns 4 B3_15M + 1 B3 variants |
+| Variant Leaderboard card (B3 5-min) | `dashboard.html` near L1697 | rendered |
+| Variant Leaderboard card (B3 15-min) | `dashboard.html` next sibling | rendered with 4 challenger rows |
+| JS fetcher `fetchVariantLeaderboard` | `dashboard.html` L5275-ish | active on B3 tab refresh |
+| ShadowOrchestrator skeleton class | `arbo/strategies/shadow_orchestrator.py` | class only — NOT in task loop |
+
+**Verified end-to-end**:
+- `python -c "from arbo.core.variant_pool import get_champion; print(get_champion('B3_15M').params['SIGMA_SCALE'])"` → `0.526` (matches quality_gate.py)
+- After deploy + restart: trade 4248 (B3 5-min, placed 2026-04-13 13:36 UTC) has `trade_details->>'variant_id' = 'champion_v1'`
+- `curl /api/variants?strategy=B3_15M` returns 4 variants with correct status, params_summary diffs, and capital_pct (champion 100%, challengers 0%)
+- Dashboard B3 tab shows two Variant Leaderboard cards
+- `ShadowOrchestrator('B3_15M')` instantiates, loads 4 variants, no errors
+- Existing B3 + B3_15M live trading unchanged (verified live trades continue, no exceptions in journalctl)
+
+**Did NOT do (intentionally — Phase 1 scope)**:
+- ❌ Wire ShadowOrchestrator into task loops (Phase 2)
+- ❌ Optuna BO replacement of grid sweeps (Phase 2)
+- ❌ MABWiser Thompson Sampling for capital allocation (Phase 3)
+- ❌ Page-Hinkley drift detectors (Phase 4)
+- ❌ Composite reward (mid-trade) logging (Phase 3)
+- ❌ HRP cross-strategy ensemble (Month 2)
+
+**Anti-pattern protection in place**: skill `optimize` Step 1.5 routes any future multi-variant proposal through the framework gates. Dashboard requirement enforced — multi-variant deployment blocked without leaderboard card visible.
+
+**Next step (when user requests Phase 2)**: refactor `strategy_b3_15m.py` scan loop to be variant-aware (accepts params dict instead of importing module constants), wire ShadowOrchestrator into `_run_b3_15m_shadow` task loop to evaluate all 4 variants on every signal, write paired-sample data to new table `shadow_variant_signals`. Estimated: 2-3 days work, no live capital at risk.
 
 | _(next)_ | | |
 
