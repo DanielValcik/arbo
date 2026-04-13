@@ -118,6 +118,8 @@ class RDHOrchestrator:
         self._adaptive_config_15m: Any = None  # AdaptiveConfig for B3_15M
         self._b3_watchdog: Any = None  # B3Watchdog (autonomous optimizer daemon) — 5-min
         self._b3_15m_watchdog: Any = None  # B3Watchdog for 15-min variant
+        self._b2_watchdog: Any = None  # Project PARALLEL — B2 autochallenger + promotion + drift
+        self._d_watchdog: Any = None   # Project PARALLEL — D_NBA autochallenger + promotion + drift
 
         # Runtime state
         self._start_time: float = 0.0
@@ -1730,6 +1732,37 @@ class RDHOrchestrator:
         if self._b3_15m_watchdog is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._b3_15m_watchdog.run(), name="b3_15m_watchdog")
+            )
+        # Project PARALLEL: B2 + D_NBA shadow-only watchdogs
+        # (autochallenger + promotion + drift only — no anomaly cycle)
+        if self._b2_watchdog is None:
+            try:
+                from arbo.core.b2_watchdog import B2Watchdog
+                self._b2_watchdog = B2Watchdog(
+                    gemini_agent=self._gemini,
+                    slack_bot=self._slack_bot,
+                )
+                logger.info("b2_watchdog_initialized")
+            except Exception as e:
+                logger.warning("b2_watchdog_init_failed", error=str(e))
+        if self._b2_watchdog is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._b2_watchdog.run(), name="b2_watchdog")
+            )
+        if self._d_watchdog is None:
+            try:
+                from arbo.core.d_watchdog import DWatchdog
+                self._d_watchdog = DWatchdog(
+                    gemini_agent=self._gemini,
+                    slack_bot=self._slack_bot,
+                )
+                logger.info("d_watchdog_initialized")
+            except Exception as e:
+                # d_watchdog ships in commit 7/10 — first deploys won't have it
+                logger.debug("d_watchdog_init_skipped", error=str(e))
+        if self._d_watchdog is not None:
+            self._internal_tasks.append(
+                asyncio.create_task(self._d_watchdog.run(), name="d_watchdog")
             )
         # TAFeatureProvider background cache (tradingview-ta → BTC RSI/ADX/MACD/BB)
         if self._ta_provider is not None:
