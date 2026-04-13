@@ -1,0 +1,25 @@
+# B2 Challenger: skip <24h markets
+#
+# Hypothesis: champion MIN_TIME_TO_EXPIRY_H=8 lets in markets that
+# resolve within hours. These have edge-decay risk (model accuracy
+# degrades as gamma → 0). Raise floor to 24h to filter out short-fuse
+# trades.
+#
+# Status: shadow only — no capital risk.
+
+variant_id: ch_short_fuse
+strategy: B2
+status: challenger
+parent_variant: champion_v1
+notes: |
+  MIN_TIME_TO_EXPIRY_H 8 → 24. All other params identical to champion_v1.
+  Expected: fewer trades on daily markets, more on weekly+ markets.
+
+params:
+  MIN_EDGE: 0.08
+  MAX_EDGE: 0.90
+  MIN_PRICE: 0.05
+  MAX_PRICE: 0.60
+  MIN_TIME_TO_EXPIRY_H: 24    # ← CHANGED (was 8)
+  MAX_TIME_TO_EXPIRY_H: 168
+  MIN_HOLD_EDGE: 0.03

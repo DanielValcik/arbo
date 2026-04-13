@@ -104,6 +104,13 @@ class StrategyB2:
         self._open_positions: dict[str, OpenPosition] = {}
         self._last_trade_time: dict[str, float] = {}
 
+        # Phase PARALLEL: variant pool cache + shadow dedup
+        self._variants_cache: list = []
+        self._variants_cache_ts: float = 0.0
+        # Dedupe shadow writes per (token_id, minute) — avoids re-eval each scan
+        self._shadow_written: set[tuple[str, int]] = set()
+        self._last_shadow_sweep_ts: float = 0.0
+
     async def init(self) -> None:
         """Initialize strategy — restore state from paper engine."""
         if self._paper_engine:
@@ -176,9 +183,25 @@ class StrategyB2:
 
         if not signals:
             logger.info("b2_no_signals", crypto_markets=len(markets))
+            # Still run shadow resolution sweep — events resolve regardless
+            await self._sweep_shadow_resolutions()
             return []
 
-        # 3. Quality gate
+        # 2b. Project PARALLEL: shadow-evaluate ALL variants on full
+        # candidate set BEFORE champion's filter. Each variant's gates
+        # decide pass/fail for the same candidate.
+        try:
+            await self._evaluate_shadow_variants(signals)
+        except Exception as e:
+            logger.debug("b2_shadow_eval_error", error=str(e))
+
+        # 2c. Resolution sweep (best-effort, every 5 min)
+        try:
+            await self._sweep_shadow_resolutions()
+        except Exception as e:
+            logger.debug("b2_shadow_sweep_error", error=str(e))
+
+        # 3. Quality gate (champion's filter — drives live execution)
         qualified = filter_signals(signals)
 
         logger.info(
@@ -379,6 +402,7 @@ class StrategyB2:
                     pre_computed_size=Decimal(str(round(actual_size, 2))),
                     clob_fill_price=Decimal(str(round(fill_price, 4))),
                     trade_details={
+                        "variant_id": "champion_v1",  # Project PARALLEL — current live variant
                         "asset": sig.asset,
                         "strike": float(sig.strike),
                         "direction": sig.direction,
@@ -528,3 +552,255 @@ class StrategyB2:
         ]
         for tid in to_remove:
             self._open_positions.pop(tid, None)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Project PARALLEL — Shadow variant evaluation + resolution sweep
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _get_variants(self) -> list:
+        """Return active B2 variants, refreshed every 60s."""
+        now = time.time()
+        if now - self._variants_cache_ts > 60:
+            try:
+                from arbo.core.variant_pool import get_active_variants
+                self._variants_cache = get_active_variants("B2")
+                self._variants_cache_ts = now
+            except Exception as e:
+                logger.warning("b2_variant_load_error", error=str(e))
+        return self._variants_cache
+
+    async def _evaluate_shadow_variants(self, signals: list[CryptoSignal]) -> None:
+        """Per-signal × per-variant evaluation → shadow_variant_signals.
+
+        For each candidate signal, applies each variant's quality gate via
+        `check_signal_quality(params=variant.params)`. Persists one row
+        per (variant, candidate). Dedupes by (token_id, minute_bucket).
+        """
+        variants = self._get_variants()
+        if not variants or not signals:
+            return
+
+        from datetime import datetime, timezone
+        from arbo.utils.db import get_session_factory
+        from arbo.strategies.crypto_quality_gate import check_signal_quality
+        import sqlalchemy as sa
+        import json
+
+        now_ts = time.time()
+        signal_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+        minute_bucket = int(now_ts // 60)
+
+        # Prune dedup set occasionally
+        if len(self._shadow_written) > 5000:
+            self._shadow_written.clear()
+
+        rows: list[dict] = []
+        for sig in signals:
+            key = (sig.token_id, minute_bucket)
+            if key in self._shadow_written:
+                continue
+            self._shadow_written.add(key)
+
+            event_end_ts = (
+                sig.expiry.timestamp() if sig.expiry else None
+            )
+
+            for v in variants:
+                decision = check_signal_quality(
+                    sig, exchange_price_age_s=0.0, params=v.params,
+                )
+                meta = {
+                    "asset": sig.asset,
+                    "strike": float(sig.strike),
+                    "direction": sig.direction,
+                    "market_type": sig.market_type,
+                    "hours_to_expiry": sig.hours_to_expiry,
+                }
+                rows.append({
+                    "strategy": "B2",
+                    "variant_id": v.variant_id,
+                    "condition_id": sig.condition_id,
+                    "token_id": sig.token_id,
+                    "signal_ts": signal_dt,
+                    "qualified": decision.passed,
+                    "skip_reason": (
+                        decision.reason.split(":")[0]
+                        if not decision.passed and decision.reason else None
+                    ),
+                    "direction": sig.direction,
+                    "entry_price": float(sig.market_price),
+                    "edge": float(sig.edge),
+                    "sigma": float(sig.sigma_hourly),
+                    "btc_at_start": float(sig.current_exchange_price),
+                    "btc_now": float(sig.current_exchange_price),
+                    "btc_move": 0.0,
+                    "market_gap": None,
+                    "velocity": None,
+                    "dir_delta": None,
+                    "would_fill_at": float(sig.market_price),
+                    "event_start_ts": None,
+                    "event_end_ts": event_end_ts,
+                    "model_prob": float(sig.model_prob),
+                    "meta_json": json.dumps(meta),
+                })
+
+        if not rows:
+            return
+
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                for r in rows:
+                    try:
+                        await session.execute(
+                            sa.text("""
+                                INSERT INTO shadow_variant_signals
+                                  (strategy, variant_id, condition_id, token_id, signal_ts,
+                                   qualified, skip_reason, direction, entry_price, edge, sigma,
+                                   btc_at_start, btc_now, btc_move, market_gap, velocity,
+                                   dir_delta, would_fill_at, event_start_ts, event_end_ts,
+                                   model_prob, meta_json)
+                                VALUES
+                                  (:strategy, :variant_id, :condition_id, :token_id, :signal_ts,
+                                   :qualified, :skip_reason, :direction, :entry_price, :edge, :sigma,
+                                   :btc_at_start, :btc_now, :btc_move, :market_gap, :velocity,
+                                   :dir_delta, :would_fill_at, :event_start_ts, :event_end_ts,
+                                   :model_prob, CAST(:meta_json AS jsonb))
+                                ON CONFLICT (strategy, variant_id, condition_id, signal_ts)
+                                DO NOTHING
+                            """),
+                            r,
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            "b2_shadow_insert_error",
+                            variant_id=r.get("variant_id"),
+                            error=str(e),
+                        )
+                await session.commit()
+        except Exception as e:
+            logger.warning("b2_shadow_persist_error", error=str(e))
+
+    async def _sweep_shadow_resolutions(self) -> None:
+        """Resolve B2 shadow rows past event_end_ts via Polymarket Gamma.
+
+        Throttled to every 5 minutes (B2 markets are daily/weekly — no
+        need to poll faster).
+        """
+        now = time.time()
+        if now - self._last_shadow_sweep_ts < 300:
+            return
+        self._last_shadow_sweep_ts = now
+
+        from arbo.utils.db import get_session_factory
+        import aiohttp
+        import sqlalchemy as sa
+
+        # Fetch unresolved (condition_id, event_end_ts) pairs
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT DISTINCT condition_id, event_end_ts
+                        FROM shadow_variant_signals
+                        WHERE strategy = 'B2'
+                          AND resolution_outcome IS NULL
+                          AND event_end_ts IS NOT NULL
+                          AND event_end_ts < :now - 300
+                        LIMIT 30
+                    """),
+                    {"now": now},
+                )
+                pending = list(result.mappings())
+        except Exception as e:
+            logger.debug("b2_sweep_query_error", error=str(e))
+            return
+
+        if not pending:
+            return
+
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as http:
+            for row in pending:
+                cid = row["condition_id"]
+                up_won = await self._fetch_b2_resolution(http, cid)
+                if up_won is None:
+                    continue
+                try:
+                    factory = get_session_factory()
+                    async with factory() as session:
+                        await session.execute(
+                            sa.text("""
+                                UPDATE shadow_variant_signals
+                                SET resolution_outcome = :up_won,
+                                    resolution_ts = NOW()
+                                WHERE strategy = 'B2'
+                                  AND condition_id = :cid
+                                  AND resolution_outcome IS NULL
+                            """),
+                            {"up_won": bool(up_won), "cid": cid},
+                        )
+                        # PnL only for qualified rows
+                        # B2 direction='above' == YES side wins iff up_won
+                        # B2 direction='below' == YES side wins iff NOT up_won
+                        # Since we always BUY YES on the chosen direction,
+                        # use direction string as proxy for which token bought
+                        await session.execute(
+                            sa.text("""
+                                UPDATE shadow_variant_signals
+                                SET would_pnl_per_share = CASE
+                                    WHEN (direction = 'above' AND :up_won = true)
+                                      OR (direction = 'below' AND :up_won = false)
+                                    THEN 1.0 - would_fill_at
+                                    ELSE -would_fill_at
+                                END
+                                WHERE strategy = 'B2'
+                                  AND condition_id = :cid
+                                  AND qualified = true
+                                  AND would_pnl_per_share IS NULL
+                                  AND would_fill_at IS NOT NULL
+                                  AND would_fill_at > 0
+                            """),
+                            {"up_won": bool(up_won), "cid": cid},
+                        )
+                        await session.commit()
+                except Exception as e:
+                    logger.debug("b2_sweep_update_error", cid=cid, error=str(e))
+
+    async def _fetch_b2_resolution(
+        self, http: Any, condition_id: str
+    ) -> bool | None:
+        """Fetch resolution from Polymarket Gamma. Returns True if YES won."""
+        try:
+            async with http.get(
+                "https://gamma-api.polymarket.com/markets",
+                params={"condition_ids": condition_id},
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+            if not data:
+                return None
+            m = data[0] if isinstance(data, list) else data
+            import json as _json
+            outcomes = m.get("outcomes")
+            prices = m.get("outcomePrices")
+            if isinstance(outcomes, str):
+                outcomes = _json.loads(outcomes)
+            if isinstance(prices, str):
+                prices = _json.loads(prices)
+            if not outcomes or not prices:
+                return None
+            # YES outcome wins iff its price == "1"
+            for o, p in zip(outcomes, prices):
+                if str(o).lower() == "yes":
+                    if str(p) == "1":
+                        return True
+                    elif str(p) == "0":
+                        return False
+                    return None
+            return None
+        except Exception:
+            return None

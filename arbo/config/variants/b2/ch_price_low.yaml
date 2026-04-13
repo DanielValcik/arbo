@@ -1,0 +1,24 @@
+# B2 Challenger: cap MAX_PRICE at 0.50
+#
+# Hypothesis: champion MAX_PRICE=0.60 admits deep-ITM trades where the
+# payoff ratio (1-price)/price is poor. Tighter cap at 0.50 keeps only
+# higher-asymmetry payoffs. Cost: fewer trades on resolved markets.
+#
+# Status: shadow only — no capital risk.
+
+variant_id: ch_price_low
+strategy: B2
+status: challenger
+parent_variant: champion_v1
+notes: |
+  MAX_PRICE 0.60 → 0.50. All other params identical to champion_v1.
+  Expected: higher avg PnL/trade, lower volume.
+
+params:
+  MIN_EDGE: 0.08
+  MAX_EDGE: 0.90
+  MIN_PRICE: 0.05
+  MAX_PRICE: 0.50             # ← CHANGED (was 0.60)
+  MIN_TIME_TO_EXPIRY_H: 8
+  MAX_TIME_TO_EXPIRY_H: 168
+  MIN_HOLD_EDGE: 0.03

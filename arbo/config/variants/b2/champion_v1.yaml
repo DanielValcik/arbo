@@ -1,0 +1,30 @@
+# B2 Champion v1 — current production constants
+#
+# Source: autoresearch v5 (2026-03-27) on BTC+ETH, 902 trades, WR 84.7%,
+#   PnL $27,034, Sharpe 7.95, DD 4.4%, OOS $1,229 avg across 3 walk-forwards.
+#
+# All values mirror arbo/strategies/crypto_quality_gate.py constants at
+# the time of this YAML's creation. DO NOT edit when tuning — create a
+# new challenger YAML instead.
+
+variant_id: champion_v1
+strategy: B2
+status: champion
+parent_variant: null
+notes: |
+  Crypto Price Edge baseline. From autoresearch v5 + per-day/night regime.
+  Locked in after 87-day BTC+ETH study.
+
+params:
+  # Entry filters
+  MIN_EDGE: 0.08
+  MAX_EDGE: 0.90
+  MIN_PRICE: 0.05
+  MAX_PRICE: 0.60
+
+  # Time-to-expiry window
+  MIN_TIME_TO_EXPIRY_H: 8
+  MAX_TIME_TO_EXPIRY_H: 168
+
+  # Exit
+  MIN_HOLD_EDGE: 0.03
