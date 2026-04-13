@@ -1755,11 +1755,11 @@ class RDHOrchestrator:
                 self._d_watchdog = DWatchdog(
                     gemini_agent=self._gemini,
                     slack_bot=self._slack_bot,
+                    strategy_ref=self._strategy_d,  # for sweep_shadow_resolutions_d
                 )
                 logger.info("d_watchdog_initialized")
             except Exception as e:
-                # d_watchdog ships in commit 7/10 — first deploys won't have it
-                logger.debug("d_watchdog_init_skipped", error=str(e))
+                logger.warning("d_watchdog_init_failed", error=str(e))
         if self._d_watchdog is not None:
             self._internal_tasks.append(
                 asyncio.create_task(self._d_watchdog.run(), name="d_watchdog")
