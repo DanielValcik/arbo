@@ -258,8 +258,11 @@ class StrategyB2:
                 logger.debug("b2_wide_spread", mid=mid, bid=raw_bid, ask=raw_ask, spread_pct=f"{spread_pct:.2f}")
                 continue
 
-            # Entry: use the lower of bid/ask as maker price (what we'd pay)
-            clob_price = min(raw_bid, raw_ask) if min(raw_bid, raw_ask) > 0.001 else mid
+            # Entry: taker BUY pays ASK (best_ask = buy_price from /price).
+            # Previous code used min(bid, ask) = BID side which inflated paper PnL
+            # by the full spread on every round-trip (paper engine "earns" the spread
+            # instead of paying it). See docs/STRATEGY_OPTIMIZATION_LEARNINGS.md B2.
+            clob_price = max(raw_bid, raw_ask) if max(raw_bid, raw_ask) > 0.001 else mid
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
