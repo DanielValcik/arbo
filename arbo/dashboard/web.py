@@ -2322,6 +2322,34 @@ async def api_variants(
     if not pool:
         return {"variants": [], "error": f"no variants defined for {strategy}"}
 
+    # Phase 2C.E: load raw YAML flags (auto_generated, retired_at, etc.)
+    raw_meta: dict[str, dict[str, Any]] = {}
+    try:
+        import yaml as _yaml
+        from pathlib import Path as _Path
+        repo_root = _Path(__file__).resolve().parents[2]
+        sdir = repo_root / "arbo" / "config" / "variants" / strategy.lower()
+        if sdir.is_dir():
+            for f in sdir.glob("*.yaml"):
+                try:
+                    with open(f) as fp:
+                        raw_meta[f.stem] = _yaml.safe_load(fp) or {}
+                except Exception:
+                    pass
+    except Exception as _e:
+        pass
+
+    # Phase 2C.E: pending promotion candidates (Tier 1/2 with p_better>=0.65)
+    pending_promotions: set[str] = set()
+    try:
+        from arbo.core.promotion_engine import PromotionEngine, MIN_P_BETTER_CEO
+        cands = await PromotionEngine(strategy).evaluate()
+        for c in cands:
+            if c.tier in (1, 2) and not c.reject_reason and c.p_better >= MIN_P_BETTER_CEO:
+                pending_promotions.add(c.challenger_id)
+    except Exception as _e:
+        pass
+
     # Aggregate stats per variant from paper_trades
     rows: list[dict[str, Any]] = []
     try:
@@ -2417,6 +2445,7 @@ async def api_variants(
                 # Capital allocation: 100% to champion in Phase 1 (no MAB yet)
                 cap_pct = 100.0 if v.status == "champion" else 0.0
 
+                meta = raw_meta.get(v.variant_id, {})
                 rows.append({
                     "variant_id": v.variant_id,
                     "strategy": v.strategy,
@@ -2439,6 +2468,11 @@ async def api_variants(
                     "shadow_n_resolved": shadow_n_resolved,
                     "shadow_wr_pct": round(shadow_wr, 1) if shadow_wr is not None else None,
                     "shadow_pnl_per_share": round(shadow_pnl, 4),
+                    # Phase 2C.E: badges
+                    "auto_generated": bool(meta.get("auto_generated", False)),
+                    "promoted_by": meta.get("promoted_by"),
+                    "retired_reason": meta.get("retired_reason"),
+                    "pending_promotion": v.variant_id in pending_promotions,
                 })
     except Exception as e:
         logger.warning("api_variants_query_error", strategy=strategy, error=str(e))
