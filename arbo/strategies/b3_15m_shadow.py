@@ -15,6 +15,7 @@ import time
 
 import aiohttp
 
+from arbo.core.variant_pool import get_active_variants
 from arbo.utils.logger import get_logger
 
 logger = get_logger("b3_15m_shadow")
@@ -44,6 +45,10 @@ class B3_15mShadow:
         self._signals: list[dict] = []  # collected shadow signals
         self._sigma_prices: list[float] = []  # for volatility
         self._last_vol_ts: float = 0
+        # Phase 2A.3: variant pool (champion + challengers)
+        # Loaded fresh each scan tick via _get_variants() — supports hot reload
+        self._variants_cache_ts: float = 0
+        self._variants_cache: list = []
 
     async def init(self) -> None:
         self._session = aiohttp.ClientSession(
@@ -284,6 +289,10 @@ class B3_15mShadow:
             # Persist to DB
             await self._save_signal_to_db(signal)
 
+            # Phase 2A.3: evaluate signal against ALL active variants
+            # (champion + challengers) and persist per-variant decisions.
+            await self._evaluate_variants(signal)
+
             logger.info(
                 "b3_15m_shadow_signal",
                 direction=signal["direction"],
@@ -376,6 +385,126 @@ class B3_15mShadow:
                 )
             except Exception:
                 pass
+
+    def _get_variants(self) -> list:
+        """Return active variants (champion + challengers), refreshed every 60s."""
+        now = time.time()
+        if now - self._variants_cache_ts > 60:
+            try:
+                self._variants_cache = get_active_variants("B3_15M")
+                self._variants_cache_ts = now
+            except Exception as e:
+                logger.warning("b3_15m_variant_load_error", error=str(e))
+        return self._variants_cache
+
+    @staticmethod
+    def _evaluate_b3_15m_gates(sig: dict, params: dict) -> tuple[bool, str | None]:
+        """Apply per-variant LIVE gates to a candidate signal.
+
+        Returns (qualified, skip_reason). Mirrors filters in
+        arbo/strategies/strategy_b3_15m.py — keep in sync.
+        """
+        edge = sig.get("edge", 0.0)
+        if edge < params.get("LIVE_MIN_EDGE", 0.30):
+            return False, "edge_below_min"
+        abs_move = sig.get("btc_abs_move", 0.0)
+        if abs_move < params.get("LIVE_MIN_BTC_MOVE", 0.0):
+            return False, "btc_move_below_min"
+        if abs_move > params.get("LIVE_MAX_BTC_MOVE", 999.0):
+            return False, "btc_move_above_max"
+        gap = sig.get("market_gap", 0.0)
+        if gap > params.get("LIVE_MAX_MARKET_GAP", 1.0):
+            return False, "market_gap_above_max"
+        fill = sig.get("would_fill_at", 0.0)
+        if fill > params.get("LIVE_MAX_FILL_PRICE", 1.01):
+            return False, "fill_above_max"
+        if fill <= 0.0:
+            return False, "no_orderbook"
+        entry_min = sig.get("entry_minute", 0)
+        if entry_min < params.get("MIN_ENTRY_MIN", 4):
+            return False, "minute_below_min"
+        if entry_min > params.get("MAX_ENTRY_MIN", 11):
+            return False, "minute_above_max"
+        market_fv = sig.get("model_fv", 0.5)
+        if market_fv < params.get("MIN_ENTRY_MKT_FV", 0.0):
+            return False, "fv_below_min"
+        if market_fv > params.get("MAX_ENTRY_MKT_FV", 1.0):
+            return False, "fv_above_max"
+        return True, None
+
+    async def _evaluate_variants(self, sig: dict) -> None:
+        """Evaluate signal across all active variants and persist decisions."""
+        variants = self._get_variants()
+        if not variants:
+            return
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+        from datetime import datetime, timezone
+
+        token_id = None
+        try:
+            ev = self._events.get(sig["condition_id"])
+            if ev is not None:
+                token_id = ev["token_up"] if sig["direction"] == "up" else ev["token_down"]
+        except Exception:
+            pass
+
+        signal_dt = datetime.fromtimestamp(sig["timestamp"], tz=timezone.utc)
+
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                for v in variants:
+                    qualified, skip_reason = self._evaluate_b3_15m_gates(sig, v.params)
+                    row = {
+                        "strategy": "B3_15M",
+                        "variant_id": v.variant_id,
+                        "condition_id": sig["condition_id"],
+                        "token_id": token_id,
+                        "signal_ts": signal_dt,
+                        "qualified": qualified,
+                        "skip_reason": skip_reason,
+                        "direction": sig.get("direction"),
+                        "entry_price": sig.get("would_fill_at"),
+                        "edge": sig.get("edge"),
+                        "sigma": sig.get("sigma"),
+                        "btc_at_start": sig.get("btc_at_start"),
+                        "btc_now": sig.get("btc_now"),
+                        "btc_move": sig.get("btc_move"),
+                        "market_gap": sig.get("market_gap"),
+                        "velocity": None,  # not computed in shadow path
+                        "dir_delta": None,
+                        "would_fill_at": sig.get("would_fill_at"),
+                        "event_start_ts": sig.get("event_start_ts"),
+                        "event_end_ts": sig.get("event_end_ts"),
+                    }
+                    try:
+                        await session.execute(
+                            sa.text("""
+                                INSERT INTO shadow_variant_signals
+                                  (strategy, variant_id, condition_id, token_id, signal_ts,
+                                   qualified, skip_reason, direction, entry_price, edge, sigma,
+                                   btc_at_start, btc_now, btc_move, market_gap, velocity,
+                                   dir_delta, would_fill_at, event_start_ts, event_end_ts)
+                                VALUES
+                                  (:strategy, :variant_id, :condition_id, :token_id, :signal_ts,
+                                   :qualified, :skip_reason, :direction, :entry_price, :edge, :sigma,
+                                   :btc_at_start, :btc_now, :btc_move, :market_gap, :velocity,
+                                   :dir_delta, :would_fill_at, :event_start_ts, :event_end_ts)
+                                ON CONFLICT (strategy, variant_id, condition_id, signal_ts)
+                                DO NOTHING
+                            """),
+                            row,
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            "shadow_variant_insert_error",
+                            variant_id=v.variant_id,
+                            error=str(e),
+                        )
+                await session.commit()
+        except Exception as e:
+            logger.warning("shadow_variant_evaluate_error", error=str(e))
 
     async def _save_signal_to_db(self, sig: dict) -> None:
         """Persist shadow signal to PostgreSQL."""
