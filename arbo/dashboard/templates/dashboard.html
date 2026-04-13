@@ -1694,6 +1694,68 @@
                 </div>
             </div>
 
+            <!-- Variant Leaderboard — B3 5-min (Phase A: champion-only) -->
+            <div class="card grid-full" style="border-top:3px solid #3fb950">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Variant Leaderboard — B3 5-min
+                    <span id="lb3VariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase A — champion only</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    Spec: <code>docs/VARIANT_LEADERBOARD_SPEC.md</code> · Pool: <code>config/variants/b3/</code>
+                </div>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;font-size:11px">
+                        <thead style="background:rgba(63,185,80,0.08)">
+                            <tr>
+                                <th style="text-align:left;padding:6px">Rank</th>
+                                <th style="text-align:left">Variant</th>
+                                <th style="text-align:left">Status</th>
+                                <th style="text-align:right">N (live)</th>
+                                <th style="text-align:right">WR</th>
+                                <th style="text-align:right">PnL</th>
+                                <th style="text-align:right">Cap %</th>
+                                <th style="text-align:center">Drift</th>
+                                <th style="text-align:left">Δ vs champion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb3VariantsBody">
+                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center;padding:8px">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Variant Leaderboard — B3 15-min (Phase A: champion-only) -->
+            <div class="card grid-full" style="border-top:3px solid #e3b341">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                    Variant Leaderboard — B3 15-min
+                    <span id="lb315mVariantsHeader" style="font-size:11px;font-weight:700;color:var(--text-dim)">Phase A — champion only</span>
+                </div>
+                <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">
+                    Spec: <code>docs/VARIANT_LEADERBOARD_SPEC.md</code> · Pool: <code>config/variants/b3_15m/</code> (3 challengers defined, not yet wired)
+                </div>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;font-size:11px">
+                        <thead style="background:rgba(227,179,65,0.08)">
+                            <tr>
+                                <th style="text-align:left;padding:6px">Rank</th>
+                                <th style="text-align:left">Variant</th>
+                                <th style="text-align:left">Status</th>
+                                <th style="text-align:right">N (live)</th>
+                                <th style="text-align:right">WR</th>
+                                <th style="text-align:right">PnL</th>
+                                <th style="text-align:right">Cap %</th>
+                                <th style="text-align:center">Drift</th>
+                                <th style="text-align:left">Δ vs champion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lb315mVariantsBody">
+                            <tr><td colspan="9" style="color:var(--text-dim);text-align:center;padding:8px">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- B3 Portfolio Balance Timeline -->
             <div class="card grid-full" style="border-top:3px solid #58a6ff">
                 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Portfolio Balance <span style="background:#58a6ff;color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">WALLET</span><span id="lb3PortfolioStats" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
@@ -3441,10 +3503,17 @@
         }
         if (tab === 'liveb3') {
             // 15M first, then 5M — merged chart + header need 15m chron available
-            (async () => { await fetchLiveB315M(); await fetchLiveB3(); })();
+            (async () => {
+                await fetchLiveB315M();
+                await fetchLiveB3();
+                fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
+                fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
+            })();
             if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(async () => {
                 await fetchLiveB315M();
                 await fetchLiveB3();
+                fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
+                fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
             }, 10000);
         } else {
             if (lb3RefreshInterval) { clearInterval(lb3RefreshInterval); lb3RefreshInterval = null; }
@@ -5199,6 +5268,63 @@
                     }
                 });
             }
+        }
+    }
+
+    // ===== Variant Leaderboard (Phase 1 — read-only) =====
+    async function fetchVariantLeaderboard(strategy, bodyId, headerId) {
+        try {
+            const data = await fetchJSON(`/api/variants?strategy=${encodeURIComponent(strategy)}`);
+            const variants = data?.variants || [];
+            const tbody = document.getElementById(bodyId);
+            const header = document.getElementById(headerId);
+            if (!tbody) return;
+
+            if (variants.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="color:var(--text-dim);text-align:center;padding:8px">${data?.error || 'No variants defined'}</td></tr>`;
+                return;
+            }
+
+            // Header text
+            if (header) {
+                const champ = data.champion || '—';
+                const active = data.active_count || 0;
+                const total = variants.length;
+                header.textContent = `${active}/${total} active · champion: ${champ} · ${data.phase || 'Phase A'}`;
+            }
+
+            tbody.innerHTML = variants.map((v, idx) => {
+                const isChamp = v.status === 'champion';
+                const isRetired = v.status === 'retired';
+                const rankCell = isChamp ? '🏆' : isRetired ? '💀' : (idx + 1);
+                const wrCell = v.wr_pct !== null ? `${v.wr_pct.toFixed(1)}%` : '—';
+                const wrColor = v.wr_pct === null ? 'var(--text-dim)'
+                    : v.wr_pct >= 70 ? 'var(--green)'
+                    : v.wr_pct >= 50 ? '#e3b341'
+                    : 'var(--red)';
+                const pnlColor = v.total_pnl > 0 ? 'var(--green)' : v.total_pnl < 0 ? 'var(--red)' : 'var(--text-dim)';
+                const pnlSign = v.total_pnl >= 0 ? '+' : '';
+                const driftIcon = v.drift_status === 'firing' ? '🔴' : v.drift_status === 'warning' ? '🟡' : '🟢';
+                const capCell = v.capital_pct > 0 ? `${v.capital_pct.toFixed(0)}%` : '—';
+                const diffStr = Object.entries(v.params_summary || {})
+                    .map(([k, val]) => `<span style="color:#a855f7">${k}=${val}</span>`)
+                    .join(', ') || (isChamp ? '<span style="color:var(--text-dim)">(baseline)</span>' : '<span style="color:var(--text-dim)">—</span>');
+                const rowStyle = isRetired ? 'opacity:0.5' : '';
+                return `<tr style="${rowStyle}">
+                    <td style="padding:6px;font-weight:600">${rankCell}</td>
+                    <td style="padding:6px;font-family:monospace">${v.variant_id}</td>
+                    <td style="padding:6px;font-size:10px;color:var(--text-dim)">${v.status}</td>
+                    <td style="padding:6px;text-align:right">${v.n_live} <span style="color:var(--text-dim);font-size:9px">/${v.n_total}</span></td>
+                    <td style="padding:6px;text-align:right;color:${wrColor}">${wrCell}</td>
+                    <td style="padding:6px;text-align:right;color:${pnlColor}">${pnlSign}$${v.total_pnl.toFixed(2)}</td>
+                    <td style="padding:6px;text-align:right">${capCell}</td>
+                    <td style="padding:6px;text-align:center">${driftIcon}</td>
+                    <td style="padding:6px;font-size:10px">${diffStr}</td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            const tbody = document.getElementById(bodyId);
+            if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);text-align:center;padding:8px">Error: ${e.message || e}</td></tr>`;
         }
     }
 

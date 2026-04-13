@@ -2288,6 +2288,141 @@ async def api_city_performance_c2(
         return {"cities": [], "error": str(e)}
 
 
+@app.get("/api/variants")
+async def api_variants(
+    request: Request,
+    _user: str = Depends(_verify_credentials),
+) -> dict[str, Any]:
+    """Variant Leaderboard data — Phase 1 (read-only, champion-only).
+
+    Returns aggregate stats per variant for a strategy. Phase 1 only the
+    champion has trades; challengers exist as YAML files but no orchestrator
+    is wired to them yet.
+
+    Spec: docs/VARIANT_LEADERBOARD_SPEC.md §3
+    """
+    strategy = request.query_params.get("strategy", "").strip()
+    if not strategy:
+        return {"variants": [], "error": "strategy query param required"}
+
+    # Load declarative pool
+    try:
+        from arbo.core.variant_pool import load_variants
+        pool = load_variants(strategy)
+    except Exception as e:
+        logger.warning("variant_pool_load_error", strategy=strategy, error=str(e))
+        return {"variants": [], "error": f"pool load failed: {e}"}
+
+    if not pool:
+        return {"variants": [], "error": f"no variants defined for {strategy}"}
+
+    # Aggregate stats per variant from paper_trades
+    rows: list[dict[str, Any]] = []
+    try:
+        from arbo.utils.db import PaperTrade, get_session_factory
+        factory = get_session_factory()
+        async with factory() as session:
+            for v in pool:
+                # Live-only filter: trades where live actually filled (so PnL is real)
+                # Match by trade_details.variant_id key.
+                stmt = sa.text("""
+                    SELECT
+                        COUNT(*) AS n_total,
+                        COUNT(*) FILTER (
+                            WHERE trade_details->>'live_fill_status' IN ('filled','partial')
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                        ) AS n_live,
+                        COUNT(*) FILTER (
+                            WHERE trade_details->>'live_fill_status' IN ('filled','partial')
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND (trade_details->>'live_exit_price')::float > 0.5
+                        ) AS wins,
+                        COUNT(*) FILTER (
+                            WHERE trade_details->>'live_fill_status' IN ('filled','partial')
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND (trade_details->>'live_exit_price')::float <= 0.5
+                              AND (trade_details->>'live_exit_status') IN ('resolution','filled','partial')
+                        ) AS losses,
+                        COALESCE(SUM(
+                            ((trade_details->>'live_exit_price')::float
+                             - (trade_details->>'live_entry_price')::float)
+                            * (trade_details->>'live_entry_shares')::float
+                        ) FILTER (
+                            WHERE trade_details->>'live_fill_status' IN ('filled','partial')
+                              AND (trade_details->>'live_entry_shares')::float > 0
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                        ), 0) AS total_pnl
+                    FROM paper_trades
+                    WHERE strategy = :strat
+                      AND trade_details->>'variant_id' = :vid
+                """)
+                result = await session.execute(
+                    stmt, {"strat": strategy, "vid": v.variant_id}
+                )
+                row = result.first()
+                n_total = int(row.n_total) if row else 0
+                n_live = int(row.n_live) if row else 0
+                wins = int(row.wins) if row else 0
+                losses = int(row.losses) if row else 0
+                resolved = wins + losses
+                wr = (100.0 * wins / resolved) if resolved > 0 else None
+                pnl = float(row.total_pnl) if row else 0.0
+
+                # Capital allocation: 100% to champion in Phase 1 (no MAB yet)
+                cap_pct = 100.0 if v.status == "champion" else 0.0
+
+                rows.append({
+                    "variant_id": v.variant_id,
+                    "strategy": v.strategy,
+                    "status": v.status,
+                    "n_total": n_total,
+                    "n_live": n_live,
+                    "wins": wins,
+                    "losses": losses,
+                    "wr_pct": round(wr, 1) if wr is not None else None,
+                    "total_pnl": round(pnl, 2),
+                    "capital_pct": cap_pct,
+                    "dsr": None,  # Phase 2: implement DSR computation
+                    "drift_status": "ok",  # Phase 4: real drift detector state
+                    "notes": v.notes,
+                    "parent_variant": v.parent_variant,
+                    "params_summary": _variant_params_diff(v, pool),
+                })
+    except Exception as e:
+        logger.warning("api_variants_query_error", strategy=strategy, error=str(e))
+        return {"variants": rows, "error": str(e)}
+
+    # Sort: champion first, then challengers by total_pnl desc, retired last
+    def sort_key(r: dict) -> tuple:
+        status_order = {"champion": 0, "live": 1, "incubate": 2, "challenger": 3, "shadow": 4, "retired": 9}
+        return (status_order.get(r["status"], 8), -r["total_pnl"])
+    rows.sort(key=sort_key)
+
+    return {
+        "strategy": strategy,
+        "variants": rows,
+        "active_count": sum(1 for r in rows if r["status"] != "retired"),
+        "champion": next((r["variant_id"] for r in rows if r["status"] == "champion"), None),
+        "phase": "A — read-only champion display",
+    }
+
+
+def _variant_params_diff(v: "Any", pool: "list") -> dict[str, str]:
+    """Return params that differ from champion (for tooltip/drill-down)."""
+    if v.status == "champion":
+        return {}
+    champ = next((p for p in pool if p.status == "champion"), None)
+    if champ is None:
+        return {}
+    diffs = {}
+    for k, val in v.params.items():
+        cval = champ.params.get(k)
+        if cval != val:
+            diffs[k] = f"{cval} → {val}"
+    return diffs
+
+
 @app.get("/api/expected-vs-reality-b3")
 async def api_expected_vs_reality_b3(
     _user: str = Depends(_verify_credentials),
