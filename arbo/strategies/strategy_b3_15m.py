@@ -670,6 +670,14 @@ class StrategyB315M:
             if paper_trade is None and self._paper_engine:
                 continue
 
+            # Phase 3.1: schedule mid_at_30s/60s capture for composite reward
+            try:
+                from arbo.core.mid_sampler import schedule_mid_capture
+                _tid = getattr(paper_trade, "id", None) if paper_trade else None
+                schedule_mid_capture(token_id, _tid)
+            except Exception:
+                pass
+
             # Live execution — V6.0 Dual Filter (2026-04-06)
             # Two simple pre-entry rules, validated on BOTH datasets:
             #   LIVE:  15t, 13W/2L, 87% WR, +$16.1 (bootstrap P(profit)=92%)

@@ -50,6 +50,10 @@ class VariantSnapshot:
     shadow_wins: int
     shadow_pnl_per_share: float
     shadow_wr: float | None
+    # Phase 3.3: mid-trade composite reward signal (None if no mid_at_60s yet)
+    avg_mid_at_60s_drift: float | None = None  # avg (mid_60s - entry)*direction
+    avg_composite_reward: float | None = None  # mean composite over resolved trades
+    composite_reward_n: int = 0                # how many trades had both signals
 
 
 @dataclass
@@ -205,6 +209,83 @@ class PerformanceAnalyzer:
         s_decided = s_wins + max(0, s_resolved - s_wins)
         s_wr = (100.0 * s_wins / s_resolved) if s_resolved > 0 else None
 
+        # Phase 3.3: mid-trade composite reward stats (live trades only)
+        mid_drift_avg: float | None = None
+        composite_avg: float | None = None
+        composite_n = 0
+        try:
+            mid_r = await session.execute(
+                sa.text("""
+                    SELECT
+                        AVG(
+                            ((trade_details->>'mid_at_60s')::float
+                             - (trade_details->>'live_entry_price')::float)
+                            * CASE
+                                WHEN trade_details->>'direction' = 'down' THEN -1
+                                ELSE 1
+                              END
+                        ) AS avg_drift,
+                        COUNT(*) FILTER (
+                            WHERE trade_details->>'mid_at_60s' IS NOT NULL
+                              AND trade_details->>'live_exit_price' IS NOT NULL
+                        ) AS n_with_signal
+                    FROM paper_trades
+                    WHERE strategy = :s
+                      AND trade_details->>'variant_id' = :v
+                      AND trade_details->>'mid_at_60s' IS NOT NULL
+                      AND trade_details->>'live_entry_price' IS NOT NULL
+                      AND entry_ts >= :cutoff
+                """),
+                {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
+            )
+            mrow = mid_r.first()
+            if mrow:
+                mid_drift_avg = (
+                    round(float(mrow.avg_drift), 4)
+                    if mrow.avg_drift is not None else None
+                )
+                composite_n = int(mrow.n_with_signal or 0)
+        except Exception as e:
+            logger.debug("perf_mid_query_error", error=str(e))
+
+        # Composite reward needs Python evaluation per row (CASE complexity)
+        if composite_n > 0:
+            try:
+                from arbo.core.mid_sampler import composite_reward
+                comp_r = await session.execute(
+                    sa.text("""
+                        SELECT
+                            CASE WHEN trade_details->>'direction' = 'down'
+                                 THEN -1 ELSE 1 END AS direction,
+                            (trade_details->>'live_entry_price')::float AS entry_price,
+                            (trade_details->>'mid_at_60s')::float AS mid_60s,
+                            ((trade_details->>'live_exit_price')::float
+                             - (trade_details->>'live_entry_price')::float) AS pnl
+                        FROM paper_trades
+                        WHERE strategy = :s
+                          AND trade_details->>'variant_id' = :v
+                          AND trade_details->>'mid_at_60s' IS NOT NULL
+                          AND trade_details->>'live_entry_price' IS NOT NULL
+                          AND trade_details->>'live_exit_price' IS NOT NULL
+                          AND entry_ts >= :cutoff
+                    """),
+                    {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
+                )
+                vals: list[float] = []
+                for row in comp_r.fetchall():
+                    cr = composite_reward(
+                        direction=int(row[0]),
+                        entry_price=float(row[1]),
+                        mid_at_60s=float(row[2]),
+                        pnl_per_share=float(row[3]),
+                    )
+                    if cr is not None:
+                        vals.append(cr)
+                if vals:
+                    composite_avg = round(sum(vals) / len(vals), 4)
+            except Exception as e:
+                logger.debug("perf_composite_error", error=str(e))
+
         return VariantSnapshot(
             variant_id=variant.variant_id,
             status=variant.status,
@@ -217,6 +298,9 @@ class PerformanceAnalyzer:
             shadow_wins=s_wins,
             shadow_pnl_per_share=round(s_pnl, 4),
             shadow_wr=round(s_wr, 1) if s_wr is not None else None,
+            avg_mid_at_60s_drift=mid_drift_avg,
+            avg_composite_reward=composite_avg,
+            composite_reward_n=composite_n,
         )
 
     async def _compute_failure_modes(

@@ -76,6 +76,10 @@ def _build_prompt(report: PerformanceReport) -> str:
             "live_wr_pct": v.live_wr,
             "shadow_pnl_per_share": v.shadow_pnl_per_share,
             "shadow_wr_pct": v.shadow_wr,
+            # Phase 3.3: mid-trade signals (None if data not yet collected)
+            "avg_mid_60s_drift": v.avg_mid_at_60s_drift,
+            "avg_composite_reward": v.avg_composite_reward,
+            "composite_n": v.composite_reward_n,
         })
 
     failure_modes = []

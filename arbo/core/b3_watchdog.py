@@ -193,6 +193,12 @@ class B3Watchdog:
         except Exception as e:
             logger.warning("promotion_cycle_error", error=str(e))
 
+        # 6. Phase 4.2 — drift detector (Page-Hinkley per variant).
+        try:
+            await self._drift_cycle()
+        except Exception as e:
+            logger.warning("drift_cycle_error", error=str(e))
+
     def _detect_anomalies(self, metrics: B3MetricsSnapshot) -> list[dict[str, Any]]:
         """Detect anomalies by comparing current metrics to baseline."""
         anomalies: list[dict[str, Any]] = []
@@ -584,6 +590,41 @@ class B3Watchdog:
             await self._slack._post(channel, text=text)
         except Exception as e:
             logger.warning("autochallenger_slack_error", error=str(e))
+
+    # ── Drift cycle (Phase 4.2) ──────────────────────────────────────
+
+    async def _drift_cycle(self) -> None:
+        """Run Page-Hinkley drift test per variant. Alert on firing."""
+        try:
+            from arbo.core.drift_monitor import evaluate_strategy_drift
+        except Exception as e:
+            logger.warning("drift_import_error", error=str(e))
+            return
+        results = await evaluate_strategy_drift(self._strategy_name)
+        firing = [r for r in results if r.firing]
+        if not firing:
+            return
+        for r in firing:
+            logger.warning(
+                "drift_detected",
+                strategy=self._strategy_name,
+                variant_id=r.variant_id,
+                ph_stat=r.ph_stat,
+                n_samples=r.n_samples,
+                reason=r.fire_reason,
+            )
+        if self._slack is not None:
+            lines = [f":rotating_light: *{self._strategy_name} Drift Alert*"]
+            for r in firing:
+                lines.append(
+                    f"• `{r.variant_id}` PH={r.ph_stat} (N={r.n_samples}, mean={r.running_mean})"
+                )
+            lines.append("Consider re-running BO sweep or manual review.")
+            try:
+                channel = getattr(self._slack, "default_channel", None) or "C0APX4K8Z2N"
+                await self._slack._post(channel, text="\n".join(lines))
+            except Exception as e:
+                logger.warning("drift_slack_error", error=str(e))
 
     # ── Promotion cycle (Phase 2C.B/C) ───────────────────────────────
 
