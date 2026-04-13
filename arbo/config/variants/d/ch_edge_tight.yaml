@@ -1,0 +1,26 @@
+# D Challenger: tighter MIN_EDGE
+#
+# Hypothesis: champion MIN_EDGE=0.16 with sweep v4 WR=50%. Tighter floor
+# (0.20) sacrifices volume for higher-confidence trades — same parallel
+# hypothesis as B3, B3_15M, B2 challengers. Cross-strategy validation.
+#
+# Status: shadow only — no capital risk.
+
+variant_id: ch_edge_tight
+strategy: D
+status: challenger
+parent_variant: champion_v1
+notes: |
+  MIN_EDGE 0.16 → 0.20. All other params identical to champion_v1.
+  Expected: fewer trades, potentially higher WR if low-edge trades
+  drive the 50% baseline down.
+
+params:
+  MIN_EDGE: 0.20              # ← CHANGED (was 0.16)
+  MAX_EDGE: 0.25
+  MIN_PRICE: 0.20
+  MAX_PRICE: 0.65
+  GREEN_BOOK_DELTA: 0.17
+  STOP_LOSS_DELTA: 0.15
+  MAX_HOLD_FRACTION: 0.50
+  GAME_DURATION_HOURS: 2.5

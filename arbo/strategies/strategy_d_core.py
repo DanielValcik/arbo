@@ -23,6 +23,7 @@ Sport variants override class attributes:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -159,6 +160,11 @@ class StrategyDCore:
         # Promotion swaps this to new champion's YAML params at runtime
         # without restart.
         self._active_variant_params: dict | None = None
+        # Shadow variant cache + write dedup
+        self._variants_cache: list = []
+        self._variants_cache_ts: float = 0.0
+        self._shadow_written_d: set[tuple[str, str, int]] = set()
+        self._last_shadow_sweep_ts_d: float = 0.0
 
         self._elo: dict[str, tuple[float, float]] = elo_ratings or {}
         self._pinnacle: dict[str, tuple[float, float]] = pinnacle_odds or {}
@@ -281,6 +287,15 @@ class StrategyDCore:
             max_price = self._p("MAX_PRICE")
 
             yes_edge = prob - market.yes_price
+            no_edge = (1 - prob) - market.no_price
+
+            # Project PARALLEL: schedule shadow eval for all variants
+            # (best-effort, fire-and-forget — never blocks signal flow)
+            try:
+                self._schedule_shadow_eval_d(market, prob, yes_edge, no_edge)
+            except Exception as _e:
+                pass  # Don't break live execution
+
             if (min_edge <= yes_edge <= max_edge
                     and min_price <= market.yes_price <= max_price):
                 size = self.kelly_size(yes_edge, market.yes_price)
@@ -293,7 +308,6 @@ class StrategyDCore:
 
             # NO side
             if self.BOTH_SIDES:
-                no_edge = (1 - prob) - market.no_price
                 if (min_edge <= no_edge <= max_edge
                         and min_price <= market.no_price <= max_price):
                     size = self.kelly_size(no_edge, market.no_price)
@@ -413,12 +427,14 @@ class StrategyDCore:
 
         if self._paper:
             trade_details = {
+                "variant_id": "champion_v1",  # Project PARALLEL — current live variant
                 "sport": self.SPORT_NAME,
                 "side": signal.side,
                 "team_a": signal.market.team_a,
                 "team_b": signal.market.team_b,
                 "question": signal.market.question,
                 "edge": round(signal.edge, 4),
+                "model_prob": round(signal.model_prob, 4),
                 "game_date": signal.market.game_date,
             }
             trade = self._paper.place_trade(
@@ -476,6 +492,275 @@ class StrategyDCore:
         self._last_trade_time = now
         self._trades_today += 1
         return position
+
+    # ── Project PARALLEL — Shadow variant eval + resolution sweep ────
+
+    def _get_variants_d(self) -> list:
+        """Return active D variants, refreshed every 60s."""
+        now = time.time()
+        if now - self._variants_cache_ts > 60:
+            try:
+                from arbo.core.variant_pool import get_active_variants
+                self._variants_cache = get_active_variants(self.STRATEGY_NAME)
+                self._variants_cache_ts = now
+            except Exception as e:
+                self._logger.warning("d_variant_load_error", error=str(e))
+        return self._variants_cache
+
+    def _schedule_shadow_eval_d(
+        self,
+        market: MarketData,
+        prob: float,
+        yes_edge: float,
+        no_edge: float,
+    ) -> None:
+        """Fire-and-forget shadow eval for D — runs as background task."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(
+            self._evaluate_shadow_variants_d(market, prob, yes_edge, no_edge),
+            name=f"d_shadow_{market.condition_id[:12]}",
+        )
+
+    async def _evaluate_shadow_variants_d(
+        self,
+        market: MarketData,
+        prob: float,
+        yes_edge: float,
+        no_edge: float,
+    ) -> None:
+        """Per-market × per-variant evaluation → shadow_variant_signals."""
+        variants = self._get_variants_d()
+        if not variants:
+            return
+
+        from datetime import datetime, timezone
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+        import json
+
+        now_ts = time.time()
+        # Dedup per (condition_id, side, minute_bucket)
+        minute_bucket = int(now_ts // 60)
+        signal_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+
+        if len(self._shadow_written_d) > 5000:
+            self._shadow_written_d.clear()
+
+        # Game end: estimate as game start + GAME_DURATION_HOURS (champion default)
+        # Use champion's GAME_DURATION_HOURS for end_ts (variants share same game)
+        try:
+            from datetime import datetime as _dt
+            game_dt = _dt.fromisoformat(
+                str(market.game_date).replace("Z", "+00:00")
+            )
+            event_end_ts = game_dt.timestamp() + (
+                self._p("GAME_DURATION_HOURS") * 3600
+            )
+        except Exception:
+            event_end_ts = now_ts + (self.GAME_DURATION_HOURS * 3600)
+
+        rows: list[dict] = []
+        for v in variants:
+            params = v.params or {}
+            min_e = params.get("MIN_EDGE", self.MIN_EDGE)
+            max_e = params.get("MAX_EDGE", self.MAX_EDGE)
+            min_p = params.get("MIN_PRICE", self.MIN_PRICE)
+            max_p = params.get("MAX_PRICE", self.MAX_PRICE)
+
+            for side, edge, price, token_id in (
+                ("yes", yes_edge, market.yes_price, market.token_id_yes),
+                ("no", no_edge, market.no_price, market.token_id_no),
+            ):
+                if not self.BOTH_SIDES and side == "no":
+                    continue
+                key = (market.condition_id, side, minute_bucket)
+                if (key, v.variant_id) in self._shadow_written_d:
+                    continue
+                qualified = (min_e <= edge <= max_e) and (min_p <= price <= max_p)
+                skip_reason = None
+                if not qualified:
+                    if edge < min_e: skip_reason = "edge_below_min"
+                    elif edge > max_e: skip_reason = "edge_above_max"
+                    elif price < min_p: skip_reason = "price_below_min"
+                    elif price > max_p: skip_reason = "price_above_max"
+                meta = {
+                    "sport": self.SPORT_NAME,
+                    "team_a": market.team_a,
+                    "team_b": market.team_b,
+                    "side": side,
+                    "game_date": str(market.game_date),
+                    "yes_price": float(market.yes_price),
+                    "no_price": float(market.no_price),
+                }
+                rows.append({
+                    "strategy": self.STRATEGY_NAME,
+                    "variant_id": v.variant_id,
+                    "condition_id": market.condition_id,
+                    "token_id": token_id,
+                    "signal_ts": signal_dt,
+                    "qualified": qualified,
+                    "skip_reason": skip_reason,
+                    "direction": side,
+                    "entry_price": float(price),
+                    "edge": float(edge),
+                    "sigma": None,
+                    "btc_at_start": None,
+                    "btc_now": None,
+                    "btc_move": None,
+                    "market_gap": None,
+                    "velocity": None,
+                    "dir_delta": None,
+                    "would_fill_at": float(price),
+                    "event_start_ts": None,
+                    "event_end_ts": event_end_ts,
+                    "model_prob": float(prob if side == "yes" else 1 - prob),
+                    "meta_json": json.dumps(meta),
+                })
+                self._shadow_written_d.add((key, v.variant_id))
+
+        if not rows:
+            return
+
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                for r in rows:
+                    try:
+                        await session.execute(
+                            sa.text("""
+                                INSERT INTO shadow_variant_signals
+                                  (strategy, variant_id, condition_id, token_id, signal_ts,
+                                   qualified, skip_reason, direction, entry_price, edge, sigma,
+                                   btc_at_start, btc_now, btc_move, market_gap, velocity,
+                                   dir_delta, would_fill_at, event_start_ts, event_end_ts,
+                                   model_prob, meta_json)
+                                VALUES
+                                  (:strategy, :variant_id, :condition_id, :token_id, :signal_ts,
+                                   :qualified, :skip_reason, :direction, :entry_price, :edge, :sigma,
+                                   :btc_at_start, :btc_now, :btc_move, :market_gap, :velocity,
+                                   :dir_delta, :would_fill_at, :event_start_ts, :event_end_ts,
+                                   :model_prob, CAST(:meta_json AS jsonb))
+                                ON CONFLICT (strategy, variant_id, condition_id, signal_ts)
+                                DO NOTHING
+                            """),
+                            r,
+                        )
+                    except Exception as e:
+                        self._logger.debug(
+                            "d_shadow_insert_error",
+                            variant_id=r.get("variant_id"), error=str(e),
+                        )
+                await session.commit()
+        except Exception as e:
+            self._logger.warning("d_shadow_persist_error", error=str(e))
+
+    async def sweep_shadow_resolutions_d(self) -> None:
+        """Resolve D shadow rows via Polymarket Gamma. Throttled to 5min.
+
+        Called by orchestrator (DWatchdog or main_rdh task) on cadence.
+        """
+        now = time.time()
+        if now - self._last_shadow_sweep_ts_d < 300:
+            return
+        self._last_shadow_sweep_ts_d = now
+
+        from arbo.utils.db import get_session_factory
+        import aiohttp
+        import sqlalchemy as sa
+        import json as _json
+
+        try:
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT DISTINCT condition_id
+                        FROM shadow_variant_signals
+                        WHERE strategy = :s
+                          AND resolution_outcome IS NULL
+                          AND event_end_ts IS NOT NULL
+                          AND event_end_ts < :now - 300
+                        LIMIT 30
+                    """),
+                    {"s": self.STRATEGY_NAME, "now": now},
+                )
+                pending = [r["condition_id"] for r in result.mappings()]
+        except Exception as e:
+            self._logger.debug("d_sweep_query_error", error=str(e))
+            return
+        if not pending:
+            return
+
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as http:
+            for cid in pending:
+                yes_won = None
+                try:
+                    async with http.get(
+                        "https://gamma-api.polymarket.com/markets",
+                        params={"condition_ids": cid},
+                    ) as resp:
+                        if resp.status != 200:
+                            continue
+                        data = await resp.json()
+                    if not data:
+                        continue
+                    m = data[0] if isinstance(data, list) else data
+                    outcomes = m.get("outcomes")
+                    prices = m.get("outcomePrices")
+                    if isinstance(outcomes, str):
+                        outcomes = _json.loads(outcomes)
+                    if isinstance(prices, str):
+                        prices = _json.loads(prices)
+                    if not outcomes or not prices:
+                        continue
+                    for o, p in zip(outcomes, prices):
+                        if str(o).lower() == "yes":
+                            if str(p) == "1":
+                                yes_won = True
+                            elif str(p) == "0":
+                                yes_won = False
+                            break
+                except Exception:
+                    continue
+                if yes_won is None:
+                    continue
+                try:
+                    factory = get_session_factory()
+                    async with factory() as session:
+                        await session.execute(
+                            sa.text("""
+                                UPDATE shadow_variant_signals
+                                SET resolution_outcome = :yes_won, resolution_ts = NOW()
+                                WHERE strategy = :s AND condition_id = :cid
+                                  AND resolution_outcome IS NULL
+                            """),
+                            {"yes_won": bool(yes_won), "cid": cid, "s": self.STRATEGY_NAME},
+                        )
+                        # PnL for qualified rows: direction='yes' wins iff yes_won;
+                        # direction='no' wins iff NOT yes_won
+                        await session.execute(
+                            sa.text("""
+                                UPDATE shadow_variant_signals
+                                SET would_pnl_per_share = CASE
+                                    WHEN (direction = 'yes' AND :yes_won = true)
+                                      OR (direction = 'no'  AND :yes_won = false)
+                                    THEN 1.0 - would_fill_at
+                                    ELSE -would_fill_at
+                                END
+                                WHERE strategy = :s AND condition_id = :cid
+                                  AND qualified = true AND would_pnl_per_share IS NULL
+                                  AND would_fill_at IS NOT NULL AND would_fill_at > 0
+                            """),
+                            {"yes_won": bool(yes_won), "cid": cid, "s": self.STRATEGY_NAME},
+                        )
+                        await session.commit()
+                except Exception as e:
+                    self._logger.debug("d_sweep_update_error", cid=cid, error=str(e))
 
     # ── Exit ──────────────────────────────────────────────────────────
 

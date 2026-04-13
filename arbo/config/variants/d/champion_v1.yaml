@@ -1,0 +1,36 @@
+# D Champion v1 — current production constants (NBA Green Book Engine)
+#
+# Source: sweep v4 winner #25 (2026-04-05), 344 experiments, P&L +$1,665
+# on $1K over 20 months, WR 50%, GB Rate 23%, Sharpe 7.03, Max DD 13%.
+# ROI ~100%/year.
+#
+# All values mirror StrategyDNba class attrs at the time of this YAML's
+# creation. DO NOT edit when tuning — create a new challenger YAML instead.
+
+variant_id: champion_v1
+strategy: D
+status: champion
+parent_variant: null
+notes: |
+  NBA moneyline green-book strategy. From sweep v4 winner #25.
+  Locked in 2026-04-05.
+
+params:
+  # Entry filters (Tier 1 — promotable)
+  MIN_EDGE: 0.16
+  MAX_EDGE: 0.25
+  MIN_PRICE: 0.20
+  MAX_PRICE: 0.65
+
+  # Exit logic (Tier 1 — promotable)
+  GREEN_BOOK_DELTA: 0.17
+  STOP_LOSS_DELTA: 0.15
+  MAX_HOLD_FRACTION: 0.50
+  GAME_DURATION_HOURS: 2.5
+
+  # Sizing + architectural (Tier 2 — NOT auto-promotable, listed for reference)
+  # KELLY_FRACTION: 0.15
+  # KELLY_RAW_CAP: 0.10
+  # MAX_POSITION_PCT: 0.03
+  # BOTH_SIDES: true
+  # MAX_CONCURRENT: 8

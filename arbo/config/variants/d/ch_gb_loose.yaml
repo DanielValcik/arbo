@@ -1,0 +1,29 @@
+# D Challenger: take green-book profits earlier
+#
+# Hypothesis: champion GREEN_BOOK_DELTA=0.17 means we hold for 17¢ profit.
+# At 23% green-book rate, often the move retraces before locking. Tighter
+# delta (0.12) locks profits earlier — more frequent green books, lower
+# average profit per booked trade but higher hit rate.
+#
+# Trade-off: 12¢ × higher_rate vs 17¢ × current_rate. Hypothesis: lower
+# delta wins net because fewer reversals.
+#
+# Status: shadow only — no capital risk.
+
+variant_id: ch_gb_loose
+strategy: D
+status: challenger
+parent_variant: champion_v1
+notes: |
+  GREEN_BOOK_DELTA 0.17 → 0.12. All other params identical to champion_v1.
+  Expected: more green books, smaller per-book profit, fewer reversals.
+
+params:
+  MIN_EDGE: 0.16
+  MAX_EDGE: 0.25
+  MIN_PRICE: 0.20
+  MAX_PRICE: 0.65
+  GREEN_BOOK_DELTA: 0.12      # ← CHANGED (was 0.17)
+  STOP_LOSS_DELTA: 0.15
+  MAX_HOLD_FRACTION: 0.50
+  GAME_DURATION_HOURS: 2.5
