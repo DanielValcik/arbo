@@ -224,8 +224,13 @@ async def discover_nba_markets(gamma_client: Any = None) -> list[MarketData]:
             except Exception:
                 continue
 
-            # Skip if prices are at extremes (probably resolved or very late)
-            if yes_price <= 0.01 or yes_price >= 0.99:
+            # Skip if prices are at extremes (probably resolved or very late).
+            # Bumped from 0.01/0.99 → 0.03/0.97 (2026-04-13) after observing
+            # POR/PHX trade where market was 0.395 at entry but settled 1 min
+            # later — implies game was at the very tail. Bumping cutoff
+            # gives more margin against late-game settlements; cost: blocks
+            # rare deep-favorite trades that were profitable historically.
+            if yes_price <= 0.03 or yes_price >= 0.97:
                 continue
 
             markets.append(MarketData(

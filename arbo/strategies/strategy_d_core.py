@@ -244,10 +244,12 @@ class StrategyDCore:
         """
         yes_p = market.yes_price
         no_p = market.no_price
-        # Either side at minimum tick = resolved
-        if yes_p <= 0.02 or no_p <= 0.02:
+        # Either side at minimum tick = resolved.
+        # Bumped from 0.02/0.98 → 0.03/0.97 (2026-04-13) — symmetry with
+        # discovery_nba.py threshold tightening after POR/PHX late-game entry.
+        if yes_p <= 0.03 or no_p <= 0.03:
             return True
-        if yes_p >= 0.98 or no_p >= 0.98:
+        if yes_p >= 0.97 or no_p >= 0.97:
             return True
         # Sum far from 1.0 = broken / stale orderbook
         if not (0.95 <= yes_p + no_p <= 1.05):
