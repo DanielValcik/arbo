@@ -98,16 +98,28 @@ def _get_threshold(param: str, asset: str, default: float) -> float:
 def check_signal_quality(
     signal: Any,
     exchange_price_age_s: float = 0.0,
+    *,
+    params: dict | None = None,
 ) -> QualityDecision:
     """Check if a crypto signal passes the quality gate.
 
     Args:
         signal: CryptoSignal from crypto_price_scanner.
         exchange_price_age_s: Age of the exchange price in seconds.
+        params: Optional override dict; falls back to module constants per
+            key. Used by Project PARALLEL variant evaluation.
 
     Returns:
         QualityDecision with pass/fail and reason.
     """
+    p = params or {}
+    min_edge_eff = p.get("MIN_EDGE", MIN_EDGE)
+    max_edge_eff = p.get("MAX_EDGE", MAX_EDGE)
+    min_price_eff = p.get("MIN_PRICE", MIN_PRICE)
+    max_price_eff = p.get("MAX_PRICE", MAX_PRICE)
+    min_t_eff = p.get("MIN_TIME_TO_EXPIRY_H", MIN_TIME_TO_EXPIRY_H)
+    max_t_eff = p.get("MAX_TIME_TO_EXPIRY_H", MAX_TIME_TO_EXPIRY_H)
+
     asset = signal.asset
 
     # 1. Asset exclusion
@@ -122,20 +134,20 @@ def check_signal_quality(
 
     # Night: require higher edge + smaller position (compensate for lower WR)
     if is_night:
-        min_edge = max(_get_threshold("min_edge", asset, MIN_EDGE), 0.15)  # 15% min at night (vs 8% day)
+        min_edge = max(_get_threshold("min_edge", asset, min_edge_eff), 0.15)  # 15% min at night (vs 8% day)
     else:
-        min_edge = _get_threshold("min_edge", asset, MIN_EDGE)
+        min_edge = _get_threshold("min_edge", asset, min_edge_eff)
 
     # 2. Edge range (min_edge already set above with day/night adjustment)
     edge = abs(signal.edge)
     if edge < min_edge:
         return QualityDecision(False, f"edge_too_low:{edge:.3f}<{min_edge}")
-    if edge > MAX_EDGE:
-        return QualityDecision(False, f"edge_too_high:{edge:.3f}>{MAX_EDGE}")
+    if edge > max_edge_eff:
+        return QualityDecision(False, f"edge_too_high:{edge:.3f}>{max_edge_eff}")
 
     # 3. Price range
-    min_price = _get_threshold("min_price", asset, MIN_PRICE)
-    max_price = _get_threshold("max_price", asset, MAX_PRICE)
+    min_price = _get_threshold("min_price", asset, min_price_eff)
+    max_price = _get_threshold("max_price", asset, max_price_eff)
     price = signal.market_price
     if price < min_price:
         return QualityDecision(False, f"price_too_low:{price:.3f}<{min_price}")
@@ -155,13 +167,13 @@ def check_signal_quality(
         )
 
     # 6. Time to expiry
-    if signal.hours_to_expiry < MIN_TIME_TO_EXPIRY_H:
+    if signal.hours_to_expiry < min_t_eff:
         return QualityDecision(
-            False, f"too_close:{signal.hours_to_expiry:.1f}h<{MIN_TIME_TO_EXPIRY_H}h"
+            False, f"too_close:{signal.hours_to_expiry:.1f}h<{min_t_eff}h"
         )
-    if signal.hours_to_expiry > MAX_TIME_TO_EXPIRY_H:
+    if signal.hours_to_expiry > max_t_eff:
         return QualityDecision(
-            False, f"too_far:{signal.hours_to_expiry:.1f}h>{MAX_TIME_TO_EXPIRY_H}h"
+            False, f"too_far:{signal.hours_to_expiry:.1f}h>{max_t_eff}h"
         )
 
     # 7. Exchange price freshness
@@ -179,11 +191,14 @@ def check_signal_quality(
     return QualityDecision(True)
 
 
-def filter_signals(signals: list[Any]) -> list[Any]:
+def filter_signals(
+    signals: list[Any], *, params: dict | None = None,
+) -> list[Any]:
     """Apply quality gate to all signals, return qualified ones.
 
     Args:
         signals: List of CryptoSignal objects.
+        params: Optional override dict for Project PARALLEL variant evaluation.
 
     Returns:
         Filtered list of signals that pass all quality checks.
@@ -193,7 +208,7 @@ def filter_signals(signals: list[Any]) -> list[Any]:
 
     for sig in signals:
         age = 0.0  # In live trading, this comes from BinanceWSFeed.get_price_age()
-        decision = check_signal_quality(sig, exchange_price_age_s=age)
+        decision = check_signal_quality(sig, exchange_price_age_s=age, params=params)
 
         if decision.passed:
             qualified.append(sig)
