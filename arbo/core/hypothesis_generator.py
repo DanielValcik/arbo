@@ -29,6 +29,7 @@ logger = get_logger("hypothesis_generator")
 # Tier 2: require CEO flag (not generated autonomously — sigma_scale, position pct).
 # Tier 3: never touched by auto-gen (MAX_BET_SIZE, DAILY_LOSS_PCT, etc.)
 TIER_1_PARAMS: dict[str, tuple[float, float]] = {
+    # B3 / B3_15M
     "LIVE_MIN_EDGE":        (0.10, 0.60),
     "LIVE_MIN_BTC_MOVE":    (0.0, 100.0),
     "LIVE_MAX_BTC_MOVE":    (30.0, 200.0),
@@ -40,6 +41,21 @@ TIER_1_PARAMS: dict[str, tuple[float, float]] = {
     "MAX_ENTRY_MIN":        (2, 14),
     "MIN_ENTRY_MKT_FV":     (0.10, 0.60),
     "MAX_ENTRY_MKT_FV":     (0.50, 0.99),
+    # Project PARALLEL B2 + D additions (shared name MIN_EDGE etc. — bounds
+    # are union-set wide enough for all strategies; per-strategy YAMLs
+    # are still validated against per-strategy expectations)
+    "MIN_EDGE":             (0.05, 0.30),
+    "MAX_EDGE":             (0.20, 0.99),
+    "MIN_PRICE":            (0.03, 0.40),
+    "MAX_PRICE":            (0.30, 0.80),
+    "MIN_HOLD_EDGE":        (0.00, 0.15),
+    "MIN_TIME_TO_EXPIRY_H": (1.0, 48.0),
+    "MAX_TIME_TO_EXPIRY_H": (48.0, 336.0),
+    # D-specific
+    "GREEN_BOOK_DELTA":     (0.05, 0.30),
+    "STOP_LOSS_DELTA":      (0.05, 0.25),
+    "MAX_HOLD_FRACTION":    (0.20, 1.00),
+    "GAME_DURATION_HOURS":  (1.5, 4.0),
 }
 
 

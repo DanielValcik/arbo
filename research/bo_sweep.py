@@ -42,6 +42,23 @@ SEARCH_SPACES: dict[str, dict[str, tuple[str, float, float]]] = {
         "LIVE_MAX_MARKET_GAP": ("float", 0.10, 0.40),
         "LIVE_MAX_FILL_PRICE": ("float", 0.55, 1.05),
     },
+    # Project PARALLEL extension
+    "B2": {
+        "MIN_EDGE":              ("float", 0.05, 0.20),
+        "MIN_PRICE":             ("float", 0.03, 0.10),
+        "MAX_PRICE":             ("float", 0.40, 0.75),
+        "MIN_TIME_TO_EXPIRY_H":  ("float", 4.0, 36.0),
+        "MAX_TIME_TO_EXPIRY_H":  ("float", 96.0, 240.0),
+    },
+    "D": {
+        "MIN_EDGE":          ("float", 0.10, 0.25),
+        "MAX_EDGE":          ("float", 0.20, 0.40),
+        "MIN_PRICE":         ("float", 0.15, 0.35),
+        "MAX_PRICE":         ("float", 0.55, 0.80),
+        "GREEN_BOOK_DELTA":  ("float", 0.10, 0.25),
+        "STOP_LOSS_DELTA":   ("float", 0.08, 0.20),
+        "MAX_HOLD_FRACTION": ("float", 0.30, 0.80),
+    },
 }
 
 
@@ -62,7 +79,7 @@ async def _load_signals(strategy: str, window_days: int) -> list[dict[str, Any]]
                 SELECT DISTINCT ON (condition_id, signal_ts)
                     condition_id, signal_ts, direction, edge, btc_move,
                     market_gap, velocity, dir_delta, would_fill_at,
-                    resolution_outcome
+                    resolution_outcome, entry_price, model_prob, meta_json
                 FROM shadow_variant_signals
                 WHERE strategy = :s
                   AND signal_ts >= :cutoff
@@ -123,6 +140,54 @@ def _evaluate_params(
             if won: n_wins += 1
             pnl_sum += pnl
             pnls.append(pnl)
+    elif strategy == "B2":
+        # Features: edge (signed), entry_price, would_fill_at, sigma,
+        # event_end_ts → derive hours_to_expiry approximately from
+        # signal_ts diff (already in seconds since epoch in row).
+        # For simplicity, hours_to_expiry stored in meta_json.hours_to_expiry
+        # (set at write time); fallback to 24h if missing.
+        import json
+        for s in signals:
+            edge_abs = abs(float(s["edge"] or 0))
+            price = float(s["entry_price"] or 0)
+            fill = float(s["would_fill_at"] or 0)
+            try:
+                meta = json.loads(s.get("meta_json") or "{}") if isinstance(s.get("meta_json"), str) else (s.get("meta_json") or {})
+                hours = float(meta.get("hours_to_expiry", 24.0))
+            except Exception:
+                hours = 24.0
+            if edge_abs < params["MIN_EDGE"]: continue
+            if price < params["MIN_PRICE"]: continue
+            if price > params["MAX_PRICE"]: continue
+            if hours < params["MIN_TIME_TO_EXPIRY_H"]: continue
+            if hours > params["MAX_TIME_TO_EXPIRY_H"]: continue
+            yes_won = bool(s["resolution_outcome"])
+            won = (s["direction"] == "above" and yes_won) or (s["direction"] == "below" and not yes_won)
+            pnl = (1.0 - fill) if won else -fill
+            n_qual += 1
+            if won: n_wins += 1
+            pnl_sum += pnl
+            pnls.append(pnl)
+    elif strategy == "D":
+        for s in signals:
+            edge = float(s["edge"] or 0)
+            price = float(s["entry_price"] or 0)
+            fill = float(s["would_fill_at"] or 0)
+            if edge < params["MIN_EDGE"]: continue
+            if edge > params["MAX_EDGE"]: continue
+            if price < params["MIN_PRICE"]: continue
+            if price > params["MAX_PRICE"]: continue
+            # Note: GREEN_BOOK_DELTA + STOP_LOSS_DELTA + MAX_HOLD_FRACTION
+            # affect EXIT, not entry — replay here uses resolution_outcome
+            # only (terminal PnL). Exit-aware replay would need mid-trade
+            # price history (out of scope for first BO iteration).
+            yes_won = bool(s["resolution_outcome"])
+            won = (s["direction"] == "yes" and yes_won) or (s["direction"] == "no" and not yes_won)
+            pnl = (1.0 - fill) if won else -fill
+            n_qual += 1
+            if won: n_wins += 1
+            pnl_sum += pnl
+            pnls.append(pnl)
     else:
         return {"n_qual": 0, "wr": 0, "pnl": 0, "sharpe": 0, "score": 0}
 
@@ -151,7 +216,7 @@ def _evaluate_params(
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--strategy", required=True, choices=["B3", "B3_15M"])
+    parser.add_argument("--strategy", required=True, choices=["B3", "B3_15M", "B2", "D"])
     parser.add_argument("--n-trials", type=int, default=100)
     parser.add_argument("--window-days", type=int, default=14)
     parser.add_argument("--out", default=None,
