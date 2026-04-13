@@ -154,6 +154,12 @@ class StrategyDCore:
         self._live = live_executor
         self._ob = orderbook_provider
 
+        # Project PARALLEL: variant_params override class attrs when set.
+        # Default None → use class-attr defaults (current production behavior).
+        # Promotion swaps this to new champion's YAML params at runtime
+        # without restart.
+        self._active_variant_params: dict | None = None
+
         self._elo: dict[str, tuple[float, float]] = elo_ratings or {}
         self._pinnacle: dict[str, tuple[float, float]] = pinnacle_odds or {}
 
@@ -178,6 +184,20 @@ class StrategyDCore:
             delta=self.GREEN_BOOK_DELTA,
             both_sides=self.BOTH_SIDES,
         )
+
+    # ── Variant param accessor (Project PARALLEL) ─────────────────────
+
+    def _p(self, name: str) -> Any:
+        """Param accessor — variant override > class attr fallback.
+
+        Used for Tier 1 params that PromotionEngine may swap at runtime.
+        Tier 2/3 params still read directly via `self.X`.
+        """
+        if self._active_variant_params is not None:
+            v = self._active_variant_params.get(name)
+            if v is not None:
+                return v
+        return getattr(self, name)
 
     # ── Model ─────────────────────────────────────────────────────────
 
@@ -254,10 +274,15 @@ class StrategyDCore:
             if prob is None:
                 continue
 
-            # YES side
+            # YES side — Tier 1 params via _p() (variant-override aware)
+            min_edge = self._p("MIN_EDGE")
+            max_edge = self._p("MAX_EDGE")
+            min_price = self._p("MIN_PRICE")
+            max_price = self._p("MAX_PRICE")
+
             yes_edge = prob - market.yes_price
-            if (self.MIN_EDGE <= yes_edge <= self.MAX_EDGE
-                    and self.MIN_PRICE <= market.yes_price <= self.MAX_PRICE):
+            if (min_edge <= yes_edge <= max_edge
+                    and min_price <= market.yes_price <= max_price):
                 size = self.kelly_size(yes_edge, market.yes_price)
                 if size > 0:
                     signals.append(DSignal(
@@ -269,8 +294,8 @@ class StrategyDCore:
             # NO side
             if self.BOTH_SIDES:
                 no_edge = (1 - prob) - market.no_price
-                if (self.MIN_EDGE <= no_edge <= self.MAX_EDGE
-                        and self.MIN_PRICE <= market.no_price <= self.MAX_PRICE):
+                if (min_edge <= no_edge <= max_edge
+                        and min_price <= market.no_price <= max_price):
                     size = self.kelly_size(no_edge, market.no_price)
                     if size > 0:
                         signals.append(DSignal(
@@ -468,19 +493,25 @@ class StrategyDCore:
             pos.max_price = max(pos.max_price, price)
             pos.min_price = min(pos.min_price, price) if pos.min_price > 0 else price
 
+            # Tier 1 exit params via _p() (variant-override aware)
+            gb_delta = self._p("GREEN_BOOK_DELTA")
+            sl_delta = self._p("STOP_LOSS_DELTA")
+            max_hold = self._p("MAX_HOLD_FRACTION")
+            game_dur = self._p("GAME_DURATION_HOURS")
+
             if pos.side == "yes":
-                gb_target = pos.entry_price + self.GREEN_BOOK_DELTA
-                sl_trigger = pos.entry_price - self.STOP_LOSS_DELTA
+                gb_target = pos.entry_price + gb_delta
+                sl_trigger = pos.entry_price - sl_delta
                 gb_hit = price >= gb_target
                 sl_hit = price <= sl_trigger
             else:
-                gb_target = pos.entry_price - self.GREEN_BOOK_DELTA
-                sl_trigger = pos.entry_price + self.STOP_LOSS_DELTA
+                gb_target = pos.entry_price - gb_delta
+                sl_trigger = pos.entry_price + sl_delta
                 gb_hit = price <= gb_target
                 sl_hit = price >= sl_trigger
 
             hold_hours = (now - pos.entry_time) / 3600
-            time_exit = hold_hours >= (self.GAME_DURATION_HOURS * self.MAX_HOLD_FRACTION)
+            time_exit = hold_hours >= (game_dur * max_hold)
 
             if gb_hit:
                 pos.exit_reason = "green_book"
