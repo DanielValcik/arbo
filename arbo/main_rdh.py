@@ -1638,6 +1638,10 @@ class RDHOrchestrator:
         if self._strategy_d_epl is not None:
             task_defs.append(("strategy_D_EPL", self._run_strategy_d_epl, 120)) # EPL scan every 2min
             task_defs.append(("D_EPL_exit_monitor", self._run_d_epl_exit_check, 30))
+        # Periodic live balance refresh for D variants (dynamic sizing)
+        if any(getattr(self, attr) is not None for attr in
+               ("_strategy_d", "_strategy_d_ufc", "_strategy_d_epl")):
+            task_defs.append(("D_balance_refresh", self._refresh_d_balance, 300))  # Every 5 min
 
         # B3 Chainlink price recorder (every 5s for precise btc_at_start)
         if self._strategy_b3 is not None:
@@ -1908,6 +1912,29 @@ class RDHOrchestrator:
 
     # Strategy D Slack channel (shared across NBA/UFC/EPL variants)
     D_SLACK_CHANNEL = "C0ARXNGKE1M"
+
+    async def _refresh_d_balance(self) -> None:
+        """Periodic USDC balance fetch; inject into Strategy D variants.
+
+        Uses the LiveExecutor shared with Strategy D (NBA). Balance is
+        allocated proportionally based on STRATEGY_ALLOCATIONS shares.
+        """
+        if self._poly_client_readonly is None:
+            return
+        try:
+            from arbo.core.live_executor import LiveExecutor
+            # Lazy-create a read-only LiveExecutor just for balance
+            if not hasattr(self, "_balance_fetcher"):
+                self._balance_fetcher = LiveExecutor(self._poly_client_readonly)
+            balance = await self._balance_fetcher.get_balance()
+            if balance is None or balance <= 0:
+                return
+            for strat in (self._strategy_d, self._strategy_d_ufc, self._strategy_d_epl):
+                if strat is not None and hasattr(strat, "set_live_balance"):
+                    strat.set_live_balance(balance)
+            logger.info("d_balance_refreshed", balance=round(balance, 2))
+        except Exception as e:
+            logger.warning("d_balance_refresh_failed", error=str(e))
 
     async def _notify_d_entry(self, pos, sport_label: str) -> None:
         """Slack notification on Strategy D entry."""

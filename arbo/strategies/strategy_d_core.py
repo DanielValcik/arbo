@@ -164,6 +164,10 @@ class StrategyDCore:
         # Cooldown per market: don't re-enter same condition_id for 4 hours
         # (one NBA game is 2.5h; by 4h any signal should be stale)
         self._recent_exits: dict[str, float] = {}  # condition_id → exit_time
+        # Live balance cache (updated externally by orchestrator every 5 min)
+        # None = use fallback allocation from risk_manager
+        self._live_balance_usdc: float | None = None
+        self._live_balance_ts: float = 0.0
 
         self._logger = get_logger(f"strategy_d_{self.SPORT_NAME}")
         self._logger.info(
@@ -283,8 +287,44 @@ class StrategyDCore:
         )
         return signals
 
+    def set_live_balance(self, balance_usdc: float) -> None:
+        """Called by orchestrator to inject fresh live balance.
+
+        When balance > 0, strategy sizes positions based on LIVE balance
+        (not static STRATEGY_ALLOCATIONS). Share of balance = strategy's
+        configured allocation / total allocation across all strategies.
+        """
+        self._live_balance_usdc = balance_usdc
+        self._live_balance_ts = time.time()
+
+    def _effective_capital(self) -> float:
+        """Return capital to use for Kelly sizing.
+
+        Priority:
+          1. If live balance fresh (< 10min), use strategy's share of it
+          2. Else fall back to risk_manager STRATEGY_ALLOCATIONS
+        """
+        # Live balance path
+        if self._live_balance_usdc is not None and self._live_balance_usdc > 0:
+            age = time.time() - self._live_balance_ts
+            if age < 600:  # Fresh within 10 minutes
+                # Strategy's share: my allocation / total allocation
+                try:
+                    from arbo.core.risk_manager import STRATEGY_ALLOCATIONS
+                    total = float(sum(STRATEGY_ALLOCATIONS.values()))
+                    my_share = float(STRATEGY_ALLOCATIONS.get(self.STRATEGY_NAME, 0))
+                    if total > 0 and my_share > 0:
+                        # Live allocation = balance * (my_share / total)
+                        return self._live_balance_usdc * (my_share / total)
+                except Exception:
+                    pass
+
+        # Fallback: static allocation from risk_manager
+        ss = self._risk.get_strategy_state(self.STRATEGY_NAME)
+        return float(ss.allocated) if ss else 300.0
+
     def kelly_size(self, edge: float, price: float) -> float:
-        """Kelly position size in USDC."""
+        """Kelly position size in USDC (uses live balance if available)."""
         if price <= 0 or price >= 1:
             return 0.0
         p = max(0.01, min(0.99, price + edge))
@@ -293,8 +333,7 @@ class StrategyDCore:
         if b <= 0:
             return 0.0
         kelly_raw = max(0, min((b * p - q) / b, self.KELLY_RAW_CAP))
-        ss = self._risk.get_strategy_state(self.STRATEGY_NAME)
-        capital = float(ss.allocated) if ss else 300.0
+        capital = self._effective_capital()
         size = capital * self.KELLY_FRACTION * kelly_raw
         return min(size, capital * self.MAX_POSITION_PCT)
 
