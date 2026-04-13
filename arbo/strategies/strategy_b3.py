@@ -237,10 +237,48 @@ class StrategyB3:
                 # Check if event has ended
                 now_ts = time.time()
                 if event_end_ts and now_ts < event_end_ts:
-                    logger.info("b3_stale_not_yet_resolved", token=token_id[:20],
-                               wait_s=int(event_end_ts - now_ts))
+                    # Event still running. We must INSERT this position into
+                    # _live_holding so check_exits can resolve it later once
+                    # event_end_ts passes. Without this insertion, the trade
+                    # is orphaned post-restart and stays unresolved forever
+                    # unless we won (auto_redeem path) — losers never get
+                    # their exit_price set (bug discovered 2026-04-13).
+                    try:
+                        live_shares = int(td.get("live_entry_shares") or 0)
+                        live_entry_price = float(td.get("live_entry_price") or 0)
+                        direction_int = 1 if direction_str == "up" else -1
+                        btc_at_start = float(td.get("btc_at_start") or 0)
+                        btc_at_entry = float(td.get("btc_now") or btc_at_start)
+                        sigma_per_min = float(td.get("sigma") or 0)
+                        if live_shares > 0 and live_entry_price > 0:
+                            self._live_holding[token_id] = B3Position(
+                                condition_id=cond_id or "",
+                                token_id=token_id,
+                                direction=direction_int,
+                                entry_mkt_fv=live_entry_price,
+                                entry_time=now_ts,
+                                event_start_ts=event_start_ts,
+                                event_end_ts=event_end_ts,
+                                btc_at_start=btc_at_start,
+                                btc_at_entry=btc_at_entry,
+                                sigma_per_min=sigma_per_min,
+                                shares=float(size or 0),
+                                question=td.get("question", ""),
+                                live_shares=live_shares,
+                                live_entry_price=live_entry_price,
+                                live_fill_status=str(td.get("live_fill_status") or "filled"),
+                            )
+                            logger.info(
+                                "b3_stale_holding_restored",
+                                token=token_id[:20],
+                                wait_s=int(event_end_ts - now_ts),
+                                msg="Inserted into _live_holding; check_exits will resolve at event end",
+                            )
+                    except Exception as e:
+                        logger.warning("b3_stale_holding_restore_error",
+                                       token=token_id[:20], error=str(e))
                     deferred_count += 1
-                    continue  # check_exits will handle later
+                    continue  # check_exits will handle later (now with _live_holding entry)
 
                 # Fetch real resolution from Gamma API
                 pm_up_won = None
