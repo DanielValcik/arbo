@@ -196,6 +196,141 @@ def _append_learnings(hypo: Hypothesis, strategy: str, retired: str | None) -> N
         logger.warning("learnings_append_error", error=str(e))
 
 
+async def promote(
+    variant_id: str, strategy: str, *, approved_by: str = "system"
+) -> tuple[bool, str | None]:
+    """Atomically promote a challenger to champion (Phase 2C.D).
+
+    Steps:
+      1. Load challenger + current champion YAMLs
+      2. Archive current champion YAML → _archive/<champion_id>_<ts>.yaml
+      3. Rewrite current champion YAML with status='retired'
+      4. Rewrite challenger YAML with status='champion'
+      5. Append LEARNINGS.md entry
+
+    Returns (success, reason).
+    """
+    pool = load_variants(strategy)
+    champ = get_champion(strategy)
+    if champ is None:
+        return False, "no current champion"
+    if variant_id == champ.variant_id:
+        return False, f"{variant_id} is already champion"
+    target = next((v for v in pool if v.variant_id == variant_id), None)
+    if target is None:
+        return False, f"variant {variant_id} not in pool"
+    if target.status not in {"challenger", "incubate"}:
+        return False, f"cannot promote from status={target.status}"
+
+    pool_dir = _pool_dir(strategy)
+    champ_yaml = pool_dir / f"{champ.variant_id}.yaml"
+    target_yaml = pool_dir / f"{variant_id}.yaml"
+    archive_dir = pool_dir / "_archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    if not champ_yaml.exists() or not target_yaml.exists():
+        return False, "champion or challenger YAML missing"
+
+    ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    try:
+        with open(champ_yaml) as f:
+            champ_data = yaml.safe_load(f) or {}
+        with open(target_yaml) as f:
+            tgt_data = yaml.safe_load(f) or {}
+    except Exception as e:
+        return False, f"yaml read error: {e}"
+
+    archive_path = archive_dir / (
+        f"{champ.variant_id}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.yaml"
+    )
+    try:
+        _atomic_write_yaml(archive_path, champ_data)
+    except Exception as e:
+        return False, f"archive write error: {e}"
+
+    champ_data["status"] = "retired"
+    champ_data["retired_at"] = ts
+    champ_data["retired_reason"] = f"replaced by {variant_id} (approved_by={approved_by})"
+
+    tgt_data["status"] = "champion"
+    tgt_data["promoted_at"] = ts
+    tgt_data["promoted_by"] = approved_by
+    tgt_data["parent_variant"] = champ.variant_id
+
+    try:
+        _atomic_write_yaml(champ_yaml, champ_data)
+        _atomic_write_yaml(target_yaml, tgt_data)
+    except Exception as e:
+        return False, f"yaml write error: {e}"
+
+    # LEARNINGS.md entry
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        learnings = repo_root / "docs" / "STRATEGY_OPTIMIZATION_LEARNINGS.md"
+        if learnings.exists():
+            entry = [
+                "",
+                f"### {ts} — Promotion: `{variant_id}` becomes champion of {strategy}",
+                "",
+                f"- **Previous champion:** `{champ.variant_id}` (archived to `_archive/{archive_path.name}`)",
+                f"- **Approved by:** {approved_by}",
+                f"- **Param changes:** {_param_diff(champ.params, tgt_data.get('params', {}))}",
+                "",
+            ]
+            with open(learnings, "a", encoding="utf-8") as f:
+                f.write("\n".join(entry) + "\n")
+    except Exception as e:
+        logger.warning("promote_learnings_error", error=str(e))
+
+    logger.info(
+        "pool_promoted",
+        strategy=strategy,
+        new_champion=variant_id,
+        ex_champion=champ.variant_id,
+        approved_by=approved_by,
+    )
+    return True, None
+
+
+async def veto(
+    variant_id: str, strategy: str, *, vetoed_by: str = "ceo"
+) -> tuple[bool, str | None]:
+    """Retire a variant immediately (Phase 2C.F).
+
+    Cannot veto the current champion (would leave strategy headless).
+    """
+    champ = get_champion(strategy)
+    if champ is not None and variant_id == champ.variant_id:
+        return False, "cannot veto the current champion"
+    path = _pool_dir(strategy) / f"{variant_id}.yaml"
+    if not path.exists():
+        return False, f"{variant_id}.yaml not found"
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        data["status"] = "retired"
+        data["retired_at"] = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        data["retired_reason"] = f"CEO veto by {vetoed_by}"
+        _atomic_write_yaml(path, data)
+        logger.info(
+            "pool_vetoed",
+            strategy=strategy, variant_id=variant_id, vetoed_by=vetoed_by,
+        )
+        return True, None
+    except Exception as e:
+        return False, f"error: {e}"
+
+
+def _param_diff(a: dict[str, Any], b: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
+    """Return {key: (a_val, b_val)} for params that differ."""
+    out: dict[str, tuple[Any, Any]] = {}
+    for k, v in b.items():
+        av = a.get(k)
+        if av != v:
+            out[k] = (av, v)
+    return out
+
+
 async def commit(hypo: Hypothesis, strategy: str) -> tuple[bool, str | None]:
     """Persist a Hypothesis as a new challenger YAML.
 

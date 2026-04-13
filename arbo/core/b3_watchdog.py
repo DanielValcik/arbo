@@ -85,6 +85,8 @@ class B3Watchdog:
         self._observation_start_trades = 0
         # Phase 2C.A: rate-limit auto-challenger to 1 per strategy per 24h
         self._last_autochallenger_ts: float = 0.0
+        # Phase 2C.B/C: dedupe posted promotion candidates — {challenger_id: post_ts}
+        self._promotion_posted: dict[str, float] = {}
 
     async def run(self) -> None:
         """Main daemon loop. Runs until stopped."""
@@ -182,6 +184,14 @@ class B3Watchdog:
             await self._autochallenger_cycle()
         except Exception as e:
             logger.warning("autochallenger_cycle_error", error=str(e))
+
+        # 5. Phase 2C.B/C — Promotion engine. Detects challengers with
+        # sufficient paired-sample evidence to beat champion; posts Slack
+        # candidates for human approval.
+        try:
+            await self._promotion_cycle()
+        except Exception as e:
+            logger.warning("promotion_cycle_error", error=str(e))
 
     def _detect_anomalies(self, metrics: B3MetricsSnapshot) -> list[dict[str, Any]]:
         """Detect anomalies by comparing current metrics to baseline."""
@@ -574,6 +584,49 @@ class B3Watchdog:
             await self._slack._post(channel, text=text)
         except Exception as e:
             logger.warning("autochallenger_slack_error", error=str(e))
+
+    # ── Promotion cycle (Phase 2C.B/C) ───────────────────────────────
+
+    async def _promotion_cycle(self) -> None:
+        """Run PromotionEngine and post any Tier 1/2 candidates to Slack.
+
+        Dedupes by challenger_id — will not re-post the same candidate
+        within 24h window.
+        """
+        try:
+            from arbo.core.promotion_engine import PromotionEngine, MIN_P_BETTER
+            from arbo.dashboard.slack_promotion import post_candidate
+        except Exception as e:
+            logger.warning("promotion_import_error", error=str(e))
+            return
+
+        now = time.time()
+        engine = PromotionEngine(self._strategy_name)
+        try:
+            cands = await engine.evaluate()
+        except Exception as e:
+            logger.warning("promotion_evaluate_error", error=str(e))
+            return
+
+        for cand in cands:
+            if cand.reject_reason:
+                continue  # below thresholds or tier 3
+            # Tier 1 only auto-posts if p_better high enough for confidence
+            if cand.tier == 1 and cand.p_better < MIN_P_BETTER:
+                continue
+            last_ts = self._promotion_posted.get(cand.challenger_id, 0.0)
+            if now - last_ts < 24 * 3600:
+                continue
+            ok = await post_candidate(self._slack, cand)
+            if ok:
+                self._promotion_posted[cand.challenger_id] = now
+                logger.info(
+                    "promotion_candidate_emitted",
+                    strategy=cand.strategy,
+                    challenger=cand.challenger_id,
+                    tier=cand.tier,
+                    p_better=cand.p_better,
+                )
 
     # ── Slack Reporting ──────────────────────────────────────────────
 

@@ -27,6 +27,28 @@ CryptoArbCallback = Callable[[], Awaitable[dict[str, Any] | None]]
 SkinnyCallback = Callable[[], Awaitable[dict[str, Any] | None]]
 
 
+async def _variant_strategy(variant_id: str) -> str | None:
+    """Find the strategy that owns a variant_id by scanning YAMLs on disk."""
+    from pathlib import Path
+    import yaml as _yaml
+    repo_root = Path(__file__).resolve().parents[2]
+    variants_dir = repo_root / "arbo" / "config" / "variants"
+    if not variants_dir.is_dir():
+        return None
+    for strategy_dir in variants_dir.iterdir():
+        if not strategy_dir.is_dir():
+            continue
+        f = strategy_dir / f"{variant_id}.yaml"
+        if f.exists():
+            try:
+                with open(f) as fp:
+                    data = _yaml.safe_load(fp) or {}
+                return data.get("strategy")
+            except Exception:
+                return None
+    return None
+
+
 class SlackBot:
     """Async Slack bot using Socket Mode (no public URL needed).
 
@@ -147,6 +169,69 @@ class SlackBot:
                 logger.error("slack_pnl_error", error=str(e))
                 await respond(text=f"Error: {e}")
 
+        # Phase 2C.F: `/arbo <sub>` — promotion workflow + veto
+        @self._app.command("/arbo")
+        async def handle_arbo(ack: Any, respond: Any, command: dict[str, Any]) -> None:
+            await ack()
+            raw = (command.get("text") or "").strip()
+            user = command.get("user_name", "?")
+            if not raw:
+                await respond(text=(
+                    "*`/arbo` subcommands:*\n"
+                    "• `/arbo promote <variant_id>` — confirm Tier 2 promotion\n"
+                    "• `/arbo veto <variant_id>` — retire an auto-generated challenger\n"
+                    "• `/arbo candidates` — list pending promotion candidates"
+                ))
+                return
+            parts = raw.split()
+            sub = parts[0].lower()
+            arg = parts[1] if len(parts) > 1 else ""
+            try:
+                if sub == "promote" and arg:
+                    from arbo.core import pool_manager
+                    # Find strategy from YAML
+                    strat = await _variant_strategy(arg)
+                    if not strat:
+                        await respond(text=f":warning: Variant `{arg}` not found.")
+                        return
+                    ok, reason = await pool_manager.promote(arg, strat, approved_by=user)
+                    if ok:
+                        await respond(text=f":white_check_mark: Promoted `{arg}` → champion of {strat} (by {user})")
+                    else:
+                        await respond(text=f":warning: Promotion failed: {reason}")
+                elif sub == "veto" and arg:
+                    from arbo.core import pool_manager
+                    strat = await _variant_strategy(arg)
+                    if not strat:
+                        await respond(text=f":warning: Variant `{arg}` not found.")
+                        return
+                    ok, reason = await pool_manager.veto(arg, strat, vetoed_by=user)
+                    if ok:
+                        await respond(text=f":x: Vetoed `{arg}` ({strat}) — retired.")
+                    else:
+                        await respond(text=f":warning: Veto failed: {reason}")
+                elif sub == "candidates":
+                    from arbo.core.promotion_engine import PromotionEngine
+                    out: list[str] = []
+                    for strategy in ("B3", "B3_15M"):
+                        cands = await PromotionEngine(strategy).evaluate()
+                        for c in cands:
+                            if c.reject_reason:
+                                continue
+                            out.append(
+                                f"• {strategy} `{c.challenger_id}` (Tier {c.tier}, "
+                                f"P={c.p_better}, ΔSh={c.dsr_delta})"
+                            )
+                    await respond(
+                        text="*Pending promotion candidates:*\n" +
+                             ("\n".join(out) if out else "_(none)_")
+                    )
+                else:
+                    await respond(text=f"Unknown subcommand `{sub}`. Try `/arbo` for help.")
+            except Exception as e:
+                logger.warning("slack_arbo_cmd_error", error=str(e))
+                await respond(text=f":warning: Error: {e}")
+
         @self._app.command("/kill")
         async def handle_kill(ack: Any, respond: Any) -> None:
             await ack()
@@ -156,6 +241,13 @@ class SlackBot:
                 await self._shutdown_fn()
             except Exception as e:
                 logger.error("slack_kill_error", error=str(e))
+
+        # Phase 2C.C: register promotion action button handlers
+        try:
+            from arbo.dashboard.slack_promotion import register_action_handlers
+            register_action_handlers(self)
+        except Exception as e:
+            logger.warning("slack_promotion_register_error", error=str(e))
 
         @self._app.event("app_mention")
         async def handle_mention(event: dict[str, Any], say: Any) -> None:
