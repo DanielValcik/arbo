@@ -83,6 +83,8 @@ class B3Watchdog:
         self._baseline: B3MetricsSnapshot | None = None
         self._observation_mode = False
         self._observation_start_trades = 0
+        # Phase 2C.A: rate-limit auto-challenger to 1 per strategy per 24h
+        self._last_autochallenger_ts: float = 0.0
 
     async def run(self) -> None:
         """Main daemon loop. Runs until stopped."""
@@ -173,6 +175,13 @@ class B3Watchdog:
         else:
             # No Gemini — just report anomalies
             await self._send_anomaly_report(metrics, anomalies)
+
+        # 4. Phase 2C.A — Auto-Challenger Generator. Runs opportunistically
+        # at each eval; self-rate-limited to 1 per strategy per 24h.
+        try:
+            await self._autochallenger_cycle()
+        except Exception as e:
+            logger.warning("autochallenger_cycle_error", error=str(e))
 
     def _detect_anomalies(self, metrics: B3MetricsSnapshot) -> list[dict[str, Any]]:
         """Detect anomalies by comparing current metrics to baseline."""
@@ -493,6 +502,78 @@ class B3Watchdog:
                     value=change.new_value,
                     wr_improvement=f"{-wr_drop:.1%}",
                 )
+
+    # ── Auto-Challenger Generator (Phase 2C.A) ───────────────────────
+
+    async def _autochallenger_cycle(self) -> None:
+        """Run PerfAnalyzer → HypothesisGenerator → PoolManager pipeline.
+
+        Rate-limited to 1 auto-challenger per strategy per 24h. Only fires
+        when champion shows stagnation (cumulative PnL < 0 over ≥20 trades).
+        """
+        now = time.time()
+        if now - self._last_autochallenger_ts < 24 * 3600:
+            return  # Already generated one in last 24h
+
+        try:
+            from arbo.core.performance_analyzer import PerformanceAnalyzer
+            from arbo.core.hypothesis_generator import HypothesisGenerator
+            from arbo.core import pool_manager
+        except Exception as e:
+            logger.warning("autochallenger_import_error", error=str(e))
+            return
+
+        analyzer = PerformanceAnalyzer(self._strategy_name, window_days=14)
+        report = await analyzer.analyze()
+        if report is None:
+            return
+        if not report.stagnation_flag:
+            logger.debug(
+                "autochallenger_no_stagnation",
+                strategy=self._strategy_name,
+                champ_n=report.champion_live_n,
+                champ_pnl=report.champion_live_pnl,
+            )
+            return
+
+        generator = HypothesisGenerator(llm_agent=self._gemini)
+        hypo = await generator.propose(report)
+        if hypo is None:
+            return
+
+        ok, reason = await pool_manager.commit(hypo, self._strategy_name)
+        if not ok:
+            logger.info(
+                "autochallenger_not_committed",
+                strategy=self._strategy_name,
+                reason=reason,
+            )
+            return
+
+        self._last_autochallenger_ts = now
+        await self._send_autochallenger_report(hypo, report)
+
+    async def _send_autochallenger_report(self, hypo: Any, report: Any) -> None:
+        """Slack: announce a new auto-generated challenger."""
+        if self._slack is None:
+            return
+        changes_str = ", ".join(f"{k}={v}" for k, v in hypo.param_changes.items())
+        lines = [
+            f":robot_face: *{self._strategy_name} Auto-Challenger generated*",
+            f"Variant: `{hypo.variant_id}` (parent: `{hypo.parent_variant_id}`)",
+            f"Změna: `{changes_str}`",
+            f"Důvod: {hypo.rationale}",
+            f"Trigger: {report.stagnation_reason}",
+            "Status: *shadow* (žádný kapitál, 24h CEO veto window)",
+            "Veto command: `/arbo veto " + hypo.variant_id + "`",
+        ]
+        text = "\n".join(lines)
+        try:
+            # Channel per strategy — reuse existing watchdog channel
+            channel = getattr(self._slack, "default_channel", None) or "C0APX4K8Z2N"
+            await self._slack._post(channel, text=text)
+        except Exception as e:
+            logger.warning("autochallenger_slack_error", error=str(e))
 
     # ── Slack Reporting ──────────────────────────────────────────────
 
