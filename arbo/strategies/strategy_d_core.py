@@ -241,10 +241,21 @@ class StrategyDCore:
     # ── Recent-exits persistence (restart-safe cooldown) ──────────────
 
     def _recent_exits_path(self) -> str:
-        """Per-sport cooldown state file on disk."""
+        """Per-sport cooldown state file on disk.
+
+        Default path lives under /opt/arbo/logs (writable on Dublin VPS
+        with ProtectSystem=strict systemd sandbox). Override with
+        ARBO_STATE_DIR env var for dev/test.
+        """
         import os
-        base = os.environ.get("ARBO_STATE_DIR", "/tmp/arbo_state")
-        os.makedirs(base, exist_ok=True)
+        default = "/opt/arbo/logs/state"
+        base = os.environ.get("ARBO_STATE_DIR", default)
+        try:
+            os.makedirs(base, exist_ok=True)
+        except (OSError, PermissionError):
+            # Fallback to /tmp if /opt/arbo/logs not writable (local dev)
+            base = "/tmp/arbo_state"
+            os.makedirs(base, exist_ok=True)
         return os.path.join(base, f"d_recent_exits_{self.SPORT_NAME}.json")
 
     def _load_recent_exits(self) -> dict[str, float]:
