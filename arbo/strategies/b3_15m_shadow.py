@@ -355,6 +355,16 @@ class B3_15mShadow:
                 # Persist resolution to DB
                 await self._update_resolution_in_db(sig["event_start_ts"], sig["resolution"], sig["would_pnl_per_share"])
 
+                # Phase 2A.4: also backfill resolution into shadow_variant_signals.
+                # All variants that logged for this condition_id evaluated the
+                # same candidate (same direction, same fill) — so PnL/outcome
+                # is identical for all qualified rows.
+                await self._update_variant_resolution(
+                    condition_id=sig["condition_id"],
+                    up_won=bool(up_won),
+                    fill=float(fill),
+                )
+
                 logger.info(
                     "b3_15m_shadow_resolved",
                     direction=direction,
@@ -550,6 +560,57 @@ class B3_15mShadow:
                 await session.commit()
         except Exception as e:
             logger.warning("b3_15m_db_resolution_error", error=str(e))
+
+    async def _update_variant_resolution(
+        self, condition_id: str, up_won: bool, fill: float
+    ) -> None:
+        """Backfill resolution into shadow_variant_signals for all variants.
+
+        All variants that logged a row for this condition_id evaluated the
+        same candidate (uniform direction + fill), so their PnL is identical.
+        Only qualified rows have meaningful PnL — unqualified rows still get
+        resolution_outcome (for counterfactual "would this have won") but
+        would_pnl_per_share stays NULL.
+        """
+        try:
+            from arbo.utils.db import get_session_factory
+            import sqlalchemy as sa
+            factory = get_session_factory()
+            async with factory() as session:
+                # Update outcome + resolution_ts for ALL rows on this condition
+                await session.execute(
+                    sa.text("""
+                        UPDATE shadow_variant_signals
+                        SET resolution_outcome = :up_won,
+                            resolution_ts = NOW()
+                        WHERE strategy = 'B3_15M'
+                          AND condition_id = :cid
+                          AND resolution_outcome IS NULL
+                    """),
+                    {"up_won": up_won, "cid": condition_id},
+                )
+                # For qualified rows, compute PnL = (1-fill) if own-direction won else -fill
+                # direction="up" wins iff up_won; direction="down" wins iff not up_won
+                await session.execute(
+                    sa.text("""
+                        UPDATE shadow_variant_signals
+                        SET would_pnl_per_share = CASE
+                            WHEN (direction = 'up'   AND :up_won = true)
+                              OR (direction = 'down' AND :up_won = false)
+                            THEN 1.0 - would_fill_at
+                            ELSE -would_fill_at
+                        END
+                        WHERE strategy = 'B3_15M'
+                          AND condition_id = :cid
+                          AND qualified = true
+                          AND would_pnl_per_share IS NULL
+                          AND would_fill_at IS NOT NULL
+                    """),
+                    {"up_won": up_won, "cid": condition_id},
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning("shadow_variant_resolution_error", error=str(e))
 
     async def _load_unresolved_from_db(self) -> None:
         """Load unresolved signals from DB on startup."""

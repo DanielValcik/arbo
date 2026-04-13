@@ -5,7 +5,7 @@ endpoint and saves them locally for backtest validation.
 
 Usage:
     python3 research/export_paper_trades.py
-    python3 research/export_paper_trades.py --host 18.135.109.36 --port 8099
+    python3 research/export_paper_trades.py --host 52.17.173.192 --port 8099
 """
 
 import argparse
@@ -21,7 +21,7 @@ from pathlib import Path
 OUTPUT_DIR = Path(__file__).parent / "data"
 OUTPUT_FILE = OUTPUT_DIR / "paper_trades_export.json"
 
-DEFAULT_HOST = "18.135.109.36"
+DEFAULT_HOST = "52.17.173.192"
 DEFAULT_PORT = 8099
 
 
