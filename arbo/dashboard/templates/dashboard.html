@@ -3502,16 +3502,22 @@
             if (lb2RefreshInterval) { clearInterval(lb2RefreshInterval); lb2RefreshInterval = null; }
         }
         if (tab === 'liveb3') {
-            // 15M first, then 5M — merged chart + header need 15m chron available
+            // 15M + 5M run sequentially (15M populates window._b3_15m_chron used by 5M).
+            // Variant leaderboards run INDEPENDENTLY (in parallel) so failures
+            // in B3/B3_15M fetchers don't block leaderboard rendering.
             (async () => {
-                await fetchLiveB315M();
-                await fetchLiveB3();
-                fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
-                fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
+                try { await fetchLiveB315M(); } catch (e) { console.error('fetchLiveB315M failed:', e); }
+                try { await fetchLiveB3(); } catch (e) { console.error('fetchLiveB3 failed:', e); }
             })();
-            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(async () => {
-                await fetchLiveB315M();
-                await fetchLiveB3();
+            // Variant leaderboards — independent of the above (no shared state)
+            fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
+            fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
+
+            if (!lb3RefreshInterval) lb3RefreshInterval = setInterval(() => {
+                (async () => {
+                    try { await fetchLiveB315M(); } catch (e) { console.error('fetchLiveB315M failed:', e); }
+                    try { await fetchLiveB3(); } catch (e) { console.error('fetchLiveB3 failed:', e); }
+                })();
                 fetchVariantLeaderboard('B3', 'lb3VariantsBody', 'lb3VariantsHeader');
                 fetchVariantLeaderboard('B3_15M', 'lb315mVariantsBody', 'lb315mVariantsHeader');
             }, 10000);
