@@ -719,7 +719,7 @@ class StrategyB315M:
                         market_gap=_gap_for_q,
                     )
                 except Exception as _e:
-                    logger.debug("b3_15m_challenger_skip_path_error", error=str(_e))
+                    logger.warning("b3_15m_challenger_skip_path_error", error=str(_e))
                 continue
 
             # Execute
@@ -1037,7 +1037,7 @@ class StrategyB315M:
                     market_gap=market_gap if 'market_gap' in locals() else 0.0,
                 )
             except Exception as _e:
-                logger.debug("b3_15m_challenger_entry_error", error=str(_e))
+                logger.warning("b3_15m_challenger_entry_error", error=str(_e))
 
             executed.append(sig)
 
@@ -1100,10 +1100,27 @@ class StrategyB315M:
     ) -> None:
         """Mirror of B3.place_challenger_paper_trades for B3_15M."""
         if not self._paper_engine or self._live_capital <= 0:
+            logger.warning(
+                "b3_15m_challenger_guard_hit",
+                paper_engine=bool(self._paper_engine),
+                live_capital=self._live_capital,
+            )
             return
         variants = self._get_variants_15m()
         if not variants:
+            logger.warning("b3_15m_challenger_no_variants")
             return
+        n_challenger = sum(1 for v in variants if v.status == "challenger")
+        logger.info(
+            "b3_15m_challenger_eval_start",
+            token=token_id[:16],
+            variants=len(variants),
+            challengers=n_challenger,
+            edge=round(sig.edge, 3),
+            move=round(btc_move, 1),
+            gap=round(market_gap, 3),
+            fill=round(entry_price, 3),
+        )
 
         entry_mkt_fv = sig.market_fv_up if sig.direction == 1 else (1 - sig.market_fv_up)
 
