@@ -728,6 +728,49 @@ class PaperTradingEngine:
         except Exception as e:
             logger.warning("update_resolved_trades_db_failed", error=str(e), token_id=token_id)
 
+    async def update_trade_by_id(
+        self,
+        trade_id: int,
+        status: str,
+        actual_pnl: Decimal | None = None,
+        exit_price: Decimal | None = None,
+        exit_reason: str | None = None,
+    ) -> None:
+        """Update ONE specific paper_trades row by primary key.
+
+        Per-variant PnL tracking (Project PARALLEL): when multiple variants
+        trade the same token with same/different params, update_resolved_
+        trades_in_db would blanket-update all rows sharing token_id. This
+        helper targets exactly one row by id — preserves independent
+        per-variant PnL histories.
+        """
+        try:
+            from sqlalchemy import update
+            from arbo.utils.db import PaperTrade as PaperTradeDB
+            from arbo.utils.db import get_session_factory
+
+            now = datetime.now(UTC)
+            values: dict = {"status": status, "resolved_at": now}
+            if actual_pnl is not None:
+                values["actual_pnl"] = actual_pnl
+            if exit_price is not None:
+                values["exit_price"] = exit_price
+            if exit_reason is not None:
+                values["exit_reason"] = exit_reason
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    update(PaperTradeDB)
+                    .where(PaperTradeDB.id == trade_id)
+                    .values(**values)
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(
+                "update_trade_by_id_failed", trade_id=trade_id, error=str(e),
+            )
+
     async def load_state_from_db(self) -> None:
         """Restore open positions and balance from the database on startup."""
         try:
