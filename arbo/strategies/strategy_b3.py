@@ -926,8 +926,10 @@ class StrategyB3:
                 and _fill_for_q <= _live_max_fill
             )
 
-            # mirror_live: skip paper too when live wouldn't qualify, so
-            # paper/live trade counts and outcomes are directly comparable.
+            # mirror_live: skip CHAMPION paper/live when live wouldn't qualify.
+            # But challengers must still be evaluated — each has own filter and
+            # could qualify where champion doesn't. Evaluate challengers first,
+            # then skip the champion path.
             if mirror_live and not live_qualified_flag:
                 logger.info(
                     "b3_mirror_skip_not_qualified",
@@ -935,6 +937,18 @@ class StrategyB3:
                     vel=f"{velocity:.1f}", dd=f"{abs_dir_delta:.1f}",
                     fill=f"{_fill_for_q:.3f}",
                 )
+                # Still evaluate challengers — their own filters may qualify
+                try:
+                    await self._place_challenger_paper_trades(
+                        sig=sig,
+                        token_id=token_id,
+                        entry_price=_fill_for_q,
+                        btc_move=btc_move,
+                        velocity=velocity,
+                        abs_dir_delta=abs_dir_delta,
+                    )
+                except Exception as _e:
+                    logger.debug("b3_challenger_skip_path_error", error=str(_e))
                 continue
 
             # Phase 2B: shadow evaluation of all B3 variants on this candidate.

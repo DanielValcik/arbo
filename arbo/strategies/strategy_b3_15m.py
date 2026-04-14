@@ -703,13 +703,23 @@ class StrategyB315M:
                 and _fill_for_q <= _live_max_fill
             )
 
-            # mirror_live: skip paper too when live would not qualify
+            # mirror_live: skip CHAMPION path but still evaluate challengers
             if mirror_live and not live_qualified_flag:
                 logger.info(
                     "b3_15m_mirror_skip_not_qualified",
                     edge=f"{sig.edge:.3f}", move=f"{btc_move:.1f}",
                     gap=f"{_gap_for_q:.3f}", fill=f"{_fill_for_q:.3f}",
                 )
+                try:
+                    await self._place_challenger_paper_trades_15m(
+                        sig=sig,
+                        token_id=token_id,
+                        entry_price=_fill_for_q,
+                        btc_move=btc_move,
+                        market_gap=_gap_for_q,
+                    )
+                except Exception as _e:
+                    logger.debug("b3_15m_challenger_skip_path_error", error=str(_e))
                 continue
 
             # Execute
