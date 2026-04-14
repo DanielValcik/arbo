@@ -500,15 +500,27 @@ class StrategyB315M:
                 logger.info("b3_halted")
                 break
 
-            available = float(strat_state.allocated - strat_state.deployed)
+            # DUAL MODE + PAPER_MATCH_LIVE: paper mirrors live in capital,
+            # entry price, and fill-cap — so paper stats are 1:1 comparable
+            # with live. See strategy_b3.py for same logic.
+            mirror_live = (
+                self._execution_mode == "dual" and PAPER_MATCH_LIVE
+                and self._live_capital > 0
+            )
+            if mirror_live:
+                available = self._live_capital
+                min_size = max(2.0, min(10.0, self._live_capital * 0.015))
+            else:
+                available = float(strat_state.allocated - strat_state.deployed)
+                min_size = MIN_ORDER_SIZE
             if available <= 0:
                 continue
 
             bet_size = min(available * raw_pct, MAX_BET_SIZE)
-            if bet_size < MIN_ORDER_SIZE:
+            if bet_size < min_size:
                 continue
 
-            entry_price = sig.entry_price + SPREAD / 2  # Buy at ask
+            entry_price = sig.entry_price + SPREAD / 2  # Buy at ask (paper default)
             if entry_price <= 0.01:
                 continue
 
@@ -516,7 +528,7 @@ class StrategyB315M:
             liq = await self._check_liquidity(token_id, entry_price, bet_size)
             if liq is not None:
                 bet_size = liq["safe_size"]
-                if bet_size < MIN_ORDER_SIZE:
+                if bet_size < min_size:
                     logger.info(
                         "b3_low_liquidity",
                         token=token_id[:20],
@@ -540,6 +552,10 @@ class StrategyB315M:
                     )
                     continue
 
+                # Mirror live: use real CLOB best_ask as paper entry too
+                if mirror_live:
+                    entry_price = expected_fill
+
                 # Dynamic sizing
                 if expected_fill <= 0.30:
                     size_mult = 0.5   # Trh prodává lacino = opatrně
@@ -550,7 +566,15 @@ class StrategyB315M:
                 else:
                     size_mult = 0.5   # Příliš drahé
                 bet_size = min(bet_size * size_mult, MAX_BET_SIZE)
-                if bet_size < MIN_ORDER_SIZE:
+                if bet_size < min_size:
+                    continue
+
+                # Apply LIVE_MAX_FILL_PRICE cap in mirror mode
+                if mirror_live and entry_price > LIVE_MAX_FILL_PRICE:
+                    logger.info(
+                        "b3_15m_mirror_skip_fill_cap",
+                        fill=f"{entry_price:.3f}", cap=f"{LIVE_MAX_FILL_PRICE:.3f}",
+                    )
                     continue
 
             shares = bet_size / entry_price
@@ -598,6 +622,32 @@ class StrategyB315M:
             else:
                 dir_delta = (_cl_for_calc - _bin_for_calc) if (_bin_for_calc and _cl_for_calc) else 0
             abs_dir_delta = abs(dir_delta)
+
+            # Compute live_qualified flag early (for mirror_live gating + trade_details)
+            _ac_q = self._adaptive_config
+            _live_min_edge = _ac_q.get("LIVE_MIN_EDGE", 0.30) if _ac_q else 0.30
+            _live_min_move = _ac_q.get("LIVE_MIN_BTC_MOVE", 0.0) if _ac_q else 0.0
+            _live_max_move = _ac_q.get("LIVE_MAX_BTC_MOVE", 80.0) if _ac_q else 80.0
+            _live_max_gap = _ac_q.get("LIVE_MAX_MARKET_GAP", 0.30) if _ac_q else 0.30
+            _live_max_fill = _ac_q.get("LIVE_MAX_FILL_PRICE", LIVE_MAX_FILL_PRICE) if _ac_q else LIVE_MAX_FILL_PRICE
+            _fill_for_q = liq.get("best_ask", entry_price) if liq else entry_price
+            _gap_for_q = market_gap if 'market_gap' in locals() else 0.0
+            live_qualified_flag = bool(
+                sig.edge >= _live_min_edge
+                and btc_move >= _live_min_move
+                and btc_move <= _live_max_move
+                and _gap_for_q <= _live_max_gap
+                and _fill_for_q <= _live_max_fill
+            )
+
+            # mirror_live: skip paper too when live would not qualify
+            if mirror_live and not live_qualified_flag:
+                logger.info(
+                    "b3_15m_mirror_skip_not_qualified",
+                    edge=f"{sig.edge:.3f}", move=f"{btc_move:.1f}",
+                    gap=f"{_gap_for_q:.3f}", fill=f"{_fill_for_q:.3f}",
+                )
+                continue
 
             # Execute
             paper_trade = None
@@ -647,16 +697,11 @@ class StrategyB315M:
                         "btc_abs_move_chainlink": round(abs(chainlink_price - sig.btc_at_start), 2) if chainlink_price and sig.btc_at_start else None,
                         "btc_abs_move": round(btc_move, 2),
                         "move_risk": round(btc_move * sig.sigma_per_min * 1e6, 0),
-                        # live_qualified reflects runtime filter values (from adaptive_config)
-                        # B3_15M defaults from shadow autoresearch rank #1 (2026-04-12)
-                        "live_qualified": bool(
-                            sig.edge >= (self._adaptive_config.get("LIVE_MIN_EDGE", 0.30) if self._adaptive_config else 0.30)
-                            and btc_move >= (self._adaptive_config.get("LIVE_MIN_BTC_MOVE", 0.0) if self._adaptive_config else 0.0)
-                            and btc_move <= (self._adaptive_config.get("LIVE_MAX_BTC_MOVE", 80.0) if self._adaptive_config else 80.0)
-                            and velocity <= (self._adaptive_config.get("LIVE_MAX_VELOCITY", 100.0) if self._adaptive_config else 100.0)
-                            and abs_dir_delta <= (self._adaptive_config.get("LIVE_MAX_DIR_DELTA", 25.0) if self._adaptive_config else 25.0)
-                            and abs(entry_mkt_fv - (liq.get("best_ask", entry_price) if liq else entry_price)) <= (self._adaptive_config.get("LIVE_MAX_MARKET_GAP", 0.30) if self._adaptive_config else 0.30)
-                        ),
+                        # live_qualified reflects runtime filter values. Computed
+                        # once above (live_qualified_flag) and reused here for
+                        # mirror_live gating consistency.
+                        "live_qualified": live_qualified_flag,
+                        "mirror_live": mirror_live,
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
                         "velocity_paper": round(velocity, 1),

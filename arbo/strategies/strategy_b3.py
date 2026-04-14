@@ -755,15 +755,28 @@ class StrategyB3:
                 logger.info("b3_halted")
                 break
 
-            available = float(strat_state.allocated - strat_state.deployed)
+            # DUAL MODE + PAPER_MATCH_LIVE: paper uses SAME capital as live
+            # (wallet balance) so paper trade size/shares/prices are 1:1
+            # comparable with live. Otherwise paper uses risk_manager allocation
+            # (broader research dataset, but not directly comparable to live).
+            mirror_live = (
+                self._execution_mode == "dual" and PAPER_MATCH_LIVE
+                and self._live_capital > 0
+            )
+            if mirror_live:
+                available = self._live_capital
+                min_size = max(2.0, min(10.0, self._live_capital * 0.015))
+            else:
+                available = float(strat_state.allocated - strat_state.deployed)
+                min_size = MIN_ORDER_SIZE
             if available <= 0:
                 continue
 
             bet_size = min(available * raw_pct, MAX_BET_SIZE)
-            if bet_size < MIN_ORDER_SIZE:
+            if bet_size < min_size:
                 continue
 
-            entry_price = sig.entry_price + SPREAD / 2  # Buy at ask
+            entry_price = sig.entry_price + SPREAD / 2  # Buy at ask (paper default)
             if entry_price <= 0.01:
                 continue
 
@@ -795,6 +808,13 @@ class StrategyB3:
                     )
                     continue
 
+                # DUAL MODE + PAPER_MATCH_LIVE: paper uses same CLOB best_ask
+                # as live (so paper = "what live would execute"). Otherwise
+                # paper keeps the model-FV + synthetic spread entry (wider
+                # historical coverage for research).
+                if mirror_live:
+                    entry_price = expected_fill  # Real orderbook price
+
                 # Dynamic sizing
                 if expected_fill <= 0.30:
                     size_mult = 0.5   # Trh prodává lacino = opatrně
@@ -805,7 +825,17 @@ class StrategyB3:
                 else:
                     size_mult = 0.5   # Příliš drahé
                 bet_size = min(bet_size * size_mult, MAX_BET_SIZE)
-                if bet_size < MIN_ORDER_SIZE:
+                if bet_size < min_size:
+                    continue
+
+                # In mirror_live mode, also apply LIVE_MAX_FILL_PRICE cap to
+                # paper — so paper doesn't "trade" markets live would reject.
+                if mirror_live and entry_price > LIVE_MAX_FILL_PRICE:
+                    logger.info(
+                        "b3_mirror_skip_fill_cap",
+                        fill=f"{entry_price:.3f}",
+                        cap=f"{LIVE_MAX_FILL_PRICE:.3f}",
+                    )
                     continue
 
             shares = bet_size / entry_price
@@ -853,6 +883,34 @@ class StrategyB3:
             else:
                 dir_delta = (_cl_for_calc - _bin_for_calc) if (_bin_for_calc and _cl_for_calc) else 0
             abs_dir_delta = abs(dir_delta)
+
+            # Compute live_qualified flag early — needed both for trade_details
+            # and for mirror_live paper gating.
+            _ac_q = self._adaptive_config
+            _live_min_edge = _ac_q.get("LIVE_MIN_EDGE", 0.30) if _ac_q else 0.30
+            _live_min_move = _ac_q.get("LIVE_MIN_BTC_MOVE", 35.0) if _ac_q else 35.0
+            _live_max_vel = _ac_q.get("LIVE_MAX_VELOCITY", 60.0) if _ac_q else 60.0
+            _live_max_dd = _ac_q.get("LIVE_MAX_DIR_DELTA", 15.0) if _ac_q else 15.0
+            _live_max_fill = _ac_q.get("LIVE_MAX_FILL_PRICE", LIVE_MAX_FILL_PRICE) if _ac_q else LIVE_MAX_FILL_PRICE
+            _fill_for_q = liq.get("best_ask", entry_price) if liq else entry_price
+            live_qualified_flag = bool(
+                sig.edge >= _live_min_edge
+                and btc_move >= _live_min_move
+                and velocity <= _live_max_vel
+                and abs_dir_delta <= _live_max_dd
+                and _fill_for_q <= _live_max_fill
+            )
+
+            # mirror_live: skip paper too when live wouldn't qualify, so
+            # paper/live trade counts and outcomes are directly comparable.
+            if mirror_live and not live_qualified_flag:
+                logger.info(
+                    "b3_mirror_skip_not_qualified",
+                    edge=f"{sig.edge:.3f}", move=f"{btc_move:.1f}",
+                    vel=f"{velocity:.1f}", dd=f"{abs_dir_delta:.1f}",
+                    fill=f"{_fill_for_q:.3f}",
+                )
+                continue
 
             # Phase 2B: shadow evaluation of all B3 variants on this candidate.
             # Writes one row per variant to shadow_variant_signals (decision
@@ -922,17 +980,9 @@ class StrategyB3:
                         "btc_abs_move": round(btc_move, 2),
                         "move_risk": round(btc_move * sig.sigma_per_min * 1e6, 0),
                         # live_qualified reflects runtime filter values (from adaptive_config).
-                        # Added 2026-04-14: LIVE_MAX_FILL_PRICE check — previously missing
-                        # and caused paper live_qualified=true on trades that would fail
-                        # live fill check (e.g. fill=0.88 on overnight deep-ITM moves).
-                        "live_qualified": bool(
-                            sig.edge >= (self._adaptive_config.get("LIVE_MIN_EDGE", 0.30) if self._adaptive_config else 0.30)
-                            and btc_move >= (self._adaptive_config.get("LIVE_MIN_BTC_MOVE", 35.0) if self._adaptive_config else 35.0)
-                            and velocity <= (self._adaptive_config.get("LIVE_MAX_VELOCITY", 60.0) if self._adaptive_config else 60.0)
-                            and abs_dir_delta <= (self._adaptive_config.get("LIVE_MAX_DIR_DELTA", 15.0) if self._adaptive_config else 15.0)
-                            and (liq.get("best_ask", entry_price) if liq else entry_price)
-                                <= (self._adaptive_config.get("LIVE_MAX_FILL_PRICE", LIVE_MAX_FILL_PRICE) if self._adaptive_config else LIVE_MAX_FILL_PRICE)
-                        ),
+                        # Computed once above (live_qualified_flag) and reused here.
+                        "live_qualified": live_qualified_flag,
+                        "mirror_live": mirror_live,
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",
                         "velocity_paper": round(velocity, 1),
