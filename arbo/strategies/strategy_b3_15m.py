@@ -86,6 +86,21 @@ class B315MPosition:
     live_error: str = ""           # Error reason if fill failed
 
 
+@dataclass
+class B315MVariantPosition:
+    """Per-variant paper position for B3_15M (Project PARALLEL)."""
+    variant_id: str
+    paper_trade_id: int
+    condition_id: str
+    token_id: str
+    direction: int
+    entry_price: float
+    shares: int
+    size_usd: float
+    event_start_ts: float
+    event_end_ts: float
+
+
 class StrategyB315M:
     """Binance Oracle Scalper — 15-min BTC Up/Down variant."""
 
@@ -132,6 +147,12 @@ class StrategyB315M:
 
         # Open position tracking
         self._open_positions: dict[str, B315MPosition] = {}  # token_id → position
+        # Project PARALLEL: per-variant paper positions (each challenger tracked
+        # independently for clean per-variant PnL history)
+        self._variant_positions: dict[tuple[str, str], B315MVariantPosition] = {}
+        # Cached variant pool
+        self._variants_cache_b3_15m: list = []
+        self._variants_cache_ts_b3_15m: float = 0.0
         self._live_holding: dict[str, B315MPosition] = {}  # live positions waiting for resolution
         self._last_exit_time: dict[str, float] = {}  # condition_id → timestamp
 
@@ -996,9 +1017,228 @@ class StrategyB315M:
                 live=live_fill_status if self._execution_mode != "paper" else None,
             )
 
+            # Project PARALLEL: per-variant paper trades
+            try:
+                await self._place_challenger_paper_trades_15m(
+                    sig=sig,
+                    token_id=token_id,
+                    entry_price=entry_price,
+                    btc_move=btc_move,
+                    market_gap=market_gap if 'market_gap' in locals() else 0.0,
+                )
+            except Exception as _e:
+                logger.debug("b3_15m_challenger_entry_error", error=str(_e))
+
             executed.append(sig)
 
         return executed
+
+    def _get_variants_15m(self) -> list:
+        """Load B3_15M variant pool (cached 60s)."""
+        now = time.time()
+        if now - self._variants_cache_ts_b3_15m > 60:
+            try:
+                from arbo.core.variant_pool import get_active_variants
+                self._variants_cache_b3_15m = get_active_variants("B3_15M")
+                self._variants_cache_ts_b3_15m = now
+            except Exception as e:
+                logger.warning("b3_15m_variant_load_error", error=str(e))
+        return self._variants_cache_b3_15m
+
+    @staticmethod
+    def _b3_15m_gates(
+        *,
+        edge: float,
+        btc_move: float,
+        market_gap: float,
+        fill_price: float | None,
+        entry_minute: int,
+        entry_mkt_fv: float,
+        params: dict,
+    ) -> tuple[bool, str | None]:
+        """Per-variant filter check for B3_15M. Same rules as live path."""
+        if edge < params.get("LIVE_MIN_EDGE", 0.30):
+            return False, "edge_below_min"
+        if btc_move < params.get("LIVE_MIN_BTC_MOVE", 0.0):
+            return False, "btc_move_below_min"
+        if btc_move > params.get("LIVE_MAX_BTC_MOVE", 80.0):
+            return False, "btc_move_above_max"
+        if market_gap > params.get("LIVE_MAX_MARKET_GAP", 0.30):
+            return False, "market_gap_above_max"
+        if fill_price is not None:
+            if fill_price > params.get("LIVE_MAX_FILL_PRICE", 1.01):
+                return False, "fill_above_max"
+            if fill_price <= 0.0:
+                return False, "no_orderbook"
+        if entry_minute < params.get("MIN_ENTRY_MIN", 4):
+            return False, "minute_below_min"
+        if entry_minute > params.get("MAX_ENTRY_MIN", 11):
+            return False, "minute_above_max"
+        if entry_mkt_fv < params.get("MIN_ENTRY_MKT_FV", 0.30):
+            return False, "fv_below_min"
+        if entry_mkt_fv > params.get("MAX_ENTRY_MKT_FV", 0.95):
+            return False, "fv_above_max"
+        return True, None
+
+    async def _place_challenger_paper_trades_15m(
+        self,
+        sig: Any,
+        token_id: str,
+        entry_price: float,
+        btc_move: float,
+        market_gap: float,
+    ) -> None:
+        """Mirror of B3.place_challenger_paper_trades for B3_15M."""
+        if not self._paper_engine or self._live_capital <= 0:
+            return
+        variants = self._get_variants_15m()
+        if not variants:
+            return
+
+        entry_mkt_fv = sig.market_fv_up if sig.direction == 1 else (1 - sig.market_fv_up)
+
+        for v in variants:
+            if v.status != "challenger":
+                continue
+            pos_key = (v.variant_id, token_id)
+            if pos_key in self._variant_positions:
+                continue
+
+            qualified, _skip = self._b3_15m_gates(
+                edge=sig.edge,
+                btc_move=btc_move,
+                market_gap=market_gap,
+                fill_price=entry_price,
+                entry_minute=int(sig.minutes_elapsed or 0),
+                entry_mkt_fv=entry_mkt_fv,
+                params=v.params,
+            )
+            if not qualified:
+                continue
+
+            v_pct = min(
+                float(v.params.get("POSITION_PCT", POSITION_PCT)),
+                sig.edge * float(v.params.get("EDGE_SCALING", EDGE_SCALING)),
+            )
+            v_size = min(self._live_capital * v_pct, MAX_BET_SIZE)
+            v_min = max(2.0, min(10.0, self._live_capital * 0.015))
+            if v_size < v_min:
+                continue
+            v_shares = int(v_size / entry_price)
+            if v_shares < 1:
+                continue
+
+            try:
+                v_trade = self._paper_engine.place_trade(
+                    market_condition_id=sig.condition_id,
+                    token_id=token_id,
+                    side="BUY",
+                    market_price=Decimal(str(round(sig.entry_price, 4))),
+                    model_prob=Decimal(str(round(
+                        sig.signal_fv_up if sig.direction == 1 else 1 - sig.signal_fv_up, 4,
+                    ))),
+                    layer=0,
+                    market_category="crypto_15min",
+                    fee_enabled=False,
+                    strategy=STRATEGY_NAME,
+                    pre_computed_size=Decimal(str(round(v_shares * entry_price, 2))),
+                    clob_fill_price=Decimal(str(round(entry_price, 4))),
+                    trade_details={
+                        "variant_id": v.variant_id,
+                        "is_shadow_variant": True,
+                        "direction": "up" if sig.direction == 1 else "down",
+                        "entry_price": entry_price,
+                        "edge": sig.edge,
+                        "btc_abs_move": round(btc_move, 2),
+                        "market_gap": round(market_gap, 3),
+                        "event_start_ts": sig.event_start_ts,
+                        "event_end_ts": sig.event_end_ts,
+                        "parent_variant": v.parent_variant,
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "b3_15m_challenger_place_trade_error",
+                    variant_id=v.variant_id, error=str(e),
+                )
+                continue
+            if v_trade is None:
+                continue
+            self._variant_positions[pos_key] = B315MVariantPosition(
+                variant_id=v.variant_id,
+                paper_trade_id=int(v_trade.id),
+                condition_id=sig.condition_id,
+                token_id=token_id,
+                direction=sig.direction,
+                entry_price=entry_price,
+                shares=v_shares,
+                size_usd=v_shares * entry_price,
+                event_start_ts=sig.event_start_ts,
+                event_end_ts=sig.event_end_ts,
+            )
+            logger.info(
+                "b3_15m_challenger_entry",
+                variant_id=v.variant_id,
+                direction="UP" if sig.direction == 1 else "DOWN",
+                entry=f"{entry_price:.3f}",
+                shares=v_shares,
+                size=f"${v_shares * entry_price:.2f}",
+                trade_id=int(v_trade.id),
+            )
+
+    async def _resolve_variant_positions_15m(self) -> None:
+        """Resolve per-variant paper positions for B3_15M at event end."""
+        now = time.time()
+        to_resolve = [
+            (key, pos) for key, pos in list(self._variant_positions.items())
+            if now >= pos.event_end_ts
+        ]
+        if not to_resolve:
+            return
+
+        by_cond: dict[str, list] = {}
+        for key, pos in to_resolve:
+            by_cond.setdefault(pos.condition_id, []).append((key, pos))
+
+        for cond_id, positions in by_cond.items():
+            event_start = positions[0][1].event_start_ts
+            try:
+                pm_up_won = await asyncio.wait_for(
+                    self._scanner.fetch_resolution(event_start),
+                    timeout=15,
+                )
+            except (asyncio.TimeoutError, Exception):
+                continue
+            if pm_up_won is None:
+                continue
+
+            for key, pos in positions:
+                won = pm_up_won if pos.direction == 1 else (not pm_up_won)
+                exit_price = 1.0 if won else 0.0
+                pnl = pos.shares * (exit_price - pos.entry_price)
+                try:
+                    if self._paper_engine:
+                        await self._paper_engine.update_trade_by_id(
+                            trade_id=pos.paper_trade_id,
+                            status="won" if won else "lost",
+                            actual_pnl=Decimal(str(round(pnl, 4))),
+                            exit_price=Decimal(str(exit_price)),
+                        )
+                    logger.info(
+                        "b3_15m_variant_resolved",
+                        variant_id=pos.variant_id,
+                        won=won,
+                        entry=f"{pos.entry_price:.3f}",
+                        shares=pos.shares,
+                        pnl=f"${pnl:+.2f}",
+                        trade_id=pos.paper_trade_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "b3_15m_variant_resolve_update_error",
+                        variant_id=pos.variant_id, error=str(e),
+                    )
+                self._variant_positions.pop(key, None)
 
     # ═══════════════════════════════════════════════════════════════════════
     # LIQUIDITY CHECK
@@ -1361,6 +1601,12 @@ class StrategyB315M:
                     entry=f"{pos.live_entry_price:.3f}",
                     shares=pos.live_shares,
                 )
+
+        # Project PARALLEL: resolve per-variant paper positions
+        try:
+            await self._resolve_variant_positions_15m()
+        except Exception as _e:
+            logger.debug("b3_15m_variant_resolve_error", error=str(_e))
 
         return triggered
 
