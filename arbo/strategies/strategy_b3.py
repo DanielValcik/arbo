@@ -921,12 +921,17 @@ class StrategyB3:
                         "btc_abs_move_chainlink": round(abs(chainlink_price - sig.btc_at_start), 2) if chainlink_price and sig.btc_at_start else None,
                         "btc_abs_move": round(btc_move, 2),
                         "move_risk": round(btc_move * sig.sigma_per_min * 1e6, 0),
-                        # live_qualified reflects runtime filter values (from adaptive_config)
+                        # live_qualified reflects runtime filter values (from adaptive_config).
+                        # Added 2026-04-14: LIVE_MAX_FILL_PRICE check — previously missing
+                        # and caused paper live_qualified=true on trades that would fail
+                        # live fill check (e.g. fill=0.88 on overnight deep-ITM moves).
                         "live_qualified": bool(
                             sig.edge >= (self._adaptive_config.get("LIVE_MIN_EDGE", 0.30) if self._adaptive_config else 0.30)
                             and btc_move >= (self._adaptive_config.get("LIVE_MIN_BTC_MOVE", 35.0) if self._adaptive_config else 35.0)
                             and velocity <= (self._adaptive_config.get("LIVE_MAX_VELOCITY", 60.0) if self._adaptive_config else 60.0)
                             and abs_dir_delta <= (self._adaptive_config.get("LIVE_MAX_DIR_DELTA", 15.0) if self._adaptive_config else 15.0)
+                            and (liq.get("best_ask", entry_price) if liq else entry_price)
+                                <= (self._adaptive_config.get("LIVE_MAX_FILL_PRICE", LIVE_MAX_FILL_PRICE) if self._adaptive_config else LIVE_MAX_FILL_PRICE)
                         ),
                         "bin_cl_delta_abs": round(abs(btc_price - chainlink_price), 2) if chainlink_price else None,
                         "btc_at_start_source": "cl_buffer" if sig.btc_at_start and chainlink_price and abs(sig.btc_at_start - chainlink_price) < 50 else "binance_fallback",

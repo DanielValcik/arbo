@@ -88,7 +88,11 @@ POSITION_PCT = 0.026              # 2.9% of capital per trade (was 6.7%)
 EDGE_SCALING = 10.000              # Size multiplier per unit of edge (was 4.838)
 MAX_BET_SIZE = 100.0              # Max $100 per trade (liquidity constraint)
 MAX_SHARES = 500                  # Max shares per trade
-MIN_ORDER_SIZE = 5.0              # Polymarket minimum $5
+MIN_ORDER_SIZE = 3.0              # Min trade size (was $5, but Polymarket's
+                                   # actual CLOB min is $1). Lowered 2026-04-14
+                                   # after 9h of B3 live qualifications yielded
+                                   # 0 filled: wallet ~$190 × POSITION_PCT 0.026
+                                   # = ~$4.9/order, blocked by old $5 floor.
 
 # Window
 WINDOW_MIN = 5                    # 5-minute windows
