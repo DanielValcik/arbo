@@ -371,6 +371,48 @@ class StrategyB315M:
         except Exception as e:
             logger.warning("b3_mark_orphaned_error", error=str(e))
 
+    async def _cancel_mirror_paper_trade(
+        self, token_id: str, cond_id: str, size: float, live_fill_status: str,
+    ) -> None:
+        """Unwind paper trade when live failed to fill (mirror mode).
+
+        Same semantics as B3 5-min variant. Keeps paper <-> live 1:1
+        comparability in partial/error edge cases.
+        """
+        try:
+            if (self._paper_engine
+                    and hasattr(self._paper_engine, "_positions")
+                    and token_id in self._paper_engine._positions):
+                del self._paper_engine._positions[token_id]
+            if self._paper_engine:
+                await self._paper_engine.update_resolved_trades_in_db(
+                    token_id=token_id,
+                    winning=None,
+                    pnl=Decimal("0"),
+                    exit_price=None,
+                    exit_reason=f"live_mirror_failed_{live_fill_status}",
+                )
+            if self._risk_manager:
+                try:
+                    self._risk_manager.post_trade_update(
+                        cond_id, "crypto_15min",
+                        Decimal(str(round(size, 2))),
+                        pnl=Decimal("0"),
+                    )
+                    self._risk_manager.strategy_post_trade(
+                        STRATEGY_NAME,
+                        Decimal(str(round(size, 2))),
+                        pnl=Decimal("0"),
+                    )
+                except Exception:
+                    pass
+            logger.info(
+                "b3_15m_mirror_paper_cancelled",
+                token=token_id[:20], live_fill_status=live_fill_status,
+            )
+        except Exception as e:
+            logger.warning("b3_15m_cancel_mirror_error", error=str(e))
+
     # ═══════════════════════════════════════════════════════════════════════
     # ENTRY: Poll Cycle
     # ═══════════════════════════════════════════════════════════════════════
@@ -907,6 +949,20 @@ class StrategyB315M:
                         paper_trade.trade_details["fill_to_model"] = round(_ftm, 4)
                         paper_trade.trade_details["combined_risk"] = round(velocity / LIVE_MAX_VELOCITY + abs_dir_delta / LIVE_MAX_DIR_DELTA, 3)
                         paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} |dd|={abs_dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
+
+            # MIRROR FAILURE PROPAGATION (same as B3 5-min)
+            live_really_filled = live_shares > 0 and live_fill_status in (
+                "filled", "partial",
+            )
+            if mirror_live and not live_really_filled:
+                await self._cancel_mirror_paper_trade(
+                    token_id=token_id,
+                    cond_id=sig.condition_id,
+                    size=actual_size,
+                    live_fill_status=live_fill_status,
+                )
+                executed.append(sig)
+                continue
 
             # Track position
             self._open_positions[token_id] = B315MPosition(
