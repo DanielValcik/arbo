@@ -758,6 +758,9 @@ class StrategyDCore:
         if not pending:
             return
 
+        resolved_count = 0
+        skipped_not_closed = 0
+        skipped_fetch_fail = 0
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=10),
         ) as http:
@@ -769,30 +772,53 @@ class StrategyDCore:
                         params={"condition_ids": cid},
                     ) as resp:
                         if resp.status != 200:
+                            skipped_fetch_fail += 1
                             continue
                         data = await resp.json()
                     if not data:
+                        skipped_fetch_fail += 1
                         continue
                     m = data[0] if isinstance(data, list) else data
+                    # Only treat as resolved if market is closed (game ended +
+                    # outcome posted). Live markets with extreme prices can
+                    # look resolved but aren't yet settled.
+                    if not m.get("closed"):
+                        skipped_not_closed += 1
+                        continue
                     outcomes = m.get("outcomes")
                     prices = m.get("outcomePrices")
                     if isinstance(outcomes, str):
                         outcomes = _json.loads(outcomes)
                     if isinstance(prices, str):
                         prices = _json.loads(prices)
-                    if not outcomes or not prices:
+                    if not outcomes or not prices or len(outcomes) < 2 or len(prices) < 2:
+                        skipped_fetch_fail += 1
                         continue
-                    for o, p in zip(outcomes, prices):
-                        if str(o).lower() == "yes":
-                            if str(p) == "1":
-                                yes_won = True
-                            elif str(p) == "0":
-                                yes_won = False
-                            break
-                except Exception:
+                    # NBA/sports markets use team names as outcomes
+                    # (["Heat", "Hornets"]), NOT "Yes"/"No". Winner = outcome
+                    # with price "1" or "1.0". By convention:
+                    #   outcomes[0] = team_a = our "yes" side
+                    #   outcomes[1] = team_b = our "no" side
+                    winner_idx = None
+                    for i, p in enumerate(prices):
+                        try:
+                            if float(p) >= 0.99:
+                                winner_idx = i
+                                break
+                        except (TypeError, ValueError):
+                            continue
+                    if winner_idx is None:
+                        skipped_fetch_fail += 1
+                        continue
+                    # yes_won means "our 'yes' side won" = team_a (index 0) won
+                    yes_won = (winner_idx == 0)
+                except Exception as e:
+                    self._logger.debug("d_resolve_fetch_err", cid=cid[:16], err=str(e))
+                    skipped_fetch_fail += 1
                     continue
                 if yes_won is None:
                     continue
+                resolved_count += 1
                 try:
                     factory = get_session_factory()
                     async with factory() as session:
@@ -825,6 +851,15 @@ class StrategyDCore:
                         await session.commit()
                 except Exception as e:
                     self._logger.debug("d_sweep_update_error", cid=cid, error=str(e))
+
+        self._logger.info(
+            "d_sweep_complete",
+            sport=self.SPORT_NAME,
+            pending=len(pending),
+            resolved=resolved_count,
+            skipped_not_closed=skipped_not_closed,
+            skipped_fetch_fail=skipped_fetch_fail,
+        )
 
     # ── Exit ──────────────────────────────────────────────────────────
 
