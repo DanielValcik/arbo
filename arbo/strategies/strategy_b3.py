@@ -1283,7 +1283,11 @@ class StrategyB3:
                     abs_dir_delta=abs_dir_delta,
                 )
             except Exception as _e:
-                logger.debug("b3_challenger_entry_error", error=str(_e))
+                logger.warning(
+                    "b3_challenger_entry_error",
+                    error=str(_e),
+                    error_type=type(_e).__name__,
+                )
 
             executed.append(sig)
 
@@ -1309,10 +1313,27 @@ class StrategyB3:
         computed at resolution and written via update_trade_by_id.
         """
         if not self._paper_engine or self._live_capital <= 0:
+            logger.warning(
+                "b3_challenger_guard_hit",
+                paper_engine=bool(self._paper_engine),
+                live_capital=self._live_capital,
+            )
             return
         variants = self._get_variants()
         if not variants:
+            logger.warning("b3_challenger_no_variants")
             return
+        n_challenger = sum(1 for v in variants if v.status == "challenger")
+        logger.info(
+            "b3_challenger_eval_start",
+            token=token_id[:16],
+            variants=len(variants),
+            challengers=n_challenger,
+            edge=round(sig.edge, 3),
+            vel=round(velocity, 1),
+            dd=round(abs_dir_delta, 1),
+            fill=round(entry_price, 3),
+        )
         # Skip if already have variant position for this token (avoid double entry)
         now = time.time()
 
