@@ -809,12 +809,13 @@ class StrategyB3:
             liq = await self._check_liquidity(token_id, entry_price, bet_size)
             if liq is not None:
                 bet_size = liq["safe_size"]
-                if bet_size < MIN_ORDER_SIZE:
+                if bet_size < min_size:
                     logger.info(
                         "b3_low_liquidity",
                         token=token_id[:20],
                         available_usd=f"${liq['available_usd']:.0f}",
                         safe_size=f"${bet_size:.0f}",
+                        min_size=f"${min_size:.2f}",
                     )
                     continue
 
