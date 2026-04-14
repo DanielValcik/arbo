@@ -981,6 +981,21 @@ class StrategyB315M:
                         paper_trade.trade_details["combined_risk"] = round(velocity / LIVE_MAX_VELOCITY + abs_dir_delta / LIVE_MAX_DIR_DELTA, 3)
                         paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} |dd|={abs_dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
 
+            # Project PARALLEL: per-variant paper trades — run FIRST (before
+            # mirror cancel), so challengers always get their chance regardless
+            # of champion's live outcome. Challengers are paper-only; champion's
+            # live failure doesn't affect them.
+            try:
+                await self._place_challenger_paper_trades_15m(
+                    sig=sig,
+                    token_id=token_id,
+                    entry_price=entry_price,
+                    btc_move=btc_move,
+                    market_gap=market_gap if 'market_gap' in locals() else 0.0,
+                )
+            except Exception as _e:
+                logger.warning("b3_15m_challenger_entry_error", error=str(_e))
+
             # MIRROR FAILURE PROPAGATION (same as B3 5-min)
             live_really_filled = live_shares > 0 and live_fill_status in (
                 "filled", "partial",
@@ -1027,17 +1042,8 @@ class StrategyB315M:
                 live=live_fill_status if self._execution_mode != "paper" else None,
             )
 
-            # Project PARALLEL: per-variant paper trades
-            try:
-                await self._place_challenger_paper_trades_15m(
-                    sig=sig,
-                    token_id=token_id,
-                    entry_price=entry_price,
-                    btc_move=btc_move,
-                    market_gap=market_gap if 'market_gap' in locals() else 0.0,
-                )
-            except Exception as _e:
-                logger.warning("b3_15m_challenger_entry_error", error=str(_e))
+            # (Challenger eval moved earlier — before mirror cancel — so it
+            # runs regardless of champion's live outcome.)
 
             executed.append(sig)
 

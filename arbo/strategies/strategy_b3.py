@@ -1220,6 +1220,25 @@ class StrategyB3:
                         paper_trade.trade_details["combined_risk"] = round(velocity / LIVE_MAX_VELOCITY + abs_dir_delta / LIVE_MAX_DIR_DELTA, 3)
                         paper_trade.trade_details["v6_filters"] = f"vel={velocity:.0f}≤{LIVE_MAX_VELOCITY} |dd|={abs_dir_delta:.1f}≤{LIVE_MAX_DIR_DELTA}"
 
+            # Project PARALLEL: per-variant paper trades — run FIRST (before
+            # mirror cancel), so challengers always get their chance regardless
+            # of champion's live fill outcome.
+            try:
+                await self._place_challenger_paper_trades(
+                    sig=sig,
+                    token_id=token_id,
+                    entry_price=entry_price,
+                    btc_move=btc_move,
+                    velocity=velocity,
+                    abs_dir_delta=abs_dir_delta,
+                )
+            except Exception as _e:
+                logger.warning(
+                    "b3_challenger_entry_error",
+                    error=str(_e),
+                    error_type=type(_e).__name__,
+                )
+
             # MIRROR FAILURE PROPAGATION: if we're in dual+mirror mode AND live
             # didn't actually fill shares, cancel the paper trade so paper PnL
             # reflects real-world outcomes (not idealized fills). This keeps
@@ -1270,24 +1289,8 @@ class StrategyB3:
                 live=live_fill_status if self._execution_mode != "paper" else None,
             )
 
-            # Project PARALLEL: create per-variant paper trades for any
-            # challenger whose filter qualifies this signal. Each gets own
-            # paper_trades row (unique id) → independent PnL tracking.
-            try:
-                await self._place_challenger_paper_trades(
-                    sig=sig,
-                    token_id=token_id,
-                    entry_price=entry_price,
-                    btc_move=btc_move,
-                    velocity=velocity,
-                    abs_dir_delta=abs_dir_delta,
-                )
-            except Exception as _e:
-                logger.warning(
-                    "b3_challenger_entry_error",
-                    error=str(_e),
-                    error_type=type(_e).__name__,
-                )
+            # (Challenger eval moved earlier — before mirror cancel — so it
+            # runs regardless of champion's live outcome.)
 
             executed.append(sig)
 
