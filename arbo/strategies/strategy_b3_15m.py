@@ -778,10 +778,16 @@ class StrategyB315M:
                     live_size = min(
                         self._live_capital * raw_pct, MAX_BET_SIZE,
                     )
-                    if live_size < MIN_ORDER_SIZE:
+                    # Dynamic min order size: 1.5% of live capital, [$2, $10]
+                    # (scales risk floor with portfolio; Polymarket platform
+                    # min is $1, we leave margin). Applied consistently with
+                    # B3 5-min.
+                    dynamic_min = max(2.0, min(10.0, self._live_capital * 0.015))
+                    if live_size < dynamic_min:
                         live_fill_status = "too_small"
                         raise ValueError(
-                            f"Live size ${live_size:.1f} < min ${MIN_ORDER_SIZE}"
+                            f"Live size ${live_size:.2f} < dynamic min ${dynamic_min:.2f} "
+                            f"(1.5% of ${self._live_capital:.0f} wallet)"
                         )
                     fill = await self._live_executor.buy(
                         token_id=token_id,
