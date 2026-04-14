@@ -1622,9 +1622,15 @@ class RDHOrchestrator:
         if self._strategy_c is not None:
             wx_cfg = self._config.weather
             task_defs.append(("strategy_C", self._run_strategy_c, wx_cfg.scan_interval_s))
-        if self._strategy_c2 is not None:
+        # C2 (weather) can be disabled via DISABLE_C2=1 to save CPU/DB I/O
+        # when volatility is low — shadow signals still come from C (old
+        # weather strategy) if needed. Re-enable by unsetting the env.
+        import os as _os_c2
+        if self._strategy_c2 is not None and not _os_c2.getenv("DISABLE_C2"):
             task_defs.append(("strategy_C2", self._run_strategy_c2, 300))       # entry scan every 5 min
             task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # exit check every 60s
+        elif self._strategy_c2 is not None:
+            logger.info("strategy_c2_disabled", reason="DISABLE_C2 env set")
         if self._strategy_b2 is not None:
             task_defs.append(("strategy_B2", self._run_strategy_b2, 60))        # entry scan every 60s (faster)
             task_defs.append(("B2_exit_monitor", self._run_b2_exit_check, 30))  # exit check every 30s

@@ -259,7 +259,11 @@ class StrategyDCore:
         return os.path.join(base, f"d_recent_exits_{self.SPORT_NAME}.json")
 
     def _load_recent_exits(self) -> dict[str, float]:
-        """Load persisted cooldown map; prune stale entries."""
+        """Load persisted cooldown map; prune stale entries.
+
+        Entries with timestamp far in the future (permanent blocklist,
+        *_RESOLVED exits) are kept regardless of cutoff.
+        """
         import json
         import os
         path = self._recent_exits_path()
@@ -270,7 +274,11 @@ class StrategyDCore:
                 data = json.load(f)
             now = time.time()
             cutoff = now - self.REENTRY_COOLDOWN_S
-            return {k: float(t) for k, t in data.items() if float(t) > cutoff}
+            # Keep: (a) within cooldown window, OR (b) permanent (far future)
+            return {
+                k: float(t) for k, t in data.items()
+                if float(t) > cutoff or float(t) > now + 86400
+            }
         except Exception:
             return {}
 
@@ -888,7 +896,15 @@ class StrategyDCore:
 
             exits.append(pos)
             del self._positions[cid]
-            self._recent_exits[cid] = now  # Cooldown: don't re-enter for REENTRY_COOLDOWN_S
+            # Cooldown: don't re-enter for REENTRY_COOLDOWN_S normally.
+            # For *_RESOLVED exits (market was already settled in gamma),
+            # store timestamp FAR in the future (permanent blocklist) —
+            # gamma cache can stay stale >24h, 4h cooldown expires too soon.
+            if pos.exit_reason and pos.exit_reason.endswith("_RESOLVED"):
+                # +100 years ≈ permanent
+                self._recent_exits[cid] = now + 3.15e9
+            else:
+                self._recent_exits[cid] = now
             self._persist_recent_exits()
             self._daily_pnl += pos.pnl
 
