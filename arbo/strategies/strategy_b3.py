@@ -84,6 +84,26 @@ class B3Position:
     live_error: str = ""           # Error reason if fill failed
 
 
+@dataclass
+class B3VariantPosition:
+    """Per-variant paper position (Project PARALLEL).
+
+    Each challenger variant (ch_edge_tight, ch_velocity_tight, etc.) that
+    qualifies a signal gets its own position tracked here — independent of
+    champion's B3Position. On resolution, each computes own PnL and updates
+    its specific paper_trades row (paper_trade_id).
+    """
+    variant_id: str
+    paper_trade_id: int       # DB PK for targeted update via update_trade_by_id
+    condition_id: str
+    token_id: str
+    direction: int            # +1 = long Up, -1 = long Down
+    entry_price: float        # best_ask (same as champion in mirror mode)
+    shares: int
+    size_usd: float
+    event_end_ts: float       # For resolution detection
+
+
 class StrategyB3:
     """Binance Oracle Scalper — 5-min BTC Up/Down."""
 
@@ -138,6 +158,11 @@ class StrategyB3:
         self._variants_cache_ts: float = 0.0
         # Dedupe shadow writes per (condition_id, entry_minute_int)
         self._shadow_written: set[tuple[str, int]] = set()
+        # Per-variant paper positions (Project PARALLEL Option B):
+        # each challenger's independent paper trade — resolved at event end
+        # with its own pnl → written to paper_trades.actual_pnl via
+        # update_trade_by_id. Clean isolation per variant_id.
+        self._variant_positions: dict[tuple[str, str], B3VariantPosition] = {}
 
     async def init(self) -> None:
         """Initialize scanner and restore state."""
@@ -1230,9 +1255,142 @@ class StrategyB3:
                 live=live_fill_status if self._execution_mode != "paper" else None,
             )
 
+            # Project PARALLEL: create per-variant paper trades for any
+            # challenger whose filter qualifies this signal. Each gets own
+            # paper_trades row (unique id) → independent PnL tracking.
+            try:
+                await self._place_challenger_paper_trades(
+                    sig=sig,
+                    token_id=token_id,
+                    entry_price=entry_price,
+                    btc_move=btc_move,
+                    velocity=velocity,
+                    abs_dir_delta=abs_dir_delta,
+                )
+            except Exception as _e:
+                logger.debug("b3_challenger_entry_error", error=str(_e))
+
             executed.append(sig)
 
         return executed
+
+    async def _place_challenger_paper_trades(
+        self,
+        sig: B3Signal,
+        token_id: str,
+        entry_price: float,
+        btc_move: float,
+        velocity: float,
+        abs_dir_delta: float,
+    ) -> None:
+        """For each challenger variant that would qualify this signal,
+        create independent paper trade with challenger's own params.
+
+        Design: each variant gets its own paper_trades row keyed by
+        variant_id in trade_details. Size = live_capital × variant's
+        POSITION_PCT (mirror of champion's sizing rule). Entry = same
+        best_ask as champion (fair comparison — both would have tried
+        to fill at same price). Exit = resolution in B3 5-min. PnL
+        computed at resolution and written via update_trade_by_id.
+        """
+        if not self._paper_engine or self._live_capital <= 0:
+            return
+        variants = self._get_variants()
+        if not variants:
+            return
+        # Skip if already have variant position for this token (avoid double entry)
+        now = time.time()
+
+        for v in variants:
+            if v.status != "challenger":
+                continue  # Champion already traded above
+            pos_key = (v.variant_id, token_id)
+            if pos_key in self._variant_positions:
+                continue  # Already positioned this variant on this token
+            # Apply variant's own gate filter
+            qualified, _skip = self._b3_gates(
+                edge=sig.edge,
+                btc_move=btc_move,
+                velocity=velocity,
+                abs_dir_delta=abs_dir_delta,
+                fill_price=entry_price,
+                entry_minute=int(sig.minutes_elapsed or 0),
+                entry_mkt_fv=sig.market_fv_up if sig.direction == 1 else (1 - sig.market_fv_up),
+                params=v.params,
+            )
+            if not qualified:
+                continue
+            # Sizing: variant's own POSITION_PCT × live_capital (mirror rule)
+            v_pct = min(
+                float(v.params.get("POSITION_PCT", POSITION_PCT)),
+                sig.edge * float(v.params.get("EDGE_SCALING", EDGE_SCALING)),
+            )
+            v_size = min(self._live_capital * v_pct, MAX_BET_SIZE)
+            v_min = max(2.0, min(10.0, self._live_capital * 0.015))
+            if v_size < v_min:
+                continue
+            v_shares = int(v_size / entry_price)
+            if v_shares < 1:
+                continue
+
+            # Place paper trade — own DB row with variant_id tagged
+            try:
+                v_trade = self._paper_engine.place_trade(
+                    market_condition_id=sig.condition_id,
+                    token_id=token_id,
+                    side="BUY",
+                    market_price=Decimal(str(round(sig.entry_price, 4))),
+                    model_prob=Decimal(str(round(
+                        sig.signal_fv_up if sig.direction == 1 else 1 - sig.signal_fv_up, 4,
+                    ))),
+                    layer=0,
+                    market_category="crypto_5min",
+                    fee_enabled=False,
+                    strategy=STRATEGY_NAME,
+                    pre_computed_size=Decimal(str(round(v_shares * entry_price, 2))),
+                    clob_fill_price=Decimal(str(round(entry_price, 4))),
+                    trade_details={
+                        "variant_id": v.variant_id,
+                        "is_shadow_variant": True,  # Challenger, not champion live
+                        "direction": "up" if sig.direction == 1 else "down",
+                        "entry_price": entry_price,
+                        "edge": sig.edge,
+                        "btc_abs_move": round(btc_move, 2),
+                        "velocity_paper": round(velocity, 1),
+                        "abs_dir_delta_paper": round(abs_dir_delta, 2),
+                        "event_start_ts": sig.event_start_ts,
+                        "event_end_ts": sig.event_end_ts,
+                        "parent_variant": v.parent_variant,
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "b3_challenger_place_trade_error",
+                    variant_id=v.variant_id, error=str(e),
+                )
+                continue
+            if v_trade is None:
+                continue
+            self._variant_positions[pos_key] = B3VariantPosition(
+                variant_id=v.variant_id,
+                paper_trade_id=int(v_trade.id),
+                condition_id=sig.condition_id,
+                token_id=token_id,
+                direction=sig.direction,
+                entry_price=entry_price,
+                shares=v_shares,
+                size_usd=v_shares * entry_price,
+                event_end_ts=sig.event_end_ts,
+            )
+            logger.info(
+                "b3_challenger_entry",
+                variant_id=v.variant_id,
+                direction="UP" if sig.direction == 1 else "DOWN",
+                entry=f"{entry_price:.3f}",
+                shares=v_shares,
+                size=f"${v_shares * entry_price:.2f}",
+                trade_id=int(v_trade.id),
+            )
 
     async def _cancel_mirror_paper_trade(
         self, token_id: str, cond_id: str, size: float, live_fill_status: str,
@@ -1642,7 +1800,86 @@ class StrategyB3:
                     shares=pos.live_shares,
                 )
 
+        # Project PARALLEL: resolve per-variant paper positions
+        try:
+            await self._resolve_variant_positions()
+        except Exception as _e:
+            logger.debug("b3_variant_resolve_error", error=str(_e))
+
         return triggered
+
+    async def _resolve_variant_positions(self) -> None:
+        """Resolve per-variant paper positions at event end.
+
+        For each challenger position whose event_end_ts has passed:
+        - Fetch resolution (up_won?) via scanner
+        - Compute PnL = shares × (exit_price - entry_price) × direction_sign
+          where exit_price = 1.0 if won else 0.0
+        - Update paper_trades row via paper_engine.update_trade_by_id
+        - Remove from _variant_positions
+
+        Resolution-only exit (PAPER_MATCH_LIVE=True for B3 5-min).
+        """
+        now = time.time()
+        to_resolve = [
+            (key, pos) for key, pos in list(self._variant_positions.items())
+            if now >= pos.event_end_ts
+        ]
+        if not to_resolve:
+            return
+
+        # Group by condition_id — one resolution fetch per event covers all variants
+        by_cond: dict[str, list] = {}
+        for key, pos in to_resolve:
+            by_cond.setdefault(pos.condition_id, []).append((key, pos))
+
+        for cond_id, positions in by_cond.items():
+            # Use event_start_ts from any position (all share same condition)
+            event_start = positions[0][1].event_end_ts - WINDOW_MIN * 60
+            try:
+                pm_up_won = await asyncio.wait_for(
+                    self._scanner.fetch_resolution(event_start),
+                    timeout=15,
+                )
+            except (asyncio.TimeoutError, Exception):
+                continue  # Retry next cycle
+            if pm_up_won is None:
+                continue
+
+            for key, pos in positions:
+                # PnL per variant position
+                if pos.direction == 1:
+                    won = pm_up_won
+                else:
+                    won = not pm_up_won
+                # Exit price: binary market resolution — 1.0 if our token won, 0.0 else
+                exit_price = 1.0 if won else 0.0
+                pnl = pos.shares * (exit_price - pos.entry_price)
+                # Sign convention: pos.direction irrelevant here (shares were for
+                # our token, exit is our token's value)
+                try:
+                    if self._paper_engine:
+                        await self._paper_engine.update_trade_by_id(
+                            trade_id=pos.paper_trade_id,
+                            status="won" if won else "lost",
+                            actual_pnl=Decimal(str(round(pnl, 4))),
+                            exit_price=Decimal(str(exit_price)),
+                        )
+                    logger.info(
+                        "b3_variant_resolved",
+                        variant_id=pos.variant_id,
+                        won=won,
+                        entry=f"{pos.entry_price:.3f}",
+                        shares=pos.shares,
+                        pnl=f"${pnl:+.2f}",
+                        trade_id=pos.paper_trade_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "b3_variant_resolve_update_error",
+                        variant_id=pos.variant_id, error=str(e),
+                    )
+                self._variant_positions.pop(key, None)
 
     async def sell_live_position(
         self, token_id: str, exit_reason: str, paper_exit_price: float,
