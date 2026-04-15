@@ -1912,8 +1912,7 @@ class StrategyB3:
                                trade_details->>'direction' AS direction,
                                (trade_details->>'entry_price')::float AS entry_price,
                                (trade_details->>'event_end_ts')::float AS event_end_ts,
-                               (trade_details->>'event_start_ts')::float AS event_start_ts,
-                               shares
+                               size AS size_usd
                         FROM paper_trades
                         WHERE strategy = 'B3'
                           AND trade_details->>'is_shadow_variant' = 'true'
@@ -1926,15 +1925,18 @@ class StrategyB3:
                     key = (row["variant_id"], row["token_id"])
                     if key in self._variant_positions:
                         continue
+                    entry_p = float(row["entry_price"] or 0)
+                    size_usd = float(row["size_usd"] or 0)
+                    shares = int(size_usd / entry_p) if entry_p > 0 else 0
                     pos = B3VariantPosition(
                         variant_id=row["variant_id"],
                         paper_trade_id=int(row["id"]),
                         condition_id=row["market_condition_id"],
                         token_id=row["token_id"],
                         direction=1 if row["direction"] == "up" else -1,
-                        entry_price=float(row["entry_price"] or 0),
-                        shares=int(float(row["shares"] or 0)),
-                        size_usd=float(row["shares"] or 0) * float(row["entry_price"] or 0),
+                        entry_price=entry_p,
+                        shares=shares,
+                        size_usd=size_usd,
                         event_end_ts=float(row["event_end_ts"] or 0),
                     )
                     to_resolve.append((key, pos))
