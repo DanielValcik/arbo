@@ -1221,18 +1221,24 @@ class StrategyB315M:
                     reason="paper_engine.place_trade returned None",
                 )
                 continue
-            # Save to DB immediately (main_rdh save loop saves only one
-            # per condition_id; challengers share condition_id with champion)
+            # Save + use DB id (paper_engine local id != DB id)
+            db_id: int | None = None
             try:
-                await self._paper_engine.save_trade_to_db(v_trade)
+                db_id = await self._paper_engine.save_trade_to_db(v_trade)
             except Exception as e:
                 logger.warning(
                     "b3_15m_challenger_save_trade_error",
                     variant_id=v.variant_id, error=str(e),
                 )
+            if db_id is None:
+                logger.warning(
+                    "b3_15m_challenger_save_returned_null",
+                    variant_id=v.variant_id,
+                )
+                continue
             self._variant_positions[pos_key] = B315MVariantPosition(
                 variant_id=v.variant_id,
-                paper_trade_id=int(v_trade.id),
+                paper_trade_id=db_id,
                 condition_id=sig.condition_id,
                 token_id=token_id,
                 direction=sig.direction,

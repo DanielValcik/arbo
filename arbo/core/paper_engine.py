@@ -570,8 +570,13 @@ class PaperTradingEngine:
 
         return snapshot
 
-    async def save_trade_to_db(self, trade: PaperTrade) -> None:
-        """Persist a paper trade to the database (best-effort)."""
+    async def save_trade_to_db(self, trade: PaperTrade) -> int | None:
+        """Persist a paper trade to the database (best-effort).
+
+        Returns the DB row id (autoincrement PK) on success, None on error.
+        Callers needing targeted updates (e.g. per-variant PnL) should use
+        this id with update_trade_by_id.
+        """
         try:
             from sqlalchemy.exc import SQLAlchemyError
 
@@ -600,8 +605,11 @@ class PaperTradingEngine:
                 )
                 session.add(db_trade)
                 await session.commit()
+                await session.refresh(db_trade)
+                return int(db_trade.id)
         except (SQLAlchemyError, ValueError, TypeError) as e:
             logger.warning("save_trade_to_db_failed", error=str(e))
+            return None
 
     async def save_snapshot_to_db(self, snapshot: PortfolioSnapshot) -> None:
         """Persist a portfolio snapshot to the database (best-effort)."""

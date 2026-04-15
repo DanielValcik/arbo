@@ -1430,20 +1430,26 @@ class StrategyB3:
                     reason="paper_engine.place_trade returned None",
                 )
                 continue
-            # Save to DB immediately — main_rdh's save loop iterates
-            # paper_engine.trade_history and saves only ONE match per
-            # condition_id. Challengers share condition_id with champion
-            # so they'd be skipped. Save them explicitly here.
+            # Save to DB immediately and use the returned DB id (not
+            # paper_engine local trade.id — those diverge after ~4k trades
+            # and update_trade_by_id would target wrong row otherwise).
+            db_id: int | None = None
             try:
-                await self._paper_engine.save_trade_to_db(v_trade)
+                db_id = await self._paper_engine.save_trade_to_db(v_trade)
             except Exception as e:
                 logger.warning(
                     "b3_challenger_save_trade_error",
                     variant_id=v.variant_id, error=str(e),
                 )
+            if db_id is None:
+                logger.warning(
+                    "b3_challenger_save_returned_null",
+                    variant_id=v.variant_id,
+                )
+                continue
             self._variant_positions[pos_key] = B3VariantPosition(
                 variant_id=v.variant_id,
-                paper_trade_id=int(v_trade.id),
+                paper_trade_id=db_id,
                 condition_id=sig.condition_id,
                 token_id=token_id,
                 direction=sig.direction,
