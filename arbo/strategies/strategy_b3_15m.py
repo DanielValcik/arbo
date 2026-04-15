@@ -1533,6 +1533,14 @@ class StrategyB315M:
             List of (token_id, reason, exit_price, live_shares, direction,
                      live_entry_price) for triggered exits.
         """
+        # Always run variant resolution sweep first — orphaned shadow
+        # trades (restart survivors) need resolution even when in-memory
+        # positions are empty.
+        try:
+            await self._resolve_variant_positions_15m()
+        except Exception as _e:
+            logger.debug("b3_15m_variant_resolve_error", error=str(_e))
+
         if not self._open_positions and not self._live_holding:
             return []
 
