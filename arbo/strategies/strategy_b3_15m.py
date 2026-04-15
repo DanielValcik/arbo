@@ -1146,6 +1146,12 @@ class StrategyB315M:
                 entry_mkt_fv=entry_mkt_fv,
                 params=v.params,
             )
+            logger.info(
+                "b3_15m_challenger_gate_result",
+                variant_id=v.variant_id,
+                qualified=qualified,
+                skip=_skip,
+            )
             if not qualified:
                 continue
 
@@ -1156,9 +1162,20 @@ class StrategyB315M:
             v_size = min(self._live_capital * v_pct, MAX_BET_SIZE)
             v_min = max(2.0, min(10.0, self._live_capital * 0.015))
             if v_size < v_min:
+                logger.warning(
+                    "b3_15m_challenger_size_too_small",
+                    variant_id=v.variant_id,
+                    v_size=round(v_size, 2), v_min=round(v_min, 2),
+                    live_capital=self._live_capital,
+                )
                 continue
             v_shares = int(v_size / entry_price)
             if v_shares < 1:
+                logger.warning(
+                    "b3_15m_challenger_shares_zero",
+                    variant_id=v.variant_id,
+                    v_size=v_size, entry_price=entry_price,
+                )
                 continue
 
             try:
@@ -1196,6 +1213,12 @@ class StrategyB315M:
                 )
                 continue
             if v_trade is None:
+                logger.warning(
+                    "b3_15m_challenger_place_trade_null",
+                    variant_id=v.variant_id,
+                    v_size=v_size, v_shares=v_shares,
+                    reason="paper_engine.place_trade returned None",
+                )
                 continue
             self._variant_positions[pos_key] = B315MVariantPosition(
                 variant_id=v.variant_id,

@@ -1357,6 +1357,10 @@ class StrategyB3:
                 entry_mkt_fv=sig.market_fv_up if sig.direction == 1 else (1 - sig.market_fv_up),
                 params=v.params,
             )
+            logger.info(
+                "b3_challenger_gate_result",
+                variant_id=v.variant_id, qualified=qualified, skip=_skip,
+            )
             if not qualified:
                 continue
             # Sizing: variant's own POSITION_PCT × live_capital (mirror rule)
@@ -1367,9 +1371,19 @@ class StrategyB3:
             v_size = min(self._live_capital * v_pct, MAX_BET_SIZE)
             v_min = max(2.0, min(10.0, self._live_capital * 0.015))
             if v_size < v_min:
+                logger.warning(
+                    "b3_challenger_size_too_small",
+                    variant_id=v.variant_id,
+                    v_size=round(v_size, 2), v_min=round(v_min, 2),
+                )
                 continue
             v_shares = int(v_size / entry_price)
             if v_shares < 1:
+                logger.warning(
+                    "b3_challenger_shares_zero",
+                    variant_id=v.variant_id,
+                    v_size=v_size, entry_price=entry_price,
+                )
                 continue
 
             # Place paper trade — own DB row with variant_id tagged
@@ -1409,6 +1423,11 @@ class StrategyB3:
                 )
                 continue
             if v_trade is None:
+                logger.warning(
+                    "b3_challenger_place_trade_null",
+                    variant_id=v.variant_id,
+                    reason="paper_engine.place_trade returned None",
+                )
                 continue
             self._variant_positions[pos_key] = B3VariantPosition(
                 variant_id=v.variant_id,
