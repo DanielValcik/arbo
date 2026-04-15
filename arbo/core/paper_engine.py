@@ -736,11 +736,19 @@ class PaperTradingEngine:
                 if exit_reason is not None:
                     values["exit_reason"] = exit_reason
 
+                # Exclude shadow variants from blanket token_id update.
+                # Shadow variants have independent resolution (update_trade_by_id)
+                # based on their own entry/params/exit. Blanket-updating them
+                # when champion's mirror cancels or resolves would corrupt
+                # per-variant PnL history.
+                from sqlalchemy import or_, not_
+                shadow_expr = PaperTradeDB.trade_details.op("->>")("is_shadow_variant")
                 await session.execute(
                     update(PaperTradeDB)
                     .where(
                         PaperTradeDB.token_id == token_id,
                         PaperTradeDB.status == "open",
+                        or_(shadow_expr.is_(None), shadow_expr != "true"),
                     )
                     .values(**values)
                 )
