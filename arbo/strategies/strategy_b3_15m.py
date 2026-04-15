@@ -1221,6 +1221,11 @@ class StrategyB315M:
                     reason="paper_engine.place_trade returned None",
                 )
                 continue
+            # Race guard: reserve pos_key SYNCHRONOUSLY before any await.
+            # save_trade_to_db yields → concurrent poll_cycle could enter,
+            # see dict still empty, and insert a duplicate. Sentinel claims
+            # the slot; overwritten below on success or removed on failure.
+            self._variant_positions[pos_key] = None  # type: ignore[assignment]
             # Save + use DB id (paper_engine local id != DB id)
             db_id: int | None = None
             try:
@@ -1235,6 +1240,8 @@ class StrategyB315M:
                     "b3_15m_challenger_save_returned_null",
                     variant_id=v.variant_id,
                 )
+                # Release sentinel — don't block future re-entry attempts
+                self._variant_positions.pop(pos_key, None)
                 continue
             self._variant_positions[pos_key] = B315MVariantPosition(
                 variant_id=v.variant_id,
@@ -1270,6 +1277,8 @@ class StrategyB315M:
         to_resolve: list[tuple[str, Any]] = []
         # In-memory (fresh, with trade_id and direction tracked)
         for key, pos in list(self._variant_positions.items()):
+            if pos is None:
+                continue  # Race-guard sentinel, not a real position
             if now >= pos.event_end_ts:
                 to_resolve.append((key, pos))
 

@@ -1430,6 +1430,8 @@ class StrategyB3:
                     reason="paper_engine.place_trade returned None",
                 )
                 continue
+            # Race guard: reserve pos_key before await (save yields)
+            self._variant_positions[pos_key] = None  # type: ignore[assignment]
             # Save to DB immediately and use the returned DB id (not
             # paper_engine local trade.id — those diverge after ~4k trades
             # and update_trade_by_id would target wrong row otherwise).
@@ -1446,6 +1448,7 @@ class StrategyB3:
                     "b3_challenger_save_returned_null",
                     variant_id=v.variant_id,
                 )
+                self._variant_positions.pop(pos_key, None)
                 continue
             self._variant_positions[pos_key] = B3VariantPosition(
                 variant_id=v.variant_id,
@@ -1901,6 +1904,8 @@ class StrategyB3:
         now = time.time()
         to_resolve: list[tuple[str, Any]] = []
         for key, pos in list(self._variant_positions.items()):
+            if pos is None:
+                continue  # Race-guard sentinel
             if now >= pos.event_end_ts:
                 to_resolve.append((key, pos))
 
