@@ -1415,6 +1415,7 @@ class StrategyB3:
                         "event_end_ts": sig.event_end_ts,
                         "parent_variant": v.parent_variant,
                     },
+                    bypass_risk_check=True,  # Shadow variant — counterfactual only
                 )
             except Exception as e:
                 logger.warning(

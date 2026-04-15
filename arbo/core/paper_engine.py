@@ -171,6 +171,7 @@ class PaperTradingEngine:
         liquidity: Decimal | None = None,
         clob_fill_price: Decimal | None = None,
         trade_details: dict | None = None,
+        bypass_risk_check: bool = False,
     ) -> PaperTrade | None:
         """Place a simulated paper trade.
 
@@ -237,8 +238,12 @@ class PaperTradingEngine:
         if size <= Decimal("0"):
             return None
 
-        # Risk manager check
-        if self._risk_manager:
+        # Risk manager check (skipped for shadow variants — they're pure
+        # counterfactuals, don't consume capital, don't occupy real positions.
+        # Project PARALLEL per-variant paper trades use bypass_risk_check=True
+        # because champion already occupies the per-market slot; challengers
+        # need their own independent entries on same market for PnL comparison.)
+        if self._risk_manager and not bypass_risk_check:
             request = TradeRequest(
                 market_id=market_condition_id,
                 token_id=token_id,
@@ -263,8 +268,9 @@ class PaperTradingEngine:
             if decision.adjusted_size is not None:
                 size = decision.adjusted_size
 
-        # D5 Bug 4: Balance floor — never go negative
-        if size > self._balance:
+        # D5 Bug 4: Balance floor — never go negative.
+        # Shadow variants skip this (they don't consume capital).
+        if not bypass_risk_check and size > self._balance:
             logger.info(
                 "paper_trade_insufficient_balance",
                 size=str(size),
@@ -291,8 +297,10 @@ class PaperTradingEngine:
         # Calculate shares
         shares = (size / fill_price).quantize(Decimal("0.01"))
 
-        # Deduct from balance (trade size + Polygon gas)
-        self._balance -= size + POLYGON_GAS_COST_USD
+        # Deduct from balance (trade size + Polygon gas).
+        # Shadow variants skip this — they're counterfactuals, no real capital.
+        if not bypass_risk_check:
+            self._balance -= size + POLYGON_GAS_COST_USD
 
         # Create trade
         trade = PaperTrade(
@@ -315,27 +323,31 @@ class PaperTradingEngine:
         self._next_trade_id += 1
         self._trades.append(trade)
 
-        # Update or create position
-        pos_key = token_id
-        if pos_key in self._positions:
-            pos = self._positions[pos_key]
-            total_size = pos.size + size
-            pos.avg_price = (pos.avg_price * pos.shares + fill_price * shares) / (
-                pos.shares + shares
-            )
-            pos.shares += shares
-            pos.size = total_size
-        else:
-            self._positions[pos_key] = PaperPosition(
-                market_condition_id=market_condition_id,
-                token_id=token_id,
-                side=side,
-                avg_price=fill_price,
-                size=size,
-                shares=shares,
-                layer=layer,
-                strategy=strategy,
-            )
+        # Update or create position — skipped for shadow variants to avoid
+        # polluting champion's aggregate exposure metrics. Shadow trades exist
+        # only as DB rows for per-variant PnL tracking; resolution uses
+        # update_trade_by_id (by primary key), not position-based exit flow.
+        if not bypass_risk_check:
+            pos_key = token_id
+            if pos_key in self._positions:
+                pos = self._positions[pos_key]
+                total_size = pos.size + size
+                pos.avg_price = (pos.avg_price * pos.shares + fill_price * shares) / (
+                    pos.shares + shares
+                )
+                pos.shares += shares
+                pos.size = total_size
+            else:
+                self._positions[pos_key] = PaperPosition(
+                    market_condition_id=market_condition_id,
+                    token_id=token_id,
+                    side=side,
+                    avg_price=fill_price,
+                    size=size,
+                    shares=shares,
+                    layer=layer,
+                    strategy=strategy,
+                )
 
         # Update risk manager (global exposure + per-strategy state)
         if self._risk_manager:
