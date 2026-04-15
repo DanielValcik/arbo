@@ -1253,12 +1253,66 @@ class StrategyB315M:
             )
 
     async def _resolve_variant_positions_15m(self) -> None:
-        """Resolve per-variant paper positions for B3_15M at event end."""
+        """Resolve per-variant paper positions for B3_15M at event end.
+
+        DB-backed: queries paper_trades for OPEN shadow variant rows past
+        event_end_ts. Handles restart orphans (in-memory _variant_positions
+        dict clears on restart, but DB rows persist).
+        """
         now = time.time()
-        to_resolve = [
-            (key, pos) for key, pos in list(self._variant_positions.items())
-            if now >= pos.event_end_ts
-        ]
+        # First, union in-memory positions with DB-orphaned open shadow trades
+        to_resolve: list[tuple[str, Any]] = []
+        # In-memory (fresh, with trade_id and direction tracked)
+        for key, pos in list(self._variant_positions.items()):
+            if now >= pos.event_end_ts:
+                to_resolve.append((key, pos))
+
+        # DB orphans: shadow trades still 'open' past event_end_ts that we
+        # don't have in _variant_positions (e.g. after service restart)
+        try:
+            from arbo.utils.db import get_session_factory
+            import sqlalchemy as sa
+            factory = get_session_factory()
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT id, market_condition_id, token_id,
+                               trade_details->>'variant_id' AS variant_id,
+                               trade_details->>'direction' AS direction,
+                               (trade_details->>'entry_price')::float AS entry_price,
+                               (trade_details->>'event_end_ts')::float AS event_end_ts,
+                               (trade_details->>'event_start_ts')::float AS event_start_ts,
+                               shares
+                        FROM paper_trades
+                        WHERE strategy = 'B3_15M'
+                          AND trade_details->>'is_shadow_variant' = 'true'
+                          AND status = 'open'
+                          AND (trade_details->>'event_end_ts')::float < :now
+                    """),
+                    {"now": now},
+                )
+                for row in result.mappings():
+                    key = (row["variant_id"], row["token_id"])
+                    # Skip if already in memory (avoid double-processing)
+                    if key in self._variant_positions:
+                        continue
+                    # Build ephemeral position from DB data
+                    pos = B315MVariantPosition(
+                        variant_id=row["variant_id"],
+                        paper_trade_id=int(row["id"]),
+                        condition_id=row["market_condition_id"],
+                        token_id=row["token_id"],
+                        direction=1 if row["direction"] == "up" else -1,
+                        entry_price=float(row["entry_price"] or 0),
+                        shares=int(float(row["shares"] or 0)),
+                        size_usd=float(row["shares"] or 0) * float(row["entry_price"] or 0),
+                        event_start_ts=float(row["event_start_ts"] or 0),
+                        event_end_ts=float(row["event_end_ts"] or 0),
+                    )
+                    to_resolve.append((key, pos))
+        except Exception as e:
+            logger.warning("b3_15m_variant_db_query_error", error=str(e))
+
         if not to_resolve:
             return
 
