@@ -2479,14 +2479,22 @@ class RDHOrchestrator:
                     edge=f"{sig.edge:.3f}",
                     btc=f"${sig.btc_now:.0f}",
                 )
-                # Save trade to DB (find matching in-memory trade by condition_id)
+                # Save champion's trade to DB. Skip shadow variants —
+                # they're saved explicitly by strategy_b3._place_challenger_*
+                # with DB id returned for per-variant PnL tracking. If we
+                # saved them again here, we'd create duplicate DB rows.
                 for t in reversed(self._paper_engine.trade_history):
-                    if t.market_condition_id == sig.condition_id and t.status.value == "open":
-                        try:
-                            await self._paper_engine.save_trade_to_db(t)
-                        except Exception as e:
-                            logger.warning("b3_save_trade_db_error", error=str(e))
-                        break
+                    if t.market_condition_id != sig.condition_id:
+                        continue
+                    if t.status.value != "open":
+                        continue
+                    if t.trade_details and t.trade_details.get("is_shadow_variant"):
+                        continue  # Already saved by challenger flow
+                    try:
+                        await self._paper_engine.save_trade_to_db(t)
+                    except Exception as e:
+                        logger.warning("b3_save_trade_db_error", error=str(e))
+                    break
                 # Sync B3 market to DB so dashboard shows question text
                 await self._sync_b3_market_to_db(sig)
                 # Slack notification
@@ -2518,13 +2526,19 @@ class RDHOrchestrator:
                     edge=f"{sig.edge:.3f}",
                     btc=f"${sig.btc_now:.0f}",
                 )
+                # Champion's save. Skip shadow variants (saved explicitly)
                 for t in reversed(self._paper_engine.trade_history):
-                    if t.market_condition_id == sig.condition_id and t.status.value == "open":
-                        try:
-                            await self._paper_engine.save_trade_to_db(t)
-                        except Exception as e:
-                            logger.warning("b3_15m_save_trade_db_error", error=str(e))
-                        break
+                    if t.market_condition_id != sig.condition_id:
+                        continue
+                    if t.status.value != "open":
+                        continue
+                    if t.trade_details and t.trade_details.get("is_shadow_variant"):
+                        continue
+                    try:
+                        await self._paper_engine.save_trade_to_db(t)
+                    except Exception as e:
+                        logger.warning("b3_15m_save_trade_db_error", error=str(e))
+                    break
                 await self._sync_b3_market_to_db(sig)
                 await self._notify_b3_entry(sig, strategy_label="B3_15M")
             await self._paper_engine.sync_positions_to_db()
