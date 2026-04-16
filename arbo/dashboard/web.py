@@ -2916,6 +2916,7 @@ async def api_expected_vs_reality_b2(
                     PaperTrade.trade_details["direction"].astext,
                     PaperTrade.trade_details["live_entry_shares"].astext,
                     PaperTrade.trade_details["paper_match_live"].astext,
+                    PaperTrade.trade_details["live_exit_status"].astext,
                 )
                 .where(PaperTrade.strategy == "B2")
                 .where(PaperTrade.status.in_(["won", "lost", "sold"]))
@@ -2948,16 +2949,29 @@ async def api_expected_vs_reality_b2(
             trade_series_live: list[tuple[object, float]] = []
             trade_series_paper: list[tuple[object, float]] = []
 
+            # Live classification requires BOTH legs to have happened on CLOB.
+            # - Entry: live_entry_shares > 0 (position actually filled on-chain)
+            # - Exit: live_exit_status recorded as a real settlement outcome
+            # Trades where paper closed but the live leg never executed (e.g.
+            # ExitManager not yet synced → paper-only path taken) count as
+            # paper, not live. Otherwise we'd attribute paper's phantom PnL
+            # to real capital and mismatch the Slack cumulative tracker,
+            # which only counts actual _notify_b2_live_resolve events.
+            live_exit_terminal = {"resolution", "filled", "partial", "maker", "taker", "maker+taker"}
             for row in rows:
                 pnl = float(row[0] or 0)
                 total_pnl += pnl
                 exit_reason = row[2] or ""
                 live_shares_raw = row[9]
+                live_exit_status = (row[11] or "").lower() if len(row) > 11 else ""
                 try:
                     live_shares = int(live_shares_raw) if live_shares_raw else 0
                 except (ValueError, TypeError):
                     live_shares = 0
-                is_live = live_shares > 0
+                # Count as Live only when BOTH legs executed on CLOB.
+                # Paper-path phantom closes (live_exit_status empty) stay
+                # with paper-only so Live PnL matches the Slack tracker.
+                is_live = live_shares > 0 and live_exit_status in live_exit_terminal
 
                 if pnl > 0:
                     wins += 1
