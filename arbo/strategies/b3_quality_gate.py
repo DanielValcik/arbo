@@ -100,5 +100,12 @@ WINDOW_MIN = 5                    # 5-minute windows
 # Re-entry
 REENTRY_COOLDOWN = 2              # No cooldown (was 3) — more trades per event
 
+# Mirror-cancel debounce: after live fails to fill in mirror mode, block re-entry
+# on the same token_id for this many seconds. Fixes observed cascade where same
+# signal triggered 4 trades on same token in 16s (IDs 4905-4908, Apr 15 18:16).
+# 120s covers ~24 poll cycles at 5s cadence — enough for stale signal to age out
+# or for CLOB orderbook to refresh materially.
+MIRROR_CANCEL_DEBOUNCE = 120
+
 # Strategy
 STRATEGY_NAME = "B3"

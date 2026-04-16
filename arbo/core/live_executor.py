@@ -35,6 +35,12 @@ logger = get_logger("live_executor")
 
 UTC = timezone.utc
 MIN_ORDER_USD = 1.5
+# Polymarket CLOB enforces a per-order minimum of 5 shares regardless of
+# price or tick size. Observed error: "Size (4) lower than the minimum: 5".
+# Orders below this are rejected BEFORE any state change on-chain, but they
+# still burn a signal (wasted live fill attempt + strategy debounce side
+# effects). Enforce client-side to fail fast and cleanly.
+MIN_ORDER_SHARES = 5
 MAKER_FILL_TIMEOUT_ENTRY_S = 30  # 30s for entry (keep poll loop fast)
 MAKER_FILL_TIMEOUT_EXIT_S = 30  # 30s for exit (then fallback to taker)
 FILL_POLL_INTERVAL_S = 5  # Check fill every 5s
@@ -195,6 +201,11 @@ class LiveExecutor:
         # Maker: buy at BUY price (bid level — same as paper)
         maker_price = buy_price
         shares = int(size_usdc / maker_price) if maker_price > 0 else 0
+        if shares < MIN_ORDER_SHARES:
+            return self._fail(
+                token_id, "BUY", maker_price, size_usdc,
+                f"shares {shares} < {MIN_ORDER_SHARES} (Polymarket minimum)",
+            )
         if shares * maker_price < MIN_ORDER_USD:
             return self._fail(token_id, "BUY", maker_price, size_usdc, "Below minimum")
 
@@ -258,6 +269,21 @@ class LiveExecutor:
         actual = self._shares_owned.get(token_id, 0)
         if actual <= 0:
             return self._fail(token_id, "SELL", price, 0, "No shares owned")
+        if actual < MIN_ORDER_SHARES:
+            # Sub-minimum positions (shouldn't happen after buy-side fix, but
+            # legacy positions exist). Skip sell — Polymarket would reject.
+            # Shares auto-resolve at event end to $1 or $0.
+            fill = LiveFill(
+                token_id=token_id, side="SELL", price=Decimal("0"),
+                size=Decimal(str(actual)), shares_requested=actual,
+                status="skipped", order_type="below_min",
+                error=f"shares {actual} < {MIN_ORDER_SHARES}, waiting for resolution",
+            )
+            fill.latency_ms = 0
+            logger.info("live_sell_skip_below_min",
+                        token=token_id[:20], shares=actual)
+            self._fills.append(fill)
+            return fill
 
         buy_price, sell_price = await self._get_prices(token_id)
         if buy_price is None or sell_price is None:

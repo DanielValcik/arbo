@@ -184,8 +184,12 @@ class AdaptiveConfig:
                 module-level PARAM_BOUNDS (5-min). For B3_15M, pass
                 PARAM_BOUNDS_B3_15M.
         """
+        from collections import deque
         self._overrides: dict[str, float] = {}
-        self._change_log: list[ConfigChange] = []
+        # Bounded: Watchdog logs every param change + revert pair. Over weeks
+        # this reaches thousands of entries. 2000 keeps ~4 weeks of active
+        # tuning history (DB audit log has authoritative long-term record).
+        self._change_log: deque[ConfigChange] = deque(maxlen=2000)
         self._next_change_id: int = 1
         self._paused: bool = False  # Watchdog can pause live trading
         self._quality_gate_module = quality_gate_module
@@ -462,7 +466,9 @@ class AdaptiveConfig:
 
     def get_change_log(self, limit: int = 20) -> list[ConfigChange]:
         """Get recent change history (for Watchdog context / Slack reports)."""
-        return list(reversed(self._change_log[-limit:]))
+        # deque has no slicing — materialize the tail via list()
+        recent = list(self._change_log)[-limit:]
+        return list(reversed(recent))
 
     def get_status(self) -> dict[str, Any]:
         """Status for health monitoring / Slack reports."""

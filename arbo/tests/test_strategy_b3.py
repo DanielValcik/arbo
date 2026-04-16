@@ -472,3 +472,126 @@ class TestB3VolSubsampling:
         # Second call immediately — should NOT update
         await strategy.poll_cycle()
         assert strategy._last_vol_update_ts == first_ts  # Unchanged
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Mirror-cancel invariants (Bug fix 2026-04-16)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMirrorCancelOrphanFix:
+    """Guards against regression of mirror-cancel orphan bug.
+
+    Previous bug: _cancel_mirror_paper_trade called update_resolved_trades_in_db
+    BEFORE save_trade_to_db (called later by main_rdh), so UPDATE affected
+    0 rows and save inserted status=open → orphan. Fixed by marking in-memory
+    trade SOLD first + saving directly + debounce.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cancel_marks_trade_sold_in_memory(self) -> None:
+        """After cancel, in-memory PaperTrade.status must be SOLD.
+
+        Invariant: main_rdh save loop skips non-open trades. If status stays
+        OPEN, main_rdh inserts the cancelled trade as open → orphan.
+        """
+        from arbo.core.paper_engine import PaperTradingEngine, TradeStatus
+
+        rm = MagicMock()
+        pe = PaperTradingEngine(initial_capital=Decimal("100"))
+        strategy = StrategyB3(risk_manager=rm, paper_engine=pe)
+
+        # Simulate place_trade creating an open trade
+        trade = pe.place_trade(
+            market_condition_id="cond_x", token_id="tok_x",
+            side="BUY", market_price=Decimal("0.5"),
+            model_prob=Decimal("0.7"), layer=0,
+            market_category="crypto_5min",
+            pre_computed_size=Decimal("5"),
+            strategy="B3",
+        )
+        assert trade is not None
+        assert trade.status == TradeStatus.OPEN
+
+        # Mock save_trade_to_db to avoid DB
+        async def _noop_save(_t):
+            return None
+        pe.save_trade_to_db = _noop_save  # type: ignore[assignment]
+
+        await strategy._cancel_mirror_paper_trade(
+            token_id="tok_x", cond_id="cond_x",
+            size=5.0, live_fill_status="failed",
+        )
+
+        # Status must now be SOLD (prevents main_rdh from inserting as open)
+        assert trade.status == TradeStatus.SOLD
+        assert trade.exit_reason == "live_mirror_failed_failed"
+        assert trade.actual_pnl == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_cancel_refunds_balance(self) -> None:
+        """Balance must be refunded on mirror-cancel to prevent drift.
+
+        place_trade deducts (size + gas). mirror-cancel removes position
+        without fill. Without refund, balance drifts down each cancel.
+        """
+        from arbo.core.paper_engine import PaperTradingEngine
+
+        rm = MagicMock()
+        pe = PaperTradingEngine(initial_capital=Decimal("100"))
+        strategy = StrategyB3(risk_manager=rm, paper_engine=pe)
+
+        balance_before = pe.balance
+        trade = pe.place_trade(
+            market_condition_id="c", token_id="t",
+            side="BUY", market_price=Decimal("0.5"),
+            model_prob=Decimal("0.7"), layer=0,
+            market_category="crypto_5min",
+            pre_computed_size=Decimal("5"),
+            strategy="B3",
+        )
+        assert trade is not None
+        # Balance deducted
+        assert pe.balance < balance_before
+
+        async def _noop_save(_t):
+            return None
+        pe.save_trade_to_db = _noop_save  # type: ignore[assignment]
+
+        await strategy._cancel_mirror_paper_trade(
+            token_id="t", cond_id="c", size=5.0, live_fill_status="failed",
+        )
+
+        # Balance refunded: size + gas (0.007) returned
+        expected = balance_before  # Full refund restores starting balance
+        assert abs(pe.balance - expected) < Decimal("0.01"), (
+            f"Balance {pe.balance} != expected {expected} after cancel refund"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_sets_debounce(self) -> None:
+        """After cancel, token must be in _last_mirror_attempt with recent ts.
+
+        Prevents cascade: next poll cycle 5s later should see the debounce
+        and skip re-entry on this token.
+        """
+        rm = MagicMock()
+        pe = MagicMock()
+        pe._positions = {}
+        pe._trades = []
+
+        async def _noop_save(_t):
+            return None
+        pe.save_trade_to_db = _noop_save
+
+        strategy = StrategyB3(risk_manager=rm, paper_engine=pe)
+        assert "tok_y" not in strategy._last_mirror_attempt
+
+        await strategy._cancel_mirror_paper_trade(
+            token_id="tok_y", cond_id="c", size=5.0, live_fill_status="failed",
+        )
+
+        assert "tok_y" in strategy._last_mirror_attempt
+        now = time.time()
+        # Timestamp should be very recent (within last 1s)
+        assert now - strategy._last_mirror_attempt["tok_y"] < 1.0

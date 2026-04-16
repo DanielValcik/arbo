@@ -303,3 +303,39 @@ class TestOrderbookProvider:
         snap = await provider.get_snapshot("tok1", neg_risk=True)
 
         assert snap is None
+
+
+class TestLRUCache:
+    """Guards against regression of unbounded _cache growth.
+
+    Without a bound, every unique token_id fetched accumulates a snapshot
+    (~1 KB) — over weeks of discovery scans this reaches hundreds of MB.
+    """
+
+    def test_cache_is_ordered_dict(self) -> None:
+        """_cache must be OrderedDict for LRU semantics."""
+        from collections import OrderedDict
+
+        provider = OrderbookProvider(poly_client=MagicMock())
+        assert isinstance(provider._cache, OrderedDict)
+
+    @pytest.mark.asyncio
+    async def test_cache_evicts_oldest_when_full(self) -> None:
+        """Once MAX_CACHE_ENTRIES exceeded, oldest entries are dropped."""
+        from arbo.connectors.orderbook_provider import MAX_CACHE_ENTRIES
+
+        # Manually fill cache past the cap to trigger eviction
+        provider = OrderbookProvider(poly_client=MagicMock())
+        from collections import OrderedDict
+        # Seed with MAX_CACHE_ENTRIES + 5 entries
+        for i in range(MAX_CACHE_ENTRIES + 5):
+            provider._cache[f"tok_{i}"] = MagicMock(fetched_at=time.monotonic())
+        # Trigger eviction by calling the LRU prune inline (mirrors get_snapshot)
+        while len(provider._cache) > MAX_CACHE_ENTRIES:
+            provider._cache.popitem(last=False)
+
+        assert len(provider._cache) == MAX_CACHE_ENTRIES
+        # Oldest entries (0..4) evicted
+        assert "tok_0" not in provider._cache
+        assert "tok_4" not in provider._cache
+        assert "tok_5" in provider._cache

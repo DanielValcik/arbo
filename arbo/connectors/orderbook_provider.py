@@ -14,6 +14,7 @@ For non-NegRisk markets, it uses the actual orderbook.
 from __future__ import annotations
 
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -24,6 +25,12 @@ if TYPE_CHECKING:
     from arbo.connectors.polymarket_client import PolymarketClient
 
 logger = get_logger("orderbook_provider")
+
+# LRU cap: unbounded cache would leak ~1 KB per unique token_id seen — over
+# weeks of discovery scans this reaches hundreds of MB. 1000 entries covers
+# the actively-traded universe (typically <500 live markets) with headroom
+# for concurrent event enumeration.
+MAX_CACHE_ENTRIES = 1000
 
 
 @dataclass
@@ -64,7 +71,10 @@ class OrderbookProvider:
     ) -> None:
         self._client = poly_client
         self._cache_ttl = cache_ttl_s
-        self._cache: dict[str, OrderbookSnapshot] = {}
+        # LRU cache: OrderedDict + move_to_end on access, popitem(last=False)
+        # on overflow. Prevents unbounded growth from discovery scans touching
+        # thousands of unique tokens (observed: ~100 MB/h steady leak).
+        self._cache: OrderedDict[str, OrderbookSnapshot] = OrderedDict()
 
     def invalidate(self, token_id: str) -> None:
         """Remove a token from the cache to force a fresh fetch."""
@@ -92,6 +102,7 @@ class OrderbookProvider:
         if cached is not None:
             age = time.monotonic() - cached.fetched_at
             if age < self._cache_ttl:
+                self._cache.move_to_end(token_id)  # LRU touch
                 return cached
 
         try:
@@ -102,6 +113,10 @@ class OrderbookProvider:
 
             if snap is not None:
                 self._cache[token_id] = snap
+                self._cache.move_to_end(token_id)
+                # Evict oldest if over bound
+                while len(self._cache) > MAX_CACHE_ENTRIES:
+                    self._cache.popitem(last=False)
             return snap
 
         except Exception as e:

@@ -35,6 +35,7 @@ from arbo.strategies.b3_quality_gate import (
     MAX_SHARES,
     MIN_ENTRY_MKT_FV,
     MIN_ORDER_SIZE,
+    MIRROR_CANCEL_DEBOUNCE,
     POSITION_PCT,
     PROFIT_TARGET,
     REENTRY_COOLDOWN,
@@ -152,6 +153,16 @@ class StrategyB3:
         self._open_positions: dict[str, B3Position] = {}  # token_id → position
         self._live_holding: dict[str, B3Position] = {}  # live positions waiting for resolution
         self._last_exit_time: dict[str, float] = {}  # condition_id → timestamp
+        # Debounce: after a mirror-cancel (live failed to fill), block re-entry
+        # on the same token for MIRROR_CANCEL_DEBOUNCE seconds. Without this,
+        # signal generator keeps triggering on the same token every poll cycle
+        # (5s), creating cascade duplicates (observed: 4 trades in 16s).
+        self._last_mirror_attempt: dict[str, float] = {}  # token_id → timestamp
+        # Orphan sweeper throttle: run at most every 15 min. Sweeper catches
+        # champion rows stuck status=open past event_end_ts (mirror-cancel
+        # legacy, restart survivors). Fixes silent data corruption where
+        # unresolved paper_trades accumulate without affecting real capital.
+        self._last_orphan_sweep: float = 0.0
 
         # Phase 2B: variant pool cache (champion + challengers)
         self._variants_cache: list = []
@@ -766,6 +777,14 @@ class StrategyB3:
             if event_tokens & set(self._open_positions.keys()):
                 continue
 
+            # Mirror-cancel debounce: after live failed to fill in mirror mode,
+            # block re-entry on this token for MIRROR_CANCEL_DEBOUNCE seconds.
+            # Without this, stale signal on same token keeps triggering every
+            # poll cycle → cascade duplicates in DB.
+            last_mirror_attempt = self._last_mirror_attempt.get(token_id, 0)
+            if now - last_mirror_attempt < MIRROR_CANCEL_DEBOUNCE:
+                continue
+
             # Re-entry cooldown
             last_exit = self._last_exit_time.get(sig.condition_id, 0)
             if now - last_exit < REENTRY_COOLDOWN * 60:
@@ -1132,19 +1151,22 @@ class StrategyB3:
                     live_size = min(
                         self._live_capital * raw_pct, MAX_BET_SIZE,
                     )
-                    # Dynamic min order size: 1.5% of live capital, clamped
-                    # to [$2, $10]. Scales risk floor with portfolio size:
-                    # - Wallet $100 → $2 min (1.5% × 100 floored at $2)
-                    # - Wallet $200 → $3 min
-                    # - Wallet $500 → $7.5 min
-                    # - Wallet >$666 → $10 min (cap to prevent over-conservative)
-                    # Floor at $2 gives margin above Polymarket's $1 platform min.
-                    dynamic_min = max(2.0, min(10.0, self._live_capital * 0.015))
+                    # Dynamic min order size: larger of
+                    #   (a) wallet-scaled floor: 1.5% of capital, clamped [$2, $10]
+                    #   (b) Polymarket 5-share minimum: 5 × entry_price
+                    # (b) is the hard platform constraint — without it, live
+                    # executor produces <5 shares → "Size (N) lower than the
+                    # minimum: 5" rejection. Observed 19× before this fix.
+                    # +1 cent safety buffer protects against int() rounding.
+                    wallet_floor = max(2.0, min(10.0, self._live_capital * 0.015))
+                    shares_floor = 5.0 * entry_price + 0.01
+                    dynamic_min = max(wallet_floor, shares_floor)
                     if live_size < dynamic_min:
                         live_fill_status = "too_small"
                         raise ValueError(
-                            f"Live size ${live_size:.2f} < dynamic min ${dynamic_min:.2f} "
-                            f"(1.5% of ${self._live_capital:.0f} wallet)"
+                            f"Live size ${live_size:.2f} < dynamic min "
+                            f"${dynamic_min:.2f} (wallet_floor=${wallet_floor:.2f}, "
+                            f"shares_floor=${shares_floor:.2f} for price {entry_price:.3f})"
                         )
                     fill = await self._live_executor.buy(
                         token_id=token_id,
@@ -1476,24 +1498,53 @@ class StrategyB3:
     ) -> None:
         """Unwind paper trade when live failed to fill (mirror mode).
 
-        Removes from paper_engine in-memory state, updates DB row to
-        status='sold' with exit_reason='live_mirror_failed' and pnl=0.
-        Prevents paper metrics from showing phantom trades where live
-        had no execution.
+        Ordering invariant (fixes orphan bug):
+        1. Mark in-memory PaperTrade status=SOLD + exit_reason. This blocks
+           main_rdh's save loop from inserting it as status=open later.
+        2. Save to DB directly with status=sold. Creates the authoritative
+           DB row in one shot — no UPDATE race with save.
+        3. Debounce re-entry on this token (120s) to prevent signal cascade.
+
+        Previous bug: update_resolved_trades_in_db fired before save_trade_to_db
+        (main_rdh runs save after poll_cycle returns), so UPDATE matched 0 rows
+        and the subsequent save inserted with status=open → orphan forever.
         """
+        from datetime import datetime, timezone
         try:
-            if (self._paper_engine
-                    and hasattr(self._paper_engine, "_positions")
-                    and token_id in self._paper_engine._positions):
-                del self._paper_engine._positions[token_id]
-            if self._paper_engine:
-                await self._paper_engine.update_resolved_trades_in_db(
-                    token_id=token_id,
-                    winning=None,
-                    pnl=Decimal("0"),
-                    exit_price=None,
-                    exit_reason=f"live_mirror_failed_{live_fill_status}",
-                )
+            # 1. Mark in-memory trade SOLD (main_rdh skips non-open trades).
+            matched_trade = None
+            if self._paper_engine is not None:
+                from arbo.core.paper_engine import POLYGON_GAS_COST_USD, TradeStatus
+                for t in reversed(self._paper_engine._trades):
+                    if t.token_id == token_id and t.status == TradeStatus.OPEN:
+                        t.status = TradeStatus.SOLD
+                        t.actual_pnl = Decimal("0")
+                        t.exit_reason = f"live_mirror_failed_{live_fill_status}"
+                        t.resolved_at = datetime.now(timezone.utc)
+                        matched_trade = t
+                        break
+                # Refund balance: place_trade deducted (size + gas) for this
+                # champion trade, and the position never materialized in live.
+                # Without refund, each mirror-cancel leaks ~$3-5 from paper
+                # balance → over hundreds of cancels, sizing underfunds future
+                # trades. load_state_from_db recomputes on restart but runtime
+                # drift matters for in-session accounting.
+                if matched_trade is not None and token_id in self._paper_engine._positions:
+                    self._paper_engine._balance += (
+                        matched_trade.size + POLYGON_GAS_COST_USD
+                    )
+                # Remove in-memory position if any (mirror mode may have created one)
+                self._paper_engine._positions.pop(token_id, None)
+
+            # 2. Persist cancel directly — inserts with status=sold, avoids
+            #    the UPDATE-before-INSERT race.
+            if self._paper_engine and matched_trade is not None:
+                await self._paper_engine.save_trade_to_db(matched_trade)
+
+            # 3. Debounce re-entry on this token to prevent cascade.
+            self._last_mirror_attempt[token_id] = time.time()
+
+            # Risk manager bookkeeping unchanged
             if self._risk_manager:
                 try:
                     self._risk_manager.post_trade_update(
@@ -1512,6 +1563,7 @@ class StrategyB3:
                 "b3_mirror_paper_cancelled",
                 token=token_id[:20],
                 live_fill_status=live_fill_status,
+                trade_id=getattr(matched_trade, "id", None),
                 reason="paper unwound to match live no-fill outcome",
             )
         except Exception as e:
@@ -1697,6 +1749,16 @@ class StrategyB3:
             await self._resolve_variant_positions()
         except Exception as _e:
             logger.debug("b3_variant_resolve_error", error=str(_e))
+
+        # Champion orphan sweeper — runs regardless of _open_positions state
+        # (orphans exist precisely when in-memory tracking is lost/empty).
+        now_tick = time.time()
+        if now_tick - self._last_orphan_sweep > 900:
+            self._last_orphan_sweep = now_tick
+            try:
+                await self._sweep_champion_orphans()
+            except Exception as _e:
+                logger.warning("b3_orphan_sweep_error", error=str(_e))
 
         if not self._open_positions and not self._live_holding:
             return []
@@ -1894,6 +1956,127 @@ class StrategyB3:
             logger.debug("b3_variant_resolve_error", error=str(_e))
 
         return triggered
+
+    async def _sweep_champion_orphans(self) -> None:
+        """Resolve champion paper_trades stuck status=open past event_end_ts.
+
+        Two orphan sources:
+          (1) Mirror-cancel legacy — pre-fix rows where UPDATE fired before
+              INSERT and left trade status=open with live_fill_status=failed.
+          (2) Restart survivors — service died with open champion positions;
+              _open_positions is in-memory (not DB-backed), so after restart
+              B3 has no knowledge of them. paper_engine.load_state_from_db
+              restores _positions table but that's a separate concern.
+
+        This sweeper queries DB directly, resolves via Binance (paper-only
+        live_shares=0) or Chainlink (live_shares>0), updates each row via
+        update_trade_by_id. No in-memory state reconstruction needed —
+        orphans are terminal, we just finalize them.
+        """
+        if self._paper_engine is None:
+            return
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+        now_ts = time.time()
+        factory = get_session_factory()
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT id, market_condition_id, token_id,
+                               trade_details->>'direction' AS direction,
+                               (trade_details->>'btc_at_start')::float AS btc_at_start,
+                               (trade_details->>'event_end_ts')::float AS event_end_ts,
+                               (trade_details->>'event_start_ts')::float AS event_start_ts,
+                               COALESCE((trade_details->>'live_entry_shares')::int, 0) AS live_shares,
+                               size AS size_usd,
+                               price AS entry_price
+                        FROM paper_trades
+                        WHERE strategy = 'B3'
+                          AND status = 'open'
+                          AND (trade_details->>'is_shadow_variant' IS NULL
+                               OR trade_details->>'is_shadow_variant' != 'true')
+                          AND (trade_details->>'event_end_ts')::float IS NOT NULL
+                          AND (trade_details->>'event_end_ts')::float < :now
+                        LIMIT 50
+                    """),
+                    {"now": now_ts},
+                )
+                orphans = list(result.mappings())
+        except Exception as e:
+            logger.warning("b3_orphan_query_error", error=str(e))
+            return
+
+        if not orphans:
+            return
+
+        logger.info("b3_orphan_sweep_start", count=len(orphans))
+        resolved_count = 0
+        # Cache per-event resolution to avoid duplicate oracle calls
+        resolution_cache: dict[float, bool | None] = {}
+
+        for row in orphans:
+            event_start = row["event_start_ts"]
+            if event_start is None or event_start == 0:
+                event_start = float(row["event_end_ts"]) - WINDOW_MIN * 60
+
+            direction = 1 if row["direction"] == "up" else -1
+
+            # Resolution: always use Polymarket oracle (Chainlink via scanner).
+            # Why not Binance fallback? For stale orphans the "current" BTC
+            # price is not the resolution price — we'd need historical klines
+            # at event_end_ts. Polymarket's Chainlink oracle is already the
+            # authoritative resolution snapshot; if unavailable, skip and
+            # retry next sweep (throttle is 15 min, so eventually resolves).
+            # live_shares distinction is irrelevant for resolution correctness.
+            if event_start in resolution_cache:
+                up_won = resolution_cache[event_start]
+            else:
+                try:
+                    up_won = await asyncio.wait_for(
+                        self._scanner.fetch_resolution(event_start),
+                        timeout=10,
+                    )
+                except Exception:
+                    up_won = None
+                resolution_cache[event_start] = up_won
+
+            if up_won is None:
+                # Skip — retry next sweep
+                continue
+
+            won = (direction == 1 and up_won) or (direction == -1 and not up_won)
+            exit_price = 1.0 if won else 0.0
+
+            # PnL: for paper-only (live_shares=0), assume paper fill at price,
+            # shares derived from size/price. For live, actual shares matter.
+            try:
+                if live_shares > 0:
+                    shares = live_shares
+                else:
+                    entry_p = float(row["entry_price"] or 0)
+                    size_usd = float(row["size_usd"] or 0)
+                    shares = int(size_usd / entry_p) if entry_p > 0 else 0
+                entry_p = float(row["entry_price"] or 0)
+                pnl = shares * (exit_price - entry_p)
+
+                await self._paper_engine.update_trade_by_id(
+                    trade_id=int(row["id"]),
+                    status="won" if won else "lost",
+                    actual_pnl=Decimal(str(round(pnl, 4))),
+                    exit_price=Decimal(str(exit_price)),
+                    exit_reason="orphan_sweep",
+                )
+                resolved_count += 1
+            except Exception as e:
+                logger.warning(
+                    "b3_orphan_resolve_error",
+                    trade_id=row["id"], error=str(e),
+                )
+
+        if resolved_count > 0:
+            logger.info("b3_orphan_sweep_done", resolved=resolved_count,
+                        total_found=len(orphans))
 
     async def _resolve_variant_positions(self) -> None:
         """Resolve per-variant paper positions at event end.

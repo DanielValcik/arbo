@@ -37,6 +37,7 @@ from arbo.strategies.b3_15m_quality_gate import (
     MAX_SHARES,
     MIN_ENTRY_MKT_FV,
     MIN_ORDER_SIZE,
+    MIRROR_CANCEL_DEBOUNCE,
     POSITION_PCT,
     PROFIT_TARGET,
     REENTRY_COOLDOWN,
@@ -155,6 +156,10 @@ class StrategyB315M:
         self._variants_cache_ts_b3_15m: float = 0.0
         self._live_holding: dict[str, B315MPosition] = {}  # live positions waiting for resolution
         self._last_exit_time: dict[str, float] = {}  # condition_id → timestamp
+        # Debounce re-entry after mirror-cancel (see strategy_b3.py for rationale).
+        self._last_mirror_attempt: dict[str, float] = {}  # token_id → timestamp
+        # Orphan sweeper throttle (see strategy_b3.py for rationale).
+        self._last_orphan_sweep: float = 0.0
 
     async def init(self) -> None:
         """Initialize scanner and restore state."""
@@ -397,22 +402,35 @@ class StrategyB315M:
     ) -> None:
         """Unwind paper trade when live failed to fill (mirror mode).
 
-        Same semantics as B3 5-min variant. Keeps paper <-> live 1:1
-        comparability in partial/error edge cases.
+        Same invariants as B3 5-min variant (see strategy_b3._cancel_mirror_*
+        for full rationale — fixes orphan creation when UPDATE fires before
+        INSERT via main_rdh save loop).
         """
+        from datetime import datetime, timezone
         try:
-            if (self._paper_engine
-                    and hasattr(self._paper_engine, "_positions")
-                    and token_id in self._paper_engine._positions):
-                del self._paper_engine._positions[token_id]
-            if self._paper_engine:
-                await self._paper_engine.update_resolved_trades_in_db(
-                    token_id=token_id,
-                    winning=None,
-                    pnl=Decimal("0"),
-                    exit_price=None,
-                    exit_reason=f"live_mirror_failed_{live_fill_status}",
-                )
+            matched_trade = None
+            if self._paper_engine is not None:
+                from arbo.core.paper_engine import POLYGON_GAS_COST_USD, TradeStatus
+                for t in reversed(self._paper_engine._trades):
+                    if t.token_id == token_id and t.status == TradeStatus.OPEN:
+                        t.status = TradeStatus.SOLD
+                        t.actual_pnl = Decimal("0")
+                        t.exit_reason = f"live_mirror_failed_{live_fill_status}"
+                        t.resolved_at = datetime.now(timezone.utc)
+                        matched_trade = t
+                        break
+                # Refund balance (see strategy_b3._cancel_mirror_paper_trade).
+                if matched_trade is not None and token_id in self._paper_engine._positions:
+                    self._paper_engine._balance += (
+                        matched_trade.size + POLYGON_GAS_COST_USD
+                    )
+                self._paper_engine._positions.pop(token_id, None)
+
+            if self._paper_engine and matched_trade is not None:
+                await self._paper_engine.save_trade_to_db(matched_trade)
+
+            self._last_mirror_attempt[token_id] = time.time()
+
             if self._risk_manager:
                 try:
                     self._risk_manager.post_trade_update(
@@ -429,7 +447,9 @@ class StrategyB315M:
                     pass
             logger.info(
                 "b3_15m_mirror_paper_cancelled",
-                token=token_id[:20], live_fill_status=live_fill_status,
+                token=token_id[:20],
+                live_fill_status=live_fill_status,
+                trade_id=getattr(matched_trade, "id", None),
             )
         except Exception as e:
             logger.warning("b3_15m_cancel_mirror_error", error=str(e))
@@ -547,6 +567,11 @@ class StrategyB315M:
             # Check any position in this event (up OR down)
             event_tokens = {sig.token_id_up, sig.token_id_down}
             if event_tokens & set(self._open_positions.keys()):
+                continue
+
+            # Mirror-cancel debounce (see strategy_b3.py for rationale).
+            last_mirror_attempt = self._last_mirror_attempt.get(token_id, 0)
+            if now - last_mirror_attempt < MIRROR_CANCEL_DEBOUNCE:
                 continue
 
             # Re-entry cooldown
@@ -896,16 +921,19 @@ class StrategyB315M:
                     live_size = min(
                         self._live_capital * raw_pct, MAX_BET_SIZE,
                     )
-                    # Dynamic min order size: 1.5% of live capital, [$2, $10]
-                    # (scales risk floor with portfolio; Polymarket platform
-                    # min is $1, we leave margin). Applied consistently with
-                    # B3 5-min.
-                    dynamic_min = max(2.0, min(10.0, self._live_capital * 0.015))
+                    # Dynamic min order size: larger of wallet-scaled floor
+                    # and Polymarket 5-share minimum (see strategy_b3.py for
+                    # full rationale). Fixes "Size (N) lower than minimum: 5"
+                    # rejections when live_size produces <5 shares.
+                    wallet_floor = max(2.0, min(10.0, self._live_capital * 0.015))
+                    shares_floor = 5.0 * entry_price + 0.01
+                    dynamic_min = max(wallet_floor, shares_floor)
                     if live_size < dynamic_min:
                         live_fill_status = "too_small"
                         raise ValueError(
-                            f"Live size ${live_size:.2f} < dynamic min ${dynamic_min:.2f} "
-                            f"(1.5% of ${self._live_capital:.0f} wallet)"
+                            f"Live size ${live_size:.2f} < dynamic min "
+                            f"${dynamic_min:.2f} (wallet_floor=${wallet_floor:.2f}, "
+                            f"shares_floor=${shares_floor:.2f} for price {entry_price:.3f})"
                         )
                     fill = await self._live_executor.buy(
                         token_id=token_id,
@@ -1557,6 +1585,15 @@ class StrategyB315M:
         except Exception as _e:
             logger.debug("b3_15m_variant_resolve_error", error=str(_e))
 
+        # Champion orphan sweeper — runs regardless of in-memory state.
+        now_tick = time.time()
+        if now_tick - self._last_orphan_sweep > 900:
+            self._last_orphan_sweep = now_tick
+            try:
+                await self._sweep_champion_orphans_15m()
+            except Exception as _e:
+                logger.warning("b3_15m_orphan_sweep_error", error=str(_e))
+
         if not self._open_positions and not self._live_holding:
             return []
 
@@ -1753,6 +1790,109 @@ class StrategyB315M:
             logger.debug("b3_15m_variant_resolve_error", error=str(_e))
 
         return triggered
+
+    async def _sweep_champion_orphans_15m(self) -> None:
+        """Resolve B3_15M champion paper_trades stuck open past event_end_ts.
+
+        See strategy_b3._sweep_champion_orphans for full rationale. Identical
+        logic but filters on strategy='B3_15M' and uses 15-min WINDOW_MIN.
+        """
+        if self._paper_engine is None:
+            return
+        from arbo.utils.db import get_session_factory
+        import sqlalchemy as sa
+        now_ts = time.time()
+        factory = get_session_factory()
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    sa.text("""
+                        SELECT id, market_condition_id, token_id,
+                               trade_details->>'direction' AS direction,
+                               (trade_details->>'btc_at_start')::float AS btc_at_start,
+                               (trade_details->>'event_end_ts')::float AS event_end_ts,
+                               (trade_details->>'event_start_ts')::float AS event_start_ts,
+                               COALESCE((trade_details->>'live_entry_shares')::int, 0) AS live_shares,
+                               size AS size_usd,
+                               price AS entry_price
+                        FROM paper_trades
+                        WHERE strategy = 'B3_15M'
+                          AND status = 'open'
+                          AND (trade_details->>'is_shadow_variant' IS NULL
+                               OR trade_details->>'is_shadow_variant' != 'true')
+                          AND (trade_details->>'event_end_ts')::float IS NOT NULL
+                          AND (trade_details->>'event_end_ts')::float < :now
+                        LIMIT 50
+                    """),
+                    {"now": now_ts},
+                )
+                orphans = list(result.mappings())
+        except Exception as e:
+            logger.warning("b3_15m_orphan_query_error", error=str(e))
+            return
+
+        if not orphans:
+            return
+
+        logger.info("b3_15m_orphan_sweep_start", count=len(orphans))
+        resolved_count = 0
+        resolution_cache: dict[float, bool | None] = {}
+
+        for row in orphans:
+            event_start = row["event_start_ts"]
+            if event_start is None or event_start == 0:
+                event_start = float(row["event_end_ts"]) - WINDOW_MIN * 60
+
+            direction = 1 if row["direction"] == "up" else -1
+
+            # Always use Polymarket oracle (see strategy_b3._sweep_champion_
+            # orphans for rationale — Binance current price is wrong for
+            # stale orphans).
+            if event_start in resolution_cache:
+                up_won = resolution_cache[event_start]
+            else:
+                try:
+                    up_won = await asyncio.wait_for(
+                        self._scanner.fetch_resolution(event_start),
+                        timeout=10,
+                    )
+                except Exception:
+                    up_won = None
+                resolution_cache[event_start] = up_won
+
+            if up_won is None:
+                continue
+
+            won = (direction == 1 and up_won) or (direction == -1 and not up_won)
+            exit_price = 1.0 if won else 0.0
+
+            try:
+                if live_shares > 0:
+                    shares = live_shares
+                else:
+                    entry_p = float(row["entry_price"] or 0)
+                    size_usd = float(row["size_usd"] or 0)
+                    shares = int(size_usd / entry_p) if entry_p > 0 else 0
+                entry_p = float(row["entry_price"] or 0)
+                pnl = shares * (exit_price - entry_p)
+
+                await self._paper_engine.update_trade_by_id(
+                    trade_id=int(row["id"]),
+                    status="won" if won else "lost",
+                    actual_pnl=Decimal(str(round(pnl, 4))),
+                    exit_price=Decimal(str(exit_price)),
+                    exit_reason="orphan_sweep",
+                )
+                resolved_count += 1
+            except Exception as e:
+                logger.warning(
+                    "b3_15m_orphan_resolve_error",
+                    trade_id=row["id"], error=str(e),
+                )
+
+        if resolved_count > 0:
+            logger.info("b3_15m_orphan_sweep_done", resolved=resolved_count,
+                        total_found=len(orphans))
 
     async def sell_live_position(
         self, token_id: str, exit_reason: str, paper_exit_price: float,

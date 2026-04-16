@@ -8,6 +8,7 @@ See brief PM-004 for full specification.
 
 from __future__ import annotations
 
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,6 +20,15 @@ from arbo.utils.logger import get_logger
 from arbo.utils.odds import half_kelly
 
 logger = get_logger("paper_engine")
+
+# Bounded in-memory caches. DB (paper_trades table) is the authoritative store —
+# these structures exist only for fast lookup during a single session. Without
+# bounds, steady-state operation leaks ~100 MB/h (observed empirically over 17h
+# uptime, 1.8 GB RSS reached). Each bound is conservative enough that the
+# working set fits in memory for weeks while avoiding unbounded growth.
+MAX_TRADES_IN_MEMORY = 10000           # ~10 MB at typical PaperTrade size
+MAX_SNAPSHOTS_IN_MEMORY = 2000         # Hourly snapshots × ~83 days
+MAX_TRADE_DETAILS_CACHE = 5000         # Open-position fallback lookup only
 
 # Polygon gas cost per transaction (~$0.007)
 POLYGON_GAS_COST_USD = Decimal("0.007")
@@ -123,13 +133,19 @@ class PaperTradingEngine:
         self._balance = initial_capital  # available USDC
         self._slippage_pct = slippage_pct
         self._risk_manager = risk_manager
-        self._trades: list[PaperTrade] = []
+        # Bounded: deque drops oldest entries when full. DB is authoritative
+        # for full trade history; this list only buffers recent trades for
+        # in-process operations (match by token_id during resolution, etc.).
+        self._trades: deque[PaperTrade] = deque(maxlen=MAX_TRADES_IN_MEMORY)
         self._positions: dict[str, PaperPosition] = {}  # key: token_id
-        self._snapshots: list[PortfolioSnapshot] = []
+        self._snapshots: deque[PortfolioSnapshot] = deque(maxlen=MAX_SNAPSHOTS_IN_MEMORY)
         self._next_trade_id = 1
         self._per_layer_realized_pnl: dict[int, Decimal] = {}
         self._per_strategy_realized_pnl: dict[str, Decimal] = {}
-        self._trade_details_cache: dict[str, dict] = {}  # token_id → trade_details
+        # LRU: OrderedDict used as bounded cache (move_to_end on access,
+        # popitem(last=False) to evict oldest). trade_details is read-mostly,
+        # so occasional eviction is fine — falls back to DB query if missing.
+        self._trade_details_cache: OrderedDict[str, dict] = OrderedDict()
 
     @property
     def balance(self) -> Decimal:
@@ -540,8 +556,11 @@ class PaperTradingEngine:
         for trade in reversed(self._trades):
             if trade.token_id == token_id and trade.status == TradeStatus.OPEN:
                 return trade.trade_details
-        # Fallback: DB cache (loaded at startup)
-        return self._trade_details_cache.get(token_id)
+        # Fallback: DB cache (loaded at startup). LRU touch on hit.
+        td = self._trade_details_cache.get(token_id)
+        if td is not None:
+            self._trade_details_cache.move_to_end(token_id)
+        return td
 
     def update_position_price(self, token_id: str, current_price: Decimal) -> None:
         """Update current price for an open position (for unrealized P&L)."""
@@ -848,7 +867,11 @@ class PaperTradingEngine:
                     )
                     for td_row in td_result:
                         if td_row[1] and isinstance(td_row[1], dict):
+                            # LRU insert with eviction
                             self._trade_details_cache[td_row[0]] = td_row[1]
+                            self._trade_details_cache.move_to_end(td_row[0])
+                            if len(self._trade_details_cache) > MAX_TRADE_DETAILS_CACHE:
+                                self._trade_details_cache.popitem(last=False)
                     logger.info(
                         "trade_details_cache_loaded",
                         cached=len(self._trade_details_cache),

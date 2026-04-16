@@ -495,3 +495,64 @@ class TestBalanceFloor:
                 model_prob=Decimal("0.60"),
             )
         assert engine.balance >= Decimal("0")
+
+
+# ================================================================
+# Bounded collections (memory leak prevention)
+# ================================================================
+
+
+class TestBoundedCollections:
+    """Guards against unbounded growth of in-process caches.
+
+    Regression: observed 100 MB/h steady leak from unbounded _trades list,
+    _snapshots list, and _trade_details_cache dict. DB is authoritative —
+    these are in-process buffers only.
+    """
+
+    def test_trades_deque_bounded(self) -> None:
+        """_trades must be a deque with maxlen, not an unbounded list."""
+        from collections import deque
+
+        from arbo.core.paper_engine import MAX_TRADES_IN_MEMORY
+
+        engine = PaperTradingEngine(initial_capital=Decimal("10000"))
+        assert isinstance(engine._trades, deque)
+        assert engine._trades.maxlen == MAX_TRADES_IN_MEMORY
+
+    def test_snapshots_deque_bounded(self) -> None:
+        """_snapshots must be a deque with maxlen."""
+        from collections import deque
+
+        from arbo.core.paper_engine import MAX_SNAPSHOTS_IN_MEMORY
+
+        engine = PaperTradingEngine(initial_capital=Decimal("10000"))
+        assert isinstance(engine._snapshots, deque)
+        assert engine._snapshots.maxlen == MAX_SNAPSHOTS_IN_MEMORY
+
+    def test_trades_deque_drops_oldest_when_full(self) -> None:
+        """deque with maxlen evicts oldest on overflow (FIFO)."""
+        engine = PaperTradingEngine(initial_capital=Decimal("100000"))
+        # Stub out the maxlen for a fast test
+        from collections import deque
+        engine._trades = deque(maxlen=3)
+
+        for i in range(5):
+            _place_trade(
+                engine,
+                token_id=f"t_{i}",
+                market_price=Decimal("0.50"),
+                model_prob=Decimal("0.60"),
+            )
+
+        # Only last 3 should remain (0 and 1 evicted)
+        assert len(engine._trades) == 3
+        tokens = [t.token_id for t in engine._trades]
+        assert tokens == ["t_2", "t_3", "t_4"]
+
+    def test_trade_details_cache_is_lru(self) -> None:
+        """_trade_details_cache must be OrderedDict (LRU semantics)."""
+        from collections import OrderedDict
+
+        engine = PaperTradingEngine(initial_capital=Decimal("1000"))
+        assert isinstance(engine._trade_details_cache, OrderedDict)

@@ -83,5 +83,10 @@ WINDOW_MIN = 15                   # 15-minute windows (vs 5 on B3)
 # Re-entry
 REENTRY_COOLDOWN = 3              # Slightly higher than 5-min (longer window absorbs reentries)
 
+# Mirror-cancel debounce (see strategy_b3.py for rationale).
+# 15-min windows are longer-lived; 120s matches 5-min variant — both prevent
+# signal cascade on same token after a live fill failure.
+MIRROR_CANCEL_DEBOUNCE = 120
+
 # Strategy
 STRATEGY_NAME = "B3_15M"
