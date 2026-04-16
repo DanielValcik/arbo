@@ -2550,6 +2550,28 @@ class RDHOrchestrator:
         if not b2_positions:
             return
 
+        # Ensure live_executor is initialized and positions are synced with
+        # the CLOB BEFORE deciding the paper-vs-live routing below. Without
+        # this, a freshly-restarted service sees _shares_owned={} and takes
+        # the paper fallback on every exit — even though the CLOB still
+        # holds the shares. That created "phantom closed" paper rows and
+        # misleading Slack messages. _ensure_clob is idempotent (no-op if
+        # already initialized), so this is cheap after the first call.
+        if (
+            self._strategy_b2._execution_mode in ("dual", "live")
+            and self._strategy_b2._live_executor is not None
+        ):
+            le = self._strategy_b2._live_executor
+            try:
+                if getattr(le, "_clob", None) is None:
+                    await le._ensure_clob()
+                elif not le._shares_owned:
+                    # Clob already built but positions dict is empty —
+                    # explicitly sync once so we have an accurate view.
+                    await le._sync_positions()
+            except Exception as e:
+                logger.warning("b2_live_executor_sync_failed", error=str(e))
+
         token_ids = [p.token_id for p in b2_positions]
         # Use /price endpoint (neg_risk=True forces it) — RFQM pricing
         snapshots = await self._orderbook_provider.get_snapshots_batch(
@@ -2657,23 +2679,27 @@ class RDHOrchestrator:
                     token_id=token_id, pnl=pnl,
                     exit_price=D(str(bid_price)), exit_reason=exit_reason,
                 )
-                # Edge case: was_live trade taking the paper path (shares
-                # vanished from CLOB — already redeemed or manually sold).
-                # Still send Slack so user sees the exit.
-                if was_live and self._slack_bot:
-                    try:
-                        await self._notify_b2_live_resolve(
-                            asset=b2_pos.asset if b2_pos else "?",
-                            strike=float(b2_pos.strike) if b2_pos else 0,
-                            direction=b2_pos.direction if b2_pos else "?",
-                            exit_reason=exit_reason,
-                            entry_price=b2_pos.live_entry_price if b2_pos else 0.0,
-                            exit_price=float(bid_price),
-                            shares=b2_pos.live_shares if b2_pos else 0,
-                            pnl=float(pnl),
-                        )
-                    except Exception as e:
-                        logger.debug("b2_slack_resolve_error", error=str(e))
+                # No "B2 LIVE SELL" Slack here. If was_live=True we took the
+                # paper path — meaning live_executor._shares_owned said 0 for
+                # this token (not yet synced post-restart, or shares already
+                # auto-redeemed). The real CLOB position may still exist;
+                # claiming a LIVE SELL happened would be a lie. Log it so
+                # we can reconcile later.
+                if was_live:
+                    logger.warning(
+                        "b2_paper_closed_live_held",
+                        token=token_id[:20],
+                        paper_pnl=float(pnl),
+                        shares=b2_pos.live_shares if b2_pos else 0,
+                        entry=b2_pos.live_entry_price if b2_pos else 0,
+                        exit_paper=float(bid_price),
+                        reason=exit_reason,
+                        msg=(
+                            "Paper marked sold but live position likely still on "
+                            "CLOB — ExitManager was not ready. Will reconcile at "
+                            "next _sync_positions or auto-redeem."
+                        ),
+                    )
 
         # Process pending exits (shared ExitManager) — any dual/live mode
         # position whose exit was registered above now runs through the
