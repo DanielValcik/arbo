@@ -1373,27 +1373,77 @@
                 </div>
             </div>
 
-            <!-- B2 Cumulative P&L Chart -->
+            <!-- ═════ TOTAL (all trades, historical view) ═════ -->
             <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title">Kumulativni P&L</div>
+                <div class="card-title">Kumulativni P&L — Total (paper + live)
+                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Historický přehled celé strategie</span>
+                </div>
                 <div class="chart-container" style="height:180px">
                     <canvas id="b2CumPnlChart"></canvas>
                 </div>
             </div>
 
-            <!-- B2 Per-Trade Cumulative P&L -->
             <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title">P&L po kazdem tradu (od $0)</div>
+                <div class="card-title">P&L po kazdem tradu — Total (od $0)</div>
                 <div class="chart-container" style="height:220px">
                     <canvas id="b2TradeByTradeChart"></canvas>
                 </div>
             </div>
 
-            <!-- B2 Daily Bar Chart -->
             <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L<span id="lb2AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L — Total<span id="lb2AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
                 <div class="chart-container" style="height:150px">
                     <canvas id="b2DailyPnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- ═════ LIVE ONLY (real capital, focus view) ═════ -->
+            <div class="card grid-full" style="border-top:3px solid var(--green);background:rgba(63,185,80,0.03)">
+                <div class="card-title" style="color:var(--green)">
+                    🟢 LIVE ONLY — Real capital
+                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px" id="lb2LiveSince">Čeká na first live trade</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px;font-size:11px">
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700;color:var(--green)" id="lb2LiveOnlyPnl">$0.00</div>
+                        <div style="color:var(--text-dim);font-size:10px">Live PnL</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700" id="lb2LiveOnlyTrades">0</div>
+                        <div style="color:var(--text-dim);font-size:10px">Trades closed</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700" id="lb2LiveOnlyWR">--</div>
+                        <div style="color:var(--text-dim);font-size:10px">Win rate</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700" id="lb2LiveOnlyOpen">0</div>
+                        <div style="color:var(--text-dim);font-size:10px">Open</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700" id="lb2LiveOnlyDeployed">$0</div>
+                        <div style="color:var(--text-dim);font-size:10px">Deployed</div>
+                    </div>
+                    <div style="text-align:center;padding:8px;background:rgba(63,185,80,0.08);border-radius:4px">
+                        <div style="font-size:20px;font-weight:700" id="lb2LiveOnlyAvg">--</div>
+                        <div style="color:var(--text-dim);font-size:10px">Avg/trade</div>
+                    </div>
+                </div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b2LiveCumChart"></canvas>
+                </div>
+                <div class="chart-container" style="height:200px;margin-top:8px">
+                    <canvas id="b2LiveTradeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- ═════ PAPER vs LIVE COMPARISON (same period, spread analysis) ═════ -->
+            <div class="card grid-full" style="border-top:3px solid var(--yellow)">
+                <div class="card-title">Paper vs Live — stejné období (od startu dual mode)
+                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Měří reálný dopad spreadu / slippage</span>
+                </div>
+                <div id="lb2PaperLiveComparison" style="padding:8px;font-size:12px;color:var(--text-dim)">
+                    Bude vypočítáno po prvních live exit resolutions.
                 </div>
             </div>
 
@@ -4061,6 +4111,164 @@
         }
     }
 
+    // Renders the dedicated "Live Only" section for B2 — independent scale
+    // so real-capital PnL isn't flattened by paper history. Idempotent
+    // (destroys any prior chart instances before redrawing).
+    function renderB2LiveOnlySection(evr, b2strat) {
+        if (typeof Chart === 'undefined' || !evr) return;
+        const live = evr.actual_live || {};
+        const liveSeries = evr.trade_series_live || [];
+        const daily = evr.daily_series || [];
+        // Cumulative live series from daily data (aligned with date axis)
+        const dailyLiveCum = daily.filter(d => (d.cumulative_live || 0) !== 0 || (d.pnl_live || 0) !== 0);
+        const hasAnyLive = (live.count || 0) > 0 || dailyLiveCum.length > 0 || liveSeries.length > 0;
+
+        // Summary stats
+        const livePnl = live.total_pnl || 0;
+        const pnlEl = document.getElementById('lb2LiveOnlyPnl');
+        if (pnlEl) {
+            pnlEl.textContent = (livePnl >= 0 ? '+$' : '-$') + Math.abs(livePnl).toFixed(2);
+            pnlEl.style.color = livePnl >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+        const setText = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+        setText('lb2LiveOnlyTrades', live.total_resolved || 0);
+        setText('lb2LiveOnlyWR', (live.total_resolved || 0) > 0 ? ((live.win_rate || 0) * 100).toFixed(0) + '%' : '--');
+        setText('lb2LiveOnlyAvg', (live.total_resolved || 0) > 0
+            ? ((live.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(live.avg_pnl_per_trade || 0).toFixed(2))
+            : '--');
+
+        // Open + deployed from /api/positions (strategy filter) — filter to live only
+        // Note: we approximate by using the open count from live.count minus closed
+        const openCount = Math.max(0, (live.count || 0) - (live.total_resolved || 0));
+        setText('lb2LiveOnlyOpen', openCount);
+
+        // Deployed estimate: sum of live_size_usd from still-open live trades.
+        // We only have the aggregate via the b2 strategy, not per-position in
+        // this payload. Fall back to b2strat.deployed if available.
+        setText('lb2LiveOnlyDeployed', b2strat ? ('$' + (b2strat.deployed || 0).toFixed(0)) : '$0');
+
+        // Since timestamp from first live trade
+        const sinceEl = document.getElementById('lb2LiveSince');
+        if (sinceEl) {
+            if (liveSeries.length > 0) {
+                const firstTs = liveSeries[0].ts;
+                sinceEl.textContent = 'Od ' + (firstTs ? firstTs.slice(0, 16).replace('T', ' ') : '?') + ' UTC';
+            } else {
+                sinceEl.textContent = 'Čeká na první live resoluci';
+            }
+        }
+
+        // Cumulative chart (daily, live-only)
+        const cumCtx = document.getElementById('b2LiveCumChart');
+        if (cumCtx) {
+            if (window._b2LiveCumChart) window._b2LiveCumChart.destroy();
+            if (dailyLiveCum.length > 0) {
+                const labels = dailyLiveCum.map(d => d.date ? d.date.slice(5) : '');
+                const values = dailyLiveCum.map(d => d.cumulative_live || 0);
+                window._b2LiveCumChart = new Chart(cumCtx, {
+                    type: 'line',
+                    data: { labels, datasets: [{ label: 'Live cumulative', data: values, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.12)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
+                });
+            } else {
+                const ctx = cumCtx.getContext('2d');
+                ctx.clearRect(0, 0, cumCtx.width, cumCtx.height);
+                ctx.fillStyle = '#8b949e';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Zatím žádné live exity — čeká se na první resoluci', cumCtx.width/2, cumCtx.height/2);
+            }
+        }
+
+        // Per-trade chart (live-only, from $0)
+        const tradeCtx = document.getElementById('b2LiveTradeChart');
+        if (tradeCtx) {
+            if (window._b2LiveTradeChart) window._b2LiveTradeChart.destroy();
+            if (liveSeries.length > 0) {
+                const sorted = [...liveSeries].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+                const labels = ['Start', ...sorted.map((_, i) => '#' + (i + 1))];
+                let cum = 0;
+                const values = [0];
+                for (const t of sorted) {
+                    cum += t.pnl;
+                    values.push(Math.round(cum * 100) / 100);
+                }
+                window._b2LiveTradeChart = new Chart(tradeCtx, {
+                    type: 'line',
+                    data: { labels, datasets: [{ label: 'Live P&L', data: values, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.15)', fill: true, tension: 0.1, pointRadius: values.length > 100 ? 1.5 : 3, borderWidth: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: { legend: {display: false},
+                            tooltip: { callbacks: { label: c => {
+                                const idx = c.dataIndex;
+                                if (idx === 0) return 'Start: $0';
+                                const t = sorted[idx-1];
+                                const sign = t.pnl >= 0 ? '+' : '';
+                                return `Trade #${idx}: ${sign}$${t.pnl.toFixed(2)} | Cum: $${c.parsed.y.toFixed(2)}`;
+                            } } } },
+                        scales: {
+                            x: { ticks: { color: '#8b949e', font: {size: 9}, maxTicksLimit: 15 }, grid: {color: 'rgba(48,54,61,0.3)'} },
+                            y: { ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2)}, grid: {color: 'rgba(48,54,61,0.5)'} }
+                        } }
+                });
+            } else {
+                const ctx = tradeCtx.getContext('2d');
+                ctx.clearRect(0, 0, tradeCtx.width, tradeCtx.height);
+                ctx.fillStyle = '#8b949e';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Zatím žádné live exity', tradeCtx.width/2, tradeCtx.height/2);
+            }
+        }
+
+        // Paper vs Live comparison (same period)
+        const cmpEl = document.getElementById('lb2PaperLiveComparison');
+        if (cmpEl) {
+            const paperOnly = evr.actual_paper_only || {};
+            if (hasAnyLive && (live.total_resolved || 0) > 0) {
+                // Compute divergence: paper vs live avg PnL per trade
+                const liveAvg = live.avg_pnl_per_trade || 0;
+                const paperAvg = paperOnly.avg_pnl_per_trade || 0;
+                const divergence = paperAvg !== 0 ? ((paperAvg - liveAvg) / Math.abs(paperAvg)) * 100 : 0;
+                const liveClass = liveAvg >= 0 ? 'style="color:var(--green);font-weight:700"' : 'style="color:var(--red);font-weight:700"';
+                const paperClass = paperAvg >= 0 ? 'style="color:var(--green);font-weight:700"' : 'style="color:var(--red);font-weight:700"';
+                cmpEl.innerHTML = `
+                    <table style="width:100%;font-size:12px">
+                        <thead><tr style="color:var(--text-dim);border-bottom:1px solid var(--border)">
+                            <th style="text-align:left;padding:6px">Stream</th>
+                            <th style="text-align:right">Trades</th>
+                            <th style="text-align:right">Total PnL</th>
+                            <th style="text-align:right">Avg/trade</th>
+                            <th style="text-align:right">WR</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr><td style="padding:6px;color:var(--green)">🟢 Live (real)</td>
+                                <td style="text-align:right">${live.total_resolved || 0}</td>
+                                <td style="text-align:right" ${liveClass}>${(livePnl >= 0 ? '+$' : '-$') + Math.abs(livePnl).toFixed(2)}</td>
+                                <td style="text-align:right" ${liveClass}>${(liveAvg >= 0 ? '+$' : '-$') + Math.abs(liveAvg).toFixed(3)}</td>
+                                <td style="text-align:right">${((live.win_rate || 0) * 100).toFixed(0)}%</td></tr>
+                            <tr><td style="padding:6px;color:var(--yellow)">📝 Paper (sim)</td>
+                                <td style="text-align:right">${paperOnly.total_resolved || 0}</td>
+                                <td style="text-align:right" ${paperClass}>${((paperOnly.total_pnl || 0) >= 0 ? '+$' : '-$') + Math.abs(paperOnly.total_pnl || 0).toFixed(2)}</td>
+                                <td style="text-align:right" ${paperClass}>${(paperAvg >= 0 ? '+$' : '-$') + Math.abs(paperAvg).toFixed(3)}</td>
+                                <td style="text-align:right">--</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top:10px;padding:8px;background:rgba(139,148,158,0.08);border-radius:4px;font-size:11px">
+                        <strong>Paper-Live divergence:</strong>
+                        ${divergence >= 0 ? 'Paper přestřeluje' : 'Paper zaostává'} o
+                        <span style="font-weight:700;color:${Math.abs(divergence) > 20 ? 'var(--red)' : 'var(--text)'}">${divergence.toFixed(1)}%</span>
+                        na průměrném PnL/trade. Čím blíž 0%, tím věrněji paper odráží live realitu.
+                        Pre-fix 13:42 byly trady ~10% paper-inflated (spread). Post-fix by mělo být blízko 0%.
+                    </div>
+                `;
+            } else {
+                cmpEl.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:8px">Bude vypočítáno po prvních live exit resolutions (aktuálně '
+                    + (live.count || 0) + ' live pozic, '
+                    + (live.total_resolved || 0) + ' closed).</div>';
+            }
+        }
+    }
+
     // ===== Live B2 dashboard (Crypto Price Edge) =====
     let lb2RefreshInterval = null;
     async function fetchLiveB2() {
@@ -4124,17 +4332,15 @@
             document.getElementById('lb2Positions').textContent = b2.position_count || 0;
         }
 
-        // Charts — cumulative line (split Total/Live/Paper) + daily bars
+        // TOTAL charts (all trades combined) — single orange line for clarity.
+        // Live-specific views are rendered separately below to avoid the
+        // scale-squash problem (paper dwarfs live by 100x+).
         if (evrOverview && evrOverview.daily_series && evrOverview.daily_series.length > 0) {
             const series = evrOverview.daily_series;
             const labels = series.map(d => d.date ? d.date.slice(5) : '');
             const cumValues = series.map(d => d.cumulative);
-            const cumLive = series.map(d => d.cumulative_live || 0);
-            const cumPaper = series.map(d => d.cumulative_paper || 0);
             const dailyValues = series.map(d => d.pnl);
             const dailyColors = dailyValues.map(v => v >= 0 ? '#3fb950' : '#f85149');
-
-            const hasLiveData = cumLive.some(v => v !== 0);
 
             const avgDaily = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
             const avgEl = document.getElementById('lb2AvgDailyPnl');
@@ -4143,24 +4349,14 @@
                 avgEl.textContent = 'prumer: ' + (avgDaily >= 0 ? '+' : '') + '$' + avgDaily.toFixed(2) + '/den';
             }
 
-            // Cumulative line chart — split datasets. Orange=total,
-            // green=live-only (real capital), yellow=paper-only.
             const cumCtx = document.getElementById('b2CumPnlChart');
             if (window._b2CumChart) window._b2CumChart.destroy();
-            const cumDatasets = [
-                { label: 'Total', data: cumValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 },
-            ];
-            if (hasLiveData) {
-                cumDatasets.push({ label: 'Live', data: cumLive, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.15)', fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
-                cumDatasets.push({ label: 'Paper', data: cumPaper, borderColor: '#d4a017', backgroundColor: 'rgba(212,160,23,0.10)', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5, borderDash: [4,4] });
-            }
             window._b2CumChart = new Chart(cumCtx, {
                 type: 'line',
-                data: { labels, datasets: cumDatasets },
-                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: hasLiveData, labels:{color:'#8b949e', font:{size:10}}}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
+                data: { labels, datasets: [{ data: cumValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
             });
 
-            // Daily bar chart (unchanged — total daily PnL)
             const barCtx = document.getElementById('b2DailyPnlChart');
             if (window._b2DailyChart) window._b2DailyChart.destroy();
             window._b2DailyChart = new Chart(barCtx, {
@@ -4170,72 +4366,19 @@
             });
         }
 
-        // Per-trade P&L chart — prefer split series from EVR endpoint (live
-        // vs paper, chronological by resolved_at). Falls back to closed-
-        // positions endpoint if the split series aren't in the payload.
+        // LIVE-ONLY charts — dedicated section, own scale, starts from $0.
+        // Uses trade_series_live (chronological, per-trade) so the user sees
+        // real-capital performance without paper drowning it out.
+        renderB2LiveOnlySection(evrOverview, b2);
+
+        // Per-trade TOTAL chart — single orange line (all closed trades
+        // combined chronologically, from $0). Live is rendered separately
+        // in the dedicated Live Only section so scale mismatch doesn't
+        // flatten the green line.
         const closedResp = await fetchJSON('/api/closed-positions?strategy=B2');
         const closed = closedResp?.positions || [];
 
-        const liveSeries = evrOverview?.trade_series_live || [];
-        const paperSeries = evrOverview?.trade_series_paper || [];
-        const haveSplit = (liveSeries.length + paperSeries.length) > 0;
-
-        if (haveSplit && typeof Chart !== 'undefined') {
-            // Build step labels by trade index of combined chronological order
-            const combined = [
-                ...liveSeries.map(t => ({...t, seg: 'live'})),
-                ...paperSeries.map(t => ({...t, seg: 'paper'})),
-            ].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
-
-            const labels = ['Start', ...combined.map((_, i) => '#' + (i + 1))];
-            // For each trade, write cumulative for its own segment, null for the other
-            let liveCum = 0, paperCum = 0;
-            const liveCumValues = [0];
-            const paperCumValues = [0];
-            for (const t of combined) {
-                if (t.seg === 'live') { liveCum += t.pnl; }
-                else { paperCum += t.pnl; }
-                liveCumValues.push(Math.round(liveCum * 100) / 100);
-                paperCumValues.push(Math.round(paperCum * 100) / 100);
-            }
-
-            const hasLive = liveSeries.length > 0;
-            const ctx = document.getElementById('b2TradeByTradeChart');
-            if (window._b2TradeChart) window._b2TradeChart.destroy();
-            const datasets = [];
-            datasets.push({
-                label: 'Paper (simulated)', data: paperCumValues,
-                borderColor: '#d4a017', backgroundColor: 'rgba(212,160,23,0.10)',
-                fill: false, tension: 0.1,
-                pointRadius: paperCumValues.length > 150 ? 1 : 2,
-                borderWidth: 1.5, borderDash: hasLive ? [4,4] : [],
-            });
-            if (hasLive) {
-                datasets.push({
-                    label: 'Live (real capital)', data: liveCumValues,
-                    borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.15)',
-                    fill: true, tension: 0.1, pointRadius: 2, borderWidth: 2,
-                });
-            }
-            window._b2TradeChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets },
-                options: { responsive: true, maintainAspectRatio: false, animation: false,
-                    plugins: { legend: {display: hasLive, labels:{color:'#8b949e', font:{size:10}}},
-                        tooltip: { callbacks: { label: ctx2 => {
-                            const idx = ctx2.dataIndex;
-                            if (idx === 0) return 'Start: $0';
-                            const t = combined[idx-1];
-                            const sign = t.pnl >= 0 ? '+' : '';
-                            return `Trade #${idx} [${t.seg}]: ${sign}$${t.pnl.toFixed(2)} | ${ctx2.dataset.label}: $${ctx2.parsed.y.toFixed(2)}`;
-                        } } } },
-                    scales: {
-                        x: { ticks: { color: '#8b949e', font: {size: 8}, maxTicksLimit: 20, callback: function(val, idx) { if (labels.length <= 30) return labels[idx]; return idx % Math.ceil(labels.length / 20) === 0 ? labels[idx] : ''; } }, grid: {color: 'rgba(48,54,61,0.3)'} },
-                        y: { ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0)}, grid: {color: 'rgba(48,54,61,0.5)'} }
-                    } }
-            });
-        } else if (closed.length > 0 && typeof Chart !== 'undefined') {
-            // Legacy fallback (no split series available)
+        if (closed.length > 0 && typeof Chart !== 'undefined') {
             const tradesChron = [...closed].reverse();
             let cumPnl = 0;
             const tradeLabels = ['Start'];
