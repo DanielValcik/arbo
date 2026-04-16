@@ -134,6 +134,10 @@ class RDHOrchestrator:
         self._b3_live_total_trades: int = 0
         self._b3_15m_live_total_pnl: float = 0.0
         self._b3_15m_live_total_trades: int = 0
+        # Same pattern for B2 — accumulated live-filled PnL, used by the
+        # Slack resolve notifier to show "Live total: $X (Nt)".
+        self._b2_live_total_pnl: float = 0.0
+        self._b2_live_total_trades: int = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -1244,7 +1248,11 @@ class RDHOrchestrator:
             factory = get_session_factory()
             # Dual-mode strategies: use LIVE PnL from trade_details, not paper actual_pnl
             # Paper-only strategies: use actual_pnl from DB
-            DUAL_MODE_STRATEGIES = {"B3", "B3_15M"}  # Both B3 variants always dual-mode
+            # B2 joined the dual-mode club 2026-04-16 — real CLOB fills mirrored
+            # to paper so PnL restore should pull from trade_details.live_*
+            # (same as B3 variants) rather than paper actual_pnl (which mixes
+            # pre-dual paper-only rows with post-dual mirror rows).
+            DUAL_MODE_STRATEGIES = {"B3", "B3_15M", "B2"}
 
             async with factory() as session:
                 # Total P&L per strategy (all resolved trades, excluding pre-validation)
@@ -1320,6 +1328,9 @@ class RDHOrchestrator:
                     elif dual_strat == "B3_15M":
                         self._b3_15m_live_total_pnl = float(live_total)
                         self._b3_15m_live_total_trades = int(live_count)
+                    elif dual_strat == "B2":
+                        self._b2_live_total_pnl = float(live_total)
+                        self._b2_live_total_trades = int(live_count)
 
                 # Weekly P&L per strategy (resolved this ISO week)
                 from datetime import UTC, datetime, timedelta
@@ -2437,6 +2448,60 @@ class RDHOrchestrator:
         except Exception as e:
             logger.debug("b2_slack_entry_error", error=str(e))
 
+    async def _notify_b2_live_resolve(
+        self,
+        *,
+        asset: str,
+        strike: float,
+        direction: str,
+        exit_reason: str,
+        entry_price: float,
+        exit_price: float,
+        shares: int,
+        pnl: float,
+    ) -> None:
+        """Slack notification on B2 LIVE resolution (maker sell or auto-redeem).
+
+        Mirrors the B3 resolve-format so both channels read the same. Updates
+        the cumulative tracker (_b2_live_total_*) and includes it in the text.
+        Silent no-op when slack_bot is unavailable.
+        """
+        if self._slack_bot is None:
+            return
+        self._b2_live_total_pnl += pnl
+        self._b2_live_total_trades += 1
+        cum_s = (
+            f"{'+' if self._b2_live_total_pnl >= 0 else ''}"
+            f"${self._b2_live_total_pnl:.2f}"
+        )
+        pnl_s = f"{'+' if pnl >= 0 else ''}${pnl:.2f}"
+        # Resolution (exit_reason == 'resolution') means token redeemed at
+        # $1 (WIN) or $0 (LOSS). Otherwise it's an early exit (edge_lost,
+        # profit_take, etc.) and we show the real fill price.
+        if exit_reason == "resolution":
+            won = exit_price > 0.5
+            emoji = ":white_check_mark:" if won else ":x:"
+            outcome = "$1 (WIN)" if won else "$0 (LOSS)"
+            text = (
+                f"{emoji} *B2 LIVE RESOLVE — {asset} above ${int(strike)}*\n"
+                f"Entry: {entry_price:.3f} -> {outcome}\n"
+                f"Trade: *{pnl_s}*  |  {shares} shares\n"
+                f"Live total: *{cum_s}* ({self._b2_live_total_trades}t)"
+            )
+        else:
+            emoji = ":white_check_mark:" if pnl >= 0 else ":x:"
+            text = (
+                f"{emoji} *B2 LIVE SELL — {asset} above ${int(strike)}* "
+                f"({exit_reason})\n"
+                f"Live: {entry_price:.3f} -> {exit_price:.3f}\n"
+                f"Trade: *{pnl_s}*  |  {shares} shares\n"
+                f"Live total: *{cum_s}* ({self._b2_live_total_trades}t)"
+            )
+        try:
+            await self._slack_bot._post(self.B2_SLACK_CHANNEL, text=text)
+        except Exception as e:
+            logger.debug("b2_slack_resolve_post_error", error=str(e))
+
     async def _run_b2_exit_check(self) -> None:
         """Check B2 positions for exit triggers every 30 seconds.
 
@@ -2489,6 +2554,11 @@ class RDHOrchestrator:
             and self._exit_manager is not None
         )
 
+        # Track which B2 tokens we register with ExitManager this cycle.
+        # Needed to correlate process_exits() results back to B2 for Slack
+        # notifications (ExitManager itself is strategy-agnostic).
+        b2_exit_registered: dict[str, dict] = {}
+
         for token_id, exit_reason in (exits or []):
             bid_price = sell_prices.get(token_id)
             if bid_price is None or bid_price < 0.02:
@@ -2526,6 +2596,14 @@ class RDHOrchestrator:
                 if pe:
                     pe.neg_risk = False
                     pe.label = f"{b2_pos.asset}_{int(b2_pos.strike)}" if b2_pos else ""
+                # Remember metadata for Slack notification after completion
+                b2_exit_registered[token_id] = {
+                    "exit_reason": exit_reason,
+                    "asset": b2_pos.asset if b2_pos else "?",
+                    "strike": float(b2_pos.strike) if b2_pos else 0,
+                    "direction": b2_pos.direction if b2_pos else "?",
+                    "live_entry_price": b2_pos.live_entry_price if b2_pos else 0.0,
+                }
             else:
                 # Paper or paper-only branch of dual mode: instant sell.
                 # is_live_capital on the decrement must match what was used
@@ -2544,13 +2622,52 @@ class RDHOrchestrator:
                     token_id=token_id, pnl=pnl,
                     exit_price=D(str(bid_price)), exit_reason=exit_reason,
                 )
+                # Edge case: was_live trade taking the paper path (shares
+                # vanished from CLOB — already redeemed or manually sold).
+                # Still send Slack so user sees the exit.
+                if was_live and self._slack_bot:
+                    try:
+                        await self._notify_b2_live_resolve(
+                            asset=b2_pos.asset if b2_pos else "?",
+                            strike=float(b2_pos.strike) if b2_pos else 0,
+                            direction=b2_pos.direction if b2_pos else "?",
+                            exit_reason=exit_reason,
+                            entry_price=b2_pos.live_entry_price if b2_pos else 0.0,
+                            exit_price=float(bid_price),
+                            shares=b2_pos.live_shares if b2_pos else 0,
+                            pnl=float(pnl),
+                        )
+                    except Exception as e:
+                        logger.debug("b2_slack_resolve_error", error=str(e))
 
         # Process pending exits (shared ExitManager) — any dual/live mode
         # position whose exit was registered above now runs through the
         # live executor. Pure-paper mode never enters the has_live_infra
         # branch so nothing is pending; skip cheaply.
+        completed_exits: list[dict] = []
         if has_live_infra and self._exit_manager and self._exit_manager.has_pending:
-            await self._exit_manager.process_exits()
+            completed_exits = await self._exit_manager.process_exits()
+
+        # Slack: notify user for B2 live resolutions. Match completed exits
+        # back to the per-token metadata we stashed during registration.
+        for result in completed_exits:
+            tid = result.get("token_id")
+            meta = b2_exit_registered.get(tid)
+            if meta is None or self._slack_bot is None:
+                continue
+            try:
+                await self._notify_b2_live_resolve(
+                    asset=meta["asset"],
+                    strike=meta["strike"],
+                    direction=meta["direction"],
+                    exit_reason=meta["exit_reason"],
+                    entry_price=meta.get("live_entry_price") or result.get("entry_price", 0),
+                    exit_price=float(result.get("avg_sell_price", 0)),
+                    shares=int(result.get("shares_sold", 0)),
+                    pnl=float(result.get("pnl", 0)),
+                )
+            except Exception as e:
+                logger.debug("b2_slack_resolve_error", error=str(e))
 
         if exits:
             logger.info(
