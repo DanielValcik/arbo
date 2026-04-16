@@ -400,25 +400,38 @@ class StrategyDCore:
         self._live_balance_usdc = balance_usdc
         self._live_balance_ts = time.time()
 
+    # Fraction of live balance allocated to D variants collectively.
+    # Remaining goes to other live strategies (B3, B3_15M, etc).
+    # Override via env D_TOTAL_BALANCE_SHARE.
+    D_TOTAL_BALANCE_SHARE = 0.40  # 40% of USDC balance
+
     def _effective_capital(self) -> float:
         """Return capital to use for Kelly sizing.
 
         Priority:
-          1. If live balance fresh (< 10min), use strategy's share of it
-          2. Else fall back to risk_manager STRATEGY_ALLOCATIONS
+          1. If live balance fresh (< 10min): D variants share D_TOTAL_BALANCE_SHARE
+             of balance, split proportionally by STRATEGY_ALLOCATIONS among D only
+          2. Else: fall back to static risk_manager allocation
+
+        Example: balance=$200, D_share=40% → $80 for D; split 3:2:2 among
+        D/D_UFC/D_EPL (300:200:200) = $34/$23/$23
         """
-        # Live balance path
         if self._live_balance_usdc is not None and self._live_balance_usdc > 0:
             age = time.time() - self._live_balance_ts
             if age < 600:  # Fresh within 10 minutes
-                # Strategy's share: my allocation / total allocation
                 try:
+                    import os
                     from arbo.core.risk_manager import STRATEGY_ALLOCATIONS
-                    total = float(sum(STRATEGY_ALLOCATIONS.values()))
-                    my_share = float(STRATEGY_ALLOCATIONS.get(self.STRATEGY_NAME, 0))
-                    if total > 0 and my_share > 0:
-                        # Live allocation = balance * (my_share / total)
-                        return self._live_balance_usdc * (my_share / total)
+                    d_share = float(os.getenv("D_TOTAL_BALANCE_SHARE",
+                                              str(self.D_TOTAL_BALANCE_SHARE)))
+                    d_pool = self._live_balance_usdc * d_share
+                    # Split among D variants only
+                    d_keys = [k for k in STRATEGY_ALLOCATIONS
+                              if k == "D" or k.startswith("D_")]
+                    d_total = float(sum(STRATEGY_ALLOCATIONS[k] for k in d_keys))
+                    my_alloc = float(STRATEGY_ALLOCATIONS.get(self.STRATEGY_NAME, 0))
+                    if d_total > 0 and my_alloc > 0:
+                        return d_pool * (my_alloc / d_total)
                 except Exception:
                     pass
 
