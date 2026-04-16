@@ -69,8 +69,11 @@ async def main() -> int:
     print(f"Total current value: ${total_current_value:.2f}")
     print()
 
-    # Initialize live executor
+    # Initialize live executor. PolymarketClient requires explicit
+    # initialize() before get_price will work; otherwise _get_prices
+    # returns ("Client not initialized") and every sell fails upstream.
     poly = PolymarketClient()
+    await poly.initialize()
     executor = LiveExecutor(poly)
     await executor._ensure_clob()  # populates _shares_owned too
 
