@@ -2545,8 +2545,11 @@ class RDHOrchestrator:
                     exit_price=D(str(bid_price)), exit_reason=exit_reason,
                 )
 
-        # Process pending exits (shared ExitManager)
-        if is_live and self._exit_manager and self._exit_manager.has_pending:
+        # Process pending exits (shared ExitManager) — any dual/live mode
+        # position whose exit was registered above now runs through the
+        # live executor. Pure-paper mode never enters the has_live_infra
+        # branch so nothing is pending; skip cheaply.
+        if has_live_infra and self._exit_manager and self._exit_manager.has_pending:
             await self._exit_manager.process_exits()
 
         if exits:
