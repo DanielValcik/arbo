@@ -1327,11 +1327,11 @@
         <div class="grid">
             <!-- B2 Overview -->
             <div class="card" style="border-top:3px solid var(--orange)">
-                <div class="card-title">B2 Crypto Price Edge <span style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
+                <div class="card-title">B2 Crypto Price Edge <span id="lb2ModeBadge" style="background:var(--yellow);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px">PAPER</span></div>
                 <div id="lb2Overview" style="font-size:12px">
                     <div style="text-align:center;padding:20px;color:var(--text-dim)">
                         <div style="font-size:24px;font-weight:700;color:var(--orange)" id="lb2TotalPnl">$0.00</div>
-                        <div>Total P&L</div>
+                        <div>Total P&L (all)</div>
                         <div style="margin-top:12px;display:flex;justify-content:space-around">
                             <div><span id="lb2Trades" style="font-weight:700">0</span><br>Trades</div>
                             <div><span id="lb2WinRate" style="font-weight:700">--</span><br>Win Rate</div>
@@ -1339,6 +1339,37 @@
                             <div><span id="lb2Positions" style="font-weight:700">0</span><br>Positions</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- B2 Live vs Paper split (dual mode) -->
+            <div class="card" style="border-top:3px solid var(--green)">
+                <div class="card-title">Live vs Paper breakdown
+                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Mirror mode separuje real CLOB fills od paper-only</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;padding:8px">
+                    <!-- LIVE side -->
+                    <div style="background:rgba(63,185,80,0.08);padding:12px;border-radius:6px;border-left:3px solid var(--green)">
+                        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">⚡ Live-filled (real capital)</div>
+                        <div style="font-size:20px;font-weight:700;color:var(--green)" id="lb2LivePnl">$0.00</div>
+                        <div style="margin-top:8px;display:flex;justify-content:space-between">
+                            <div><span id="lb2LiveCount" style="font-weight:700">0</span> trades</div>
+                            <div>WR: <span id="lb2LiveWR" style="font-weight:700">--</span></div>
+                            <div>Avg: <span id="lb2LiveAvg" style="font-weight:700">--</span></div>
+                        </div>
+                    </div>
+                    <!-- PAPER-only side -->
+                    <div style="background:rgba(245,158,66,0.06);padding:12px;border-radius:6px;border-left:3px solid var(--yellow)">
+                        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📝 Paper-only (simulated)</div>
+                        <div style="font-size:20px;font-weight:700;color:var(--yellow)" id="lb2PaperPnl">$0.00</div>
+                        <div style="margin-top:8px;display:flex;justify-content:space-between">
+                            <div><span id="lb2PaperCount" style="font-weight:700">0</span> trades</div>
+                            <div>Avg: <span id="lb2PaperAvg" style="font-weight:700">--</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:0 12px 8px 12px;font-size:10px;color:var(--text-dim)" id="lb2SplitExplainer">
+                    Live = skutečné CLOB ordery přes wallet (dual mode). Paper-only = historická data nebo live-skipped signály.
                 </div>
             </div>
 
@@ -4056,6 +4087,35 @@
             const ratio = act.avg_loss > 0 ? (act.avg_win / act.avg_loss).toFixed(1) + 'x' : '--';
             document.getElementById('lb2WLRatio').textContent = ratio;
             document.getElementById('lb2AvgPnl').textContent = (act.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(act.avg_pnl_per_trade || 0).toFixed(2);
+
+            // Live vs Paper breakdown card
+            const live = evrOverview.actual_live || {total_resolved: 0, total_pnl: 0, avg_pnl_per_trade: 0, win_rate: 0, count: 0};
+            const paper = evrOverview.actual_paper_only || {total_resolved: 0, total_pnl: 0, avg_pnl_per_trade: 0};
+
+            const livePnl = live.total_pnl || 0;
+            document.getElementById('lb2LivePnl').textContent = (livePnl >= 0 ? '+$' : '-$') + Math.abs(livePnl).toFixed(2);
+            document.getElementById('lb2LivePnl').style.color = livePnl >= 0 ? 'var(--green)' : 'var(--red)';
+            document.getElementById('lb2LiveCount').textContent = live.count || 0;
+            document.getElementById('lb2LiveWR').textContent = live.total_resolved > 0 ? (live.win_rate * 100).toFixed(0) + '%' : '--';
+            document.getElementById('lb2LiveAvg').textContent = live.total_resolved > 0 ? ((live.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(live.avg_pnl_per_trade).toFixed(2)) : '--';
+
+            const paperPnl = paper.total_pnl || 0;
+            document.getElementById('lb2PaperPnl').textContent = (paperPnl >= 0 ? '+$' : '-$') + Math.abs(paperPnl).toFixed(2);
+            document.getElementById('lb2PaperPnl').style.color = paperPnl >= 0 ? 'var(--green)' : 'var(--yellow)';
+            document.getElementById('lb2PaperCount').textContent = paper.total_resolved || 0;
+            document.getElementById('lb2PaperAvg').textContent = paper.total_resolved > 0 ? ((paper.avg_pnl_per_trade >= 0 ? '+$' : '-$') + Math.abs(paper.avg_pnl_per_trade).toFixed(2)) : '--';
+
+            // Dynamic mode badge: if any live trades exist, show DUAL
+            const badge = document.getElementById('lb2ModeBadge');
+            if (live.count > 0) {
+                badge.textContent = 'DUAL';
+                badge.style.background = 'var(--green)';
+                badge.style.color = '#000';
+            } else {
+                badge.textContent = 'PAPER';
+                badge.style.background = 'var(--yellow)';
+                badge.style.color = '#000';
+            }
         } else if (b2) {
             const pnl = b2.total_pnl || 0;
             document.getElementById('lb2TotalPnl').textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
