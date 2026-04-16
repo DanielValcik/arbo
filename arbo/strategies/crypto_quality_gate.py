@@ -63,6 +63,17 @@ REENTRY_COOLDOWN_H = 0       # No cooldown
 # Exchange price freshness
 MAX_EXCHANGE_PRICE_AGE_S = 30.0  # Max 30 seconds stale
 
+# Paper-live parity. When True, paper BUY entry uses the LIVE fill price
+# (best_ask from CLOB), matching what live execution would pay. When False,
+# paper uses min(bid, ask) — the historical "earn the spread" model which
+# systematically inflates paper PnL vs live. Cumulative 344-trade B2 paper
+# PnL of +$2,499 is likely inflated by ~$300-700 from this spread gap.
+#
+# Default True: live parity is the only accurate way to measure edge. Flip
+# to False only for research where spread-free paper is the desired signal
+# (e.g. comparing model against idealized fills).
+PAPER_MATCH_LIVE = True
+
 # Excluded assets (insufficient liquidity)
 EXCLUDED_ASSETS: set[str] = {"SOL", "XRP", "DOGE", "ADA", "BNB"}
 

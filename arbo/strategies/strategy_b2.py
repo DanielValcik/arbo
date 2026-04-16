@@ -32,6 +32,7 @@ from arbo.strategies.crypto_price_scanner import (
 from arbo.strategies.crypto_quality_gate import (
     KELLY_RAW_CAP,
     MIN_HOLD_EDGE,
+    PAPER_MATCH_LIVE,
     PROFIT_TARGET_ABS,
     VOLATILITY_METHOD,
     VOLATILITY_WINDOW,
@@ -281,8 +282,16 @@ class StrategyB2:
                 logger.debug("b2_wide_spread", mid=mid, bid=raw_bid, ask=raw_ask, spread_pct=f"{spread_pct:.2f}")
                 continue
 
-            # Entry: use the lower of bid/ask as maker price (what we'd pay)
-            clob_price = min(raw_bid, raw_ask) if min(raw_bid, raw_ask) > 0.001 else mid
+            # Entry price source — gated by PAPER_MATCH_LIVE to match the B3
+            # mirror pattern (paper ≡ live). Live taker BUY pays raw_ask
+            # (maker bid is irrelevant for the buy leg). The legacy
+            # min(bid, ask) path earned the spread — systematically inflating
+            # paper PnL vs live. Flip to False only for research against
+            # spread-free model performance.
+            if PAPER_MATCH_LIVE:
+                clob_price = raw_ask if raw_ask > 0.001 else mid
+            else:
+                clob_price = min(raw_bid, raw_ask) if min(raw_bid, raw_ask) > 0.001 else mid
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
@@ -413,6 +422,9 @@ class StrategyB2:
                         "clob_bid": raw_bid,
                         "clob_ask": raw_ask,
                         "clob_spread_pct": round(spread_pct * 100, 1),
+                        # Flag so post-analysis can separate mirror-on vs
+                        # mirror-off paper trades (pre- vs post-deploy).
+                        "paper_match_live": PAPER_MATCH_LIVE,
                     },
                 )
 
