@@ -2475,16 +2475,20 @@ class RDHOrchestrator:
             from arbo.utils.db import get_session_factory
             factory = get_session_factory()
             async with factory() as session:
+                # asyncpg + jsonb_build_object needs every variadic param
+                # to have an explicit SQL type — otherwise "could not
+                # determine data type of parameter $N". Cast all three
+                # even the obvious string, plus the token_id in WHERE.
                 await session.execute(
                     sa.text("""
                         UPDATE paper_trades
                         SET trade_details = COALESCE(trade_details, '{}'::jsonb)
                           || jsonb_build_object(
                                'live_exit_price', CAST(:px AS numeric),
-                               'live_exit_status', :status,
+                               'live_exit_status', CAST(:status AS text),
                                'live_pnl', CAST(:pnl AS numeric)
                              )
-                        WHERE token_id = :tid
+                        WHERE token_id = CAST(:tid AS varchar)
                           AND status != 'open'
                           AND (trade_details->>'live_entry_shares')::int > 0
                     """),
