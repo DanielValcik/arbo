@@ -2394,6 +2394,49 @@ class RDHOrchestrator:
                 )
             await self._paper_engine.sync_positions_to_db()
 
+            # Slack notification for LIVE fills only (dual or live mode).
+            # Matches B3/D policy: paper trades log but don't spam Slack.
+            if self._slack_bot and self._strategy_b2._execution_mode in ("dual", "live"):
+                await self._notify_b2_live_entries(trades)
+
+    # B2 lives in the B3 live channel — both are crypto, share the same
+    # wallet, and the user already watches this channel for live fills.
+    B2_SLACK_CHANNEL = "C0APX4K8Z2N"
+
+    async def _notify_b2_live_entries(self, trades: list) -> None:
+        """Slack notification on B2 LIVE entries only (dual/live mode).
+
+        A trade is "live" when its B2 position has live_shares > 0 (real
+        CLOB fill occurred). In dual mode we may return signals whose live
+        leg didn't fill — those paper-only trades stay silent.
+        """
+        try:
+            for sig in trades:
+                token_id = sig.token_id_above if hasattr(sig, "token_id_above") else None
+                if token_id is None:
+                    # Resolve from open_positions by condition_id
+                    for tid, p in self._strategy_b2._open_positions.items():
+                        if p.condition_id == sig.condition_id:
+                            token_id = tid
+                            break
+                if token_id is None:
+                    continue
+                pos = self._strategy_b2._open_positions.get(token_id)
+                if pos is None or pos.live_shares <= 0:
+                    continue
+                text = (
+                    f":zap: *B2 LIVE BUY* — {pos.asset} {pos.direction} ${int(pos.strike)}\n"
+                    f"*{pos.live_fill_status}*  |  "
+                    f"{pos.live_shares} shares @ {pos.live_entry_price:.3f}  |  "
+                    f"${pos.live_shares * pos.live_entry_price:.1f}\n"
+                    f"Edge: {sig.edge*100:+.1f}¢  |  "
+                    f"Exchange: ${sig.current_exchange_price:,.0f}  |  "
+                    f"Expiry: {sig.hours_to_expiry:.0f}h"
+                )
+                await self._slack_bot._post(self.B2_SLACK_CHANNEL, text=text)
+        except Exception as e:
+            logger.debug("b2_slack_entry_error", error=str(e))
+
     async def _run_b2_exit_check(self) -> None:
         """Check B2 positions for exit triggers every 30 seconds.
 

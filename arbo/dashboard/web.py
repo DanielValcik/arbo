@@ -2889,7 +2889,15 @@ async def api_strategy_d(_user: str = Depends(_verify_credentials)) -> dict[str,
 async def api_expected_vs_reality_b2(
     _user: str = Depends(_verify_credentials),
 ) -> dict[str, Any]:
-    """Compare B2 backtest expectations to actual paper trading."""
+    """Compare B2 backtest expectations to actual paper trading.
+
+    Breaks down by live_entry_shares:
+      - `actual` — all B2 trades (paper + live-filled)
+      - `actual_live` — subset where live_entry_shares > 0 (real CLOB fills
+        in dual mode). Paper side mirrors the real fill so PnL reflects
+        what live capital actually earned.
+      - `actual_paper_only` — paper-only trades (live skipped or pre-deploy)
+    """
     try:
         from arbo.utils.db import PaperTrade, get_session_factory
 
@@ -2906,6 +2914,8 @@ async def api_expected_vs_reality_b2(
                     PaperTrade.trade_details["asset"].astext,
                     PaperTrade.trade_details["strike"].astext,
                     PaperTrade.trade_details["direction"].astext,
+                    PaperTrade.trade_details["live_entry_shares"].astext,
+                    PaperTrade.trade_details["paper_match_live"].astext,
                 )
                 .where(PaperTrade.strategy == "B2")
                 .where(PaperTrade.status.in_(["won", "lost", "sold"]))
@@ -2925,11 +2935,22 @@ async def api_expected_vs_reality_b2(
             daily_pnl: dict[str, float] = {}
             win_pnls: list[float] = []
             loss_pnls: list[float] = []
+            # Live-filled subset (dual mode, real CLOB fills)
+            live_pnl = 0.0
+            live_wins = 0
+            live_losses = 0
+            live_count = 0
 
             for row in rows:
                 pnl = float(row[0] or 0)
                 total_pnl += pnl
                 exit_reason = row[2] or ""
+                live_shares_raw = row[9]
+                try:
+                    live_shares = int(live_shares_raw) if live_shares_raw else 0
+                except (ValueError, TypeError):
+                    live_shares = 0
+                is_live = live_shares > 0
 
                 if pnl > 0:
                     wins += 1
@@ -2937,6 +2958,14 @@ async def api_expected_vs_reality_b2(
                 else:
                     losses += 1
                     loss_pnls.append(abs(pnl))
+
+                if is_live:
+                    live_pnl += pnl
+                    live_count += 1
+                    if pnl > 0:
+                        live_wins += 1
+                    else:
+                        live_losses += 1
 
                 if exit_reason == "resolution":
                     resolution_count += 1
@@ -2990,9 +3019,29 @@ async def api_expected_vs_reality_b2(
                 },
             }
 
+            live_resolved = live_wins + live_losses
+            actual_live = {
+                "total_resolved": live_resolved,
+                "wins": live_wins,
+                "losses": live_losses,
+                "win_rate": round(live_wins / live_resolved, 4) if live_resolved else 0,
+                "total_pnl": round(live_pnl, 2),
+                "avg_pnl_per_trade": round(live_pnl / live_resolved, 2) if live_resolved else 0,
+                "count": live_count,
+            }
+            paper_resolved = total_resolved - live_resolved
+            paper_pnl = total_pnl - live_pnl
+            actual_paper_only = {
+                "total_resolved": paper_resolved,
+                "total_pnl": round(paper_pnl, 2),
+                "avg_pnl_per_trade": round(paper_pnl / paper_resolved, 2) if paper_resolved else 0,
+            }
+
             return {
                 "expected": expected,
                 "actual": actual,
+                "actual_live": actual_live,
+                "actual_paper_only": actual_paper_only,
                 "daily_series": daily_series,
                 "too_early": total_resolved < 5,
             }
