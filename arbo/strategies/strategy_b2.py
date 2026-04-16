@@ -477,14 +477,32 @@ class StrategyB2:
                 shares_floor = 5.0 * clob_price + 0.01
                 live_min = max(wallet_floor, shares_floor)
                 if live_size < live_min:
-                    logger.info(
-                        "b2_live_size_too_small",
-                        live_size=round(live_size, 2),
-                        min_required=round(live_min, 2),
-                        price=round(clob_price, 3),
-                    )
-                    self._last_mirror_attempt[token_id] = now
-                    continue
+                    # Kelly sizing produced under the Polymarket 5-share
+                    # minimum. If the shortfall is small enough to stay
+                    # within a 5% per-trade wallet cap, boost up to the
+                    # floor — missing the signal entirely over a few cents
+                    # is worse than a mild sizing overshoot. Otherwise the
+                    # signal is genuinely too small for this price level.
+                    max_boost = self._live_capital * 0.05  # 5% hard cap per trade
+                    if live_min <= max_boost:
+                        logger.info(
+                            "b2_live_size_boosted",
+                            original=round(live_size, 2),
+                            boosted_to=round(live_min, 2),
+                            price=round(clob_price, 3),
+                            cap_pct=5.0,
+                        )
+                        live_size = live_min
+                    else:
+                        logger.info(
+                            "b2_live_size_too_small",
+                            live_size=round(live_size, 2),
+                            min_required=round(live_min, 2),
+                            max_boost=round(max_boost, 2),
+                            price=round(clob_price, 3),
+                        )
+                        self._last_mirror_attempt[token_id] = now
+                        continue
 
                 fill = await self._live_executor.buy(
                     token_id=token_id, price=clob_price, size_usdc=live_size,
