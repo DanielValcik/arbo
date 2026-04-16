@@ -2599,25 +2599,33 @@ class RDHOrchestrator:
         if not b2_positions:
             return
 
-        # Ensure live_executor is initialized and positions are synced with
-        # the CLOB BEFORE deciding the paper-vs-live routing below. Without
-        # this, a freshly-restarted service sees _shares_owned={} and takes
-        # the paper fallback on every exit — even though the CLOB still
-        # holds the shares. That created "phantom closed" paper rows and
-        # misleading Slack messages. _ensure_clob is idempotent (no-op if
-        # already initialized), so this is cheap after the first call.
+        # Ensure live_executor state matches on-chain wallet BEFORE deciding
+        # paper-vs-live routing. Previous bug: _shares_owned was stale after
+        # restart (buy happened 4s before kill, new process's initial API
+        # sync missed it due to Polymarket data-api lag). The "only sync if
+        # empty" guard was insufficient — partial staleness went undetected.
+        # Now sync at the start of every check. Cost: 1 unauthenticated
+        # Polymarket API call per 30s cycle, throttled via _b2_last_live_sync
+        # so overlapping exit-checks don't stampede. Source of truth for
+        # "do we actually hold shares on CLOB" is the wallet API, never the
+        # in-memory cache.
         if (
             self._strategy_b2._execution_mode in ("dual", "live")
             and self._strategy_b2._live_executor is not None
         ):
             le = self._strategy_b2._live_executor
+            now_ts = time.time()
+            last_sync = getattr(self, "_b2_last_live_sync", 0.0)
             try:
                 if getattr(le, "_clob", None) is None:
                     await le._ensure_clob()
-                elif not le._shares_owned:
-                    # Clob already built but positions dict is empty —
-                    # explicitly sync once so we have an accurate view.
+                    self._b2_last_live_sync = now_ts
+                elif now_ts - last_sync > 20.0:
+                    # Refresh at most every 20s. Exit check runs every 30s,
+                    # so this effectively syncs each cycle while protecting
+                    # against burst calls from overlapping scheduler ticks.
                     await le._sync_positions()
+                    self._b2_last_live_sync = now_ts
             except Exception as e:
                 logger.warning("b2_live_executor_sync_failed", error=str(e))
 
