@@ -1982,17 +1982,22 @@ class RDHOrchestrator:
             logger.warning("d_balance_refresh_failed", error=str(e))
 
     async def _notify_d_entry(self, pos, sport_label: str) -> None:
-        """Slack notification on Strategy D entry."""
+        """Slack notification on Strategy D entry — LIVE only.
+
+        Paper entries skip Slack to match the B2/B3/C2 policy (paper is
+        data collection, not something to interrupt the user about).
+        Paper trades still log to structlog + DB.
+        """
         if self._slack_bot is None or pos is None:
             return
+        is_live = bool(pos.live_shares > 0)
+        if not is_live:
+            return
         try:
-            is_live = bool(pos.live_shares > 0)
-            kind = "LIVE BUY" if is_live else "PAPER BUY"
-            emoji = ":zap:" if is_live else ":pencil:"
-            shares = pos.live_shares if is_live else pos.shares
-            price = pos.live_entry_price if is_live else pos.entry_price
+            shares = pos.live_shares
+            price = pos.live_entry_price
             text = (
-                f"{emoji} *{pos.sport.upper()} {kind}* — {pos.side.upper()} "
+                f":zap: *{pos.sport.upper()} LIVE BUY* — {pos.side.upper()} "
                 f"{pos.team_a} vs {pos.team_b}\n"
                 f"*{sport_label}*  |  {shares} shares @ {price:.3f}  |  "
                 f"${shares * price:.1f}\n"
@@ -2003,17 +2008,21 @@ class RDHOrchestrator:
             logger.debug("d_slack_entry_error", error=str(e))
 
     async def _notify_d_exit(self, pos) -> None:
-        """Slack notification on Strategy D exit."""
+        """Slack notification on Strategy D exit — LIVE only.
+
+        Paper exits skip Slack (see _notify_d_entry rationale).
+        """
         if self._slack_bot is None or pos is None:
             return
+        is_live = bool(pos.live_shares > 0)
+        if not is_live:
+            return
         try:
-            is_live = bool(pos.live_shares > 0)
             win = pos.pnl > 0
             emoji = ":white_check_mark:" if win else ":x:"
-            kind = "LIVE EXIT" if is_live else "PAPER EXIT"
-            shares = pos.live_shares if is_live else pos.shares
+            shares = pos.live_shares
             text = (
-                f"{emoji} *{pos.sport.upper()} {kind}* — {pos.exit_reason}\n"
+                f"{emoji} *{pos.sport.upper()} LIVE EXIT* — {pos.exit_reason}\n"
                 f"{pos.team_a} vs {pos.team_b}  |  {pos.side.upper()}\n"
                 f"Entry: {pos.entry_price:.3f} → Exit: {pos.exit_price:.3f}\n"
                 f"P&L: ${pos.pnl:+.2f}  |  CLV: {pos.clv*100:+.1f}¢  |  {shares} shares"
