@@ -2399,9 +2399,9 @@ class RDHOrchestrator:
             if self._slack_bot and self._strategy_b2._execution_mode in ("dual", "live"):
                 await self._notify_b2_live_entries(trades)
 
-    # B2 lives in the B3 live channel — both are crypto, share the same
-    # wallet, and the user already watches this channel for live fills.
-    B2_SLACK_CHANNEL = "C0APX4K8Z2N"
+    # B2 has its own dedicated live channel (live-b2). Separates B2 fills
+    # from the B3 live channel so each strategy's signal stream stays clean.
+    B2_SLACK_CHANNEL = "C0AT5NU127M"
 
     async def _notify_b2_live_entries(self, trades: list) -> None:
         """Slack notification on B2 LIVE entries only (dual/live mode).
