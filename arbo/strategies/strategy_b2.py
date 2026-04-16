@@ -428,11 +428,16 @@ class StrategyB2:
             live_size = 0.0
 
             if self._execution_mode == "live" and self._live_executor:
-                # Pure-live: single-sided execution, no paper record if live fails
+                # Pure-live: single-sided execution, no paper record if live fails.
+                # Taker fallback: B2 daily crypto markets often have thin maker
+                # liquidity — maker-only resulted in 0% fill rate over 13 min.
+                # Paying the ask (1-3c spread) is the cost of getting filled at
+                # all on these markets.
                 fill = await self._live_executor.buy(
                     token_id=token_id, price=clob_price, size_usdc=actual_size,
                     neg_risk=False, tick_size="0.01",
                     maker_timeout_s=self._live_entry_timeout_s,
+                    fallback_to_taker=True,
                 )
                 if fill.status in ("filled", "partial") and fill.shares_filled > 0:
                     shares = fill.shares_filled
@@ -485,6 +490,8 @@ class StrategyB2:
                     token_id=token_id, price=clob_price, size_usdc=live_size,
                     neg_risk=False, tick_size="0.01",
                     maker_timeout_s=self._live_entry_timeout_s,
+                    # See pure-live branch above for rationale on taker fallback.
+                    fallback_to_taker=True,
                 )
                 live_fill_status = fill.status
                 live_latency_ms = fill.latency_ms

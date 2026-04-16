@@ -164,6 +164,7 @@ class LiveExecutor:
         neg_risk: bool = True, tick_size: str = "0.01",
         maker_timeout_s: int | None = None,
         max_price: float | None = None,
+        fallback_to_taker: bool = False,
     ) -> LiveFill:
         """MAKER BUY at BUY price (same as paper). 0% fee + rebate.
 
@@ -172,6 +173,14 @@ class LiveExecutor:
         the cap. This protects against CLOB drift between the strategy's
         scan and our execution — we don't want to fill ITM tokens that
         the strategy already considers too expensive.
+
+        If `fallback_to_taker` is True and the maker leg returns no fill
+        within the timeout, cancels the maker and submits a taker BUY at
+        `sell_price` (ask level, what paper's mirror entry uses when
+        PAPER_MATCH_LIVE is on). This gives paper-live parity for thin
+        markets where maker never gets crossed — at the cost of paying
+        the bid/ask spread plus taker fees. Default False preserves the
+        existing B3 maker-only behavior.
         """
         buy_price, sell_price = await self._get_prices(token_id)
         if buy_price is None or sell_price is None:
@@ -210,7 +219,7 @@ class LiveExecutor:
             return self._fail(token_id, "BUY", maker_price, size_usdc, "Below minimum")
 
         logger.info("live_buy_maker", price=maker_price, spread_pct=round(spread_pct, 3),
-                     shares=shares, token=token_id[:20])
+                     shares=shares, token=token_id[:20], fallback=fallback_to_taker)
 
         fill = LiveFill(
             token_id=token_id, side="BUY", price=Decimal(str(maker_price)),
@@ -230,7 +239,7 @@ class LiveExecutor:
             filled = await self._poll_fill(clob, order_id, immediate,
                                             timeout_s=timeout)
 
-            # Always cancel remainder
+            # Always cancel maker remainder before any fallback
             await self._cancel(order_id, clob)
 
             if filled > 0:
@@ -239,14 +248,58 @@ class LiveExecutor:
                 fill.fill_price = Decimal(str(maker_price))
                 fill.usdc_spent = filled * maker_price
                 self._shares_owned[token_id] = self._shares_owned.get(token_id, 0) + filled
-            else:
+
+            # Taker fallback for the unfilled remainder. Pays sell_price (ask)
+            # — same level paper uses under PAPER_MATCH_LIVE, so paper/live
+            # prices stay in parity. Re-check shares-floor on the remainder.
+            if fallback_to_taker and filled < shares:
+                remaining = shares - filled
+                if remaining >= MIN_ORDER_SHARES:
+                    taker_price = sell_price
+                    # CLOB drift recheck — don't eat through a cap
+                    if max_price is not None and taker_price > max_price:
+                        logger.info(
+                            "live_buy_taker_cap_skip", taker_price=taker_price,
+                            max_price=max_price, token=token_id[:20],
+                        )
+                    else:
+                        logger.info("live_buy_taker_fallback",
+                                    price=taker_price, shares=remaining,
+                                    token=token_id[:20])
+                        try:
+                            oid2, imm2 = await self._post_order(
+                                clob, token_id, taker_price, remaining,
+                                "BUY", neg_risk, tick_size,
+                            )
+                            filled2 = await self._poll_fill(clob, oid2, imm2, timeout_s=10)
+                            await self._cancel(oid2, clob)
+                            if filled2 > 0:
+                                fill.shares_filled += filled2
+                                # Blended avg fill price when partial maker + taker
+                                total_cost = (filled * maker_price) + (filled2 * taker_price)
+                                fill.usdc_spent = total_cost
+                                fill.fill_price = Decimal(str(
+                                    total_cost / fill.shares_filled if fill.shares_filled else taker_price
+                                ))
+                                fill.order_type = "maker+taker" if filled > 0 else "taker"
+                                self._shares_owned[token_id] = (
+                                    self._shares_owned.get(token_id, 0) + filled2
+                                )
+                                fill.status = "filled" if fill.shares_filled >= shares else "partial"
+                        except Exception as e2:
+                            logger.warning(
+                                "live_buy_taker_fallback_error",
+                                token=token_id[:20], error=str(e2),
+                            )
+
+            if fill.shares_filled == 0:
                 fill.status = "failed"
-                fill.error = "No maker fill within timeout"
+                fill.error = "No fill (maker timeout, no taker fallback or taker also failed)"
 
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
             logger.info("live_buy_done", token=token_id[:20], price=maker_price,
-                        requested=shares, filled=filled, status=fill.status,
-                        type="maker", latency=fill.latency_ms)
+                        requested=shares, filled=fill.shares_filled, status=fill.status,
+                        type=fill.order_type, latency=fill.latency_ms)
 
         except Exception as e:
             fill.latency_ms = int((time.monotonic() - t0) * 1000)
