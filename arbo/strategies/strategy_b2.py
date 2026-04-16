@@ -133,26 +133,68 @@ class StrategyB2:
         self._last_shadow_sweep_ts: float = 0.0
 
     async def init(self) -> None:
-        """Initialize strategy — restore state from paper engine."""
-        if self._paper_engine:
-            for pos in self._paper_engine.open_positions:
-                tid = pos.token_id
-                if getattr(pos, "strategy", "") == STRATEGY_NAME:
-                    self._open_positions[tid] = OpenPosition(
-                        token_id=tid,
-                        condition_id="",
-                        asset="BTC",  # Will be refined on next scan
-                        symbol="BTCUSDT",
-                        strike=0,
-                        direction="above",
-                        market_type="daily_above",
-                        entry_price=float(pos.avg_price),
-                        entry_exchange_price=0,
-                        sigma_at_entry=0.02,
-                        hours_to_expiry_at_entry=24,
-                        entry_time=time.time(),
-                        shares=int(pos.shares),
+        """Initialize strategy — restore B2 positions from DB with metadata.
+
+        Paper_engine.open_positions only carries generic fields (avg_price,
+        shares, size) — asset/strike/direction live in paper_trades.
+        trade_details JSON. If we only restore from paper_engine we get
+        asset="?" / strike=0 placeholders; any exit that fires before the
+        next scan refreshes them sends broken Slack notifications like
+        "B2 LIVE SELL — ? above $0". Query paper_trades directly to hydrate
+        the full OpenPosition on init.
+        """
+        from arbo.utils.db import PaperTrade, get_session_factory
+        import sqlalchemy as sa
+        factory = get_session_factory()
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    sa.select(PaperTrade).where(
+                        PaperTrade.strategy == STRATEGY_NAME,
+                        PaperTrade.status == "open",
                     )
+                )
+                rows = list(result.scalars().all())
+        except Exception as e:
+            logger.warning("b2_restore_db_failed", error=str(e))
+            rows = []
+
+        for row in rows:
+            td = row.trade_details or {}
+            asset = str(td.get("asset") or "?")
+            try:
+                strike = float(td.get("strike") or 0)
+            except (TypeError, ValueError):
+                strike = 0.0
+            entry_price = float(row.price or 0)
+            size = float(row.size or 0)
+            shares = int(size / entry_price) if entry_price > 0 else 0
+            try:
+                live_shares = int(td.get("live_entry_shares") or 0)
+            except (TypeError, ValueError):
+                live_shares = 0
+            try:
+                live_entry_price = float(td.get("live_entry_price") or 0)
+            except (TypeError, ValueError):
+                live_entry_price = 0.0
+            self._open_positions[row.token_id] = OpenPosition(
+                token_id=row.token_id,
+                condition_id=row.market_condition_id or "",
+                asset=asset,
+                symbol=f"{asset}USDT" if asset and asset != "?" else "BTCUSDT",
+                strike=strike,
+                direction=str(td.get("direction") or "above"),
+                market_type=str(td.get("market_type") or "daily_above"),
+                entry_price=entry_price,
+                entry_exchange_price=float(td.get("exchange_price") or 0),
+                sigma_at_entry=float(td.get("sigma") or 0.02),
+                hours_to_expiry_at_entry=float(td.get("hours_to_expiry") or 24),
+                entry_time=(row.placed_at.timestamp() if row.placed_at else time.time()),
+                shares=shares,
+                live_shares=live_shares,
+                live_entry_price=live_entry_price,
+                live_fill_status=str(td.get("live_fill_status") or ""),
+            )
 
         n_restored = len(self._open_positions)
         if n_restored:

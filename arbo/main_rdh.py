@@ -2465,8 +2465,36 @@ class RDHOrchestrator:
         Mirrors the B3 resolve-format so both channels read the same. Updates
         the cumulative tracker (_b2_live_total_*) and includes it in the text.
         Silent no-op when slack_bot is unavailable.
+
+        Suppression rules — don't spam Slack with uninformative messages:
+          1. No slack_bot → silent
+          2. shares == 0 AND pnl == 0 → nothing actually settled (e.g. maker
+             never filled, taker skipped) — would produce garbage like
+             "Trade: +\$0.00 | 0 shares"
+          3. asset is placeholder "?" AND strike == 0 → metadata missing
+             (position wasn't properly hydrated); skipping avoids broken
+             "B2 LIVE SELL — ? above \$0" messages
         """
         if self._slack_bot is None:
+            return
+        if shares == 0 and pnl == 0:
+            logger.debug(
+                "b2_slack_resolve_skip_empty",
+                exit_reason=exit_reason,
+                entry=entry_price,
+                exit=exit_price,
+            )
+            return
+        if asset in ("", "?") and strike == 0:
+            logger.warning(
+                "b2_slack_resolve_skip_missing_meta",
+                exit_reason=exit_reason,
+                entry=entry_price,
+                exit=exit_price,
+                shares=shares,
+                pnl=pnl,
+                msg="Skipping Slack — position metadata not hydrated; fix upstream",
+            )
             return
         self._b2_live_total_pnl += pnl
         self._b2_live_total_trades += 1
