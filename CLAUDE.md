@@ -3,6 +3,28 @@
 > This file is the authoritative reference for all development on Arbo.
 > Updated: 2026-02-21 (POLYMARKET PIVOT)
 
+## 🔴 MANDATORY: Read LEARNINGS.md before any change
+
+`LEARNINGS.md` is the operational memory — every bug, fix, architectural
+decision, and performance observation lives there. Before **any** of the
+following, open LEARNINGS.md and scan for relevant entries:
+
+- Strategy parameter change (even "small" ones)
+- Autoresearch validation of existing strategy
+- Deploying new code that touches live execution
+- Investigation of production anomalies
+- Optimization decisions
+
+You MUST also **update LEARNINGS.md autonomously** whenever you:
+- Find a bug (add entry before/while fixing)
+- Ship a fix (link commit hash)
+- Observe surprising behavior (WR, fill rate, slippage, latency)
+- Make architectural decisions with trade-offs
+
+Entries are grouped per strategy (B2, B3, B3_15M, D, ...) with a global
+section for system-wide patterns. Keep it fresh — stale knowledge is
+worse than no knowledge.
+
 ## What Is Arbo
 
 Automated trading system for Polymarket — a decentralized prediction market on Polygon blockchain. The system combines 9 strategic layers for generating edge through information asymmetry, statistical models, and on-chain analytics. Single-user, runs on VPS, interfaces via Slack + PostgreSQL.
