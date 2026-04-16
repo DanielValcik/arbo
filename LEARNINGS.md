@@ -490,6 +490,36 @@ avg hold is suspect for spread artifact. Validate by computing
 × N_trades. If this number is ≤ 0, the strategy has no real edge;
 paper is counting the spread as profit.
 
+### Low-frequency, high-quality entries after mirror fix
+
+**Observed 2026-04-17 early hours:**
+
+60+ min window with 0 executed trades, then a single entry at 21:34:
+BTC above $74000 @ $0.59, edge +35¢. Exchange price $74,951 (already
+above strike). This is qualitatively different from the pre-fix
+losers:
+
+| | Losers (B2-1 to 8) | This entry |
+|-|-|-|
+| Entry price | $0.06–$0.13 | $0.59 |
+| Signal edge | 8–15¢ | 35¢ |
+| Hours to expiry | 30–130h | 146h |
+| Market state vs strike | Well below | Already above |
+
+Pattern: post-quality-gate, B2 only fires when the signal has real
+margin over the spread — often on high-conviction positions where
+the market is already on the favorable side of the strike.
+
+**Implication for validation:** expect fewer but higher-quality
+trades than the inflated paper baseline predicted. Target sample
+rate likely 1-5 trades per hour (vs paper's ~2/hour during similar
+windows). Needs ~48h of data for N=30.
+
+**Memory health:** bounded collections are working. Post-restart
+memory grew ~155 MB over 3h = 50 MB/h, down from the pre-bounded
+100 MB/h rate. Still trends up but within the 2 GB/day ceiling
+we budgeted for.
+
 ### Performance observations (cumulative)
 
 Track per-week. Update entries here when material data comes in.
