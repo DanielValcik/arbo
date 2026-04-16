@@ -1867,13 +1867,13 @@ class StrategyB315M:
             exit_price = 1.0 if won else 0.0
 
             try:
+                live_shares = int(row["live_shares"] or 0)
+                entry_p = float(row["entry_price"] or 0)
                 if live_shares > 0:
                     shares = live_shares
                 else:
-                    entry_p = float(row["entry_price"] or 0)
                     size_usd = float(row["size_usd"] or 0)
                     shares = int(size_usd / entry_p) if entry_p > 0 else 0
-                entry_p = float(row["entry_price"] or 0)
                 pnl = shares * (exit_price - entry_p)
 
                 await self._paper_engine.update_trade_by_id(

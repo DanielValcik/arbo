@@ -2048,16 +2048,16 @@ class StrategyB3:
             won = (direction == 1 and up_won) or (direction == -1 and not up_won)
             exit_price = 1.0 if won else 0.0
 
-            # PnL: for paper-only (live_shares=0), assume paper fill at price,
-            # shares derived from size/price. For live, actual shares matter.
+            # PnL computation: prefer recorded live shares (accurate), else
+            # derive from paper size/price (size_usd / entry_p).
             try:
+                live_shares = int(row["live_shares"] or 0)
+                entry_p = float(row["entry_price"] or 0)
                 if live_shares > 0:
                     shares = live_shares
                 else:
-                    entry_p = float(row["entry_price"] or 0)
                     size_usd = float(row["size_usd"] or 0)
                     shares = int(size_usd / entry_p) if entry_p > 0 else 0
-                entry_p = float(row["entry_price"] or 0)
                 pnl = shares * (exit_price - entry_p)
 
                 await self._paper_engine.update_trade_by_id(
