@@ -2448,6 +2448,50 @@ class RDHOrchestrator:
         except Exception as e:
             logger.debug("b2_slack_entry_error", error=str(e))
 
+    async def _upsert_b2_live_exit_details(
+        self, *, token_id: str, live_exit_price: float,
+        live_exit_status: str, live_pnl: float,
+    ) -> None:
+        """Merge live-exit details into paper_trades.trade_details JSONB.
+
+        ExitManager's completion data (real CLOB fill price, shares sold,
+        realized PnL) must land in trade_details so the dashboard Live
+        counter — which filters on live_exit_status — actually includes
+        the row. Without this the trade_details only carry entry info
+        and the dashboard stays at \$0.00 even after successful live sells.
+        """
+        try:
+            import sqlalchemy as sa
+            from arbo.utils.db import get_session_factory
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    sa.text("""
+                        UPDATE paper_trades
+                        SET trade_details = COALESCE(trade_details, '{}'::jsonb)
+                          || jsonb_build_object(
+                               'live_exit_price', :px::numeric,
+                               'live_exit_status', :status,
+                               'live_pnl', :pnl::numeric
+                             )
+                        WHERE token_id = :tid
+                          AND status != 'open'
+                          AND (trade_details->>'live_entry_shares')::int > 0
+                    """),
+                    {
+                        "tid": token_id,
+                        "px": live_exit_price,
+                        "status": live_exit_status,
+                        "pnl": live_pnl,
+                    },
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(
+                "b2_upsert_live_exit_failed",
+                token=token_id[:20], error=str(e),
+            )
+
     async def _notify_b2_live_resolve(
         self,
         *,
@@ -2714,21 +2758,71 @@ class RDHOrchestrator:
         for result in completed_exits:
             tid = result.get("token_id")
             meta = b2_exit_registered.get(tid)
-            if meta is None or self._slack_bot is None:
+            if meta is None:
                 continue
-            try:
-                await self._notify_b2_live_resolve(
-                    asset=meta["asset"],
-                    strike=meta["strike"],
-                    direction=meta["direction"],
-                    exit_reason=meta["exit_reason"],
-                    entry_price=meta.get("live_entry_price") or result.get("entry_price", 0),
-                    exit_price=float(result.get("avg_sell_price", 0)),
-                    shares=int(result.get("shares_sold", 0)),
-                    pnl=float(result.get("pnl", 0)),
-                )
-            except Exception as e:
-                logger.debug("b2_slack_resolve_error", error=str(e))
+            shares_sold = int(result.get("shares_sold", 0))
+            avg_sell_price = float(result.get("avg_sell_price", 0))
+            live_pnl = float(result.get("pnl", 0))
+            live_entry = float(meta.get("live_entry_price") or result.get("entry_price", 0))
+
+            # CRITICAL: propagate the live sell into paper_engine + DB.
+            # ExitManager only touches the CLOB via live_executor — it has
+            # no knowledge of paper_trades or paper_engine._positions. If
+            # we skip this, the row stays status=open in DB (dashboard
+            # never sees the close) and paper_engine still holds the
+            # position (risk_manager over-counts deployed capital).
+            if shares_sold > 0 and avg_sell_price > 0:
+                try:
+                    from decimal import Decimal as D
+                    # 1. paper_engine: sell the position at the real live fill
+                    #    price. PnL computed from live fill price minus entry.
+                    self._paper_engine.sell_position(
+                        token_id=tid,
+                        sell_price=D(str(avg_sell_price)),
+                        exit_reason=meta.get("exit_reason") or "live_exit",
+                    )
+                    # 2. risk_manager: decrement live pool counters.
+                    self._risk_manager.strategy_post_trade(
+                        "B2", pos.size if pos else D("0"),
+                        pnl=D(str(live_pnl)),
+                        is_live_capital=True,
+                    )
+                    # 3. DB: update the paper_trades row with live outcome
+                    #    including live_exit_status / live_exit_price so the
+                    #    dashboard Live counter (which requires a real live
+                    #    exit) picks this up.
+                    await self._paper_engine.update_resolved_trades_in_db(
+                        token_id=tid,
+                        pnl=D(str(live_pnl)),
+                        exit_price=D(str(avg_sell_price)),
+                        exit_reason=meta.get("exit_reason") or "live_exit",
+                    )
+                    await self._upsert_b2_live_exit_details(
+                        token_id=tid,
+                        live_exit_price=avg_sell_price,
+                        live_exit_status="taker",  # ExitManager uses taker
+                        live_pnl=live_pnl,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "b2_live_exit_reconcile_failed",
+                        token=tid[:20], error=str(e),
+                    )
+
+            if self._slack_bot is not None:
+                try:
+                    await self._notify_b2_live_resolve(
+                        asset=meta["asset"],
+                        strike=meta["strike"],
+                        direction=meta["direction"],
+                        exit_reason=meta["exit_reason"],
+                        entry_price=live_entry,
+                        exit_price=avg_sell_price,
+                        shares=shares_sold,
+                        pnl=live_pnl,
+                    )
+                except Exception as e:
+                    logger.debug("b2_slack_resolve_error", error=str(e))
 
         if exits:
             logger.info(
