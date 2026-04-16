@@ -743,8 +743,10 @@ class RDHOrchestrator:
     async def _init_strategy_b2(self) -> Any:
         """Initialize Strategy B2: Crypto Price Edge.
 
-        Supports paper and live execution modes.
-        Set B2_EXECUTION_MODE=live in .env to enable real CLOB trading.
+        Supports paper, dual, and live modes via B2_EXECUTION_MODE env var.
+        In dual mode, paper is mirrored against real live fills — this is
+        the recommended mode for measuring real edge (paper alone inflates
+        PnL via spread earning, even with PAPER_MATCH_LIVE entry pricing).
         """
         import os
 
@@ -752,6 +754,11 @@ class RDHOrchestrator:
         from arbo.strategies.strategy_b2 import StrategyB2
 
         execution_mode = os.getenv("B2_EXECUTION_MODE", "paper")
+        live_capital = float(os.getenv("B2_LIVE_CAPITAL", "100"))
+        live_capital_fallback = float(os.getenv("B2_LIVE_STARTING_CAPITAL",
+                                                str(live_capital)))
+        live_entry_timeout = int(os.getenv("B2_LIVE_ENTRY_TIMEOUT_S", "30"))
+        live_daily_loss = float(os.getenv("B2_LIVE_DAILY_LOSS_LIMIT", "20"))
         live_executor = None
 
         # Initialize Binance WebSocket for real-time prices
@@ -759,18 +766,28 @@ class RDHOrchestrator:
         await self._binance_ws.start()
         logger.info("binance_ws_started_for_b2")
 
-        if execution_mode == "live":
+        if execution_mode in ("dual", "live"):
             from arbo.core.exit_manager import ExitManager
             from arbo.core.live_executor import LiveExecutor
 
             if self._poly_client_readonly is not None:
-                live_executor = LiveExecutor(self._poly_client_readonly)
-                # Reuse exit manager from C2, or create one if not yet created
+                # Reuse existing executor if B3 already created one (same wallet)
+                if hasattr(self, "_strategy_b3") and self._strategy_b3 is not None \
+                        and getattr(self._strategy_b3, "_live_executor", None) is not None:
+                    live_executor = self._strategy_b3._live_executor
+                    logger.info("b2_live_executor_shared_with_b3",
+                                mode=execution_mode)
+                else:
+                    live_executor = LiveExecutor(self._poly_client_readonly)
+                    logger.info("b2_live_executor_ready", mode=execution_mode,
+                                capital=live_capital)
                 if self._exit_manager is None:
                     self._exit_manager = ExitManager(live_executor)
-                logger.info("b2_live_executor_ready")
             else:
-                logger.warning("b2_live_executor_no_client", msg="Falling back to paper mode")
+                logger.warning(
+                    "b2_live_executor_no_client",
+                    msg="Falling back to paper mode",
+                )
                 execution_mode = "paper"
 
         s = StrategyB2(
@@ -780,6 +797,10 @@ class RDHOrchestrator:
             orderbook_provider=self._orderbook_provider,
             execution_mode=execution_mode,
             live_executor=live_executor,
+            live_capital=live_capital,
+            live_capital_fallback=live_capital_fallback,
+            live_entry_timeout_s=live_entry_timeout,
+            live_daily_loss_limit=live_daily_loss,
         )
         await s.init()
 
@@ -2412,7 +2433,12 @@ class RDHOrchestrator:
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)
 
-        is_live = self._strategy_b2._execution_mode == "live"
+        # Dual mode also needs live exit routing — any position with
+        # live_shares > 0 goes through ExitManager (real CLOB sell).
+        has_live_infra = (
+            self._strategy_b2._execution_mode in ("live", "dual")
+            and self._exit_manager is not None
+        )
 
         for token_id, exit_reason in (exits or []):
             bid_price = sell_prices.get(token_id)
@@ -2426,24 +2452,31 @@ class RDHOrchestrator:
             if pos is None:
                 continue
 
-            if is_live and self._exit_manager:
-                b2_pos = self._strategy_b2._open_positions.get(token_id)
-                shares = self._strategy_b2._live_executor._shares_owned.get(token_id, 0) if self._strategy_b2._live_executor else 0
-                if shares > 0:
-                    from arbo.core.exit_manager import PendingExit
+            # Route through live exit only when position actually has live
+            # shares on CLOB. In dual mode paper-only trades (live fill
+            # failed, mirror cancelled) take the paper path.
+            b2_pos = self._strategy_b2._open_positions.get(token_id)
+            live_shares_on_clob = 0
+            if has_live_infra and self._strategy_b2._live_executor:
+                live_shares_on_clob = (
+                    self._strategy_b2._live_executor._shares_owned.get(token_id, 0)
+                )
 
-                    self._exit_manager.register_exit(
-                        token_id=token_id,
-                        city=b2_pos.asset if b2_pos else "?",
-                        exit_reason=exit_reason,
-                        shares=shares,
-                        entry_price=float(pos.avg_price),
-                    )
-                    # Set non-NegRisk flag on the PendingExit
-                    pe = self._exit_manager._pending.get(token_id)
-                    if pe:
-                        pe.neg_risk = False
-                        pe.label = f"{b2_pos.asset}_{int(b2_pos.strike)}" if b2_pos else ""
+            if has_live_infra and live_shares_on_clob > 0:
+                from arbo.core.exit_manager import PendingExit
+
+                self._exit_manager.register_exit(
+                    token_id=token_id,
+                    city=b2_pos.asset if b2_pos else "?",
+                    exit_reason=exit_reason,
+                    shares=live_shares_on_clob,
+                    entry_price=float(pos.avg_price),
+                )
+                # Set non-NegRisk flag on the PendingExit
+                pe = self._exit_manager._pending.get(token_id)
+                if pe:
+                    pe.neg_risk = False
+                    pe.label = f"{b2_pos.asset}_{int(b2_pos.strike)}" if b2_pos else ""
             else:
                 # Paper: instant sell
                 from decimal import Decimal as D

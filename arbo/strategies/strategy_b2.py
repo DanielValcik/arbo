@@ -32,6 +32,7 @@ from arbo.strategies.crypto_price_scanner import (
 from arbo.strategies.crypto_quality_gate import (
     KELLY_RAW_CAP,
     MIN_HOLD_EDGE,
+    MIRROR_CANCEL_DEBOUNCE,
     PAPER_MATCH_LIVE,
     PROFIT_TARGET_ABS,
     VOLATILITY_METHOD,
@@ -73,6 +74,11 @@ class OpenPosition:
     hours_to_expiry_at_entry: float
     entry_time: float
     shares: int = 0
+    # Live execution tracking (dual mode) — shares_owned on CLOB, used by
+    # exit path to route through live_executor.sell vs paper sell_position.
+    live_shares: int = 0
+    live_entry_price: float = 0.0
+    live_fill_status: str = ""
 
 
 class StrategyB2:
@@ -86,6 +92,10 @@ class StrategyB2:
         orderbook_provider: Any | None = None,
         execution_mode: str = "paper",
         live_executor: Any | None = None,
+        live_capital: float = 100.0,
+        live_capital_fallback: float = 100.0,
+        live_entry_timeout_s: int = 30,
+        live_daily_loss_limit: float = 20.0,
     ) -> None:
         self._risk_manager = risk_manager
         self._paper_engine = paper_engine
@@ -94,6 +104,14 @@ class StrategyB2:
         self._execution_mode = execution_mode
         self._live_executor = live_executor
         self._exit_manager_ref: Any | None = None
+
+        # Live trading state (dual/live mode only)
+        self._live_capital = live_capital
+        self._live_capital_fallback = live_capital_fallback
+        self._live_capital_last_check = 0.0
+        self._live_entry_timeout_s = live_entry_timeout_s
+        self._live_daily_loss_limit = live_daily_loss_limit
+        self._live_daily_pnl = 0.0
 
         # Volatility estimator (maintains rolling price buffer)
         self._vol_estimator = VolatilityEstimator(
@@ -104,6 +122,8 @@ class StrategyB2:
         # Open position tracking
         self._open_positions: dict[str, OpenPosition] = {}
         self._last_trade_time: dict[str, float] = {}
+        # Debounce re-entry after mirror-cancel (see strategy_b3 for rationale).
+        self._last_mirror_attempt: dict[str, float] = {}
 
         # Phase PARALLEL: variant pool cache + shadow dedup
         self._variants_cache: list = []
@@ -377,21 +397,110 @@ class StrategyB2:
 
             actual_size = float(decision.adjusted_size or trade_size)
 
-            # 9. Execute
+            # Mirror-cancel debounce — skip tokens we recently failed to fill.
+            # Prevents cascade of paper trades when live keeps failing.
+            now = time.time()
+            if now - self._last_mirror_attempt.get(token_id, 0) < MIRROR_CANCEL_DEBOUNCE:
+                skip_reasons["mirror_debounce"] = skip_reasons.get("mirror_debounce", 0) + 1
+                continue
+
+            # Execution mode branches:
+            #   "paper"  — record paper only, no live call
+            #   "live"   — fire live, abort if no fill (no paper record)
+            #   "dual"   — fire live AND paper; if live fails, cancel paper
+            mirror_live = (
+                self._execution_mode == "dual"
+                and PAPER_MATCH_LIVE
+                and self._live_capital > 0
+            )
+            live_shares = 0
+            live_fill_status = "skipped"
+            live_entry_price = 0.0
+            live_latency_ms = 0
+            live_size = 0.0
+
             if self._execution_mode == "live" and self._live_executor:
+                # Pure-live: single-sided execution, no paper record if live fails
                 fill = await self._live_executor.buy(
-                    token_id=token_id,
-                    price=clob_price,
-                    size_usdc=actual_size,
-                    neg_risk=False,  # NOT NegRisk!
-                    tick_size="0.01",
+                    token_id=token_id, price=clob_price, size_usdc=actual_size,
+                    neg_risk=False, tick_size="0.01",
+                    maker_timeout_s=self._live_entry_timeout_s,
                 )
                 if fill.status in ("filled", "partial") and fill.shares_filled > 0:
                     shares = fill.shares_filled
                     fill_price = float(fill.fill_price) if fill.fill_price else clob_price
                 else:
                     continue
+            elif mirror_live and self._live_executor:
+                # Dual: size for live (from wallet), fire live first.
+                # Kill-switch: stop live if cumulative daily PnL below limit.
+                if self._live_daily_pnl <= -self._live_daily_loss_limit:
+                    logger.info(
+                        "b2_live_kill_switch",
+                        daily_pnl=round(self._live_daily_pnl, 2),
+                        limit=self._live_daily_loss_limit,
+                    )
+                    continue
+
+                # Refresh wallet balance every 60s (shared wallet with B3)
+                if now - self._live_capital_last_check > 60:
+                    try:
+                        bal = await self._live_executor.get_balance()
+                        self._live_capital = bal if bal > 10 else self._live_capital_fallback
+                        self._live_capital_last_check = now
+                        logger.info(
+                            "b2_live_balance",
+                            balance=f"${self._live_capital:.2f}",
+                            source="wallet" if bal > 10 else "fallback",
+                        )
+                    except Exception as e:
+                        logger.warning("b2_live_balance_failed", error=str(e))
+
+                # Live sizing: same % as paper, but on live wallet
+                position_pct = actual_size / float(strat_state.allocated) if strat_state.allocated > 0 else 0.03
+                live_size = min(self._live_capital * position_pct, 50.0)  # $50 hard cap
+                # Polymarket 5-share minimum: shares = int(size / price); enforce
+                wallet_floor = max(2.0, min(10.0, self._live_capital * 0.015))
+                shares_floor = 5.0 * clob_price + 0.01
+                live_min = max(wallet_floor, shares_floor)
+                if live_size < live_min:
+                    logger.info(
+                        "b2_live_size_too_small",
+                        live_size=round(live_size, 2),
+                        min_required=round(live_min, 2),
+                        price=round(clob_price, 3),
+                    )
+                    self._last_mirror_attempt[token_id] = now
+                    continue
+
+                fill = await self._live_executor.buy(
+                    token_id=token_id, price=clob_price, size_usdc=live_size,
+                    neg_risk=False, tick_size="0.01",
+                    maker_timeout_s=self._live_entry_timeout_s,
+                )
+                live_fill_status = fill.status
+                live_latency_ms = fill.latency_ms
+                if fill.status in ("filled", "partial") and fill.shares_filled > 0:
+                    live_shares = fill.shares_filled
+                    live_entry_price = float(fill.fill_price) if fill.fill_price else clob_price
+                    # Paper mirrors the ACTUAL fill price and shares
+                    fill_price = live_entry_price
+                    shares = live_shares
+                    # actual_size = what live actually deployed
+                    actual_size = live_shares * live_entry_price
+                else:
+                    # Live failed — don't create paper trade at all (avoids
+                    # phantom record). Debounce re-entry on this token.
+                    self._last_mirror_attempt[token_id] = now
+                    logger.info(
+                        "b2_mirror_live_skip",
+                        token=token_id[:20],
+                        status=fill.status,
+                        reason="live no-fill → skip paper too",
+                    )
+                    continue
             else:
+                # Pure paper
                 shares = int(actual_size / clob_price)
                 fill_price = clob_price
 
@@ -425,6 +534,16 @@ class StrategyB2:
                         # Flag so post-analysis can separate mirror-on vs
                         # mirror-off paper trades (pre- vs post-deploy).
                         "paper_match_live": PAPER_MATCH_LIVE,
+                        # Live fill details (only populated in dual mode).
+                        # live_shares > 0 distinguishes real-capital trades
+                        # from paper-only ones in dashboards/analytics.
+                        "mirror_live": mirror_live,
+                        "live_fill_status": live_fill_status,
+                        "live_entry_price": live_entry_price,
+                        "live_entry_shares": live_shares,
+                        "live_entry_latency_ms": live_latency_ms,
+                        "live_size_usd": round(live_size, 2),
+                        "live_capital": self._live_capital if mirror_live else 0,
                     },
                 )
 
@@ -447,6 +566,9 @@ class StrategyB2:
                 hours_to_expiry_at_entry=sig.hours_to_expiry,
                 entry_time=time.time(),
                 shares=shares,
+                live_shares=live_shares,
+                live_entry_price=live_entry_price,
+                live_fill_status=live_fill_status,
             )
             self._last_trade_time[token_id] = time.time()
 
@@ -460,6 +582,8 @@ class StrategyB2:
                 size=f"${actual_size:.2f}",
                 exchange_price=f"${sig.current_exchange_price:.0f}",
                 mode=self._execution_mode,
+                live=live_fill_status if mirror_live else None,
+                live_shares=live_shares if mirror_live else None,
             )
 
             executed.append(sig)

@@ -74,6 +74,12 @@ MAX_EXCHANGE_PRICE_AGE_S = 30.0  # Max 30 seconds stale
 # (e.g. comparing model against idealized fills).
 PAPER_MATCH_LIVE = True
 
+# Mirror-cancel debounce: after live fails to fill in dual mode, block
+# re-entry on the same token for this many seconds. Matches the B3 pattern
+# (120s covers ~2 poll cycles at 60s cadence — enough for orderbook to
+# refresh materially).
+MIRROR_CANCEL_DEBOUNCE = 120
+
 # Excluded assets (insufficient liquidity)
 EXCLUDED_ASSETS: set[str] = {"SOL", "XRP", "DOGE", "ADA", "BNB"}
 
