@@ -1311,7 +1311,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
-                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial','maker','taker','maker+taker')
                               AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                         """),
                         {"strat": dual_strat},
@@ -1379,7 +1379,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
-                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial','maker','taker','maker+taker')
                               AND resolved_at >= :week_start
                               AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                         """),
@@ -1427,7 +1427,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
-                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial','maker','taker','maker+taker')
                               AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                               AND resolved_at >= :since
                         """),
@@ -1466,7 +1466,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_entry_price' IS NOT NULL
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
-                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                              AND trade_details->>'live_exit_status' IN ('resolution','filled','partial','maker','taker','maker+taker')
                               AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                               AND resolved_at >= :since
                         """),
@@ -3219,7 +3219,7 @@ class RDHOrchestrator:
                           AND trade_details->>'live_entry_price' IS NOT NULL
                           AND (trade_details->>'live_entry_shares')::float > 0
                           AND trade_details->>'live_exit_price' IS NOT NULL
-                          AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
+                          AND trade_details->>'live_exit_status' IN ('resolution','filled','partial','maker','taker','maker+taker')
                           AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                     """),
                     {"strat": strategy},
