@@ -45,7 +45,16 @@ STRATEGY_ALLOCATIONS: dict[str, Decimal] = {
     "D_EPL": Decimal("200"),  # EPL Green Book — sweep winner #12 (100% profitable sweep)
 }
 RESERVE_CAPITAL = Decimal("200")  # 10% reserve — NEVER deployed
-MAX_POSITIONS_PER_STRATEGY = 10  # Max concurrent positions per strategy
+
+# Position limits — separated per capital type so paper (simulated, no
+# real money) doesn't block live (real capital). Historic paper positions
+# from before dual-mode deploy otherwise starve the live slot budget.
+MAX_LIVE_POSITIONS_PER_STRATEGY = 10   # Tight — protects real capital concentration
+MAX_PAPER_POSITIONS_PER_STRATEGY = 30  # Loose — paper = data collection, no capital at risk
+# Kept as alias for backwards compat with older callers that haven't been
+# updated to the split limits (treats generic calls as paper).
+MAX_POSITIONS_PER_STRATEGY = MAX_PAPER_POSITIONS_PER_STRATEGY
+
 STRATEGY_WEEKLY_DRAWDOWN_PCT = Decimal("0.50")  # 50% weekly drawdown → halt strategy (raised for live optimization phase)
 
 
@@ -63,6 +72,10 @@ class TradeRequest:
     confluence_score: int = 0
     is_whale_copy: bool = False
     strategy: str = ""  # RDH strategy: "A", "B", "C", or "" for legacy
+    # True when this request represents real capital deployed (dual-mode
+    # mirror or pure live). Paper-only requests (no real fill intended)
+    # are checked against the paper slot/capital budget instead.
+    is_live_capital: bool = False
 
 
 @dataclass
@@ -76,18 +89,30 @@ class RiskDecision:
 
 @dataclass
 class StrategyState:
-    """Per-strategy allocation and exposure tracking (RDH)."""
+    """Per-strategy allocation and exposure tracking (RDH).
+
+    `deployed` / `position_count` track the paper slot budget (simulated
+    positions, capped by MAX_PAPER_POSITIONS_PER_STRATEGY). Historic paper
+    trades and pure-paper strategies use these.
+
+    `live_deployed` / `live_position_count` track real capital (dual-mode
+    mirror or pure-live), capped by MAX_LIVE_POSITIONS_PER_STRATEGY. These
+    are the slots that protect actual blast radius — paper doesn't share
+    the budget.
+    """
 
     allocated: Decimal
-    deployed: Decimal = Decimal("0")
+    deployed: Decimal = Decimal("0")          # Paper-only deployed
     weekly_pnl: Decimal = Decimal("0")
     total_pnl: Decimal = Decimal("0")
-    position_count: int = 0
+    position_count: int = 0                    # Paper-only count
+    live_deployed: Decimal = Decimal("0")     # Real capital deployed
+    live_position_count: int = 0              # Real capital positions
     is_halted: bool = False
 
     @property
     def available(self) -> Decimal:
-        """Capital available to deploy for this strategy."""
+        """Capital available to deploy for this strategy (paper budget)."""
         return self.allocated - self.deployed
 
 
@@ -373,7 +398,12 @@ class RiskManager:
         # Actual order cancellation and Slack notification handled by caller
 
     def _check_strategy_limits(self, request: TradeRequest) -> RiskDecision:
-        """Check RDH per-strategy limits."""
+        """Check RDH per-strategy limits.
+
+        Paper and live requests check against separate slot/capital pools
+        (see StrategyState docstring). Historic paper positions and live
+        wallet positions do not share a slot budget.
+        """
         strategy = request.strategy
         if strategy not in self._state.strategies:
             return RiskDecision(
@@ -391,21 +421,34 @@ class RiskManager:
                 f"CEO escalation required.",
             )
 
-        # Would exceed strategy allocation?
-        if ss.deployed + request.size > ss.allocated:
-            return RiskDecision(
-                approved=False,
-                reason=f"Strategy {strategy}: deployed {ss.deployed} + size {request.size} "
-                f"would exceed allocation {ss.allocated}",
-            )
-
-        # Position count limit
-        if ss.position_count >= MAX_POSITIONS_PER_STRATEGY:
-            return RiskDecision(
-                approved=False,
-                reason=f"Strategy {strategy}: already has {ss.position_count} positions "
-                f"(max {MAX_POSITIONS_PER_STRATEGY})",
-            )
+        if request.is_live_capital:
+            # Live pool: position count limit. Allocation for live is
+            # governed by the wallet balance at the strategy level, not
+            # by the paper allocation.
+            if ss.live_position_count >= MAX_LIVE_POSITIONS_PER_STRATEGY:
+                return RiskDecision(
+                    approved=False,
+                    reason=(
+                        f"Strategy {strategy}: already has {ss.live_position_count} "
+                        f"LIVE positions (max {MAX_LIVE_POSITIONS_PER_STRATEGY})"
+                    ),
+                )
+        else:
+            # Paper pool: both capital + count caps apply.
+            if ss.deployed + request.size > ss.allocated:
+                return RiskDecision(
+                    approved=False,
+                    reason=f"Strategy {strategy}: paper deployed {ss.deployed} + "
+                    f"size {request.size} would exceed allocation {ss.allocated}",
+                )
+            if ss.position_count >= MAX_PAPER_POSITIONS_PER_STRATEGY:
+                return RiskDecision(
+                    approved=False,
+                    reason=(
+                        f"Strategy {strategy}: already has {ss.position_count} "
+                        f"PAPER positions (max {MAX_PAPER_POSITIONS_PER_STRATEGY})"
+                    ),
+                )
 
         return RiskDecision(approved=True, reason="Strategy checks passed")
 
@@ -414,6 +457,8 @@ class RiskManager:
         strategy: str,
         size: Decimal,
         pnl: Decimal | None = None,
+        *,
+        is_live_capital: bool = False,
     ) -> None:
         """Update per-strategy state after a trade fill or resolution.
 
@@ -421,6 +466,10 @@ class RiskManager:
             strategy: Strategy identifier ("A", "B", "C").
             size: Trade size in USDC.
             pnl: Realized P&L if position resolved (None for new positions).
+            is_live_capital: True when this trade deploys real capital (dual
+                mode mirror or pure live). Updates live_* fields instead of
+                the paper-only fields. Defaults to False (paper) for
+                backwards compatibility with existing callers.
         """
         if strategy not in self._state.strategies:
             logger.warning("unknown_strategy_update", strategy=strategy)
@@ -429,12 +478,22 @@ class RiskManager:
         ss = self._state.strategies[strategy]
         if pnl is None:
             # Opening new position
-            ss.deployed += size
-            ss.position_count += 1
+            if is_live_capital:
+                ss.live_deployed += size
+                ss.live_position_count += 1
+            else:
+                ss.deployed += size
+                ss.position_count += 1
         else:
             # Closing position
-            ss.deployed = max(Decimal("0"), ss.deployed - size)
-            ss.position_count = max(0, ss.position_count - 1)
+            if is_live_capital:
+                ss.live_deployed = max(Decimal("0"), ss.live_deployed - size)
+                ss.live_position_count = max(0, ss.live_position_count - 1)
+            else:
+                ss.deployed = max(Decimal("0"), ss.deployed - size)
+                ss.position_count = max(0, ss.position_count - 1)
+            # P&L is tracked together for strategy-level drawdown decisions
+            # regardless of capital origin — the halted flag applies globally.
             ss.weekly_pnl += pnl
             ss.total_pnl += pnl
 

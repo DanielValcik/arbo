@@ -379,6 +379,13 @@ class StrategyB2:
             # 8. Risk check
             from arbo.core.risk_manager import TradeRequest
 
+            # Dual/live mode trades count against the LIVE slot budget.
+            # Paper-only (execution_mode="paper") uses the paper budget.
+            # When live ends up not filling in dual mode, mirror-cancel
+            # currently skips the paper record — so this flag stays True
+            # only for requests we genuinely expect to consume real capital.
+            will_use_live_capital = self._execution_mode in ("dual", "live")
+
             trade_req = TradeRequest(
                 market_id=sig.condition_id,
                 token_id=token_id,
@@ -388,6 +395,7 @@ class StrategyB2:
                 layer=0,
                 market_category="crypto",
                 strategy=STRATEGY_NAME,
+                is_live_capital=will_use_live_capital,
             )
             decision = self._risk_manager.pre_trade_check(trade_req)
             if not decision.approved:
@@ -545,6 +553,11 @@ class StrategyB2:
                         "live_size_usd": round(live_size, 2),
                         "live_capital": self._live_capital if mirror_live else 0,
                     },
+                    # Route the paper-engine strategy_post_trade call to the
+                    # correct pool. In dual mode the paper trade is a mirror
+                    # of a real CLOB fill — it should occupy a LIVE slot, not
+                    # steal from the paper budget.
+                    is_live_capital=(live_shares > 0),
                 )
 
             if paper_trade is None and self._paper_engine:

@@ -188,6 +188,7 @@ class PaperTradingEngine:
         clob_fill_price: Decimal | None = None,
         trade_details: dict | None = None,
         bypass_risk_check: bool = False,
+        is_live_capital: bool = False,
     ) -> PaperTrade | None:
         """Place a simulated paper trade.
 
@@ -270,6 +271,8 @@ class PaperTradingEngine:
                 market_category=market_category,
                 confluence_score=confluence_score,
                 is_whale_copy=is_whale_copy,
+                strategy=strategy,
+                is_live_capital=is_live_capital,
             )
             decision = self._risk_manager.pre_trade_check(request)
             if not decision.approved:
@@ -375,9 +378,13 @@ class PaperTradingEngine:
             # CRITICAL: also increment per-strategy deployed/position_count
             # so MAX_POSITIONS_PER_STRATEGY and allocation cap are enforced.
             # Without this, strategies bypass their own risk limits.
+            # is_live_capital routes to the live slot pool (real capital)
+            # vs the paper pool (simulated).
             if strategy:
                 try:
-                    self._risk_manager.strategy_post_trade(strategy, size)
+                    self._risk_manager.strategy_post_trade(
+                        strategy, size, is_live_capital=is_live_capital,
+                    )
                 except Exception as e:
                     logger.warning("strategy_post_trade_error", strategy=strategy, error=str(e))
 

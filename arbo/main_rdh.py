@@ -2521,14 +2521,19 @@ class RDHOrchestrator:
                     pe.neg_risk = False
                     pe.label = f"{b2_pos.asset}_{int(b2_pos.strike)}" if b2_pos else ""
             else:
-                # Paper: instant sell
+                # Paper or paper-only branch of dual mode: instant sell.
+                # is_live_capital on the decrement must match what was used
+                # at entry so the correct pool is released.
                 from decimal import Decimal as D
                 pnl = self._paper_engine.sell_position(
                     token_id=token_id,
                     sell_price=D(str(bid_price)),
                     exit_reason=exit_reason,
                 )
-                self._risk_manager.strategy_post_trade("B2", pos.size, pnl=pnl)
+                was_live = bool(b2_pos and b2_pos.live_shares > 0)
+                self._risk_manager.strategy_post_trade(
+                    "B2", pos.size, pnl=pnl, is_live_capital=was_live,
+                )
                 await self._paper_engine.update_resolved_trades_in_db(
                     token_id=token_id, pnl=pnl,
                     exit_price=D(str(bid_price)), exit_reason=exit_reason,
