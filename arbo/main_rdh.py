@@ -2463,7 +2463,7 @@ class RDHOrchestrator:
             token_ids, neg_risk=True
         )
         current_prices: dict[str, float] = {}  # midpoint for edge check
-        sell_prices: dict[str, float] = {}     # BUY price = what seller receives
+        sell_prices: dict[str, float] = {}     # LOW side — taker SELL receives this
         for tid, snap in snapshots.items():
             if snap is None:
                 continue
@@ -2471,7 +2471,13 @@ class RDHOrchestrator:
             best_ask = float(snap.best_ask) if snap.best_ask else 0
             if best_bid > 0.001 and best_ask > 0.001:
                 current_prices[tid] = (best_bid + best_ask) / 2
-                sell_prices[tid] = best_bid  # Sell at BUY price (taker sell)
+                # Paper SELL in mirror mode must receive the taker-sell price
+                # (the LOW side) to stay in parity with live. Polymarket /price
+                # semantics are inverted on non-NegRisk markets — don't trust
+                # bid/ask labels, use min/max for the invariant. Previously
+                # used best_bid directly which happened to be the HIGH side
+                # for B2, so paper sold at a 2c/share premium vs live taker.
+                sell_prices[tid] = min(best_bid, best_ask)
 
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)

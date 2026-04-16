@@ -302,16 +302,28 @@ class StrategyB2:
                 logger.debug("b2_wide_spread", mid=mid, bid=raw_bid, ask=raw_ask, spread_pct=f"{spread_pct:.2f}")
                 continue
 
-            # Entry price source — gated by PAPER_MATCH_LIVE to match the B3
-            # mirror pattern (paper ≡ live). Live taker BUY pays raw_ask
-            # (maker bid is irrelevant for the buy leg). The legacy
-            # min(bid, ask) path earned the spread — systematically inflating
-            # paper PnL vs live. Flip to False only for research against
-            # spread-free model performance.
+            # Entry price source — gated by PAPER_MATCH_LIVE.
+            #
+            # IMPORTANT: orderbook_provider stores Polymarket /price endpoint
+            # semantically INVERTED vs a standard exchange orderbook:
+            #   best_bid = get_price("SELL") = what a seller receives (LOW)
+            #   best_ask = get_price("BUY")  = what a buyer pays     (HIGH?)
+            # But empirically on non-NegRisk crypto markets (B2), the observed
+            # values are the OPPOSITE: raw_bid is higher than raw_ask. Our
+            # first 11 live fills confirmed: live taker BUY paid
+            #   max(raw_bid, raw_ask) = the HIGH side,
+            # while paper using raw_ask was filling at the LOW side — earning
+            # ~\$0.02/share spread vs live (≈9.5% drag on deployed capital).
+            #
+            # Fix: don't rely on bid/ask labels. For a BUY leg the taker pays
+            # whichever side is higher; for a SELL leg receives whichever is
+            # lower. max/min is the invariant regardless of inversion.
+            hi = max(raw_bid, raw_ask)
+            lo = min(raw_bid, raw_ask)
             if PAPER_MATCH_LIVE:
-                clob_price = raw_ask if raw_ask > 0.001 else mid
+                clob_price = hi if hi > 0.001 else mid
             else:
-                clob_price = min(raw_bid, raw_ask) if min(raw_bid, raw_ask) > 0.001 else mid
+                clob_price = lo if lo > 0.001 else mid
 
             # 6. Revalidate with CLOB price
             from arbo.strategies.crypto_quality_gate import MIN_PRICE, MAX_PRICE, MIN_EDGE
