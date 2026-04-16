@@ -37,13 +37,52 @@ logger = get_logger("strategy_d_discovery_epl")
 GAMMA_API = "https://gamma-api.polymarket.com"
 
 
+_EPL_TEAM_CODES = {
+    "arsenal": "ARS",
+    "astonvilla": "AVL", "villa": "AVL",
+    "brighton": "BHA", "brightonhovealbion": "BHA", "brightonandhovealbion": "BHA",
+    "bournemouth": "BOU", "afcbournemouth": "BOU",
+    "brentford": "BRE",
+    "burnley": "BUR",
+    "chelsea": "CHE",
+    "crystalpalace": "CRY", "palace": "CRY",
+    "everton": "EVE",
+    "fulham": "FUL",
+    "ipswich": "IPS", "ipswichtown": "IPS",
+    "leeds": "LEE", "leedsunited": "LEE",
+    "leicester": "LEI", "leicestercity": "LEI",
+    "liverpool": "LIV",
+    "luton": "LUT", "lutontown": "LUT",
+    "manchestercity": "MCI", "mancity": "MCI", "mcfc": "MCI",
+    "manchesterunited": "MUN", "manunited": "MUN", "manutd": "MUN", "mufc": "MUN",
+    "newcastle": "NEW", "newcastleunited": "NEW",
+    "nottinghamforest": "NFO", "forest": "NFO",
+    "sheffieldunited": "SHU",
+    "southampton": "SOU",
+    "sunderland": "SUN",
+    "tottenham": "TOT", "tottenhamhotspur": "TOT", "spurs": "TOT",
+    "westham": "WHU", "westhamunited": "WHU",
+    "wolves": "WOL", "wolverhamptonwanderers": "WOL", "wolverhampton": "WOL",
+}
+
+
 def _team_key(name: str) -> str:
-    """Normalize team name (unicode, lowercase, strip suffixes)."""
+    """Normalize team name to EPL 3-letter code matching Pinnacle cache keys.
+
+    Pinnacle cache uses standard football abbreviations (ARS, LIV, MCI, etc).
+    We map Polymarket full names via _EPL_TEAM_CODES.
+    """
     if not name:
         return ""
     normalized = unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode()
     normalized = re.sub(r"\b(f\.?c\.?|fc)\b", "", normalized.lower())
-    return re.sub(r"[^a-z]", "", normalized)
+    flat = re.sub(r"[^a-z]", "", normalized)
+    code = _EPL_TEAM_CODES.get(flat)
+    if code:
+        return code
+    # Fallback: first 3 chars uppercase (matches research_d abbreviation for
+    # single-word names not in the lookup). Logged in scan to surface misses.
+    return flat[:3].upper()
 
 
 _BEAT_RE = re.compile(r"[Ww]ill\s+(.+?)\s+beat\s+(.+?)[\?\s]*$")
@@ -193,6 +232,7 @@ async def discover_epl_markets(gamma_client: Any = None) -> list[MarketData]:
                 no_price=no_price,
                 volume=float(mkt.get("volume", 0) or 0),
                 neg_risk=bool(mkt.get("negRisk", False)),
+                outcome_type=outcome_type,
             ))
 
     logger.info("discover_epl_markets", found=len(markets), events=len(unique))

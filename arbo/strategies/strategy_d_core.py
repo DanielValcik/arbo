@@ -51,6 +51,9 @@ class MarketData:
     no_price: float
     volume: float
     neg_risk: bool
+    # Question type: "moneyline" (YES = team_a beats team_b) or
+    # "draw" (YES = match ends in a draw — EPL only).
+    outcome_type: str = "moneyline"
 
 
 @dataclass
@@ -210,8 +213,13 @@ class StrategyDCore:
 
     # ── Model ─────────────────────────────────────────────────────────
 
-    def compute_model_prob(self, team_a: str, team_b: str) -> float | None:
-        """Probability of team_a winning, using Elo + Pinnacle ensemble."""
+    def compute_model_prob(self, team_a: str, team_b: str,
+                           outcome_type: str = "moneyline") -> float | None:
+        """Probability of team_a winning, using Elo + Pinnacle ensemble.
+
+        outcome_type is accepted for compatibility with overrides like EPL's
+        Dixon-Coles draw handling; the base implementation ignores it.
+        """
         elo_a = self._elo.get(team_a)
         elo_b = self._elo.get(team_b)
 
@@ -340,7 +348,9 @@ class StrategyDCore:
                 stale_count += 1
                 continue
 
-            prob = self.compute_model_prob(market.team_a, market.team_b)
+            prob = self.compute_model_prob(
+                market.team_a, market.team_b, outcome_type=market.outcome_type,
+            )
             if prob is None:
                 continue
 
@@ -482,6 +492,33 @@ class StrategyDCore:
         if shares < 1:
             return None
 
+        # Pre-entry orderbook sanity check — catches markets Gamma still reports
+        # as active but whose orderbook has already collapsed to resolution
+        # (0.01/0.99). Without this, we enter "stale" markets at Gamma price
+        # 0.30-ish and exit 1 minute later at 0.01.
+        if self._ob is not None:
+            try:
+                snap = await self._ob.get_snapshot(
+                    signal.token_id, neg_risk=bool(signal.market.neg_risk),
+                )
+                if snap is not None:
+                    bid = float(snap.best_bid) if snap.best_bid is not None else None
+                    ask = float(snap.best_ask) if snap.best_ask is not None else None
+                    # If either side is at the resolution tick, market is settled.
+                    extremes = [p for p in (bid, ask) if p is not None]
+                    if extremes and (min(extremes) <= 0.02 or max(extremes) >= 0.98):
+                        # Permanent cooldown — don't revisit until cache clears
+                        self._recent_exits[signal.market.condition_id] = now + 3.15e9
+                        self._persist_recent_exits()
+                        self._logger.info(
+                            "entry_skipped_resolved", sport=self.SPORT_NAME,
+                            gamma_price=signal.entry_price, ob_bid=bid, ob_ask=ask,
+                            team_a=signal.market.team_a, team_b=signal.market.team_b,
+                        )
+                        return None
+            except Exception as e:
+                self._logger.warning("entry_ob_check_failed", error=str(e))
+
         position = DPosition(
             sport=self.SPORT_NAME,
             condition_id=signal.market.condition_id,
@@ -524,6 +561,7 @@ class StrategyDCore:
                 market_category="Sports",
                 strategy=self.STRATEGY_NAME,
                 trade_details=trade_details,
+                pre_computed_size=Decimal(str(signal.kelly_size)),
             )
             if trade:
                 position.live_fill_status = "paper"
@@ -560,6 +598,9 @@ class StrategyDCore:
                     self._logger.info(
                         "entry_live_skipped", sport=self.SPORT_NAME,
                         reason=getattr(fill, "status", "no_fill"),
+                        error=getattr(fill, "error", ""),
+                        team_a=signal.market.team_a, team_b=signal.market.team_b,
+                        price=signal.entry_price, size_usdc=size_usdc,
                     )
             except Exception as e:
                 self._logger.error("live_entry_error", error=str(e))

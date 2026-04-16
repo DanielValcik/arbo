@@ -131,13 +131,8 @@ class StrategyDEpl(StrategyDCore):
 
     # ── Dixon-Coles probability override ──────────────────────────────
 
-    def compute_model_prob(self, team_a: str, team_b: str) -> float | None:
-        """Use Dixon-Coles model for EPL probabilities.
-
-        Returns P(team_a wins) for 2-way moneyline markets.
-        For draw-specific markets, the caller can override outcome.
-        """
-        # Get raw Pinnacle 2-way
+    def _dc_probs(self, team_a: str, team_b: str) -> tuple[float, float, float] | None:
+        """Return (p_home, p_draw, p_away) Dixon-Coles probs or None."""
         pin_prob = None
         for key_teams in [(team_a, team_b), (team_b, team_a)]:
             pin_key = f"{self.SPORT_NAME}_{key_teams[0]}_{key_teams[1]}"
@@ -145,16 +140,28 @@ class StrategyDEpl(StrategyDCore):
                 hp, ap = self._pinnacle[pin_key]
                 pin_prob = (hp, ap) if key_teams[0] == team_a else (ap, hp)
                 break
-
         if pin_prob is None:
-            # No Pinnacle — fall back to base class (Elo/Glicko if available)
-            return super().compute_model_prob(team_a, team_b)
-
-        # Apply Dixon-Coles correction
+            return None
         p_h_pin, p_a_pin = pin_prob
-        p_home, _p_draw, _p_away = dixon_coles_probs(p_h_pin, p_a_pin)
+        return dixon_coles_probs(p_h_pin, p_a_pin)
 
-        # Blend with Elo if available (small weight since DC is sport-specific)
+    def compute_model_prob(self, team_a: str, team_b: str,
+                           outcome_type: str = "moneyline") -> float | None:
+        """Probability for the YES outcome given market type.
+
+        - moneyline → P(team_a wins)
+        - draw → P(match ends in a draw)
+        """
+        dc = self._dc_probs(team_a, team_b)
+        if dc is None:
+            return super().compute_model_prob(team_a, team_b)
+        p_home, p_draw, _p_away = dc
+
+        if outcome_type == "draw":
+            # Draw markets are not Elo-blended (Elo doesn't model draws directly)
+            return p_draw
+
+        # Moneyline: blend Dixon-Coles home with Elo
         elo_a = self._elo.get(team_a)
         elo_b = self._elo.get(team_b)
         if elo_a and elo_b:

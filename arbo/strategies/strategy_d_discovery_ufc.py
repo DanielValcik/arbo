@@ -32,19 +32,26 @@ GAMMA_API = "https://gamma-api.polymarket.com"
 
 
 def _fighter_key(name: str) -> str:
-    """Normalize fighter name to abbreviation-like key.
+    """Normalize fighter name to Pinnacle cache key format.
 
-    UFC fighters don't have standard team abbrevs. We use last-name based keys.
-    Example: 'Islam Makhachev' → 'MAKHACHEV'
+    Cache uses first-name 3-letter prefix (e.g. 'Ilia Topuria' → 'ILI',
+    'Justin Gaethje' → 'JUS'). This matches research_d/export_backtest_cache.py
+    `team_to_abbreviation` which returns cleaned[:3].upper() for names treated
+    as single tokens in the Pinnacle source.
     """
     if not name:
         return ""
-    cleaned = re.sub(r"[^a-zA-Z\s-]", "", name).strip()
+    cleaned = re.sub(r"[^a-zA-Z\s\.-]", "", name).strip()
     parts = cleaned.split()
     if not parts:
         return ""
-    # Use last word, uppercase
-    return parts[-1].upper()
+    # First name, first 3 chars. Pad to 3 chars with spaces for short names
+    # like 'Bo ' or 'Yi ' — cache preserves trailing whitespace in keys.
+    first = parts[0]
+    key = first[:3].upper()
+    if len(key) < 3:
+        key = key.ljust(3)
+    return key
 
 
 _FIGHT_PATTERNS = [
