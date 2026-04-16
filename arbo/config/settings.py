@@ -150,7 +150,15 @@ class OrchestratorConfig(BaseModel):
     """Orchestrator runtime configuration."""
 
     health_check_interval_s: int = 30
-    heartbeat_timeout_s: int = 120
+    # Task watcher kills tasks that don't update their heartbeat for this
+    # long. Bumped 120s → 300s because B2's dual-mode poll cycle runs
+    # through multiple signals serially and each can wait out a 30s maker
+    # + 5s taker fallback = ~35s per live attempt. 3 attempts ≈ 2 min,
+    # which exceeded 120s and killed the task mid-cycle → max_restart_count
+    # reached in 5 min → B2 permanently halted. 300s accommodates the
+    # legitimate worst case while still catching genuinely hung async
+    # awaits within a reasonable window. See LEARNINGS B2-14.
+    heartbeat_timeout_s: int = 300
     max_restart_count: int = 10
     signal_batch_timeout_s: float = 2.0
     dashboard_update_interval_s: int = 60

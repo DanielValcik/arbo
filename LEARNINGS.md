@@ -308,6 +308,29 @@ Five occurrences updated. Commit `231f8f9`.
 filters that distinguish "real live exit" from "not". Search for the
 existing status set and update in sync.
 
+#### B2-14. Task watcher killed B2 mid-poll during serial live attempts
+**What:** B2 task stopped logging after 19:04:26 (one successful live
+entry), health watcher reported `health_task_hung` at 19:04:28, then hit
+`task_max_restarts` at 19:09:08 → task permanently stopped. B2 was dead
+for ~40 min until user-triggered monitoring noticed.
+
+**Why:** `OrchestratorConfig.heartbeat_timeout_s=120` was below B2's
+legitimate worst-case poll runtime. With 20+ qualified signals per
+poll and each serializing through a 30s maker + 5s taker fallback, a
+cycle with 3 live attempts easily reaches 2 min. Heartbeat is only
+updated between poll iterations (line 1858-1860 main_rdh), not during
+the `coro_factory()` execution.
+
+**Fix:** Bump `heartbeat_timeout_s` from 120 → 300 in settings.
+Commit (pending — ships with this LEARNINGS update).
+
+**Lesson:** The health watcher timeout must be > (max legitimate poll
+runtime + safety margin). Any strategy that serializes remote I/O per
+signal (B2 taker fallback, large market scans, slow external APIs)
+bumps the floor. Alternative fix for future: plumb mid-cycle heartbeat
+pings from strategies so long legitimate operations don't look like
+hangs.
+
 #### B2-13. Wallet API pagination default = 100
 **What:** Initial reconciliation of "which tokens are held on-chain" used
 `data-api.polymarket.com/positions?user=X` which defaults to limit=100.
