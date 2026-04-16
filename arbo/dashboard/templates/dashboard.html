@@ -4124,13 +4124,17 @@
             document.getElementById('lb2Positions').textContent = b2.position_count || 0;
         }
 
-        // Charts — cumulative line + daily bars
+        // Charts — cumulative line (split Total/Live/Paper) + daily bars
         if (evrOverview && evrOverview.daily_series && evrOverview.daily_series.length > 0) {
             const series = evrOverview.daily_series;
             const labels = series.map(d => d.date ? d.date.slice(5) : '');
             const cumValues = series.map(d => d.cumulative);
+            const cumLive = series.map(d => d.cumulative_live || 0);
+            const cumPaper = series.map(d => d.cumulative_paper || 0);
             const dailyValues = series.map(d => d.pnl);
             const dailyColors = dailyValues.map(v => v >= 0 ? '#3fb950' : '#f85149');
+
+            const hasLiveData = cumLive.some(v => v !== 0);
 
             const avgDaily = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
             const avgEl = document.getElementById('lb2AvgDailyPnl');
@@ -4139,16 +4143,24 @@
                 avgEl.textContent = 'prumer: ' + (avgDaily >= 0 ? '+' : '') + '$' + avgDaily.toFixed(2) + '/den';
             }
 
-            // Cumulative line chart
+            // Cumulative line chart — split datasets. Orange=total,
+            // green=live-only (real capital), yellow=paper-only.
             const cumCtx = document.getElementById('b2CumPnlChart');
             if (window._b2CumChart) window._b2CumChart.destroy();
+            const cumDatasets = [
+                { label: 'Total', data: cumValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 },
+            ];
+            if (hasLiveData) {
+                cumDatasets.push({ label: 'Live', data: cumLive, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.15)', fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
+                cumDatasets.push({ label: 'Paper', data: cumPaper, borderColor: '#d4a017', backgroundColor: 'rgba(212,160,23,0.10)', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5, borderDash: [4,4] });
+            }
             window._b2CumChart = new Chart(cumCtx, {
                 type: 'line',
-                data: { labels, datasets: [{ data: cumValues, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 }] },
-                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
+                data: { labels, datasets: cumDatasets },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: hasLiveData, labels:{color:'#8b949e', font:{size:10}}}}, scales: { x: {ticks: {color: '#8b949e', font: {size: 10}}, grid: {display: false}}, y: {ticks: {color: '#8b949e', font: {size: 10}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v)}, grid: {color: 'rgba(48,54,61,0.5)'}} } }
             });
 
-            // Daily bar chart
+            // Daily bar chart (unchanged — total daily PnL)
             const barCtx = document.getElementById('b2DailyPnlChart');
             if (window._b2DailyChart) window._b2DailyChart.destroy();
             window._b2DailyChart = new Chart(barCtx, {
@@ -4158,11 +4170,72 @@
             });
         }
 
-        // Trades table + per-trade P&L chart
+        // Per-trade P&L chart — prefer split series from EVR endpoint (live
+        // vs paper, chronological by resolved_at). Falls back to closed-
+        // positions endpoint if the split series aren't in the payload.
         const closedResp = await fetchJSON('/api/closed-positions?strategy=B2');
         const closed = closedResp?.positions || [];
 
-        if (closed.length > 0 && typeof Chart !== 'undefined') {
+        const liveSeries = evrOverview?.trade_series_live || [];
+        const paperSeries = evrOverview?.trade_series_paper || [];
+        const haveSplit = (liveSeries.length + paperSeries.length) > 0;
+
+        if (haveSplit && typeof Chart !== 'undefined') {
+            // Build step labels by trade index of combined chronological order
+            const combined = [
+                ...liveSeries.map(t => ({...t, seg: 'live'})),
+                ...paperSeries.map(t => ({...t, seg: 'paper'})),
+            ].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+
+            const labels = ['Start', ...combined.map((_, i) => '#' + (i + 1))];
+            // For each trade, write cumulative for its own segment, null for the other
+            let liveCum = 0, paperCum = 0;
+            const liveCumValues = [0];
+            const paperCumValues = [0];
+            for (const t of combined) {
+                if (t.seg === 'live') { liveCum += t.pnl; }
+                else { paperCum += t.pnl; }
+                liveCumValues.push(Math.round(liveCum * 100) / 100);
+                paperCumValues.push(Math.round(paperCum * 100) / 100);
+            }
+
+            const hasLive = liveSeries.length > 0;
+            const ctx = document.getElementById('b2TradeByTradeChart');
+            if (window._b2TradeChart) window._b2TradeChart.destroy();
+            const datasets = [];
+            datasets.push({
+                label: 'Paper (simulated)', data: paperCumValues,
+                borderColor: '#d4a017', backgroundColor: 'rgba(212,160,23,0.10)',
+                fill: false, tension: 0.1,
+                pointRadius: paperCumValues.length > 150 ? 1 : 2,
+                borderWidth: 1.5, borderDash: hasLive ? [4,4] : [],
+            });
+            if (hasLive) {
+                datasets.push({
+                    label: 'Live (real capital)', data: liveCumValues,
+                    borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.15)',
+                    fill: true, tension: 0.1, pointRadius: 2, borderWidth: 2,
+                });
+            }
+            window._b2TradeChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: { responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: {display: hasLive, labels:{color:'#8b949e', font:{size:10}}},
+                        tooltip: { callbacks: { label: ctx2 => {
+                            const idx = ctx2.dataIndex;
+                            if (idx === 0) return 'Start: $0';
+                            const t = combined[idx-1];
+                            const sign = t.pnl >= 0 ? '+' : '';
+                            return `Trade #${idx} [${t.seg}]: ${sign}$${t.pnl.toFixed(2)} | ${ctx2.dataset.label}: $${ctx2.parsed.y.toFixed(2)}`;
+                        } } } },
+                    scales: {
+                        x: { ticks: { color: '#8b949e', font: {size: 8}, maxTicksLimit: 20, callback: function(val, idx) { if (labels.length <= 30) return labels[idx]; return idx % Math.ceil(labels.length / 20) === 0 ? labels[idx] : ''; } }, grid: {color: 'rgba(48,54,61,0.3)'} },
+                        y: { ticks: {color: '#8b949e', font: {size: 9}, callback: v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0)}, grid: {color: 'rgba(48,54,61,0.5)'} }
+                    } }
+            });
+        } else if (closed.length > 0 && typeof Chart !== 'undefined') {
+            // Legacy fallback (no split series available)
             const tradesChron = [...closed].reverse();
             let cumPnl = 0;
             const tradeLabels = ['Start'];

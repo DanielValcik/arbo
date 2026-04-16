@@ -2933,6 +2933,9 @@ async def api_expected_vs_reality_b2(
             edge_count = 0
             profit_count = 0
             daily_pnl: dict[str, float] = {}
+            # Per-segment daily for live-only and paper-only lines on charts
+            daily_pnl_live: dict[str, float] = {}
+            daily_pnl_paper: dict[str, float] = {}
             win_pnls: list[float] = []
             loss_pnls: list[float] = []
             # Live-filled subset (dual mode, real CLOB fills)
@@ -2940,6 +2943,10 @@ async def api_expected_vs_reality_b2(
             live_wins = 0
             live_losses = 0
             live_count = 0
+            # Per-trade time series (resolved_at, pnl) for the per-trade
+            # cumulative chart — split by live/paper.
+            trade_series_live: list[tuple[object, float]] = []
+            trade_series_paper: list[tuple[object, float]] = []
 
             for row in rows:
                 pnl = float(row[0] or 0)
@@ -2977,6 +2984,20 @@ async def api_expected_vs_reality_b2(
                 if row[3]:
                     day = row[3].strftime("%Y-%m-%d")
                     daily_pnl[day] = daily_pnl.get(day, 0) + pnl
+                    if is_live:
+                        daily_pnl_live[day] = daily_pnl_live.get(day, 0) + pnl
+                    else:
+                        daily_pnl_paper[day] = daily_pnl_paper.get(day, 0) + pnl
+
+                # Per-trade timeline keyed by resolution time (row[4]) —
+                # falls back to placed_at (row[3]) if unresolved. Skip rows
+                # with no timestamp at all.
+                ts = row[4] or row[3]
+                if ts is not None:
+                    if is_live:
+                        trade_series_live.append((ts, pnl))
+                    else:
+                        trade_series_paper.append((ts, pnl))
 
             total_resolved = wins + losses
             days_active = len(daily_pnl)
@@ -2986,10 +3007,38 @@ async def api_expected_vs_reality_b2(
             pnl_per_day = total_pnl / days_active if days_active > 0 else 0
 
             cum = 0.0
+            cum_live = 0.0
+            cum_paper = 0.0
             daily_series = []
             for day in sorted(daily_pnl.keys()):
                 cum += daily_pnl[day]
-                daily_series.append({"date": day, "pnl": round(daily_pnl[day], 2), "cumulative": round(cum, 2)})
+                cum_live += daily_pnl_live.get(day, 0)
+                cum_paper += daily_pnl_paper.get(day, 0)
+                daily_series.append({
+                    "date": day,
+                    "pnl": round(daily_pnl[day], 2),
+                    "cumulative": round(cum, 2),
+                    "pnl_live": round(daily_pnl_live.get(day, 0), 2),
+                    "cumulative_live": round(cum_live, 2),
+                    "pnl_paper": round(daily_pnl_paper.get(day, 0), 2),
+                    "cumulative_paper": round(cum_paper, 2),
+                })
+
+            # Per-trade cumulative series (chronological, split by segment).
+            def _build_trade_cum(items: list) -> list[dict]:
+                items_sorted = sorted(items, key=lambda x: x[0])
+                out: list[dict] = []
+                running = 0.0
+                for ts, pnl in items_sorted:
+                    running += pnl
+                    out.append({
+                        "ts": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                        "pnl": round(pnl, 4),
+                        "cumulative": round(running, 2),
+                    })
+                return out
+            trade_series_live_out = _build_trade_cum(trade_series_live)
+            trade_series_paper_out = _build_trade_cum(trade_series_paper)
 
             expected = {
                 "win_rate": 0.847,
@@ -3043,6 +3092,8 @@ async def api_expected_vs_reality_b2(
                 "actual_live": actual_live,
                 "actual_paper_only": actual_paper_only,
                 "daily_series": daily_series,
+                "trade_series_live": trade_series_live_out,
+                "trade_series_paper": trade_series_paper_out,
                 "too_early": total_resolved < 5,
             }
     except Exception as e:
