@@ -2464,6 +2464,11 @@ class RDHOrchestrator:
         counter — which filters on live_exit_status — actually includes
         the row. Without this the trade_details only carry entry info
         and the dashboard stays at \$0.00 even after successful live sells.
+
+        Note on the CAST() usage: SQLAlchemy's :param parser collides with
+        Postgres' ::type cast shorthand (e.g. `:px::numeric` is read as
+        `:px:` + `:numeric` and throws a syntax error). Use CAST(:px AS
+        numeric) instead — explicit, cross-dialect, no bind-param clash.
         """
         try:
             import sqlalchemy as sa
@@ -2475,9 +2480,9 @@ class RDHOrchestrator:
                         UPDATE paper_trades
                         SET trade_details = COALESCE(trade_details, '{}'::jsonb)
                           || jsonb_build_object(
-                               'live_exit_price', :px::numeric,
+                               'live_exit_price', CAST(:px AS numeric),
                                'live_exit_status', :status,
-                               'live_pnl', :pnl::numeric
+                               'live_pnl', CAST(:pnl AS numeric)
                              )
                         WHERE token_id = :tid
                           AND status != 'open'
