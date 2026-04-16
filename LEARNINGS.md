@@ -308,6 +308,31 @@ Five occurrences updated. Commit `231f8f9`.
 filters that distinguish "real live exit" from "not". Search for the
 existing status set and update in sync.
 
+#### B2-15. `jsonb_build_object` variadic params broke asyncpg type inference
+**What:** After the `::numeric` → `CAST()` fix landed (B2-11), the first
+new live exits that tried to write `live_exit_*` fields into
+trade_details still failed with
+`IndeterminateDatatypeError: could not determine data type of parameter $2`.
+Seven B2 LIVE SELL messages fired in Slack between 19:55 and 19:58
+but trade_details never got updated → dashboard Live counter stayed
+at 1 instead of 7.
+
+**Why:** `jsonb_build_object(k1, v1, k2, v2, k3, v3)` is variadic.
+When the call is `..., CAST(:px AS numeric), :status, CAST(:pnl AS numeric)`,
+asyncpg can't resolve the middle arg's type because it's a raw string
+literal sandwiched between two numerics — Postgres function-overload
+resolution fails before execution.
+
+**Fix:** Cast **every** parameter explicitly, including the obvious
+`:status` (as `text`) and the WHERE-clause `:tid` (as `varchar`).
+Commit `2f43d71`. Backfilled affected rows (5142-5159) with manual
+UPDATE copying actual_pnl → live_pnl and exit_price → live_exit_price.
+
+**Lesson:** asyncpg + jsonb_build_object + mixed-type variadic params →
+cast absolutely everything. Don't rely on asyncpg's inference when the
+function is variadic; it gives up rather than falling back to ambiguous
+overloads. Apply this rule to any future jsonb helpers in raw SQL.
+
 #### B2-14. Task watcher killed B2 mid-poll during serial live attempts
 **What:** B2 task stopped logging after 19:04:26 (one successful live
 entry), health watcher reported `health_task_hung` at 19:04:28, then hit
