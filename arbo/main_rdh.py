@@ -2572,6 +2572,13 @@ class RDHOrchestrator:
                 # for B2, so paper sold at a 2c/share premium vs live taker.
                 sell_prices[tid] = min(best_bid, best_ask)
 
+        # Snapshot B2's in-memory positions BEFORE calling check_exits —
+        # check_exits pops triggered positions from _open_positions before
+        # returning, so downstream lookups by token_id would fail. The
+        # snapshot lets us hydrate b2_pos metadata (asset/strike/live_*)
+        # for Slack notifications even after the pop.
+        b2_pos_snapshot = dict(self._strategy_b2._open_positions)
+
         # Check for exit triggers
         exits = await self._strategy_b2.check_exits(current_prices)
 
@@ -2602,7 +2609,7 @@ class RDHOrchestrator:
             # Route through live exit only when position actually has live
             # shares on CLOB. In dual mode paper-only trades (live fill
             # failed, mirror cancelled) take the paper path.
-            b2_pos = self._strategy_b2._open_positions.get(token_id)
+            b2_pos = b2_pos_snapshot.get(token_id)
             live_shares_on_clob = 0
             if has_live_infra and self._strategy_b2._live_executor:
                 live_shares_on_clob = (
