@@ -391,6 +391,66 @@ cap — it diverges from reality.
 paper slot budget. Protects real-capital concentration without starving
 paper data collection.
 
+### 🔴 Edge pattern: paper 80% WR → live 20% WR on longshot whipsaws
+
+**Observed 2026-04-16 20:30 UTC, N=10 real live closes:**
+
+After all spread/parity/reconciliation fixes shipped, the first clean
+sample of live B2 data shows dramatic divergence from paper:
+
+| | Paper (pre-mirror) | Live (post-fix) |
+|-|-|-|
+| WR | 80% | 20% (2W/8L) |
+| Avg PnL/trade | +\$6.72 | -\$0.43 |
+| Avg hold | 2.4h | 3-65 min |
+
+**Root pattern identified:**
+1. Model finds edge on low-price tokens (\$0.06-\$0.13, ~6-13% implied
+   prob = "longshots").
+2. Live enters — pays the ask, taker fee, slippage.
+3. 3-5 min later the exchange price moves 0.5-2% against our direction.
+4. Model recomputes with `SIGMA_SCALE=0.8` + current price → edge
+   drops below `MIN_HOLD_EDGE=0.03`.
+5. Exit triggers `edge_lost` → sells at the bid (low side). Loss = ~2-4¢
+   per share crossing the spread plus the adverse move.
+6. Every whipsaw locks in cost of execution with no time for mean
+   reversion to recover.
+
+**Why paper didn't show this:**
+Pre-PAPER_MATCH_LIVE fix, paper `clob_price = min(bid, ask)` = low side
+on entry AND high side implicitly on exit (different code path). Paper
+entered at the favorable side and exited at the other favorable side —
+it "earned the spread" on every trip. Multiplied across 324 trades,
+this masqueraded as an 80% WR strategy. Real execution pays the spread
+on both sides — ~4¢/share round-trip, enough to turn B2's ~10¢ signal
+edge negative on ~30-share positions at \$0.10 entry prices.
+
+**This is not a bug** — it's the hypothesis we were testing. We deployed
+dual mode specifically to measure whether paper's edge was real or
+spread-arbitrage. The answer, with N=10, is leaning strongly toward
+"artifact." Before drawing a final conclusion:
+- N=10 is small; need ≥ 30 real exits for statistical significance
+- Recent 3 trades (-\$3.15 of -\$4.30 total) happened in a single
+  volatility burst — could be regime, not strategy
+- Need at least one resolution (market expiry → \$1) to see if
+  "hold-to-resolution" changes the picture (paper baseline has few
+  resolutions; most exits were edge_lost like live)
+
+**Next steps if pattern persists:**
+1. Tighten entry: `MIN_PRICE ≥ 0.15` (avoid longshots where spread
+   dominates signal) — routine params change, goes through `/optimize`.
+2. Loosen exit: `MIN_HOLD_EDGE ≥ 0.08` or add min-hold-time 30 min
+   to avoid whipsaw.
+3. Re-autoresearch on **post-fix live data** (not pre-fix paper) —
+   paper optimization was solving the wrong problem (spread earning,
+   not edge capture).
+
+**Lesson (generalizable):** Any strategy with high paper WR and short
+avg hold is suspect for spread artifact. Validate by computing
+"spread-free" backtest PnL = backtest PnL − 2 × avg_spread × avg_shares
+× N_trades. If this number is ≤ 0, the strategy has no real edge;
+paper is counting the spread as profit.
+
 ### Performance observations (cumulative)
 
 Track per-week. Update entries here when material data comes in.
