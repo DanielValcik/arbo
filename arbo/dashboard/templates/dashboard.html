@@ -1373,31 +1373,9 @@
                 </div>
             </div>
 
-            <!-- ═════ TOTAL (all trades, historical view) ═════ -->
-            <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title">Kumulativni P&L — Total (paper + live)
-                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Historický přehled celé strategie</span>
-                </div>
-                <div class="chart-container" style="height:180px">
-                    <canvas id="b2CumPnlChart"></canvas>
-                </div>
-            </div>
-
-            <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title">P&L po kazdem tradu — Total (od $0)</div>
-                <div class="chart-container" style="height:220px">
-                    <canvas id="b2TradeByTradeChart"></canvas>
-                </div>
-            </div>
-
-            <div class="card grid-full" style="border-top:3px solid var(--orange)">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L — Total<span id="lb2AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
-                <div class="chart-container" style="height:150px">
-                    <canvas id="b2DailyPnlChart"></canvas>
-                </div>
-            </div>
-
-            <!-- ═════ LIVE ONLY (real capital, focus view) ═════ -->
+            <!-- ═════ LIVE ONLY (real capital, focus view) — placed right
+                 under the split card so the live narrative flows: stats →
+                 deep dive → total history. ═════ -->
             <div class="card grid-full" style="border-top:3px solid var(--green);background:rgba(63,185,80,0.03)">
                 <div class="card-title" style="color:var(--green)">
                     🟢 LIVE ONLY — Real capital
@@ -1437,13 +1415,39 @@
                 </div>
             </div>
 
-            <!-- ═════ PAPER vs LIVE COMPARISON (same period, spread analysis) ═════ -->
+            <!-- ═════ PAPER vs LIVE COMPARISON (same period, spread analysis) —
+                 pairs with the Live Only card to tell the divergence story. ═════ -->
             <div class="card grid-full" style="border-top:3px solid var(--yellow)">
                 <div class="card-title">Paper vs Live — stejné období (od startu dual mode)
                     <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Měří reálný dopad spreadu / slippage</span>
                 </div>
                 <div id="lb2PaperLiveComparison" style="padding:8px;font-size:12px;color:var(--text-dim)">
                     Bude vypočítáno po prvních live exit resolutions.
+                </div>
+            </div>
+
+            <!-- ═════ TOTAL (all trades, historical view) — kept below the
+                 live-focused cards so the live story stays visually prominent. ═════ -->
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">Kumulativni P&L — Total (paper + live)
+                    <span style="font-size:10px;color:var(--text-dim);margin-left:8px">Historický přehled celé strategie</span>
+                </div>
+                <div class="chart-container" style="height:180px">
+                    <canvas id="b2CumPnlChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title">P&L po kazdem tradu — Total (od $0)</div>
+                <div class="chart-container" style="height:220px">
+                    <canvas id="b2TradeByTradeChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card grid-full" style="border-top:3px solid var(--orange)">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">Denni P&L — Total<span id="lb2AvgDailyPnl" style="font-size:11px;font-weight:700;color:var(--text-dim)"></span></div>
+                <div class="chart-container" style="height:150px">
+                    <canvas id="b2DailyPnlChart"></canvas>
                 </div>
             </div>
 
