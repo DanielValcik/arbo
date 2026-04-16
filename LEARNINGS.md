@@ -391,6 +391,45 @@ cap — it diverges from reality.
 paper slot budget. Protects real-capital concentration without starving
 paper data collection.
 
+### 🟡 Post-fix clob_edge_low dominates signal rejection
+
+**Observed 2026-04-16 21:00-21:25 UTC:**
+
+30 min of B2 poll cycles with 3-8 qualified signals each, **0 executed**
+across the window. All skipped with reason `clob_edge_low`.
+
+The quality gate flow:
+1. Scanner computes edge from Gamma API price (stale, may lag real book)
+2. Quality gate filter passes signals where `|model_prob - gamma_price| ≥ MIN_EDGE (0.08)`
+3. Before sizing, we fetch CLOB orderbook and compute `clob_edge = model_prob - clob_price` (where `clob_price = max(bid, ask)` post-mirror fix)
+4. If `clob_edge < MIN_EDGE`, skip with `clob_edge_low`
+
+Post-PAPER_MATCH_LIVE fix (B2-1), `clob_price = max(bid, ask)` = HIGH
+side (what live taker actually pays). This shrinks the measured edge
+vs. the pre-fix `min(bid, ask)` path by the spread amount (~2-4¢ per
+share). Signals that showed 10¢ edge on Gamma might show only 6-8¢
+edge against the real CLOB ask, failing the 8¢ threshold.
+
+**Positive reading:** Quality gate is now doing its job — blocking
+structurally-negative-EV trades where spread eats the signal. Without
+this filter, B2 would enter, get whipsawed by 3-5 min edge_lost exits,
+and lose the spread on every round-trip (see B2-14 / edge pattern entry
+above).
+
+**Negative reading:** Confirms the "paper edge was spread arbitrage"
+hypothesis. If real edge (post-spread) is consistently < 8¢, B2 rarely
+trades at all in this regime. Low sample rate → slow statistical
+validation.
+
+**Decision pending:** Is it worth lowering MIN_EDGE to 0.05 to collect
+more live samples faster, accepting that some will be spread-dominated
+losses? Or hold 0.08 and just wait? Waiting preserves capital but
+drags out the validation timeline. This is an optimization question
+that should go through the `/optimize` framework, not a one-off tweak.
+
+**Don't tweak this parameter without autoresearch validation against
+post-fix data.** Paper-era optimization was solving the wrong problem.
+
 ### 🔴 Edge pattern: paper 80% WR → live 20% WR on longshot whipsaws
 
 **Observed 2026-04-16 20:30 UTC, N=10 real live closes:**
