@@ -152,6 +152,13 @@ class StrategyB2:
                     sa.select(PaperTrade).where(
                         PaperTrade.strategy == STRATEGY_NAME,
                         PaperTrade.status == "open",
+                        # Skip archived pre-reset rows so the strategy's
+                        # in-memory state matches the clean-slate counters
+                        # the rest of the system uses.
+                        sa.or_(
+                            PaperTrade.notes.is_(None),
+                            ~PaperTrade.notes.ilike("%pre_reset%"),
+                        ),
                     )
                 )
                 rows = list(result.scalars().all())

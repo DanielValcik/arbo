@@ -1255,10 +1255,15 @@ class RDHOrchestrator:
             DUAL_MODE_STRATEGIES = {"B3", "B3_15M", "B2"}
 
             async with factory() as session:
-                # Total P&L per strategy (all resolved trades, excluding pre-validation)
-                _no_preval = sa.or_(
-                    PaperTrade.notes.is_(None),
-                    PaperTrade.notes != "pre-validation",
+                # Total P&L per strategy (all resolved trades, excluding
+                # pre-validation AND pre-reset archives). Pre-reset rows
+                # are kept in the DB for audit but must not inflate the
+                # clean-slate counters shown to the user.
+                _no_preval = sa.and_(
+                    sa.or_(PaperTrade.notes.is_(None),
+                           PaperTrade.notes != "pre-validation"),
+                    sa.or_(PaperTrade.notes.is_(None),
+                           ~PaperTrade.notes.ilike("%pre_reset%")),
                 )
 
                 # Get ALL paper strategies (non-dual) total PnL
@@ -1307,7 +1312,7 @@ class RDHOrchestrator:
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
                               AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
-                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                         """),
                         {"strat": dual_strat},
                     )
@@ -1376,7 +1381,7 @@ class RDHOrchestrator:
                               AND trade_details->>'live_exit_price' IS NOT NULL
                               AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
                               AND resolved_at >= :week_start
-                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                         """),
                         {"strat": dual_strat, "week_start": week_start},
                     )
@@ -1423,7 +1428,7 @@ class RDHOrchestrator:
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
                               AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
-                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                               AND resolved_at >= :since
                         """),
                         {"strat": dual_strat, "since": today},
@@ -1462,7 +1467,7 @@ class RDHOrchestrator:
                               AND (trade_details->>'live_entry_shares')::float > 0
                               AND trade_details->>'live_exit_price' IS NOT NULL
                               AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
-                              AND (notes IS NULL OR notes != 'pre-validation')
+                              AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                               AND resolved_at >= :since
                         """),
                         {"strat": dual_strat, "since": week_start},
@@ -3202,7 +3207,7 @@ class RDHOrchestrator:
                           AND (trade_details->>'live_entry_shares')::float > 0
                           AND trade_details->>'live_exit_price' IS NOT NULL
                           AND trade_details->>'live_exit_status' IN ('resolution','filled','partial')
-                          AND (notes IS NULL OR notes != 'pre-validation')
+                          AND (notes IS NULL OR (notes != 'pre-validation' AND notes NOT ILIKE '%pre_reset%'))
                     """),
                     {"strat": strategy},
                 )

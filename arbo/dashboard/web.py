@@ -2920,6 +2920,11 @@ async def api_expected_vs_reality_b2(
                 )
                 .where(PaperTrade.strategy == "B2")
                 .where(PaperTrade.status.in_(["won", "lost", "sold"]))
+                # Exclude archived pre-reset trades — dashboard shows only
+                # data collected after the 2026-04-16 reset. The pre-reset
+                # rows are preserved in DB for audit but don't pollute the
+                # clean-slate Live counter. Same filter on restore query.
+                .where(sa.or_(PaperTrade.notes.is_(None), ~PaperTrade.notes.ilike("%pre_reset%")))
                 .order_by(PaperTrade.placed_at)
             )
             rows = result.all()
