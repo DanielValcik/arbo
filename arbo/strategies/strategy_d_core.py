@@ -418,15 +418,16 @@ class StrategyDCore:
     def _effective_capital(self) -> float:
         """Return capital to use for Kelly sizing.
 
-        Priority:
-          1. If live balance fresh (< 10min): D variants share D_TOTAL_BALANCE_SHARE
-             of balance, split proportionally by STRATEGY_ALLOCATIONS among D only
-          2. Else: fall back to static risk_manager allocation
+        Paper-mode variants always use the static risk_manager allocation —
+        they don't consume real USDC, so tying them to the (usually small)
+        live balance artificially shrinks size to sub-cent Kelly (e.g.
+        $92 balance × 40% × 200/700 × 0.12 × 0.10 = $0.126 → 0 shares).
 
-        Example: balance=$200, D_share=40% → $80 for D; split 3:2:2 among
-        D/D_UFC/D_EPL (300:200:200) = $34/$23/$23
+        Live-mode variants use the live balance share so we never overspend
+        real capital.
         """
-        if self._live_balance_usdc is not None and self._live_balance_usdc > 0:
+        is_live = self._live is not None
+        if is_live and self._live_balance_usdc is not None and self._live_balance_usdc > 0:
             age = time.time() - self._live_balance_ts
             if age < 600:  # Fresh within 10 minutes
                 try:
@@ -445,7 +446,7 @@ class StrategyDCore:
                 except Exception:
                     pass
 
-        # Fallback: static allocation from risk_manager
+        # Paper mode or stale live balance: use static risk_manager allocation
         ss = self._risk.get_strategy_state(self.STRATEGY_NAME)
         return float(ss.allocated) if ss else 300.0
 
