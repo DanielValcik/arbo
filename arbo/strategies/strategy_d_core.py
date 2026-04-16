@@ -570,6 +570,10 @@ class StrategyDCore:
                     team_a=signal.market.team_a, team_b=signal.market.team_b,
                     price=signal.entry_price, edge=f"{signal.edge:.3f}", shares=shares,
                 )
+                try:
+                    await self._paper.save_trade_to_db(trade)
+                except Exception as e:
+                    self._logger.warning("entry_paper_db_persist_failed", error=str(e))
 
         if self._live:
             try:
