@@ -1619,14 +1619,20 @@ class RDHOrchestrator:
         if self._strategy_b is not None:
             rx_cfg = self._config.reflexivity
             task_defs.append(("strategy_B", self._run_strategy_b, rx_cfg.scan_interval_s))
-        if self._strategy_c is not None:
+        # C (weather) can be disabled via DISABLE_C=1 — useful when all
+        # weather strategies are halted and we want to stop the Open-Meteo
+        # API hammering (429 Too Many Requests observed when C runs without
+        # trading). Unset env to re-enable.
+        import os as _os_c
+        if self._strategy_c is not None and not _os_c.getenv("DISABLE_C"):
             wx_cfg = self._config.weather
             task_defs.append(("strategy_C", self._run_strategy_c, wx_cfg.scan_interval_s))
+        elif self._strategy_c is not None:
+            logger.info("strategy_c_disabled", reason="DISABLE_C env set")
         # C2 (weather) can be disabled via DISABLE_C2=1 to save CPU/DB I/O
         # when volatility is low — shadow signals still come from C (old
         # weather strategy) if needed. Re-enable by unsetting the env.
-        import os as _os_c2
-        if self._strategy_c2 is not None and not _os_c2.getenv("DISABLE_C2"):
+        if self._strategy_c2 is not None and not _os_c.getenv("DISABLE_C2"):
             task_defs.append(("strategy_C2", self._run_strategy_c2, 300))       # entry scan every 5 min
             task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # exit check every 60s
         elif self._strategy_c2 is not None:
