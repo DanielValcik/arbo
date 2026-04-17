@@ -619,7 +619,8 @@ def main() -> int:
     ap.add_argument("--month", help="YYYY-MM for monthly", default=None)
     ap.add_argument("--year", help="YYYY for yearly", default=None)
     ap.add_argument("--no-commit", action="store_true",
-                    help="Skip git commit/push (for testing)")
+                    help="Skip git commit/push (for testing or VPS runs — "
+                         "files still persist on disk)")
     ap.add_argument("--no-cascade", action="store_true",
                     help="Don't trigger next-level summary even if period closed")
     args = ap.parse_args()
