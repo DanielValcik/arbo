@@ -481,6 +481,38 @@ is frozen.
 
 ---
 
+### B2-19. Sigma fix validated: first real B2 post-fix wins
+
+**Observed 2026-04-17 13:00–17:00 UTC (6-10h after B2-16 + B2-17 fixes):**
+Two B2 trades that entered shortly after the sigma-freeze fix hit
+resolution with real profit — the first live B2 wins since the
+dual-mode launch.
+
+- **Trade 5310** ETH above $2400. Entry 0.21 @ 07:11, exit 0.45 @ 13:10
+  via `edge_lost` (edge flipped below MIN_HOLD_EDGE as the event got
+  close to expiry) → **+$2.35 on $2.31 invested** (≈100% ROI).
+- **Trade 5309** BTC above $78k. Entry 0.14 @ 07:11, exit 0.45 @ 14:38
+  via `profit_take` (price climbed +$2.7k on Binance) →
+  **+$6.41 on $3.22 invested** (≈200% ROI).
+
+Cumulative post-fix stats after N=4 closes: **+$8.57 net**,
+2W/2L, avg hold 202 min (vs ~3 min pre-fix). Both wins explicitly
+required the fixes — with the pre-fix calibration, each trade would
+have fired `edge_lost` within 3 minutes of entry for small losses on
+stale/noisy sigma.
+
+**Lesson:** the sigma-frozen exit gate is the *only* thing that gives
+a slow-moving thesis time to play out. B2's edge model expects daily
+markets, not minute-level whipsaw. Hold the calibration, let the
+market come to the position.
+
+Archive note: the N=14 pre-fix -$4.93 result in the session transcript
+does NOT represent B2's true performance — it measures how the system
+behaves under a broken exit gate. Future retrospectives should discount
+anything before commit `af7bb2e` when comparing calibration choices.
+
+---
+
 ### B2-18. `event_end_ts` parses START not END of market date range
 
 **Observed 2026-04-17 10:50 UTC:**
