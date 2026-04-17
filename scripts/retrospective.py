@@ -549,11 +549,24 @@ def _git_commit_summary(period: Period) -> None:
             ["git", "-C", str(REPO_ROOT), "commit", "-m", msg, "--no-verify"],
             timeout=15,
         )
-        push_out = run(
-            ["git", "-C", str(REPO_ROOT), "push", "origin", "HEAD:main"],
-            timeout=60,
-        )
-        print(f"[commit] pushed: {push_out.strip()[:200]}")
+        # Non-interactive push: on the VPS (arbo user) there are no git
+        # credentials configured for push, so the command would hang on
+        # username prompt. GIT_TERMINAL_PROMPT=0 makes it fail fast.
+        # Summaries are still written to disk and committed locally —
+        # someone with push access can pick them up later.
+        env = dict(os.environ)
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        try:
+            push_res = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "push", "origin", "HEAD:main"],
+                env=env, capture_output=True, text=True, timeout=60,
+            )
+            if push_res.returncode == 0:
+                print(f"[commit] pushed: {push_res.stderr.strip()[:200]}")
+            else:
+                print(f"[commit] push skipped (no creds): {push_res.stderr.strip()[:100]}")
+        except subprocess.TimeoutExpired:
+            print("[commit] push timed out")
     except Exception as e:
         print(f"[commit] skipped: {e}", file=sys.stderr)
 
