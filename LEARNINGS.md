@@ -439,6 +439,48 @@ loop.
 
 ---
 
+### B2-17. Fresh sigma in `check_exits` whipsaws → false edge_lost on flat markets
+
+**Observed 2026-04-17 07:00–07:04 UTC (AFTER B2-16 sigma_scale fix):**
+Even with matching `sigma_scale=0.8` on both paths, edge_lost kept firing
+within 3 minutes. Smoking gun: trade 5304 bought ETH $2400 at `0.17`
+and exited 3 min later at **identical `0.17`** with `edge_lost`. Price
+was flat — yet the edge model decided the position lost edge.
+
+**Why:** `check_exits` called `vol_estimator.get_sigma(pos.symbol,
+time.time())` which returns the CURRENT sigma from a rolling 24-obs
+window. Each poll cycle adds one new Binance-WS price observation; the
+window slides and any large return dropping out the back end produces a
+step change in sigma.
+
+With only 24 observations of 1-minute samples, a single $200 BTC move
+entering/leaving the window can shift sigma by ±20%. For OTM strikes
+(prob 0.20–0.30), a 20% sigma drop can erase 3–5 points of probability
+in one poll. Combined with a `MIN_HOLD_EDGE` hysteresis of only 5 points
+(entry 0.08, exit 0.03), **the strategy was guaranteed to exit on
+sigma-driven noise alone**, independent of any real market movement.
+
+**Fix (commit pending):** freeze `sigma_at_entry` in the `OpenPosition`
+dataclass (already stored — just use it) and read it back in
+`check_exits` instead of re-querying `vol_estimator`. Exchange price and
+hours_to_expiry continue to update (those are real signals); only sigma
+is frozen.
+
+**Lesson (generalised):**
+- A **rolling-window realised-volatility estimator is too noisy** to
+  drive exit decisions on short timeframes. The window length
+  is set for long-horizon calibration, not intra-position recomputation.
+- When an entry gate is paired with an exit gate on the same quantity,
+  the exit computation should reuse the entry-time snapshot of any
+  high-frequency noisy inputs. Only inputs that change with real
+  meaning (price, time) should update.
+- Corollary: audit **any** model that recomputes probability at both
+  signal time and exit time. If the model has hidden state that
+  changes (sigma, bias, shrinkage estimate), ensure the position
+  caches and reuses the entry snapshot.
+
+---
+
 ### Architectural decisions
 
 #### B2-A1. `B2_EXECUTION_MODE=dual`, $100 live capital

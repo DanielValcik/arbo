@@ -751,9 +751,10 @@ class StrategyB2:
                     pos.hours_to_expiry_at_entry - elapsed_hours, 0.01
                 )
 
-                sigma = self._vol_estimator.get_sigma(
-                    pos.symbol, time.time()
-                )
+                # Use sigma frozen at entry — fresh sigma from the
+                # rolling window whipsaws between polls and triggers
+                # false edge_lost on flat markets. See LEARNINGS B2-17.
+                sigma = pos.sigma_at_entry
 
                 updated_prob = estimate_crypto_prob(
                     current_price=exchange_price,
