@@ -481,6 +481,43 @@ is frozen.
 
 ---
 
+### B2-18. `event_end_ts` parses START not END of market date range
+
+**Observed 2026-04-17 10:50 UTC:**
+Shadow resolver stuck at 58.5% resolved. Diagnostic: `SELECT` on stuck
+condition_ids showed `event_end_ts = 2026-04-13 00:00:00 UTC` — 4 days
+past. But Gamma returned empty. CLOB showed the market is still open
+with `end_date_iso = 2026-04-20T00:00:00Z`.
+
+**Why:** `market_discovery.categorize_crypto_market()` parses the FIRST
+date matched by the regex (`April 13` in "Bitcoin reach $80k April
+13-19") and creates `expiry = datetime(2026, 4, 13)` — midnight of the
+START of the weekly window. Actual market end is a week later.
+
+For daily markets ("Bitcoin above $78k on April 17"), the same bug is
+smaller: expiry stored as `2026-04-17 00:00:00` but market actually
+ends `2026-04-17 23:59:59` — off by 24h, which the `_sweep_shadow`
+throttle > 300s tolerates but causes the resolver to query ~24h before
+Gamma has posted the resolution.
+
+**Fix deferred:** the parsing needs a second-date regex for ranges
+(`April 13-19` → match group 2 for end day) and for daily markets
+should add 23h59m or parse from Gamma's `end_date_iso` directly. Touched
+by anyone hardening the shadow pipeline next.
+
+**Impact:** non-breaking. Shadow N grows slower than it could (~58% of
+expired signals resolved vs ~95% expected). Still enough data (N>2000
+per variant) for statistical analysis. Markets eventually resolve when
+their TRUE end passes.
+
+**Lesson:** when a parser returns a single date from a range
+expression, validate against the canonical source (`end_date_iso` from
+Gamma `GET /markets/<cid>`) before using it as an end-timestamp. The
+ambiguity is silent and the consequences (stale shadow data, missing
+backtest resolutions) masquerade as "resolver slow."
+
+---
+
 ### Architectural decisions
 
 #### B2-A1. `B2_EXECUTION_MODE=dual`, $100 live capital
