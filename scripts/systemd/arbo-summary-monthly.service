@@ -1,0 +1,14 @@
+[Unit]
+Description=Arbo monthly retrospective
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=arbo
+Group=arbo
+WorkingDirectory=/opt/arbo
+EnvironmentFile=/opt/arbo/.env
+ExecStart=/opt/arbo/.venv/bin/python /opt/arbo/scripts/retrospective.py monthly
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=1200

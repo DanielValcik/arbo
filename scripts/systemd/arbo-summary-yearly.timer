@@ -1,0 +1,10 @@
+[Unit]
+Description=Trigger Arbo yearly retrospective Jan 1 00:35 UTC
+
+[Timer]
+OnCalendar=*-01-01 00:35:00 UTC
+Persistent=true
+Unit=arbo-summary-yearly.service
+
+[Install]
+WantedBy=timers.target

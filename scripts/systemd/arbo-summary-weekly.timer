@@ -1,0 +1,10 @@
+[Unit]
+Description=Trigger Arbo weekly retrospective Monday 00:15 UTC
+
+[Timer]
+OnCalendar=Mon *-*-* 00:15:00 UTC
+Persistent=true
+Unit=arbo-summary-weekly.service
+
+[Install]
+WantedBy=timers.target
