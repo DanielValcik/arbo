@@ -941,13 +941,18 @@ class StrategyB2:
             async with factory() as session:
                 result = await session.execute(
                     sa.text("""
-                        SELECT DISTINCT condition_id, event_end_ts
-                        FROM shadow_variant_signals
-                        WHERE strategy = 'B2'
-                          AND resolution_outcome IS NULL
-                          AND event_end_ts IS NOT NULL
-                          AND event_end_ts < :now - 300
-                        LIMIT 30
+                        SELECT condition_id, event_end_ts FROM (
+                            SELECT DISTINCT ON (condition_id)
+                                condition_id, event_end_ts
+                            FROM shadow_variant_signals
+                            WHERE strategy = 'B2'
+                              AND resolution_outcome IS NULL
+                              AND event_end_ts IS NOT NULL
+                              AND event_end_ts < :now - 300
+                            ORDER BY condition_id, event_end_ts
+                        ) t
+                        ORDER BY event_end_ts ASC
+                        LIMIT 100
                     """),
                     {"now": now},
                 )
