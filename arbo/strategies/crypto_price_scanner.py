@@ -105,6 +105,7 @@ def scan_crypto_markets(
     vol_estimator: VolatilityEstimator,
     min_edge: float = 0.01,
     current_time: float = 0.0,
+    sigma_scale: float = 1.0,
 ) -> list[CryptoSignal]:
     """Scan all crypto price markets and produce trading signals.
 
@@ -182,6 +183,7 @@ def scan_crypto_markets(
             hours_to_expiry=hours_to_expiry,
             sigma_per_hour=sigma_hourly,
             market_type=market_type,
+            sigma_scale=sigma_scale,
             direction=info.direction,
         )
 

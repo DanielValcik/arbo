@@ -395,6 +395,50 @@ rows.
 **Lesson:** Default pagination limits are quiet lies. Any reconciliation
 query must verify with an explicit, generous limit.
 
+### B2-16. Entry vs exit `sigma_scale` mismatch → instant edge_lost cascade
+
+**Observed 2026-04-17 06:30–06:40 UTC (Slack alert run):**
+Every new BUY exited within 3-5 minutes with `edge_lost`. Pattern from
+live feed:
+
+- 06:33 BUY BTC above $78k @ 0.12 (edge +32¢) → 06:36 SELL @ 0.10 (−$0.55)
+- 06:33 BUY ETH above $2500 @ 0.12 (edge +29¢) → 06:36 SELL @ 0.10 (−$0.60)
+- 06:33 BUY ETH above $2400 @ 0.15 (edge +26¢) → 06:36 SELL @ 0.14 (−$0.37)
+
+14 live trades → -$4.93 cumulative, all edge_lost, avg hold ~4 min.
+
+**Why:** Entry and exit computed probability with **different `sigma_scale`
+values** against the same strike/spot/hours data. `estimate_crypto_prob`
+takes `sigma_scale` as kwarg (default `1.0`). Exit (`strategy_b2.check_exits`)
+passed `sigma_scale=SIGMA_SCALE` (= `0.8` from `crypto_quality_gate.py:45`).
+Entry (`crypto_price_scanner.scan_crypto_markets`) did not pass it at all,
+so it used the default `1.0`.
+
+Consequence: entry saw wider vol tails → prob inflated (e.g., OTM strike
+looked ~44% likely). 30 seconds later, exit recomputed with `sigma_scale=0.8`
+→ narrower tails → prob collapsed to ~12% → `updated_edge = 0.12 - 0.10 =
+0.02 < MIN_HOLD_EDGE (0.03)` → immediate exit. Every buy was guaranteed
+to fire edge_lost before the market had time to move.
+
+**Fix (commit pending):** thread `sigma_scale` kwarg through
+`scan_crypto_markets` and call it with `sigma_scale=SIGMA_SCALE` in
+`strategy_b2.py:247`. Entry and exit now use identical calibration.
+
+**Lesson:** **Entry and exit of the same position MUST share identical
+model calibration.** Any kwarg (sigma_scale, prob_sharpening, shrinkage)
+that biases one path vs the other produces artificial "drift" that looks
+like market behavior but is purely arithmetic. Audit every other strategy
+(C2, B3, B3_15M, D) for the same pattern: compare signal-generator call
+vs exit-recompute call side by side. If they differ on any kwarg, fix
+before shipping any more live trades.
+
+This bug was HIDDEN BY paper mode because paper used whichever path
+populated model_prob first and just stored it — no recomputation
+divergence. Only live mirror mode surfaced it via the rapid BUY→SELL
+loop.
+
+---
+
 ### Architectural decisions
 
 #### B2-A1. `B2_EXECUTION_MODE=dual`, $100 live capital

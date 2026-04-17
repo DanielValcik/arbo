@@ -243,12 +243,15 @@ class StrategyB2:
             logger.info("b2_no_exchange_prices")
             return []
 
-        # 2. Scan markets
+        # 2. Scan markets — MUST pass SIGMA_SCALE to match check_exits
+        # recalc; otherwise entry prob inflated (sigma=1.0) vs exit prob
+        # (sigma=0.8) triggers instant edge_lost. LEARNINGS B2-16.
         signals = scan_crypto_markets(
             markets,
             exchange_prices,
             self._vol_estimator,
             current_time=time.time(),
+            sigma_scale=SIGMA_SCALE,
         )
 
         if not signals:
