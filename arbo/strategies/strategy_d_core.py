@@ -828,7 +828,7 @@ class StrategyDCore:
                 try:
                     async with http.get(
                         "https://gamma-api.polymarket.com/markets",
-                        params={"condition_ids": cid},
+                        params={"condition_ids": cid, "closed": "true"},
                     ) as resp:
                         if resp.status != 200:
                             skipped_fetch_fail += 1

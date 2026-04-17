@@ -149,6 +149,33 @@ init). Preserves audit trail but resets counters cleanly.
 
 Source: B2 reset on 2026-04-16 16:35 UTC.
 
+### G11. Gamma `/markets?condition_ids=X` returns empty for CLOSED markets
+The Gamma API endpoint by default only lists **active/open** markets.
+Once a market closes and resolves, `GET /markets?condition_ids=<cid>`
+returns `[]` — not the resolved outcome. To fetch resolution you MUST
+pass `closed=true` alongside the filter:
+
+```
+# WRONG (returns []):
+GET /markets?condition_ids=0xABC...
+# RIGHT:
+GET /markets?condition_ids=0xABC...&closed=true
+```
+
+**Impact discovered 2026-04-17 06:30 UTC:** All shadow variant resolution
+sweeps (B2, D) had been silently failing since Project PARALLEL shipped.
+576,248 B2 shadow signals qualified as expired → 0 resolved → bandit
+allocator had no data to pick champion → weeks of evaluation wasted.
+
+**Fix:** `strategy_b2.py:1014` and `strategy_d_core.py:831` — add
+`"closed": "true"` to the params dict.
+
+Lesson: whenever a resolver returns None silently (no errors, no logs)
+but work queue keeps growing, the API is filtering you out — add
+explicit metric (`skipped_fetch_fail` / `skipped_not_closed`) BEFORE the
+silent return. The D version already had these counters; B2 did not, so
+the bug hid longer on B2.
+
 ---
 
 ## Strategy B2 — Crypto Price Edge
@@ -390,6 +417,47 @@ cap — it diverges from reality.
 (See B2-9.) `MAX_LIVE_POSITIONS_PER_STRATEGY=10`, independent of the 30
 paper slot budget. Protects real-capital concentration without starving
 paper data collection.
+
+### 🔴 DO NOT backtest live hypotheses on pre-mirror paper data
+
+**Observed 2026-04-17 ~07:40 UTC:**
+
+Live N=10 suggested a hypothesis: tight filter (spread ≤10%, price ≥$0.15)
+would have eliminated 6/8 losers while keeping 2/2 winners. Net live
+projection: -$4.30 → +$0.32.
+
+Tried to validate on pre_reset data (N=838 archived paper trades):
+
+| Bucket | N | WR | Avg PnL | Total |
+|-|-|-|-|-|
+| HIGH SPREAD (>10%) | 327 | 92% | +\$7.36 | +\$2,406 |
+| TIGHT FILTER (hypothesis) | 409 | 77% | +\$2.34 | +\$956 |
+| LOW PRICE (<0.15) | 102 | 64% | +\$0.34 | +\$35 |
+
+Pre_reset data showed the **opposite** conclusion — high-spread trades
+were paper's BEST profit category, not worst. Total paper PnL on
+high-spread bucket: +\$2,406 vs +\$956 for tight-filter bucket.
+
+**Why the contradiction:** paper was earning the spread (B2-1). Wider
+spread = more "profit" to pocket at the paper level. The 92% WR and
++\$7.36/trade on high-spread trades is the ceiling of spread arbitrage,
+not real edge. Pre_reset data is not just noisy for live hypotheses —
+it's systematically **inverted**. Validating a "tight spread helps"
+hypothesis on data that rewards wide spreads will always reject it.
+
+**Lesson (generalizable):** Any retroactive validation of a live-edge
+hypothesis against paper data requires the paper to already have
+correct paper-live parity (PAPER_MATCH_LIVE=True with proper bid/ask
+semantics). Pre-mirror paper data is strictly worse than useless for
+this purpose — it can actively mislead. Only post-mirror live data
+counts.
+
+**Implication for B2:** Cannot fast-validate the tight-filter hypothesis.
+Must collect N=30+ under current live semantics (~10 days at 3
+trades/day). Alternative: activate B2 shadow variants (Project PARALLEL
+framework) so parallel parameter configurations generate paper-valid
+data. Currently 0 shadow rows for B2 — TBD whether it's disabled or
+not wired.
 
 ### 🟡 Post-fix clob_edge_low dominates signal rejection
 

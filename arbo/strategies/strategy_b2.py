@@ -1011,7 +1011,7 @@ class StrategyB2:
         try:
             async with http.get(
                 "https://gamma-api.polymarket.com/markets",
-                params={"condition_ids": condition_id},
+                params={"condition_ids": condition_id, "closed": "true"},
             ) as resp:
                 if resp.status != 200:
                     return None
