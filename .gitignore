@@ -84,3 +84,6 @@ research/results.tsv
 research/run.log
 research/experiment.pid
 research/experiment_log.txt
+
+# Claude Code state
+.claude/
