@@ -149,6 +149,30 @@ init). Preserves audit trail but resets counters cleanly.
 
 Source: B2 reset on 2026-04-16 16:35 UTC.
 
+### G12. systemd service user == command user → no sudo available
+
+When a systemd unit runs `User=arbo`, the process IS arbo. Any call to
+`sudo -u arbo <cmd>` fails because `arbo` isn't in sudoers — it can
+only call the command directly. Same for `sudo journalctl` — you need
+to either be in `systemd-journal` / `adm` group, or skip sudo.
+
+**Discovered 2026-04-18 00:10 UTC** when the first scheduled daily
+retrospective auto-generated EMPTY metrics tables. The retrospective
+script detected `/opt/arbo/.env` (VPS mode) and prepended `sudo -u arbo`
+to every psql/journalctl call — which silently failed because arbo
+can't sudo. Fix: detect current user via `$USER`/`whoami`, drop the
+sudo wrapper when already running as arbo, and add arbo to the
+`systemd-journal` group for clean journal access.
+
+**Lesson:** any automation script that shells out to privileged
+commands must key off the *current* user, not a "VPS mode" boolean.
+`sudo -u $TARGET` is an identity-transition, not an access-grant — it
+only works from a user who can transition. Prefer `os.environ["USER"]`
++ conditional sudo over assuming a fixed context. (Fix in
+`scripts/retrospective.py` commit `c6bffb5`.)
+
+---
+
 ### G11. Gamma `/markets?condition_ids=X` returns empty for CLOSED markets
 The Gamma API endpoint by default only lists **active/open** markets.
 Once a market closes and resolves, `GET /markets?condition_ids=<cid>`
