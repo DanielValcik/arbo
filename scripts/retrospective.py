@@ -286,8 +286,14 @@ def collect_journal(period: Period) -> str:
     since = period.start.strftime("%Y-%m-%d %H:%M:%S")
     until = period.end.strftime("%Y-%m-%d %H:%M:%S")
     if is_vps:
+        # When running as user `arbo` (systemd timer), `arbo` isn't in
+        # sudoers. `journalctl -u arbo` works for the owner of the unit
+        # without sudo, so just try it directly. When running
+        # interactively as ubuntu/root, use sudo.
+        current_user = os.environ.get("USER") or run(["whoami"]).strip()
+        prefix = "" if current_user == "arbo" else "sudo "
         cmd = (
-            f"sudo journalctl -u arbo --since='{since}' --until='{until}' "
+            f"{prefix}journalctl -u arbo --since='{since}' --until='{until}' "
             f"--no-pager --output=short"
         )
     else:
@@ -321,7 +327,15 @@ def collect_metrics(period: Period) -> dict[str, Any]:
     def q(sql: str) -> str:
         is_vps = Path("/opt/arbo/.env").exists()
         if is_vps:
-            cmd = ["sudo", "-u", "arbo", "psql", "-d", "arbo", "-A", "-t", "-c", sql]
+            # If we're already user `arbo` (systemd timer), call psql
+            # directly — user arbo is not in sudoers. Otherwise
+            # (ubuntu/root running interactively) use sudo.
+            current_user = os.environ.get("USER") or run(["whoami"]).strip()
+            if current_user == "arbo":
+                cmd = ["psql", "-d", "arbo", "-A", "-t", "-c", sql]
+            else:
+                cmd = ["sudo", "-u", "arbo", "psql", "-d", "arbo",
+                       "-A", "-t", "-c", sql]
         else:
             cmd = ["ssh", "arbo-dublin",
                    f"sudo -u arbo psql -d arbo -A -t -c \"{sql}\""]
