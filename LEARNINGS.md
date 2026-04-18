@@ -814,10 +814,50 @@ Track per-week. Update entries here when material data comes in.
 
 ## Strategy B3 — Binance Oracle Scalper (5-min)
 
-Status: LIVE since pre-2026-04-16. See project memory for long history.
+Status: **STOPPED as of 2026-04-18 08:30 UTC** (entry-side).
+`B3_EXECUTION_MODE=stopped` in `/opt/arbo/.env`; check_exits continues
+so existing positions can resolve naturally.
 
-_(Populate as new discoveries happen. Today 2026-04-16 focused on B2; no
-new B3 entries this session.)_
+### B3-1. Entry stopped after 3-day drawdown
+
+**Observed 2026-04-15 → 2026-04-18 via daily retrospective:**
+
+| Day | Trades | WR | Net PnL |
+|-----|--------|-----|---------|
+| Apr 12 | 202 | 74.8% | +\$432 |
+| Apr 13 | 261 | 70.1% | +\$1 |
+| Apr 14 | 135 | 68.1% | +\$348 |
+| Apr 15 | 27  | 33.3% | -\$27 |
+| Apr 16 | 152 | 63.2% | -\$300 |
+| Apr 17 | 190 | 62.6% | -\$286 |
+| Apr 18 (early) | 1 | 0% | -\$10 |
+
+Win rate didn't collapse — held ~63% — but avg per-trade PnL flipped
+from +\$2 to -\$1.50. **Asymmetric losses:** winners stayed small while
+losers grew. Signature of a regime shift, not random noise.
+
+**Action:** entry-side STOP until we can run a proper autoresearch
+validation of current V6.0 parameters against post-Apr-14 data. Did
+NOT alter parameters or shut down the strategy entirely — `check_exits`
+still runs so the 100+ open B3 positions can resolve via Gamma API
+instead of rotting.
+
+**Mechanism:** `strategy_b3.poll_cycle` has a new early-return when
+`_execution_mode == "stopped"`. The orchestrator still calls poll
+every 10-15s but it returns `[]` immediately after the shadow sweep.
+
+**Next step (user decision):** before re-enabling, either
+(a) `/optimize B3` against last 2 weeks of price data to find new
+    parameters that handle the Apr 15+ regime, or
+(b) Compare Project PARALLEL B3 shadow variants and promote a better
+    challenger.
+
+Don't flip back to `paper` blindly — the -$595 over 3 days is the kind
+of drawdown that can hide a real structural shift in BTC
+microstructure (e.g., liquidity profile on 5-min Polymarket events
+changing with broader market conditions).
+
+---
 
 ### Known pinned (imported from memory)
 

@@ -683,6 +683,13 @@ class StrategyB3:
         except Exception as _e:
             logger.debug("b3_shadow_sweep_error", error=str(_e))
 
+        # "stopped" mode: skip entry logic entirely. check_exits() still
+        # runs from the orchestrator so existing positions resolve
+        # naturally. Set by B3_EXECUTION_MODE=stopped on Apr 18 after
+        # -$595 drawdown over 3 days (see LEARNINGS B3-1).
+        if self._execution_mode == "stopped":
+            return executed
+
         # 1. Fetch events
         await self._scanner.fetch_events()
 
