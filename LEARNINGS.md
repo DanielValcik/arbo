@@ -287,6 +287,46 @@ or the framework is ceremony without safety.
 
 ---
 
+### G15. Silent market-resolve notifications — the "missing half" of the feed
+
+**Observed 2026-04-19:** trade 5333 (ETH above $2500, entry $0.06) held
+55h and resolved LOST when the market closed without ETH reaching
+$2500. Position went to zero; `actual_pnl = -$2.35`. But **no Slack
+message fired** — the operator only saw the original BUY notification
+55h earlier, then nothing.
+
+Root cause: the Slack notification path (`_notify_b2_live_resolve`) is
+wired only to ExitManager-driven sells (edge_lost, profit_take). When
+a market resolves naturally at expiry — the dominant outcome for
+B2's far-OTM daily bets — the resolution-check loop
+(`main_rdh.py:~4037`) marks the paper trade as `status='lost'` or
+`status='sold'` and cleans up, but never posts to Slack.
+
+Consequence: the operator's Slack view of B2 was systematically
+biased toward active exits (which trend profitable since edge_lost
+often fires near favorable prices and profit_take captures winners).
+Naturally-resolved losers were invisible. This is exactly the kind of
+feed that trains a user to trust the system too much.
+
+**Fix (commit pending):** add Slack notification in the B2 resolution
+branch. Uses the same `_notify_b2_live_resolve` helper so message
+format is identical (`resolved_yes` / `resolved_no` exit_reason
+instead of `edge_lost`/`profit_take`).
+
+**Lesson:** any event log the user reads must be **complete by
+default**, not complete-by-happy-path. A notification that only fires
+on the interesting branches silently teaches a biased narrative.
+When implementing notifications, enumerate ALL terminal states and
+verify each one has a path to the feed.
+
+---
+
+### G14. User decision fatigue — the framework is only as good as the operator's ability to act on it
+
+_(See earlier entry above)_
+
+---
+
 ## Strategy B2 — Crypto Price Edge
 
 Status: **LIVE dual-mode since 2026-04-16 11:20 UTC**, $100 wallet capital.

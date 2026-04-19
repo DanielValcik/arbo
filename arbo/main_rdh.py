@@ -4045,7 +4045,35 @@ class RDHOrchestrator:
                     elif strategy == "C2" and self._strategy_c2 is not None:
                         self._strategy_c2.handle_resolution(cid, pnl)
                     elif strategy == "B2" and self._strategy_b2 is not None:
+                        # Capture B2 position metadata BEFORE handle_resolution
+                        # pops it from _open_positions. Used for the market-
+                        # resolved Slack notification below so the operator
+                        # sees a symmetric flow with edge_lost/profit_take
+                        # sells (same template, same channel).
+                        b2_pos_snapshot = self._strategy_b2._open_positions.get(
+                            pos.token_id,
+                        )
                         self._strategy_b2.handle_resolution(cid, float(pnl))
+                        # Slack notification — market closed naturally
+                        if b2_pos_snapshot is not None and self._slack_bot is not None:
+                            try:
+                                await self._notify_b2_live_resolve(
+                                    asset=b2_pos_snapshot.asset,
+                                    strike=b2_pos_snapshot.strike,
+                                    direction=b2_pos_snapshot.direction,
+                                    exit_reason=(
+                                        "resolved_yes" if winning else "resolved_no"
+                                    ),
+                                    entry_price=b2_pos_snapshot.entry_price,
+                                    exit_price=1.0 if winning else 0.0,
+                                    shares=int(b2_pos_snapshot.live_shares or 0),
+                                    pnl=float(pnl),
+                                )
+                            except Exception as slack_err:
+                                logger.warning(
+                                    "b2_resolve_slack_error",
+                                    error=str(slack_err),
+                                )
                     elif strategy == "B3" and self._strategy_b3 is not None:
                         self._strategy_b3.handle_resolution(cid, float(pnl))
                     elif strategy == "C" and self._strategy_c is not None:

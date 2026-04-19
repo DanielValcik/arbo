@@ -131,6 +131,8 @@ P(better): 0.92
 | ✅ SELL (profit_take) | Prodali jsme se ziskem | Nic — 🎉 |
 | ✅ SELL (edge_lost) s plusem | Edge zmizel při dobré ceně | Nic — info |
 | ❌ SELL (edge_lost) se ztrátou | Edge zmizel, pozice proděl | Nic — systém to hlídal |
+| ✅ SELL (resolved_yes) | Market resolved YES, výhra | Nic — 🎉 |
+| ❌ SELL (resolved_no) | Market resolved NO, plná ztráta investice | Nic — u longshots (prob <15%) očekávané |
 | 🏆 PROMOTION CANDIDATE | Shadow ukazuje lepšího challengera | Approve / Reject / Details |
 | 🤖 AUTO-APPROVED CANARY | Systém sám spustil kanárek | Jen info — jak to dopadne uvidíš |
 | 🌱 incubate on B2 | Kanárek rozběhnut | Nic — čekání na live data |
