@@ -350,9 +350,13 @@ def llm_synthesis(prompt: str) -> str | None:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(GEMINI_MODEL)
+        # Gemini 2.5 Flash uses "thinking tokens" that count against
+        # max_output_tokens. 1500 was too tight — final text got cut
+        # mid-sentence. 8000 gives thinking + ~1500-2000 tokens of
+        # actual response (well over what we need for a briefing).
         resp = model.generate_content(
             prompt,
-            generation_config={"temperature": 0.3, "max_output_tokens": 1500},
+            generation_config={"temperature": 0.3, "max_output_tokens": 8000},
             request_options={"timeout": 60},
         )
         return (resp.text or "").strip()
