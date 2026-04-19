@@ -202,6 +202,42 @@ the bug hid longer on B2.
 
 ---
 
+### G13. Shadow stats can't justify live promotion alone — need canary stage
+
+**Problem:** Project PARALLEL's promotion engine flagged candidates
+based on `shadow_variant_signals` — a DB of theoretical PnL as if each
+variant's gate had admitted each candidate. The shadow paper stats
+systematically overstate edge:
+
+- Shadow fills at midpoint or inferred price, live pays real ask/bid
+  (spread cost — see G1)
+- Shadow has no fill latency, slippage, or partial fills
+- Shadow price series can be stale by seconds; live orderbook moves
+
+Consequence: a variant that beats champion on shadow stats can lose
+money live. Promotion directly from shadow → champion risks flipping
+the production strategy onto a broken thesis that only looked good in
+simulation.
+
+**Fix (2026-04-19):** canary promotion flow — Slack "Approve" now
+routes the challenger into an `incubate` stage that receives a bounded
+fraction (default 20%) of live signals for real fills. Watchdog
+collects ≥15 paired live trades and runs block-bootstrap against the
+champion's live PnL. Only escalates to champion when P(live better) >
+0.70. Reverts to challenger-shadow when P < 0.30 after ≥20 trades.
+
+Spec: `docs/CANARY_PROMOTION_SPEC.md`. Implementation:
+`pool_manager.promote_to_incubate`, `strategy_b2._get_live_routing` +
+`_route_signal`, `b2_watchdog._incubate_cycle`.
+
+**Lesson:** any multi-variant optimization framework needs a live-data
+validation stage between shadow and full production. Shadow is a
+filter, not a decision. The stage can be brief (days) when trade
+volume is high, or slow (weeks) when it's low — but it has to exist,
+or the framework is ceremony without safety.
+
+---
+
 ## Strategy B2 — Crypto Price Edge
 
 Status: **LIVE dual-mode since 2026-04-16 11:20 UTC**, $100 wallet capital.

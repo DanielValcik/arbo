@@ -274,8 +274,37 @@ class StrategyB2:
         except Exception as e:
             logger.debug("b2_shadow_sweep_error", error=str(e))
 
-        # 3. Quality gate (champion's filter — drives live execution)
-        qualified = filter_signals(signals)
+        # 3. Quality gate — canary promotion routing
+        # -------------------------------------------
+        # Every candidate signal is routed to either the champion or the
+        # incubating variant's quality gate. Route is deterministic
+        # (hash(token_id, minute_bucket)) so the same signal always
+        # uses the same variant across the poll-and-execute path.
+        # Incubate capital_pct is read from the YAML; champion gets the
+        # complement. If no incubate variant exists, 100% → champion.
+        from arbo.strategies.crypto_quality_gate import check_signal_quality
+
+        champion, incubate, incubate_pct = self._get_live_routing()
+        champion_params = champion.params if champion else None
+        incubate_params = incubate.params if incubate else None
+
+        qualified: list[CryptoSignal] = []
+        signal_variant: dict[str, str] = {}   # token_id → variant_id used at gate
+        route_counts = {"champion": 0, "incubate": 0}
+        for sig in signals:
+            to_incubate = self._route_signal(sig, incubate_pct)
+            variant_params = incubate_params if to_incubate else champion_params
+            variant_id = (
+                incubate.variant_id if to_incubate and incubate
+                else (champion.variant_id if champion else "champion_v1")
+            )
+            decision = check_signal_quality(
+                sig, exchange_price_age_s=0.0, params=variant_params,
+            )
+            if decision.passed:
+                qualified.append(sig)
+                signal_variant[sig.token_id] = variant_id
+                route_counts["incubate" if to_incubate else "champion"] += 1
 
         logger.info(
             "b2_poll_summary",
@@ -283,6 +312,8 @@ class StrategyB2:
             crypto_markets=len(markets),
             signals=len(signals),
             qualified=len(qualified),
+            route=route_counts,
+            incubate_pct=incubate_pct if incubate else 0,
         )
 
         if not qualified:
@@ -617,7 +648,12 @@ class StrategyB2:
                     pre_computed_size=Decimal(str(round(actual_size, 2))),
                     clob_fill_price=Decimal(str(round(fill_price, 4))),
                     trade_details={
-                        "variant_id": "champion_v1",  # Project PARALLEL — current live variant
+                        # Record the variant whose quality gate actually
+                        # admitted this signal. Under canary promotion,
+                        # champion and incubate both generate trades;
+                        # this field lets watchdog compute per-variant
+                        # live PnL for the escalation decision.
+                        "variant_id": signal_variant.get(token_id, "champion_v1"),
                         "asset": sig.asset,
                         "strike": float(sig.strike),
                         "direction": sig.direction,
@@ -807,6 +843,49 @@ class StrategyB2:
             except Exception as e:
                 logger.warning("b2_variant_load_error", error=str(e))
         return self._variants_cache
+
+    def _get_live_routing(self) -> tuple[Any, Any | None, float]:
+        """Return (champion, incubate_or_None, incubate_capital_pct).
+
+        The live quality gate uses these to decide, per candidate signal,
+        whether to apply the incubating variant's params (canary) or the
+        champion's. `incubate_capital_pct` is the share of signals routed
+        to the incubate variant (0 when there is none).
+        """
+        variants = self._get_variants() or []
+        champion = next((v for v in variants if v.status == "champion"), None)
+        incubate = next((v for v in variants if v.status == "incubate"), None)
+        if incubate is None:
+            return champion, None, 0.0
+        raw_pct = 0.20  # default canary allocation
+        try:
+            # VariantConfig is frozen — YAML-loaded override lives on the
+            # raw dict. We stash it on a side-attr in pool_manager, but
+            # fallback to the declared constant when missing.
+            raw_pct = float(getattr(incubate, "incubate_capital_pct", None) or 0.20)
+        except Exception:
+            raw_pct = 0.20
+        raw_pct = max(0.05, min(0.50, raw_pct))
+        return champion, incubate, raw_pct
+
+    @staticmethod
+    def _route_signal(sig: Any, incubate_pct: float) -> bool:
+        """Deterministically decide whether a signal goes to incubate.
+
+        Uses hash(token_id + minute_bucket) to produce a stable 0..99
+        bucket. Returns True if the signal should use the incubate
+        variant's params, False for champion. Deterministic routing
+        means re-running the same poll cycle produces the same
+        attribution — critical for attribution consistency and
+        reproducibility.
+        """
+        if incubate_pct <= 0.0:
+            return False
+        import hashlib
+        minute_bucket = int(time.time() // 60)
+        key = f"{sig.token_id}:{minute_bucket}".encode()
+        h = int(hashlib.sha1(key).hexdigest()[:8], 16)
+        return (h % 100) < int(round(incubate_pct * 100))
 
     async def _evaluate_shadow_variants(self, signals: list[CryptoSignal]) -> None:
         """Per-signal × per-variant evaluation → shadow_variant_signals.

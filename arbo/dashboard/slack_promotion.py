@@ -97,7 +97,7 @@ def build_promotion_blocks(candidate: PromotionCandidate) -> list[dict[str, Any]
                 {
                     "type": "button",
                     "style": "primary",
-                    "text": {"type": "plain_text", "text": ":white_check_mark: Approve & Promote"},
+                    "text": {"type": "plain_text", "text": ":white_check_mark: Approve → Incubate 20%"},
                     "action_id": f"promote_approve:{strategy}:{ch}",
                     "value": f"{strategy}:{ch}",
                 },
@@ -195,8 +195,16 @@ def register_action_handlers(slack_bot: Any) -> None:
             strategy=strategy, variant_id=variant_id, user=user,
         )
         try:
+            # Two-stage promotion: first to incubate (live canary with
+            # capped capital share), then auto-escalate to champion
+            # once live P(better) > threshold. See
+            # docs/CANARY_PROMOTION_SPEC.md for the full flow.
             from arbo.core import pool_manager
-            ok, reason = await pool_manager.promote(variant_id, strategy, approved_by=user)
+            ok, reason = await pool_manager.promote_to_incubate(
+                variant_id, strategy,
+                capital_pct=0.20,
+                approved_by=user,
+            )
         except Exception as e:
             await respond(replace_original=False, text=f":warning: Error: {e}")
             logger.warning("promotion_approve_exec_error", error=str(e))
@@ -204,12 +212,17 @@ def register_action_handlers(slack_bot: Any) -> None:
         if ok:
             await respond(
                 replace_original=False,
-                text=f":white_check_mark: Promoted `{variant_id}` → champion of {strategy} (by {user})",
+                text=(
+                    f":seedling: `{variant_id}` → *incubate* on {strategy} (by {user})\n"
+                    f"• 20% of live signals will route through this variant\n"
+                    f"• Watchdog will auto-escalate to champion after "
+                    f"≥15 paired live trades with P(better)>0.70"
+                ),
             )
         else:
             await respond(
                 replace_original=False,
-                text=f":warning: Promotion failed: {reason}",
+                text=f":warning: Incubate failed: {reason}",
             )
 
     @app.action(_reject_re)

@@ -292,6 +292,150 @@ async def promote(
     return True, None
 
 
+async def promote_to_incubate(
+    variant_id: str,
+    strategy: str,
+    *,
+    capital_pct: float = 0.20,
+    approved_by: str = "system",
+) -> tuple[bool, str | None]:
+    """Move a challenger into the `incubate` stage.
+
+    Unlike `promote()` which does a full champion swap, this keeps the
+    current champion in place and flips the challenger to `incubate`.
+    Live strategy code (e.g. strategy_b2) reads active variants via
+    `get_active_variants()` and routes `capital_pct` of candidate signals
+    through the incubating variant's params. The remaining
+    `1 - capital_pct` continues to use the champion.
+
+    The incubate stage is a live canary: the variant sees real fills,
+    real spread, real slippage — none of which shadow evaluation can
+    capture. After sufficient live data accumulates, the watchdog
+    (`b2_watchdog._eval_cycle`) either escalates incubate → champion
+    via `promote()` or reverts via `revert_incubate_to_challenger()`.
+
+    Args:
+        variant_id: challenger variant YAML id.
+        strategy: e.g. "B2".
+        capital_pct: fraction of live capital/signals routed to the
+            incubating variant. Clamped to [0.05, 0.50]. Default 0.20.
+        approved_by: audit string.
+
+    Returns:
+        (success, reason_if_failed). No YAML changes if success=False.
+    """
+    if not 0.05 <= capital_pct <= 0.50:
+        return False, f"capital_pct {capital_pct} outside [0.05, 0.50]"
+
+    pool = load_variants(strategy)
+    target = next((v for v in pool if v.variant_id == variant_id), None)
+    if target is None:
+        return False, f"variant {variant_id} not in pool"
+    if target.status != "challenger":
+        return False, (
+            f"cannot move to incubate from status={target.status}; "
+            f"promote_to_incubate only accepts challengers"
+        )
+
+    # Ensure no OTHER variant is already in incubate — we only
+    # canary one at a time to keep attribution clean.
+    existing_incubate = next((v for v in pool if v.status == "incubate"), None)
+    if existing_incubate is not None:
+        return False, (
+            f"{existing_incubate.variant_id} is already in incubate; "
+            f"resolve that one (escalate/revert) before starting a new canary"
+        )
+
+    target_yaml = _pool_dir(strategy) / f"{variant_id}.yaml"
+    if not target_yaml.exists():
+        return False, f"{variant_id}.yaml missing"
+
+    ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    try:
+        with open(target_yaml) as f:
+            data = yaml.safe_load(f) or {}
+        data["status"] = "incubate"
+        data["incubated_at"] = ts
+        data["incubated_by"] = approved_by
+        data["incubate_capital_pct"] = round(capital_pct, 3)
+        _atomic_write_yaml(target_yaml, data)
+    except Exception as e:
+        return False, f"yaml write error: {e}"
+
+    # LEARNINGS log
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        learnings = repo_root / "docs" / "STRATEGY_OPTIMIZATION_LEARNINGS.md"
+        if learnings.exists():
+            entry = [
+                "",
+                f"### {ts} — Canary: `{variant_id}` → incubate ({strategy})",
+                "",
+                f"- **Capital share:** {capital_pct * 100:.0f}% of live signals",
+                f"- **Approved by:** {approved_by}",
+                "- **Escalation:** watchdog evaluates live P(better) after N≥15 paired trades.",
+                "",
+            ]
+            with open(learnings, "a", encoding="utf-8") as f:
+                f.write("\n".join(entry) + "\n")
+    except Exception as e:
+        logger.warning("incubate_learnings_error", error=str(e))
+
+    logger.info(
+        "pool_incubated",
+        strategy=strategy,
+        variant_id=variant_id,
+        capital_pct=capital_pct,
+        approved_by=approved_by,
+    )
+    return True, None
+
+
+async def revert_incubate_to_challenger(
+    variant_id: str,
+    strategy: str,
+    *,
+    reason: str = "underperformed_live",
+    decided_by: str = "watchdog",
+) -> tuple[bool, str | None]:
+    """Demote an incubating variant back to challenger (shadow-only).
+
+    Used when live data shows the variant is NOT better than the
+    current champion. Capital routing stops; the variant goes back to
+    shadow evaluation.
+    """
+    pool = load_variants(strategy)
+    target = next((v for v in pool if v.variant_id == variant_id), None)
+    if target is None:
+        return False, f"variant {variant_id} not in pool"
+    if target.status != "incubate":
+        return False, f"cannot revert from status={target.status}"
+
+    target_yaml = _pool_dir(strategy) / f"{variant_id}.yaml"
+    ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    try:
+        with open(target_yaml) as f:
+            data = yaml.safe_load(f) or {}
+        data["status"] = "challenger"
+        data["reverted_at"] = ts
+        data["reverted_reason"] = reason
+        data["reverted_by"] = decided_by
+        # Strip incubate-specific keys
+        data.pop("incubate_capital_pct", None)
+        _atomic_write_yaml(target_yaml, data)
+    except Exception as e:
+        return False, f"yaml write error: {e}"
+
+    logger.info(
+        "pool_incubate_reverted",
+        strategy=strategy,
+        variant_id=variant_id,
+        reason=reason,
+        decided_by=decided_by,
+    )
+    return True, None
+
+
 async def veto(
     variant_id: str, strategy: str, *, vetoed_by: str = "ceo"
 ) -> tuple[bool, str | None]:

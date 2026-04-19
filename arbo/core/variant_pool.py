@@ -49,6 +49,10 @@ class VariantConfig:
     params: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
     parent_variant: str | None = None
+    # Canary promotion: set on variants with status=="incubate" by
+    # pool_manager.promote_to_incubate. Fraction of live signals
+    # routed to this variant's gate. None for non-incubating variants.
+    incubate_capital_pct: float | None = None
 
     def __post_init__(self) -> None:
         if self.status not in VALID_STATUS:
@@ -93,6 +97,7 @@ def load_variants(strategy: str, root: Path | None = None) -> list[VariantConfig
                 params=raw.get("params", {}) or {},
                 notes=raw.get("notes", ""),
                 parent_variant=raw.get("parent_variant"),
+                incubate_capital_pct=raw.get("incubate_capital_pct"),
             )
         except KeyError as e:
             raise ValueError(f"Variant YAML {yaml_path} missing required field: {e}")
