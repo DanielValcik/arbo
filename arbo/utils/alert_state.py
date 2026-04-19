@@ -41,15 +41,24 @@ from typing import Any
 
 
 def _state_path() -> Path:
-    """Resolve the state file location."""
+    """Resolve the state file location.
+
+    On the VPS the systemd unit has `ProtectSystem=strict` with
+    `ReadWritePaths=/opt/arbo/arbo /opt/arbo/models /opt/arbo/logs
+    /home/arbo/.cache /home/arbo/.postgresql`. We MUST write inside
+    one of those or the rename() at commit time fails with
+    read-only-fs EROFS. `/opt/arbo/logs/.state/` sits inside a
+    writable path, is ignored by rsync/logrotate, and survives
+    restarts (good for dedup persistence).
+    """
     base = os.environ.get("ARBO_STATE_DIR")
     if base:
         d = Path(base)
     else:
-        # Default on VPS: /var/lib/arbo/ (systemd-friendly)
-        # Default on dev: repo-local ./.state/
+        # Repo-local dev default + VPS-writable prod default
         repo_state = Path(__file__).resolve().parents[2] / ".state"
-        d = Path("/var/lib/arbo") if Path("/opt/arbo").exists() else repo_state
+        vps_state = Path("/opt/arbo/logs/.state")
+        d = vps_state if Path("/opt/arbo/logs").exists() else repo_state
     d.mkdir(parents=True, exist_ok=True)
     return d / "alert_state.json"
 
