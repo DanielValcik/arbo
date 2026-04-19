@@ -38,6 +38,7 @@ dependencies = [
     "fastapi>=0.109",
     "uvicorn[standard]>=0.27",
     "jinja2>=3.1",
+    "markdown>=3.5",  # Knowledge Base page renders docs/KNOWLEDGE_BASE.md
     "python-multipart>=0.0.6",
     "psutil>=5.9",
 

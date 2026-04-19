@@ -234,38 +234,266 @@ async def knowledge_base_page(
         from html import escape as _escape
         body_html = f"<pre>{_escape(md_text)}</pre>"
 
+    # Styling goal: a real reading experience. Magazine-like
+    # typography (serif headings for hierarchy, sans-serif body for
+    # flow), generous whitespace, cards + callouts for emphasis. The
+    # Knowledge Base is meant to be READ, not scanned like a log file.
     html = """<!doctype html>
 <html lang="cs"><head>
 <meta charset="utf-8">
-<title>Arbo — Knowledge Base</title>
+<title>Arbo — Jak to funguje</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
-    system-ui, sans-serif; max-width: 780px; margin: 2em auto;
-    padding: 0 1em; color: #222; background: #fbfbfb; }
-  h1 { border-bottom: 2px solid #222; padding-bottom: 0.3em; }
-  h2 { margin-top: 1.8em; border-bottom: 1px solid #ddd;
-    padding-bottom: 0.2em; }
-  h3 { margin-top: 1.4em; }
-  code { background: #eee; padding: 1px 6px; border-radius: 3px;
-    font-size: 0.92em; }
-  pre { background: #f3f3f3; padding: 12px 16px; border-radius: 4px;
-    overflow-x: auto; font-size: 0.88em; line-height: 1.45; }
-  pre code { background: none; padding: 0; }
-  table { border-collapse: collapse; margin: 1em 0; }
-  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left;
-    font-size: 0.94em; }
-  th { background: #eee; }
-  blockquote { border-left: 4px solid #888; padding: 0.1em 1em;
-    background: #f0f0f0; margin: 1em 0; color: #444; }
-  a { color: #0366d6; }
-  .nav { font-size: 0.9em; color: #666; margin-bottom: 2em; }
-  .nav a { color: #0366d6; text-decoration: none; }
-  .nav a:hover { text-decoration: underline; }
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #555;
+    --ink-mute: #888;
+    --paper: #faf8f3;
+    --paper-warm: #f2ede3;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --link: #1e40af;
+    --border: #e7e1d4;
+    --success: #166534;
+    --warn: #92400e;
+    --mono: #edeae1;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 17px; line-height: 1.7;
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse at top, var(--paper-warm), var(--paper)) no-repeat;
+    background-attachment: fixed;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* Top navigation bar */
+  .topbar {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 1.5rem 0 2rem;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+  }
+  .topbar .back {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem; font-weight: 500;
+    color: var(--ink-soft); text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: color 0.15s;
+  }
+  .topbar .back:hover { color: var(--accent); }
+  .topbar .logo {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .topbar .logo::before {
+    content: "📖 ";
+    margin-right: 0.3em;
+  }
+
+  /* Article container */
+  article {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 0.5rem;
+  }
+
+  /* Headings */
+  article h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 1.1;
+    margin: 0.5rem 0 1rem;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  article h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 2rem;
+    line-height: 1.2;
+    margin: 3.5rem 0 1rem;
+    color: var(--ink);
+    border-top: 3px solid var(--accent);
+    padding-top: 2rem;
+    letter-spacing: -0.01em;
+  }
+  article h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 1.4rem;
+    margin: 2.2rem 0 0.6rem;
+    color: var(--ink);
+  }
+  article h4 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    margin: 1.8rem 0 0.4rem;
+  }
+
+  /* Paragraphs */
+  article p {
+    margin: 0 0 1.1rem;
+    color: var(--ink);
+  }
+  article p strong { font-weight: 600; color: var(--ink); }
+  article p em { color: var(--ink-soft); font-style: italic; }
+
+  /* Lists */
+  article ul, article ol {
+    margin: 0 0 1.2rem; padding-left: 1.6rem;
+  }
+  article li { margin-bottom: 0.35rem; }
+  article li::marker { color: var(--accent); font-weight: 600; }
+
+  /* Inline code & code blocks */
+  article code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: var(--mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.86em;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  article pre {
+    background: var(--ink);
+    color: #f1ede5;
+    padding: 1.2rem 1.4rem;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    box-shadow: var(--shadow);
+    margin: 1.4rem 0;
+  }
+  article pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 400;
+  }
+
+  /* Tables */
+  article table {
+    border-collapse: collapse;
+    margin: 1.8rem 0;
+    width: 100%;
+    font-size: 0.95rem;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  article th, article td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  article th {
+    background: var(--paper-warm);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+  }
+  article tr:last-child td { border-bottom: none; }
+  article tr:nth-child(even) td { background: #fbfaf5; }
+
+  /* Blockquote as highlight / intro */
+  article blockquote {
+    background: #fff;
+    border-left: 4px solid var(--accent);
+    padding: 1.2rem 1.6rem;
+    margin: 2rem 0;
+    border-radius: 6px;
+    color: var(--ink-soft);
+    font-style: italic;
+    box-shadow: var(--shadow);
+  }
+  article blockquote p { margin: 0; }
+  article blockquote p + p { margin-top: 0.8rem; }
+
+  /* Links */
+  article a {
+    color: var(--link);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  article a:hover { border-bottom-color: var(--link); }
+
+  /* Horizontal rule */
+  article hr {
+    border: none;
+    height: 1px;
+    background: var(--border);
+    margin: 3rem 0;
+  }
+
+  /* Emoji-as-anchor icon-heads (common pattern in the doc) */
+  article h2 + p:first-letter,
+  article h3 + p:first-letter {
+    /* subtle drop-cap-like first letter for the first paragraph after a heading */
+    font-weight: 500;
+  }
+
+  /* Pretty first-paragraph treatment */
+  article > h1 + blockquote {
+    background: linear-gradient(135deg, #fff, var(--paper-warm));
+    border-left-width: 6px;
+  }
+
+  /* Reading progress — small footer */
+  .read-footer {
+    max-width: 720px;
+    margin: 4rem auto 0;
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--border);
+    color: var(--ink-mute);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    article h1 { font-size: 2.2rem; }
+    article h2 { font-size: 1.6rem; }
+    article h3 { font-size: 1.2rem; }
+    body { padding: 0 1rem 3rem; font-size: 16px; }
+  }
 </style>
 </head><body>
-<div class="nav"><a href="/">← zpět na dashboard</a></div>
-""" + body_html + "</body></html>"
+<div class="topbar">
+  <div class="logo">Arbo Knowledge Base</div>
+  <a class="back" href="/">← zpět na dashboard</a>
+</div>
+<article>
+""" + body_html + """
+</article>
+<div class="read-footer">
+  Tento dokument je udržován synchronně s chováním systému.
+  Pokud vidíš rozpor s realitou, je to bug v procesu.
+</div>
+</body></html>"""
     response = HTMLResponse(content=html)
     response.headers["Cache-Control"] = "public, max-age=60"
     return response
