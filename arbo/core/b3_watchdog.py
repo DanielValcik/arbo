@@ -118,6 +118,14 @@ class B3Watchdog:
 
     async def _eval_cycle(self) -> None:
         """Single evaluation cycle: fetch metrics → detect → decide → apply."""
+        # Skip the whole cycle when the strategy is stopped. No new trades
+        # are being generated, so reports, anomaly detection, auto-revert,
+        # challenger proposals, promotion and drift alerts have nothing to
+        # act on. B3 maps to B3_EXECUTION_MODE, B3_15M to B3_15M_EXECUTION_MODE.
+        env_var = f"{self._strategy_name}_EXECUTION_MODE"
+        if os.getenv(env_var) == "stopped":
+            return
+
         metrics = await fetch_b3_metrics(
             self._session_factory, strategy=self._strategy_name,
         )
