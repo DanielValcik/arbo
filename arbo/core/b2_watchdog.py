@@ -43,14 +43,10 @@ class B2Watchdog:
         self._last_eval_ts: float = 0.0
         self._last_autochallenger_ts: float = 0.0
         self._promotion_posted: dict[str, float] = {}
-        # Drift dedup: last emitted fingerprint + timestamp. Same
-        # drift state (same variants + same N per variant) within
-        # the cooldown window is silenced to avoid spamming Slack
-        # on every watchdog restart. Surfaces via the daily digest
-        # regardless — user never misses context, just never gets
-        # woken up by the same alert twice.
-        self._last_drift_fingerprint: str | None = None
-        self._last_drift_ts: float = 0.0
+        # Drift dedup is now persisted via `arbo.utils.alert_state` so
+        # restarts don't re-emit the same alert. See
+        # docs/KNOWLEDGE_BASE.md ("B2 Drift Alert" row) for the
+        # suppression rules the operator should expect.
 
     async def run(self) -> None:
         """Main daemon loop. Runs until stop()."""
@@ -449,13 +445,15 @@ class B2Watchdog:
             logger.warning("b2_drift_import_error", error=str(e))
             return
 
+        from arbo.utils.alert_state import should_alert, record_alert, clear_alert
+
         results = await evaluate_strategy_drift(self.STRATEGY_NAME)
         firing = sorted(
             [r for r in results if r.firing], key=lambda r: r.variant_id,
         )
         if not firing:
-            # Clear fingerprint if drift cleared — next firing will alert.
-            self._last_drift_fingerprint = None
+            # No drift — clear state so next firing alerts freshly.
+            clear_alert("b2_drift")
             return
 
         # Fingerprint = which variants fire + their N_samples. Mean
@@ -465,12 +463,7 @@ class B2Watchdog:
         fingerprint = "|".join(
             f"{r.variant_id}:{r.n_samples}" for r in firing
         )
-        now = time.time()
-        cooldown_s = 24 * 3600
-        same_state = (
-            fingerprint == self._last_drift_fingerprint
-            and now - self._last_drift_ts < cooldown_s
-        )
+        fire = should_alert("b2_drift", fingerprint, cooldown_s=24 * 3600)
 
         for r in firing:
             logger.warning(
@@ -478,14 +471,13 @@ class B2Watchdog:
                 variant_id=r.variant_id,
                 ph_stat=r.ph_stat,
                 n_samples=r.n_samples,
-                dedup_suppressed=same_state,
+                dedup_suppressed=not fire,
             )
 
-        if same_state:
-            return  # suppressed
+        if not fire:
+            return  # already notified within cooldown
 
-        self._last_drift_fingerprint = fingerprint
-        self._last_drift_ts = now
+        record_alert("b2_drift", fingerprint)
 
         if self._slack is not None:
             lines = [

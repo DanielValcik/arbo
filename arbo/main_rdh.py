@@ -4136,18 +4136,36 @@ class RDHOrchestrator:
                     notes=report.notes[:3] if report.notes else [],
                 )
 
-                # Slack alert if not OK
+                # Slack alert if not OK — deduped by verdict + notes so
+                # identical degradations don't re-spam on every 12h cycle
+                # or process restart. New verdict or meaningfully new
+                # notes → re-alert. Otherwise silent; operator sees it
+                # in the daily digest instead. See LEARNINGS G-15 on
+                # why stateless alerts are a UX bug.
                 if report.verdict != "ok" and self._slack_bot is not None:
-                    verdict_emoji = (
-                        ":warning:" if report.verdict == "needs_attention" else ":red_circle:"
+                    from arbo.utils.alert_state import should_alert, record_alert
+
+                    fingerprint = f"{report.verdict}|" + "||".join(
+                        sorted(report.notes or [])
                     )
-                    msg = (
-                        f"{verdict_emoji} *Health Check: {report.verdict.upper()}*\n"
-                        + "\n".join(f"• {n}" for n in report.notes)
-                    )
-                    # send_alert routes to the review_queue channel and
-                    # prefixes :rotating_light: — correct for health degradations
-                    await self._slack_bot.send_alert(msg)
+                    if should_alert("health_check", fingerprint, cooldown_s=24 * 3600):
+                        verdict_emoji = (
+                            ":warning:"
+                            if report.verdict == "needs_attention"
+                            else ":red_circle:"
+                        )
+                        msg = (
+                            f"{verdict_emoji} *Health Check: {report.verdict.upper()}*\n"
+                            + "\n".join(f"• {n}" for n in report.notes)
+                        )
+                        # send_alert routes to the review_queue channel and
+                        # prefixes :rotating_light: — correct for health degradations
+                        await self._slack_bot.send_alert(msg)
+                        record_alert("health_check", fingerprint)
+                elif report.verdict == "ok":
+                    # Degradation cleared — let next non-ok emit.
+                    from arbo.utils.alert_state import clear_alert
+                    clear_alert("health_check")
 
             except Exception as e:
                 logger.error("health_check_scheduler_error", error=str(e))
