@@ -1,0 +1,10 @@
+[Unit]
+Description=Trigger Arbo PARALLEL digest at 07:00 UTC each day
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 UTC
+Persistent=true
+Unit=arbo-parallel-digest.service
+
+[Install]
+WantedBy=timers.target

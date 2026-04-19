@@ -202,6 +202,55 @@ the bug hid longer on B2.
 
 ---
 
+### G14. User decision fatigue — the framework is only as good as the operator's ability to act on it
+
+**Observed 2026-04-19 after canary promotion shipped:** the operator
+received two simultaneous Slack promotion candidates (ch_short_fuse +
+ch_edge_tight) with a dead "Auto-approve in 24h" line, plus a drift
+alert, plus an auto-challenger notice. Each message was individually
+correct but the SET was confusing. First question was "what happens if
+I approve both?" — exactly the question the system should have
+prevented by design.
+
+**Root cause:** The promotion engine emitted every Tier-1 candidate
+above threshold. It didn't know that only one canary can run at a
+time (that guard lives downstream in `pool_manager`). It also didn't
+rank or pick — it just dumped candidates. And the Slack formatter
+carried over an "Auto-approve" line from a feature that was planned
+but never implemented. Each piece was individually sane; composed,
+they pushed decisions back onto the user.
+
+**Fix (commit pending):**
+
+1. **Watchdog `_promotion_cycle`** now guards on "incubate already
+   active" — if one canary is running, no new candidates emit at all.
+2. **Top-1 only** — candidates sorted by `p_better` desc, only the
+   best is posted per cycle.
+3. **Auto-approve threshold** — candidates with P(better)≥0.85 AND
+   N≥1000 AND DSR Δ≥0.20 are auto-promoted to incubate by the
+   watchdog. Operator sees a notification, not a question.
+4. **Slack text rewritten** — removed the dead "Auto-approve in 24h"
+   line, replaced with what the Approve button will actually do.
+5. **Daily digest (`scripts/parallel_digest.py`)** — Gemini writes ONE
+   plain-Czech morning briefing per strategy at 07:00 UTC that
+   aggregates champion status, incubate progress, drift, and pending
+   decisions. Replaces the stream of ad-hoc alerts.
+
+**Lesson:** every notification you send the operator is an implicit
+"figure this out" request. Before a system ships to a non-engineer
+user, walk through a week of their Slack and check: would they know
+exactly what to do, without asking? If they have to interpret, the
+framework is leaking complexity. **Prefer silence + autonomous action
+over a prompt**; prefer a daily digest over ad-hoc alerts; prefer a
+single best candidate over a list.
+
+Related: `docs/KNOWLEDGE_BASE.md` — a living user-facing doc that
+describes exactly what the system does autonomously vs what it asks
+about. Kept current by CLAUDE.md rule — if a change isn't in the KB,
+the change doesn't ship.
+
+---
+
 ### G13. Shadow stats can't justify live promotion alone — need canary stage
 
 **Problem:** Project PARALLEL's promotion engine flagged candidates

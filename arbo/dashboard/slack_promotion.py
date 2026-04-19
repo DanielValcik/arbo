@@ -39,7 +39,9 @@ def build_promotion_blocks(candidate: PromotionCandidate) -> list[dict[str, Any]
 
     title_icon = {1: ":trophy:", 2: ":warning:", 3: ":no_entry:"}.get(tier, ":question:")
     auto_note = (
-        "Auto-approve in 24h if no action (Tier 1)."
+        "Click *Approve* to enter a 20% live-capital canary. "
+        "Watchdog will auto-decide (escalate or revert) after ≥15 "
+        "paired live trades — you don't need to act again."
         if tier == 1 else
         "Tier 2 — CEO approval required. No auto-promote."
         if tier == 2 else

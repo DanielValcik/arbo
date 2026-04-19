@@ -317,33 +317,113 @@ class B2Watchdog:
                 logger.warning("b2_autochallenger_slack_error", error=str(e))
 
     async def _promotion_cycle(self) -> None:
-        """Detect promotion candidates → post to Slack."""
+        """Detect promotion candidates → auto-approve or post to Slack.
+
+        Design rules that reduce decision fatigue for the operator:
+        1. If any variant is already in `incubate`, skip emitting NEW
+           candidates entirely — only one canary at a time (matches
+           `pool_manager.promote_to_incubate` guard).
+        2. Rank candidates by `p_better` desc; emit only the TOP-1.
+        3. If the top candidate's evidence is very strong
+           (see AUTO_APPROVE_* thresholds in promotion_engine), call
+           `promote_to_incubate` directly — operator sees a notification,
+           not a decision.
+        4. Otherwise post a single-option Slack message for manual
+           approval. Dedup per challenger for 24h.
+        """
         try:
             from arbo.core.promotion_engine import PromotionEngine, MIN_P_BETTER
+            from arbo.core.variant_pool import load_variants
+            from arbo.core import pool_manager
             from arbo.dashboard.slack_promotion import post_candidate
         except Exception as e:
             logger.warning("b2_promotion_import_error", error=str(e))
             return
 
+        # One-canary-at-a-time guard: if an incubate already exists,
+        # don't emit any other candidates (they would fail downstream).
+        pool = load_variants(self.STRATEGY_NAME)
+        active_incubate = next(
+            (v for v in pool if v.status == "incubate"), None,
+        )
+        if active_incubate is not None:
+            logger.debug(
+                "b2_promotion_skipped_incubate_active",
+                incubating=active_incubate.variant_id,
+            )
+            return
+
         cands = await PromotionEngine(self.STRATEGY_NAME).evaluate()
+        # Filter out rejected + below user-approval threshold, then
+        # take the TOP-1 by p_better.
+        eligible = [
+            c for c in cands
+            if c.reject_reason is None
+            and not (c.tier == 1 and c.p_better < MIN_P_BETTER)
+        ]
+        if not eligible:
+            return
+        eligible.sort(key=lambda c: c.p_better, reverse=True)
+        top = eligible[0]
+
         now = time.time()
-        for cand in cands:
-            if cand.reject_reason:
-                continue
-            if cand.tier == 1 and cand.p_better < MIN_P_BETTER:
-                continue
-            last_ts = self._promotion_posted.get(cand.challenger_id, 0.0)
-            if now - last_ts < 24 * 3600:
-                continue
-            ok = await post_candidate(self._slack, cand)
+        last_ts = self._promotion_posted.get(top.challenger_id, 0.0)
+        if now - last_ts < 24 * 3600:
+            return  # already acted/posted within 24h
+
+        # Auto-approve path — strong evidence, safe change, no human
+        # in the loop. Pool manager will still apply the one-incubate
+        # guard, so worst case this no-ops and logs.
+        if top.auto_approve:
+            ok, reason = await pool_manager.promote_to_incubate(
+                top.challenger_id, self.STRATEGY_NAME,
+                capital_pct=0.20,
+                approved_by="system_auto",
+            )
             if ok:
-                self._promotion_posted[cand.challenger_id] = now
+                self._promotion_posted[top.challenger_id] = now
                 logger.info(
-                    "b2_promotion_emitted",
-                    challenger=cand.challenger_id,
-                    tier=cand.tier,
-                    p_better=cand.p_better,
+                    "b2_promotion_auto_approved",
+                    challenger=top.challenger_id,
+                    p_better=top.p_better,
+                    dsr_delta=top.dsr_delta,
+                    n=top.n_challenger,
                 )
+                if self._slack is not None:
+                    msg = (
+                        f":robot_face: *B2 AUTO-APPROVED CANARY*\n\n"
+                        f"System promoted `{top.challenger_id}` → *incubate* "
+                        f"(20% live capital) without manual review.\n\n"
+                        f"Why: very strong shadow evidence — "
+                        f"P(better)={top.p_better:.2f}, "
+                        f"Sharpe Δ={top.dsr_delta:+.2f}, "
+                        f"N={top.n_challenger}.\n\n"
+                        f"Watchdog will auto-escalate or revert based on "
+                        f"≥15 paired live trades."
+                    )
+                    try:
+                        await self._slack._post(self._b2_channel(), text=msg)
+                    except Exception as e:
+                        logger.warning("b2_auto_approve_slack_error", error=str(e))
+            else:
+                logger.warning(
+                    "b2_promotion_auto_approve_failed",
+                    challenger=top.challenger_id,
+                    reason=reason,
+                )
+            return
+
+        # Manual approval path — post single card to Slack
+        ok = await post_candidate(self._slack, top)
+        if ok:
+            self._promotion_posted[top.challenger_id] = now
+            logger.info(
+                "b2_promotion_emitted",
+                challenger=top.challenger_id,
+                tier=top.tier,
+                p_better=top.p_better,
+                also_eligible_count=len(eligible) - 1,
+            )
 
     async def _drift_cycle(self) -> None:
         """Page-Hinkley drift test → Slack alert on firing."""

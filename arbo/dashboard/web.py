@@ -202,6 +202,75 @@ def _infer_category(question: str | None, details: dict[str, Any] | None = None)
 # ---------------------------------------------------------------------------
 
 
+@app.get("/knowledge-base", response_class=HTMLResponse)
+async def knowledge_base_page(
+    request: Request, _user: str = Depends(_verify_credentials)
+) -> HTMLResponse:
+    """Render `docs/KNOWLEDGE_BASE.md` as a human-readable page.
+
+    The Knowledge Base is the single source of truth for non-engineer
+    operators — it's kept in sync with system behavior. CLAUDE.md
+    instructs Claude to update this file whenever a system-facing
+    change ships (see `docs/KNOWLEDGE_BASE.md` for the up-to-date
+    lifecycle description; any drift between code and that file is a
+    bug in our process).
+    """
+    from pathlib import Path
+    kb_path = Path(__file__).resolve().parents[2] / "docs" / "KNOWLEDGE_BASE.md"
+    try:
+        md_text = kb_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        md_text = "# Knowledge Base\n\n_KNOWLEDGE_BASE.md missing._"
+    try:
+        # markdown is a light dep — only imported here to avoid
+        # pulling it into the critical trading path on import.
+        import markdown as _md
+        body_html = _md.markdown(
+            md_text,
+            extensions=["fenced_code", "tables", "toc", "sane_lists"],
+        )
+    except ImportError:
+        # Fallback to <pre> when markdown isn't installed
+        from html import escape as _escape
+        body_html = f"<pre>{_escape(md_text)}</pre>"
+
+    html = """<!doctype html>
+<html lang="cs"><head>
+<meta charset="utf-8">
+<title>Arbo — Knowledge Base</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, sans-serif; max-width: 780px; margin: 2em auto;
+    padding: 0 1em; color: #222; background: #fbfbfb; }
+  h1 { border-bottom: 2px solid #222; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ddd;
+    padding-bottom: 0.2em; }
+  h3 { margin-top: 1.4em; }
+  code { background: #eee; padding: 1px 6px; border-radius: 3px;
+    font-size: 0.92em; }
+  pre { background: #f3f3f3; padding: 12px 16px; border-radius: 4px;
+    overflow-x: auto; font-size: 0.88em; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; margin: 1em 0; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left;
+    font-size: 0.94em; }
+  th { background: #eee; }
+  blockquote { border-left: 4px solid #888; padding: 0.1em 1em;
+    background: #f0f0f0; margin: 1em 0; color: #444; }
+  a { color: #0366d6; }
+  .nav { font-size: 0.9em; color: #666; margin-bottom: 2em; }
+  .nav a { color: #0366d6; text-decoration: none; }
+  .nav a:hover { text-decoration: underline; }
+</style>
+</head><body>
+<div class="nav"><a href="/">← zpět na dashboard</a></div>
+""" + body_html + "</body></html>"
+    response = HTMLResponse(content=html)
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_page(
     request: Request, _user: str = Depends(_verify_credentials)

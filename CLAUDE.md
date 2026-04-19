@@ -25,6 +25,32 @@ Entries are grouped per strategy (B2, B3, B3_15M, D, ...) with a global
 section for system-wide patterns. Keep it fresh — stale knowledge is
 worse than no knowledge.
 
+## 🔴 MANDATORY: Keep KNOWLEDGE_BASE.md in sync
+
+`docs/KNOWLEDGE_BASE.md` is the **user-facing** single source of
+truth — it's written in plain Czech for the non-engineer operator and
+rendered at `/knowledge-base` in the dashboard. It describes how the
+system actually works **right now**, not aspirationally.
+
+Unlike LEARNINGS.md (which accumulates history), KNOWLEDGE_BASE.md is
+**current-state**. Whenever you ship a change that the operator would
+notice — a new Slack message format, a new automatic decision, a new
+dashboard tab, a changed threshold that shows up somewhere — **update
+the relevant section of KNOWLEDGE_BASE.md in the same commit**.
+
+Specifically, update when you change:
+
+- What/when the system decides automatically vs asks the user
+- Thresholds or parameters that are called out in the doc
+- Slack message formats or channel routing
+- The list of active strategies
+- The canary promotion flow or any other multi-stage process
+- The data the dashboard or digest surfaces
+
+Never ship a change that contradicts KNOWLEDGE_BASE.md. Either update
+the doc or refine the change. If the code and the doc disagree, the
+user's trust in the system is what breaks.
+
 ## What Is Arbo
 
 Automated trading system for Polymarket — a decentralized prediction market on Polygon blockchain. The system combines 9 strategic layers for generating edge through information asymmetry, statistical models, and on-chain analytics. Single-user, runs on VPS, interfaces via Slack + PostgreSQL.

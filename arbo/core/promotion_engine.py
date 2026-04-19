@@ -46,11 +46,20 @@ TIER_3_PARAMS = {
 
 # Thresholds (configurable — start conservative)
 MIN_PAIRED_N = 100          # min shadow signals for challenger
-MIN_P_BETTER = 0.75         # bootstrap P(better) threshold for Tier 1 auto
+MIN_P_BETTER = 0.75         # bootstrap P(better) threshold for user approval
 MIN_P_BETTER_CEO = 0.65     # lower threshold triggers Tier 2 CEO alert
 MIN_SHARPE_DELTA = 0.10     # minimum DSR gap (deflation-adjusted)
 BOOTSTRAP_RESAMPLES = 1000
 BOOTSTRAP_BLOCK_SIZE = 10
+
+# Auto-approve thresholds — watchdog moves straight to incubate without
+# human click when ALL of these are satisfied. Stricter than the
+# user-approval thresholds above — "obvious" winners only. Borderline
+# candidates still go to Slack for human review.
+AUTO_APPROVE_MIN_P_BETTER = 0.85
+AUTO_APPROVE_MIN_PAIRED_N = 1000
+AUTO_APPROVE_MIN_DSR_DELTA = 0.20
+AUTO_APPROVE_TIER = 1       # only safe params auto-approve
 
 
 @dataclass
@@ -73,6 +82,10 @@ class PromotionCandidate:
     param_diff: dict[str, tuple[float, float]]  # {name: (champion, challenger)}
     rationale: str
     reject_reason: str | None = None
+    # True when the candidate passes the stricter auto-approve bar and
+    # the watchdog should call promote_to_incubate directly (no human
+    # button). See AUTO_APPROVE_* constants above.
+    auto_approve: bool = False
 
 
 def _classify_tier(param_diff: dict[str, Any]) -> tuple[int, str | None]:
@@ -230,6 +243,18 @@ class PromotionEngine:
                 elif dsr_delta < MIN_SHARPE_DELTA and tier == 1:
                     reject = f"dsr_delta={dsr_delta:.3f} below min {MIN_SHARPE_DELTA}"
 
+                # Auto-approve gate — system decides without user click
+                # when the evidence is strong and the change is safe.
+                # All conditions must hold: Tier 1, high P(better),
+                # large sample, meaningful DSR gap, no pending reject.
+                auto_approve = (
+                    reject is None
+                    and tier == AUTO_APPROVE_TIER
+                    and p_better >= AUTO_APPROVE_MIN_P_BETTER
+                    and len(ch_series) >= AUTO_APPROVE_MIN_PAIRED_N
+                    and dsr_delta >= AUTO_APPROVE_MIN_DSR_DELTA
+                )
+
                 cand = PromotionCandidate(
                     strategy=self.strategy,
                     challenger_id=ch.variant_id,
@@ -248,6 +273,7 @@ class PromotionEngine:
                     param_diff=diff,
                     rationale=rationale,
                     reject_reason=reject,
+                    auto_approve=auto_approve,
                 )
                 candidates.append(cand)
 
