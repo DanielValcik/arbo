@@ -287,6 +287,52 @@ or the framework is ceremony without safety.
 
 ---
 
+### G16. Drift alerts must be INTERPRETED, not just shown
+
+**Observed 2026-04-19 21:13 UTC:** operator received a drift alert
+listing three variants with N counts and mean PnL values. Message
+was technically correct but expected the operator to interpret:
+which variant matters, what "mean dropped from 0.33 to 0.25" means
+for the business, what system will do about it. Operator response:
+"this is too technical."
+
+The data was there, the semantics weren't. A drift alert is a
+decision document, not a dashboard screenshot.
+
+**Fix (2026-04-19):** `b2_watchdog._drift_cycle` now:
+
+1. **Compares current means to the previous alert's snapshot** (stored
+   in `alert_state.json` as `b2_drift_means`). Produces delta
+   context: "průměr poklesl z $X na $Y".
+2. **Classifies severity** — minor (<10% drop), moderate (10-25%),
+   severe (>25% + canary also drifting). Severity drives icon and
+   recommended action.
+3. **Reads canary state** — if the incubating variant is NOT in
+   the drift set, surface that as positive evidence ("kanárek se
+   drží"). Regime-robust canary = reason to accelerate canary
+   evaluation.
+4. **Synthesizes the user-facing message via Gemini** into plain
+   Czech — no "Page-Hinkley", no "fingerprint", no raw stats.
+   Gemini is handed the full context + a formatting spec and asked
+   to produce a <150-word message that says what happened, what it
+   means, what system is doing, what user needs to do.
+
+Autonomous action boundary:
+- **Log + interpret:** always.
+- **Alert with severity icon:** always, deduped.
+- **Pause trading:** NEVER autonomously from shadow drift. That's
+  a capital decision. If live data also regresses (separate check),
+  the message RECOMMENDS pausing; user still clicks.
+
+**Lesson:** every alert that expects the operator to draw conclusions
+from raw data is a leaky abstraction. The monitoring system owes the
+operator the interpretation — what changed, why it matters, what
+the system is doing, what (if anything) the operator needs to act on.
+If the message requires the reader to be an engineer, the system
+hasn't finished its job.
+
+---
+
 ### G15. Silent market-resolve notifications — the "missing half" of the feed
 
 **Observed 2026-04-19:** trade 5333 (ETH above $2500, entry $0.06) held

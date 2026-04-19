@@ -138,7 +138,7 @@ P(better): 0.92
 | 🌱 incubate on B2 | Kanárek rozběhnut | Nic — čekání na live data |
 | 🏆 CANARY ESCALATED | Kanárek se stal championem | 🎉 nic |
 | 🔄 CANARY REVERTED | Kanárek selhal v reálu | Nic — systém ho vrátil do shadow |
-| 🚨 B2 Drift Alert | Distribuce výsledků se mění | Systém sleduje; opakující se alerty se potlačují (dedup 24h + až když se změní počet vzorků) |
+| 📉/⚠️/🚨 B2 drift | Strategie se v aktuálním režimu chová jinak než historicky. Ikona podle severity. Text vysvětluje konkrétně co se stalo a co systém dělá. | Pokud je v textu "Co musíš udělat: Nic" → nic. Pokud navrhuje pauzu (severe), zvaž `B2_EXECUTION_MODE=stopped` |
 | 🤖 B2 Auto-Challenger generated | Gemini navrhl nový challenger | Nic — běží v shadow |
 | 🌅 Ranní briefing | Denní souhrn v češtině | Přečíst si, pokud chceš |
 

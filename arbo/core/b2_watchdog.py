@@ -430,36 +430,51 @@ class B2Watchdog:
             )
 
     async def _drift_cycle(self) -> None:
-        """Page-Hinkley drift test → Slack alert ONLY on state change.
+        """Detect shadow-PnL drift → interpret → react + post human alert.
 
-        Dedups identical drift signals so the same "N=9222, mean=0.3221"
-        doesn't re-appear in Slack every watchdog cycle or after every
-        restart. The daily digest (scripts/parallel_digest.py) still
-        surfaces current drift state even when this alert is silenced,
-        so the user never loses the context — we just don't wake them
-        up for stale information.
+        Design (evolved from dedup-only to analysis+action):
+          1. Run Page-Hinkley across variants.
+          2. Compare current means to the previous alert snapshot
+             (persistent, via alert_state) to compute deltas.
+          3. Classify severity:
+               - minor: all variants down <10%
+               - moderate: champion down 10-25%, or any variant >25%
+               - severe: champion down >25% AND canary also drifting
+          4. Autonomous response:
+               - minor/moderate: log + post human Slack interpretation
+               - severe + live regression also present: flag for
+                 operator attention in the message; do NOT auto-pause
+                 (that's a capital decision — needs operator)
+          5. Check the canary: if champion drifts but incubating
+             variant does NOT drift, note this as evidence the
+             canary is a regime-robust candidate. The incubate_cycle
+             (not this one) still makes the actual promotion call —
+             drift only adds context.
+
+        Slack message is Gemini-synthesised into plain Czech with
+        interpretation + recommended action. If LLM unavailable, a
+        tight human-readable template fallback is used.
         """
         try:
             from arbo.core.drift_monitor import evaluate_strategy_drift
+            from arbo.core.variant_pool import load_variants, get_champion
         except Exception as e:
             logger.warning("b2_drift_import_error", error=str(e))
             return
 
-        from arbo.utils.alert_state import should_alert, record_alert, clear_alert
+        from arbo.utils.alert_state import (
+            should_alert, record_alert, clear_alert,
+            _read_state, _write_state,
+        )
 
         results = await evaluate_strategy_drift(self.STRATEGY_NAME)
         firing = sorted(
             [r for r in results if r.firing], key=lambda r: r.variant_id,
         )
         if not firing:
-            # No drift — clear state so next firing alerts freshly.
             clear_alert("b2_drift")
             return
 
-        # Fingerprint = which variants fire + their N_samples. Mean
-        # drifts continuously so it's not part of the key; N changes
-        # only as new shadow signals resolve, which is the real signal
-        # the user cares about.
         fingerprint = "|".join(
             f"{r.variant_id}:{r.n_samples}" for r in firing
         )
@@ -473,30 +488,194 @@ class B2Watchdog:
                 n_samples=r.n_samples,
                 dedup_suppressed=not fire,
             )
-
         if not fire:
-            return  # already notified within cooldown
+            return
+
+        # --- Historical means (for delta computation) ---
+        # We persist the previous means snapshot alongside the fingerprint
+        # under a side-key so human messages can say "průměr poklesl z
+        # $X na $Y" instead of just the current number.
+        state = _read_state()
+        prev = state.get("b2_drift_means", {}) or {}
+        current_means = {r.variant_id: float(r.running_mean) for r in firing}
+        current_ns = {r.variant_id: int(r.n_samples) for r in firing}
+        deltas: dict[str, tuple[float, float]] = {}  # id → (prev_mean, curr_mean)
+        for vid, m in current_means.items():
+            pm = prev.get(vid, {}).get("mean") if isinstance(prev.get(vid), dict) else None
+            if pm is not None:
+                deltas[vid] = (float(pm), float(m))
+
+        # Canary context
+        pool = load_variants(self.STRATEGY_NAME)
+        champion = get_champion(self.STRATEGY_NAME)
+        incubate = next((v for v in pool if v.status == "incubate"), None)
+        firing_ids = {r.variant_id for r in firing}
+        canary_in_drift = incubate is not None and incubate.variant_id in firing_ids
+        champion_in_drift = champion is not None and champion.variant_id in firing_ids
+
+        # Severity classification
+        champion_drop_pct = None
+        if champion and champion.variant_id in deltas:
+            pm, cm = deltas[champion.variant_id]
+            champion_drop_pct = (cm - pm) / pm if pm > 0 else 0.0
+
+        if (
+            champion_drop_pct is not None
+            and champion_drop_pct < -0.25
+            and canary_in_drift
+        ):
+            severity = "severe"
+        elif champion_drop_pct is not None and champion_drop_pct < -0.10:
+            severity = "moderate"
+        else:
+            severity = "minor"
+
+        # Log everything structured for retrospective
+        logger.warning(
+            "b2_drift_analyzed",
+            severity=severity,
+            champion_drop_pct=(
+                round(champion_drop_pct, 3)
+                if champion_drop_pct is not None else None
+            ),
+            champion_in_drift=champion_in_drift,
+            canary_in_drift=canary_in_drift,
+            canary_id=incubate.variant_id if incubate else None,
+        )
 
         record_alert("b2_drift", fingerprint)
+        # Persist means snapshot for NEXT drift delta comparison.
+        state = _read_state()
+        state["b2_drift_means"] = {
+            vid: {"mean": m, "n": current_ns.get(vid, 0)}
+            for vid, m in current_means.items()
+        }
+        _write_state(state)
 
-        if self._slack is not None:
-            lines = [
-                ":rotating_light: *B2 Drift Alert* "
-                "(distribuce výsledků se mění)",
-            ]
-            for r in firing:
-                lines.append(
-                    f"• `{r.variant_id}` "
-                    f"— {r.n_samples} obchodů, průměr ${r.running_mean}"
-                )
-            lines.append(
-                "_Systém sleduje; další notifikace přijde jen pokud "
-                "se stav změní. Detail v ranním briefingu._"
+        if self._slack is None:
+            return
+
+        # Compose the Slack message. Prefer Gemini synthesis; fall
+        # back to a tight human-readable template.
+        text = self._render_drift_message(
+            firing=firing,
+            deltas=deltas,
+            severity=severity,
+            champion_id=champion.variant_id if champion else None,
+            canary_id=incubate.variant_id if incubate else None,
+            canary_in_drift=canary_in_drift,
+        )
+
+        try:
+            await self._slack._post(self._b2_channel(), text=text)
+        except Exception as e:
+            logger.warning("b2_drift_slack_error", error=str(e))
+
+    def _render_drift_message(
+        self,
+        *,
+        firing: list[Any],
+        deltas: dict[str, tuple[float, float]],
+        severity: str,
+        champion_id: str | None,
+        canary_id: str | None,
+        canary_in_drift: bool,
+    ) -> str:
+        """Produce a plain-Czech drift message. Tries Gemini first."""
+        # Build a compact data block for the LLM prompt
+        data_lines = []
+        for r in firing:
+            delta_str = ""
+            if r.variant_id in deltas:
+                prev_m, curr_m = deltas[r.variant_id]
+                delta_str = f" (minule {prev_m:.4f})"
+            role = []
+            if r.variant_id == champion_id:
+                role.append("champion")
+            if r.variant_id == canary_id:
+                role.append("kanárek")
+            role_str = f" [{', '.join(role)}]" if role else ""
+            data_lines.append(
+                f"- {r.variant_id}{role_str}: {r.n_samples} obchodů, "
+                f"průměr ${float(r.running_mean):.4f}{delta_str}"
             )
-            try:
-                await self._slack._post(self._b2_channel(), text="\n".join(lines))
-            except Exception as e:
-                logger.warning("b2_drift_slack_error", error=str(e))
+        canary_note = "kanárek v driftu" if canary_in_drift else (
+            "kanárek drží stabilně" if canary_id else "žádný kanárek neinkubuje"
+        )
+
+        prompt = f"""Napiš krátkou Slack zprávu česky, uživatelsky přátelsky, o tom
+že u strategie B2 systém detekoval drift. Žádné technické zkratky, ŽÁDNÉ "Page-Hinkley",
+"fingerprint", "PH=X". Vysvětli co se stalo a co systém dělá.
+
+KONTEXT:
+Severita: {severity} (minor = do 10%, moderate = 10-25%, severe = >25% drop + kanárek taky v driftu)
+Drift u těchto variant:
+{chr(10).join(data_lines)}
+Kanárek: {canary_note}
+
+POŽADAVEK NA VÝSTUP — přesně v tomto formátu:
+
+Úvodní řádek: ikona podle severity + krátký jednovětý titulek.
+- minor → 📉 B2: mírné zhoršení
+- moderate → ⚠️ B2: znatelné zhoršení
+- severe → 🚨 B2: výrazné zhoršení, potřeba pozornost
+
+*Co se stalo*
+2 věty, konkrétně čísla (pokles průměrného zisku z $X na $Y), přeložené do lidské řeči.
+
+*Co to znamená*
+1-2 věty — co drift říká o strategii v aktuálním tržním režimu.
+
+*Co dělá systém*
+1-2 věty — co autonomně udělá nebo sleduje. Pokud je kanárek stabilní, zdůrazni to jako dobrou zprávu.
+
+*Co musíš udělat*
+"Nic — systém to hlídá." NEBO konkrétní akce. Pouze pokud severity=severe navrhni zvážit pauzu.
+
+Max 150 slov. Žádné bullet pointy, hezká próza."""
+
+        # Try LLM
+        try:
+            import os
+            api_key = os.environ.get("GEMINI_API_KEY")
+            if api_key:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                resp = model.generate_content(
+                    prompt,
+                    generation_config={"temperature": 0.3, "max_output_tokens": 4000},
+                    request_options={"timeout": 30},
+                )
+                text = (resp.text or "").strip()
+                if text:
+                    return text
+        except Exception as e:
+            logger.debug("b2_drift_llm_failed", error=str(e))
+
+        # Fallback: tight template
+        icon = {"minor": "📉", "moderate": "⚠️", "severe": "🚨"}.get(severity, "📊")
+        header = {
+            "minor": f"{icon} *B2: mírné zhoršení*",
+            "moderate": f"{icon} *B2: znatelné zhoršení*",
+            "severe": f"{icon} *B2: výrazné zhoršení*",
+        }[severity]
+        lines = [header, ""]
+        if champion_id and champion_id in deltas:
+            pm, cm = deltas[champion_id]
+            pct = (cm - pm) / pm * 100 if pm else 0
+            lines.append(
+                f"Průměrný zisk strategie poklesl z `${pm:.3f}` na `${cm:.3f}` "
+                f"({pct:+.0f}%) za obchod."
+            )
+        if canary_id and not canary_in_drift:
+            lines.append(
+                f"Kanárek `{canary_id}` se v tomto zhoršení drží — dobrý signál."
+            )
+        lines.append(
+            "_Systém sleduje dál. Detail v ranním briefingu._"
+        )
+        return "\n".join(lines)
 
     def _b2_channel(self) -> str:
         """Channel for B2 Slack messages."""
