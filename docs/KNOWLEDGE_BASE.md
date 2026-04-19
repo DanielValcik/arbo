@@ -136,7 +136,7 @@ P(better): 0.92
 | 🌱 incubate on B2 | Kanárek rozběhnut | Nic — čekání na live data |
 | 🏆 CANARY ESCALATED | Kanárek se stal championem | 🎉 nic |
 | 🔄 CANARY REVERTED | Kanárek selhal v reálu | Nic — systém ho vrátil do shadow |
-| 🚨 B2 Drift Alert | Distribuce výsledků se mění | Pozor — možná je třeba re-tuning (systém upozorní víc) |
+| 🚨 B2 Drift Alert | Distribuce výsledků se mění | Systém sleduje; opakující se alerty se potlačují (dedup 24h + až když se změní počet vzorků) |
 | 🤖 B2 Auto-Challenger generated | Gemini navrhl nový challenger | Nic — běží v shadow |
 | 🌅 Ranní briefing | Denní souhrn v češtině | Přečíst si, pokud chceš |
 

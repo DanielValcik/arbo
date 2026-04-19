@@ -43,6 +43,14 @@ class B2Watchdog:
         self._last_eval_ts: float = 0.0
         self._last_autochallenger_ts: float = 0.0
         self._promotion_posted: dict[str, float] = {}
+        # Drift dedup: last emitted fingerprint + timestamp. Same
+        # drift state (same variants + same N per variant) within
+        # the cooldown window is silenced to avoid spamming Slack
+        # on every watchdog restart. Surfaces via the daily digest
+        # regardless — user never misses context, just never gets
+        # woken up by the same alert twice.
+        self._last_drift_fingerprint: str | None = None
+        self._last_drift_ts: float = 0.0
 
     async def run(self) -> None:
         """Main daemon loop. Runs until stop()."""
@@ -426,7 +434,15 @@ class B2Watchdog:
             )
 
     async def _drift_cycle(self) -> None:
-        """Page-Hinkley drift test → Slack alert on firing."""
+        """Page-Hinkley drift test → Slack alert ONLY on state change.
+
+        Dedups identical drift signals so the same "N=9222, mean=0.3221"
+        doesn't re-appear in Slack every watchdog cycle or after every
+        restart. The daily digest (scripts/parallel_digest.py) still
+        surfaces current drift state even when this alert is silenced,
+        so the user never loses the context — we just don't wake them
+        up for stale information.
+        """
         try:
             from arbo.core.drift_monitor import evaluate_strategy_drift
         except Exception as e:
@@ -434,23 +450,57 @@ class B2Watchdog:
             return
 
         results = await evaluate_strategy_drift(self.STRATEGY_NAME)
-        firing = [r for r in results if r.firing]
+        firing = sorted(
+            [r for r in results if r.firing], key=lambda r: r.variant_id,
+        )
         if not firing:
+            # Clear fingerprint if drift cleared — next firing will alert.
+            self._last_drift_fingerprint = None
             return
+
+        # Fingerprint = which variants fire + their N_samples. Mean
+        # drifts continuously so it's not part of the key; N changes
+        # only as new shadow signals resolve, which is the real signal
+        # the user cares about.
+        fingerprint = "|".join(
+            f"{r.variant_id}:{r.n_samples}" for r in firing
+        )
+        now = time.time()
+        cooldown_s = 24 * 3600
+        same_state = (
+            fingerprint == self._last_drift_fingerprint
+            and now - self._last_drift_ts < cooldown_s
+        )
+
         for r in firing:
             logger.warning(
                 "b2_drift_detected",
                 variant_id=r.variant_id,
                 ph_stat=r.ph_stat,
                 n_samples=r.n_samples,
+                dedup_suppressed=same_state,
             )
+
+        if same_state:
+            return  # suppressed
+
+        self._last_drift_fingerprint = fingerprint
+        self._last_drift_ts = now
+
         if self._slack is not None:
-            lines = [":rotating_light: *B2 Drift Alert*"]
+            lines = [
+                ":rotating_light: *B2 Drift Alert* "
+                "(distribuce výsledků se mění)",
+            ]
             for r in firing:
                 lines.append(
-                    f"• `{r.variant_id}` PH={r.ph_stat} (N={r.n_samples}, mean={r.running_mean})"
+                    f"• `{r.variant_id}` "
+                    f"— {r.n_samples} obchodů, průměr ${r.running_mean}"
                 )
-            lines.append("Consider re-running BO sweep or manual review.")
+            lines.append(
+                "_Systém sleduje; další notifikace přijde jen pokud "
+                "se stav změní. Detail v ranním briefingu._"
+            )
             try:
                 await self._slack._post(self._b2_channel(), text="\n".join(lines))
             except Exception as e:
