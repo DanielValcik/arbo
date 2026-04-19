@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from typing import Any
 
@@ -527,6 +528,13 @@ class B3Watchdog:
         Rate-limited to 1 auto-challenger per strategy per 24h. Only fires
         when champion shows stagnation (cumulative PnL < 0 over ≥20 trades).
         """
+        # Skip when the strategy is stopped — no point proposing variants
+        # that will never get deployed. B3 maps to B3_EXECUTION_MODE,
+        # B3_15M maps to B3_15M_EXECUTION_MODE.
+        env_var = f"{self._strategy_name}_EXECUTION_MODE"
+        if os.getenv(env_var) == "stopped":
+            return
+
         now = time.time()
         if now - self._last_autochallenger_ts < 24 * 3600:
             return  # Already generated one in last 24h
