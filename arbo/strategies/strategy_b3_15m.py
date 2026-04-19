@@ -475,6 +475,13 @@ class StrategyB315M:
         # 0. Record Chainlink price to rolling buffer (for accurate btc_at_start)
         self._scanner.record_cl_price()
 
+        # "stopped" mode: skip entry logic entirely. check_exits() still
+        # runs from the orchestrator so existing positions resolve
+        # naturally. Set by B3_15M_EXECUTION_MODE=stopped on Apr 19 after
+        # 333 paper trades, -$158 PnL, WR 58% (avg -$0.48/trade).
+        if self._execution_mode == "stopped":
+            return executed
+
         # 1. Fetch events
         await self._scanner.fetch_events()
 
