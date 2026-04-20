@@ -232,13 +232,19 @@ async def _poll_once(orderbook_provider, tokens: list[dict], dry_run: bool = Fal
 async def _main_loop(interval_s: int, window_h: float, dry_run: bool):
     """Top-level async loop. Discovers markets + polls orderbook forever."""
     from arbo.connectors.orderbook_provider import OrderbookProvider
+    from arbo.connectors.polymarket_client import PolymarketClient
 
     logger.info(
         "capture_starting",
         extra={"interval_s": interval_s, "window_h": window_h, "dry_run": dry_run},
     )
 
-    orderbook = OrderbookProvider()
+    # Read-only CLOB client is required — OrderbookProvider w/o client
+    # silently returns None for every get_snapshot call.
+    poly_client = PolymarketClient()
+    await poly_client.initialize()
+    orderbook = OrderbookProvider(poly_client=poly_client, cache_ttl_s=30.0)
+    logger.info("clob_client_initialized")
 
     # Graceful shutdown
     stop_event = asyncio.Event()
@@ -288,7 +294,7 @@ async def _main_loop(interval_s: int, window_h: float, dry_run: bool):
 
     # Cleanup
     try:
-        await orderbook.close()
+        await poly_client.close()
     except Exception:
         pass
     logger.info("capture_stopped", extra={"total_iterations": iter_count})
