@@ -288,6 +288,88 @@
 
 <!-- Add new entries with newest at top -->
 
+### [2026-04-20] D — REJECTED 3 promotion candidates; fixed shadow dedup bug affecting ALL strategies
+
+**Observation**: 6 Slack alerts fired in 1h (2:01 PM, 3:18 PM duplicates) proposing 20% live-capital canary for `ch_edge_tight` (MIN_EDGE 0.16→0.20), `ch_gb_loose` (GREEN_BOOK_DELTA 0.17→0.12), `ch_sl_tight` (STOP_LOSS_DELTA 0.15→0.10). All showed P(better)=1.0, N_paired 188-1206. Red flags: challenger WR 0-0.2%, mean PnL -$0.21 to -$0.27 (negative), `ch_gb_loose` and `ch_sl_tight` had *identical* stats to champion.
+
+**Data at decision time**:
+- D live N: 15 trades in paper_trades (4 resolved: 3 lose, 1 win, PnL -$0.24)
+- Shadow signals per variant: 65,011 raw rows, only 32 unique markets
+- Inflation factor: 402× (1206 "resolved" from 3 markets)
+- Avg fill price: 0.359 → breakeven WR 36%; actual shadow WR 0.2%
+
+**Hypothesis**: Shadow evaluation inflates N by logging each market re-scan as independent trade. `would_pnl_per_share` UPDATE hits all rows for (strategy, condition_id), making 402 rows share same resolution outcome. Promotion engine reads raw rows without GROUP BY → statistics fake.
+
+**Framework gates checked**:
+- ✓ Step 0 read learnings — previous DSR-deflation entry (same day) flagged expected Sharpe 3-5 range; live -5 to -38 Sharpe = catastrophic divergence
+- ✗ Step 2 Min N — formally 1206 passes, but real N=3 markets is BELOW 50 threshold for filter-tightening
+- ✗ Step 5 autoresearch gates — PBO/DSR/CPCV on N=3 markets = meaningless
+- ✓ Step 4 Payout asymmetry — breakeven WR 36% vs actual 0.2% = strategy has catastrophically negative EV
+- ✓ Dedup guard added to promotion engine code (SQL DISTINCT ON condition_id)
+- ✓ Negative-EV guard added (mean_ch ≤ 0 → reject regardless of champion)
+
+**Decision**: **REJECT all 3 promotions.** Patched promotion_engine.py `_fetch_pnl_series` to DISTINCT ON (condition_id, direction) and added `mean_ch <= 0` rejection. Commit 9660556. Verified post-fix: 0 candidates across D/B2/B3/B3_15M.
+
+**Bug scope** (beyond D):
+- B2: 1917× inflation (619K raw, 323 unique) — past B2 promotions may have been wrong
+- B3_15M: 4× inflation
+- B3: 1.3× (fast resolution, minimal dup)
+
+**Evidence basis**: SQL count verified real unique markets; promotion engine test script confirmed 0 candidates post-fix. Shadow `would_pnl_per_share` formula only knows resolution outcome, not exit params → `ch_gb_loose`/`ch_sl_tight` were mathematically guaranteed to match champion. Promotion engine was incapable of evaluating exit-param changes.
+
+**Revert triggers armed**:
+- If fix inadvertently suppresses legitimate candidates: re-evaluate after 100+ real markets resolve per variant
+- Weekly sanity: shadow unique-market count per variant should equal actual EPL/NBA fixtures in the window
+
+**Follow-ups tracked**:
+1. **Per-variant exit simulation** — current shadow can't evaluate GREEN_BOOK_DELTA / STOP_LOSS_DELTA changes. Needs price-trajectory replay per signal OR live orderbook path logging. Blocks exit-param promotion.
+2. **`self._promotion_posted` is in-memory** — resets on restart, caused 2:01/3:18 duplicate alerts. Persist to DB.
+3. **Underlying D edge question** — with shadow WR 0.2% across 32 markets, the Dixon-Coles → P(draw) → buy signal may be fundamentally broken (or shadow labeling inverted). Investigate before ML redesign.
+
+**Outcome**: ONGOING. Will verify zero candidates holds after 48h of new data accumulates. Tag: FIXED (code) / MONITORING (edge question).
+
+**Lesson**: Any evaluation pipeline that allows the same ground-truth outcome to label N>1 rows MUST dedupe before computing statistics. "N paired=1206" that bootstraps to P(better)=1.0 from 3 real markets is a statistical poltergeist.
+
+### [2026-04-20] D — DSR gate for ML redesign: BORDERLINE PASS
+
+**Observation**: CEO asked for ML innovation plan to turn Strategy D into profitable machine. Before touching any model code, Phase 0 gate: validate the 344-experiment sweep isn't overfit. Headline Sharpe 7.03 (memory) / 7.10 (actual TSV) would be too good to be true if it didn't survive deflation.
+
+**Data at decision time**:
+- Live NBA paper: ~14 trades (per CEO brief)
+- Sweep archive: 344 experiments total (v1=60, v2=60, v3=144, v4=80)
+- Best config: experiment #23 of v4, min_edge=0.16, gb_delta=0.15, sl_delta=0.15, mhf=0.50
+- Best Sharpe 7.10, trades=2193 (backtest), PnL +$1,511, DD 11.3%, WR 50.2%
+
+**Hypothesis**: Iterative sweep learning inflates observed max Sharpe beyond i.i.d. null, so headline 7.10 overstates live expectation.
+
+**Framework gates checked**:
+- ✓ Step 0 read learnings — Section 7 empty, no prior D decisions
+- ✓ Step 8 DSR computation — now possible with `research_d/compute_dsr.py`
+- ⏳ PBO not yet computed (needs per-trade return matrix; requires prepare.py refactor — tracked as follow-up task)
+- ⏳ CPCV — deferred; per-trade returns prerequisite
+- ✓ Revert trigger: none needed (no prod change made)
+
+**Decision**: **PROCEED with ML plan, but deflate expectations.** Real Sharpe likely 3-5 range, not 7.0+. Meta-labeler performance benchmark will use E[max SR under null] = 6.86, NOT raw 7.10.
+
+**Evidence basis**:
+- V4-only DSR (80 trials, tight-σ neighborhood): 100% pass — winner is real best-in-neighborhood
+- Combined v1-v4 DSR (344 trials, honest search space): 93.5% pass under skew=-0.5, xkurt=+2
+- E[max SR under null | 344 trials, V[SR]=5.45] = 6.86
+- Observed max (7.10) - null expectation (6.86) = +0.24 (small but positive)
+- 0/344 configs reach strong DSR (≥0.95); 6/344 reach borderline (≥0.75)
+- Sharpe histogram right-skewed (cluster 3.5-6.5 Sharpes) → edge is broadly present, not a lottery ticket
+
+**Revert triggers armed**: None — no prod change. If ML meta-labeler eventually shipped, armed triggers will be:
+- Live Sharpe < 1.0 over 50 trades → revert meta-labeler, return to rule-based v4 config
+- PBO > 0.5 once computable → pause all ML promotion
+- 5-trade rolling DD > 15% → pause
+
+**Outcome (updated 2026-04-20 initial)**:
+- Verdict: ONGOING
+- Lesson preview: Never accept headline backtest Sharpe without (a) splitting "final refinement sweep" vs "union of all exploration", (b) computing E[max SR under null] for the union, (c) reporting observed - null as the honest edge figure.
+
+---
+
 ---
 
 ## Section 8: Recurring Anti-Patterns (things we keep doing wrong)
