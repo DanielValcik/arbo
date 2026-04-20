@@ -54,6 +54,59 @@ def _atomic_write_yaml(path: Path, data: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+def _git_commit_runtime_state(
+    paths: list[Path], message: str, *, push: bool = True,
+) -> None:
+    """Commit + push YAML state changes immediately.
+
+    Why: variant YAMLs serve double duty — templates in git AND runtime
+    state that pool_manager mutates. Without auto-commit, a deploy
+    (`git stash && git pull`) silently discards the live state. See
+    LEARNINGS G-17 (2026-04-20).
+
+    Best-effort: all failures logged but never raised — the YAML write
+    has already happened, and commit failure must NOT undo the
+    in-memory change.
+    """
+    import subprocess
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        # Stage only the specific paths that were mutated
+        for p in paths:
+            subprocess.run(
+                ["git", "-C", str(repo_root), "add", str(p)],
+                capture_output=True, text=True, timeout=15, check=False,
+            )
+        # Commit only if there's anything staged
+        staged = subprocess.run(
+            ["git", "-C", str(repo_root), "diff", "--cached", "--name-only"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if not staged.stdout.strip():
+            return
+        subprocess.run(
+            ["git", "-C", str(repo_root), "commit", "-m", message, "--no-verify"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        if push:
+            # Non-interactive; VPS has no push credentials so this
+            # typically no-ops there — laptop sync picks up the commit
+            # later. `GIT_TERMINAL_PROMPT=0` prevents any hanging.
+            env = dict(os.environ)
+            env["GIT_TERMINAL_PROMPT"] = "0"
+            subprocess.run(
+                ["git", "-C", str(repo_root), "push", "origin", "HEAD:main"],
+                capture_output=True, text=True, timeout=60, env=env, check=False,
+            )
+        logger.info(
+            "pool_state_committed",
+            paths=[str(p.name) for p in paths],
+            message=message[:80],
+        )
+    except Exception as e:
+        logger.warning("pool_state_commit_error", error=str(e))
+
+
 def _hypothesis_to_variant_dict(
     hypo: Hypothesis, strategy: str, champion_params: dict[str, Any]
 ) -> dict[str, Any]:
@@ -282,6 +335,13 @@ async def promote(
     except Exception as e:
         logger.warning("promote_learnings_error", error=str(e))
 
+    # Commit the swap to git so git pull won't wipe it on next deploy
+    _git_commit_runtime_state(
+        [champ_yaml, target_yaml, archive_path],
+        f"pool({strategy}): promote {variant_id} → champion "
+        f"(replaces {champ.variant_id}) by {approved_by}",
+    )
+
     logger.info(
         "pool_promoted",
         strategy=strategy,
@@ -381,6 +441,12 @@ async def promote_to_incubate(
     except Exception as e:
         logger.warning("incubate_learnings_error", error=str(e))
 
+    _git_commit_runtime_state(
+        [target_yaml],
+        f"pool({strategy}): incubate {variant_id} "
+        f"({capital_pct * 100:.0f}% canary) by {approved_by}",
+    )
+
     logger.info(
         "pool_incubated",
         strategy=strategy,
@@ -426,6 +492,12 @@ async def revert_incubate_to_challenger(
     except Exception as e:
         return False, f"yaml write error: {e}"
 
+    _git_commit_runtime_state(
+        [target_yaml],
+        f"pool({strategy}): revert {variant_id} incubate → challenger "
+        f"(reason: {reason})",
+    )
+
     logger.info(
         "pool_incubate_reverted",
         strategy=strategy,
@@ -456,6 +528,10 @@ async def veto(
         data["retired_at"] = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         data["retired_reason"] = f"CEO veto by {vetoed_by}"
         _atomic_write_yaml(path, data)
+        _git_commit_runtime_state(
+            [path],
+            f"pool({strategy}): veto {variant_id} → retired by {vetoed_by}",
+        )
         logger.info(
             "pool_vetoed",
             strategy=strategy, variant_id=variant_id, vetoed_by=vetoed_by,
@@ -505,6 +581,11 @@ async def commit(hypo: Hypothesis, strategy: str) -> tuple[bool, str | None]:
         return False, f"write error: {e}"
 
     _append_learnings(hypo, strategy, retired)
+
+    _git_commit_runtime_state(
+        [target],
+        f"pool({strategy}): new challenger {hypo.variant_id} (auto-generated)",
+    )
 
     logger.info(
         "pool_challenger_committed",

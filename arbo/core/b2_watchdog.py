@@ -370,6 +370,25 @@ class B2Watchdog:
         eligible.sort(key=lambda c: c.p_better, reverse=True)
         top = eligible[0]
 
+        # Drift-aware auto-approve: if the top candidate is itself in
+        # the current drift firing set, demote auto_approve to manual.
+        # Promoting a variant whose own PnL distribution is shifting
+        # bets on an unstable signal — we want live data first, which
+        # is the whole point of manual approval. See LEARNINGS G-17.
+        try:
+            from arbo.core.drift_monitor import evaluate_strategy_drift
+            drift_results = await evaluate_strategy_drift(self.STRATEGY_NAME)
+            drifting_ids = {r.variant_id for r in drift_results if r.firing}
+            if top.auto_approve and top.challenger_id in drifting_ids:
+                logger.info(
+                    "b2_auto_approve_blocked_drift",
+                    challenger=top.challenger_id,
+                    reason="candidate itself is drifting",
+                )
+                top.auto_approve = False
+        except Exception as e:
+            logger.debug("b2_drift_check_for_auto_approve_failed", error=str(e))
+
         now = time.time()
         last_ts = self._promotion_posted.get(top.challenger_id, 0.0)
         if now - last_ts < 24 * 3600:
