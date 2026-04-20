@@ -303,6 +303,20 @@ class RDHOrchestrator:
             risk_manager=self._risk_manager,
         )
 
+        # Isolated paper engine for Strategy D variants (D, D_UFC, D_EPL).
+        # Prevents B2/B3/C2 from consuming D's paper balance — shared engine
+        # led to 4 days of zero D trades due to $0.23 remaining balance.
+        from arbo.core.risk_manager import STRATEGY_ALLOCATIONS
+        d_capital = sum(
+            v for k, v in STRATEGY_ALLOCATIONS.items()
+            if k == "D" or k.startswith("D_")
+        )
+        self._paper_engine_d = PaperTradingEngine(
+            initial_capital=Decimal(str(d_capital)),
+            risk_manager=self._risk_manager,
+        )
+        logger.info("paper_engine_d_initialized", capital=str(d_capital))
+
         # Market discovery
         self._discovery = await self._init_optional("MarketDiscovery", self._init_discovery)
 
@@ -649,7 +663,7 @@ class RDHOrchestrator:
 
         s = StrategyDNba(
             risk_manager=self._risk_manager,
-            paper_engine=self._paper_engine if execution_mode == "paper" else None,
+            paper_engine=self._paper_engine_d if execution_mode == "paper" else None,
             live_executor=live_executor,
             orderbook_provider=self._orderbook_provider,
             elo_ratings=elo_ratings,
@@ -693,7 +707,7 @@ class RDHOrchestrator:
 
         s = StrategyDUfc(
             risk_manager=self._risk_manager,
-            paper_engine=self._paper_engine if execution_mode == "paper" else None,
+            paper_engine=self._paper_engine_d if execution_mode == "paper" else None,
             live_executor=live_executor,
             orderbook_provider=self._orderbook_provider,
             elo_ratings=elo_ratings,
@@ -735,7 +749,7 @@ class RDHOrchestrator:
 
         s = StrategyDEpl(
             risk_manager=self._risk_manager,
-            paper_engine=self._paper_engine if execution_mode == "paper" else None,
+            paper_engine=self._paper_engine_d if execution_mode == "paper" else None,
             live_executor=live_executor,
             orderbook_provider=self._orderbook_provider,
             elo_ratings=elo_ratings,
@@ -2091,8 +2105,8 @@ class RDHOrchestrator:
                 await self._notify_d_entry(pos, "NBA")
         if entered > 0:
             logger.info("strategy_d_entries", count=entered, signals=len(signals))
-            if self._paper_engine is not None:
-                await self._paper_engine.sync_positions_to_db()
+            if self._paper_engine_d is not None:
+                await self._paper_engine_d.sync_positions_to_db()
 
     async def _run_d_exit_check(self) -> None:
         """Check Strategy D positions for exit every 60s."""
@@ -2149,8 +2163,8 @@ class RDHOrchestrator:
                 await self._notify_d_entry(pos, "UFC")
         if entered > 0:
             logger.info("strategy_d_ufc_entries", count=entered, signals=len(signals))
-            if self._paper_engine is not None:
-                await self._paper_engine.sync_positions_to_db()
+            if self._paper_engine_d is not None:
+                await self._paper_engine_d.sync_positions_to_db()
 
     async def _run_d_ufc_exit_check(self) -> None:
         """Check UFC positions for exit every 30s."""
@@ -2199,8 +2213,8 @@ class RDHOrchestrator:
                 await self._notify_d_entry(pos, "EPL")
         if entered > 0:
             logger.info("strategy_d_epl_entries", count=entered, signals=len(signals))
-            if self._paper_engine is not None:
-                await self._paper_engine.sync_positions_to_db()
+            if self._paper_engine_d is not None:
+                await self._paper_engine_d.sync_positions_to_db()
 
     async def _run_d_epl_exit_check(self) -> None:
         """Check EPL positions for exit every 30s."""
