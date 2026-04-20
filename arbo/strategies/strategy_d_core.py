@@ -101,6 +101,11 @@ class DPosition:
     live_shares: int = 0
     live_entry_price: float = 0.0
     live_fill_status: str = ""
+    # Price history — [(ts, price), …] appended on each check_exits tick.
+    # Used by ML exit policy (see arbo.models.strategy_d_exit). Bounded to
+    # last 300 entries in check_exits to cap memory. Empty by default ⇒
+    # zero-cost when no ML variant active.
+    price_history: list[tuple[float, float]] = field(default_factory=list)
 
 
 # ── Core class ────────────────────────────────────────────────────────
@@ -139,6 +144,21 @@ class StrategyDCore:
     ELO_WEIGHT: float = 0.40
     PINNACLE_WEIGHT: float = 0.60
 
+    # ── ML exit policy (Tier 1 via variant YAML, None by default) ──────
+    # EXIT_POLICY: str|None — "ml_hazard_v1" activates learned exit model.
+    #   None (default) ⇒ fixed GREEN_BOOK_DELTA + MAX_HOLD_FRACTION rule
+    #   (champion behavior — zero change for variants that don't set this).
+    # EXIT_MODEL_PATH: Path relative to repo root; loaded on first call.
+    # EXIT_ML_THRESHOLD: Exit if model's pred log(T_event) > threshold
+    #   AND position is currently profitable. Tuned on v2 val split.
+    EXIT_POLICY: str | None = None
+    EXIT_MODEL_PATH: str | None = None
+    EXIT_ML_THRESHOLD: float = 6658.3
+    # Max DPosition.price_history length (bounded to cap memory — 300
+    # ticks × 5-min orderbook-refresh interval ≈ 25 hours of history,
+    # well past any NBA game).
+    PRICE_HISTORY_MAXLEN: int = 300
+
     # Risk layer (for TradeRequest)
     RISK_LAYER: int = 9  # Sports
 
@@ -175,6 +195,12 @@ class StrategyDCore:
         self._positions: dict[str, DPosition] = {}
         self._last_trade_time: float = 0.0
         self._trades_today: int = 0
+
+        # ML exit policy — lazy-loaded on first check_exits call that
+        # sees EXIT_POLICY != None. None by default; zero cost when
+        # inactive.
+        self._ml_exit_policy: Any | None = None
+        self._ml_exit_policy_key: tuple[str | None, str | None, float] | None = None
         self._daily_pnl: float = 0.0
         # Cooldown per market: don't re-enter same condition_id for 4 hours
         # (one NBA game is 2.5h; by 4h any signal should be stale).
@@ -927,6 +953,52 @@ class StrategyDCore:
     # when orderbook returns no quotes (common for thin draw markets).
     MAX_STALE_HOURS = 72  # 3 days — well past any game resolution
 
+    def _get_ml_exit_policy(self):
+        """Lazy-load the ML exit policy if active variant requests it.
+
+        Returns an ExitPolicyModel instance when EXIT_POLICY is set
+        (e.g. "ml_hazard_v1"), else None. Caches the loaded policy —
+        reloads only if EXIT_POLICY, EXIT_MODEL_PATH or
+        EXIT_ML_THRESHOLD change at runtime (e.g. variant promotion).
+        """
+        policy_name = self._p("EXIT_POLICY")
+        if not policy_name:
+            return None
+        model_path = self._p("EXIT_MODEL_PATH")
+        threshold = float(self._p("EXIT_ML_THRESHOLD") or 0.0)
+        key = (policy_name, model_path, threshold)
+        if self._ml_exit_policy is not None and self._ml_exit_policy_key == key:
+            return self._ml_exit_policy
+        # (Re)build
+        if policy_name != "ml_hazard_v1":
+            self._logger.warning(
+                "ml_exit_unknown_policy",
+                policy=policy_name, sport=self.SPORT_NAME,
+            )
+            return None
+        if not model_path:
+            self._logger.warning(
+                "ml_exit_missing_path",
+                policy=policy_name, sport=self.SPORT_NAME,
+            )
+            return None
+        try:
+            from arbo.models.strategy_d_exit import ExitPolicyModel
+            self._ml_exit_policy = ExitPolicyModel(
+                model_path=model_path,
+                threshold_log_t=threshold,
+            )
+            self._ml_exit_policy_key = key
+            return self._ml_exit_policy
+        except Exception as e:
+            self._logger.warning(
+                "ml_exit_init_failed",
+                err=str(e), policy=policy_name, sport=self.SPORT_NAME,
+            )
+            self._ml_exit_policy = None
+            self._ml_exit_policy_key = None
+            return None
+
     def check_exits(self, current_prices: dict[str, float]) -> list[DPosition]:
         """Check all open positions for exit conditions."""
         exits: list[DPosition] = []
@@ -959,6 +1031,12 @@ class StrategyDCore:
             pos.max_price = max(pos.max_price, price)
             pos.min_price = min(pos.min_price, price) if pos.min_price > 0 else price
 
+            # Append to bounded price history (for ML exit policy features).
+            # Zero-cost if no ML variant active (list stays short anyway).
+            pos.price_history.append((now, price))
+            if len(pos.price_history) > self.PRICE_HISTORY_MAXLEN:
+                pos.price_history = pos.price_history[-self.PRICE_HISTORY_MAXLEN:]
+
             # Tier 1 exit params via _p() (variant-override aware)
             gb_delta = self._p("GREEN_BOOK_DELTA")
             sl_delta = self._p("STOP_LOSS_DELTA")
@@ -979,12 +1057,56 @@ class StrategyDCore:
             hold_hours = (now - pos.entry_time) / 3600
             time_exit = hold_hours >= (game_dur * max_hold)
 
+            # ── ML early-exit (Tier 1, opt-in via EXIT_POLICY variant) ──
+            # Fires BETWEEN gb/sl safety nets and time_exit. Only triggers
+            # when (a) position is currently profitable, (b) model says
+            # predicted log(T_event) > threshold (event far).
+            # Zero behavior change when EXIT_POLICY is None (default).
+            ml_early_exit = False
+            ml_decision = None
+            ml_policy = self._get_ml_exit_policy()
+            if ml_policy is not None and not (gb_hit or sl_hit):
+                # Build trajectory: [(entry_time, entry_price)] + price_history
+                # price_history already includes current tick (appended above).
+                trajectory = [(pos.entry_time, pos.entry_price)] + pos.price_history
+                try:
+                    ml_decision = ml_policy.decide(
+                        trajectory=trajectory,
+                        entry_price=pos.entry_price,
+                        target=gb_target,
+                        stop_loss_price=sl_trigger,
+                        side=pos.side,
+                        model_prob=pos.model_prob,
+                        edge_at_entry=pos.edge,
+                    )
+                    ml_early_exit = bool(ml_decision.should_exit)
+                except Exception as e:
+                    self._logger.warning(
+                        "ml_exit_decide_failed",
+                        err=str(e), sport=self.SPORT_NAME,
+                        token=pos.token_id[:20],
+                    )
+
             if gb_hit:
                 pos.exit_reason = "green_book"
                 pos.exit_price = price
             elif sl_hit:
                 pos.exit_reason = "stop_loss"
                 pos.exit_price = price
+            elif ml_early_exit:
+                pos.exit_reason = "learned_early"
+                pos.exit_price = price
+                # Log the decision for post-hoc analysis
+                self._logger.info(
+                    "ml_exit_fired",
+                    sport=self.SPORT_NAME, side=pos.side,
+                    entry=f"{pos.entry_price:.3f}",
+                    exit_p=f"{price:.3f}",
+                    pred_log_t=f"{ml_decision.pred_log_t:.0f}" if ml_decision else "?",
+                    threshold=f"{self._p('EXIT_ML_THRESHOLD')}",
+                    team_a=pos.team_a, team_b=pos.team_b,
+                    hold_min=f"{(now - pos.entry_time)/60:.0f}",
+                )
             elif time_exit:
                 pos.exit_reason = "time_exit"
                 pos.exit_price = price

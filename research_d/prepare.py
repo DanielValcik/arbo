@@ -439,6 +439,18 @@ class TradeResult:
     min_price: float
     n_prices: int
     hold_fraction: float    # Fraction of price series before exit
+    # ── Optional fields (defaults preserve dataclass field ordering rule) ──
+    side: str = "yes"                  # "yes" or "no" — trade direction
+    target: float = 0.0                # Green-book target price (side-adjusted)
+    stop_loss_price: float = 0.0       # Stop-loss price (side-adjusted)
+    exit_idx: int = 0                  # Index into prices[] where exit occurred
+    exit_reason: str = "resolution"    # green_book / stop_loss / time_exit / resolution
+    entry_ts: int = 0                  # Unix ts of entry
+    exit_ts: int = 0                   # Unix ts of exit
+    # Trajectory of (ts, price) from entry to exit, inclusive.
+    # Only populated when simulate_trade(capture_trajectory=True).
+    # Heavy: ~40 tuples × ~15K trades = ~600K tuples in memory.
+    trajectory: list[tuple[int, float]] | None = None
 
 
 def simulate_trade(
@@ -446,8 +458,15 @@ def simulate_trade(
     model_prob: float,
     capital: float,
     params: dict,
+    capture_trajectory: bool = False,
 ) -> TradeResult | None:
-    """Simulate a single D1 Green Book trade on a market's price trajectory."""
+    """Simulate a single D1 Green Book trade on a market's price trajectory.
+
+    Args:
+        capture_trajectory: if True, include prices[0..exit_idx] in
+            TradeResult.trajectory. Default False preserves behavior +
+            memory footprint for existing sweep callers.
+    """
     prices = market.prices
     if len(prices) < 2:
         return None
@@ -555,6 +574,26 @@ def simulate_trade(
 
     hold_fraction = exit_idx / max(len(prices) - 1, 1)
 
+    # Categorical exit reason (useful for ML labels + analytics)
+    if green_booked:
+        exit_reason = "green_book"
+    elif stopped_out:
+        exit_reason = "stop_loss"
+    elif time_exited:
+        exit_reason = "time_exit"
+    else:
+        exit_reason = "resolution"
+
+    # Exit timestamp: prices[exit_idx] if break occurred, else last price
+    exit_ts = prices[exit_idx][0] if exit_idx < len(prices) else prices[-1][0]
+
+    # Optionally capture the trajectory prices[0..exit_idx] (inclusive).
+    # Pay memory/storage cost only when caller opts in.
+    trajectory: list[tuple[int, float]] | None = None
+    if capture_trajectory:
+        upper = min(exit_idx + 1, len(prices))
+        trajectory = list(prices[:upper])
+
     return TradeResult(
         token_id=market.token_id,
         sport=sport,
@@ -574,6 +613,14 @@ def simulate_trade(
         min_price=min_price,
         n_prices=len(prices),
         hold_fraction=hold_fraction,
+        side=side,
+        target=target,
+        stop_loss_price=stop_loss_price,
+        exit_idx=exit_idx,
+        exit_reason=exit_reason,
+        entry_ts=entry_ts,
+        exit_ts=exit_ts,
+        trajectory=trajectory,
     )
 
 
@@ -782,10 +829,28 @@ def walk_forward(
 # ── Main Evaluate ─────────────────────────────────────────────────────
 
 
-def evaluate(params: dict | None = None, db_path: Path | None = None, limit: int = 0) -> dict:
+def evaluate(
+    params: dict | None = None,
+    db_path: Path | None = None,
+    limit: int = 0,
+    return_trades: bool = False,
+    capture_trajectory: bool = False,
+) -> dict:
     """Run full backtest with given parameters.
 
     Returns dict with all metrics for autoresearch scoring.
+
+    Args:
+        return_trades: if True, include "trades" key with per-trade records
+            (date, pnl, entry_price, exit_price, edge, model_prob, won,
+            green_booked, hold_fraction, sport, team_a, team_b, token_id,
+            n_contracts, side, target, exit_idx, exit_reason, entry_ts,
+            exit_ts). Used by training-set builder and PBO/CSCV analysis.
+            Default False preserves backward-compat for existing sweeps.
+        capture_trajectory: if True AND return_trades=True, include
+            trajectory=[(ts, price), ...] in each trade record. Heavy —
+            only enable for exit-timing training-set construction. Default
+            False preserves memory for existing callers.
     """
     if params is None:
         params = PARAMS
@@ -795,8 +860,15 @@ def evaluate(params: dict | None = None, db_path: Path | None = None, limit: int
     t0 = time.time()
     print(f"Loading data from {db_path}...", flush=True)
 
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode=WAL")
+    # Open read-write first (normal case); fall back to readonly URI if DB
+    # is on a readonly mount (e.g. /mnt/arbo-data on arbo-download).
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError:
+        conn = sqlite3.connect(
+            f"file:{db_path}?mode=ro&immutable=1", uri=True,
+        )
     conn.execute("PRAGMA cache_size=-64000")
 
     # Load ratings + Pinnacle (small, fits in memory)
@@ -846,14 +918,18 @@ def evaluate(params: dict | None = None, db_path: Path | None = None, limit: int
             skipped["no_model"] += 1
             continue
 
-        result = simulate_trade(market, prob, capital, params)
+        result = simulate_trade(
+            market, prob, capital, params,
+            capture_trajectory=capture_trajectory,
+        )
         if result is None:
             skipped["no_edge"] += 1
             continue
 
         trades.append(result)
         capital += result.pnl
-        # Free price data immediately (GC)
+        # Free price data immediately (GC). Keep only if trajectory captured
+        # into the TradeResult already (copy made).
         market.prices = []
 
     conn.close()
@@ -865,7 +941,7 @@ def evaluate(params: dict | None = None, db_path: Path | None = None, limit: int
     print(f"\nBacktest done in {elapsed:.1f}s", flush=True)
     print(f"Skipped: {skipped}", flush=True)
 
-    return {
+    result = {
         "score": metrics.score,
         "n_trades": metrics.n_trades,
         "total_pnl": metrics.total_pnl,
@@ -881,6 +957,44 @@ def evaluate(params: dict | None = None, db_path: Path | None = None, limit: int
         "sport_pnl": metrics.sport_pnl,
         "sport_trades": metrics.sport_trades,
     }
+    if return_trades:
+        # Per-trade records for PBO / training-set construction.
+        # Keep flat + JSON-serializable (no dataclass instances).
+        result["trades"] = [
+            {
+                "token_id": t.token_id,
+                "sport": t.sport,
+                "game_date": t.game_date,
+                "team_a": t.team_a,
+                "team_b": t.team_b,
+                "model_prob": t.model_prob,
+                "entry_price": t.entry_price,
+                "edge": t.edge,
+                "position_usd": t.position_usd,
+                "n_contracts": t.n_contracts,
+                "won": t.won,
+                "green_booked": t.green_booked,
+                "exit_price": t.exit_price,
+                "pnl": t.pnl,
+                "max_price": t.max_price,
+                "min_price": t.min_price,
+                "n_prices": t.n_prices,
+                "hold_fraction": t.hold_fraction,
+                # New fields for exit-timing ML (always included when
+                # return_trades=True — small constant-size payload):
+                "side": t.side,
+                "target": t.target,
+                "stop_loss_price": t.stop_loss_price,
+                "exit_idx": t.exit_idx,
+                "exit_reason": t.exit_reason,
+                "entry_ts": t.entry_ts,
+                "exit_ts": t.exit_ts,
+                # Trajectory — opt-in, heavy payload
+                "trajectory": t.trajectory,  # None unless capture_trajectory=True
+            }
+            for t in trades
+        ]
+    return result
 
 
 # ── CLI ───────────────────────────────────────────────────────────────

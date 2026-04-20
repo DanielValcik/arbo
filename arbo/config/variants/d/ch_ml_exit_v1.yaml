@@ -1,0 +1,54 @@
+# D Challenger — ML-driven exit policy (Cesta B)
+#
+# Replaces fixed GREEN_BOOK_DELTA + MAX_HOLD_FRACTION exit rule with a
+# learned XGBoost AFT survival model. Model predicts P(event = GB hit)
+# given current market state; exits early when prediction says event
+# is far AND position is currently profitable.
+#
+# Entry logic UNCHANGED vs champion — this variant only differs in exit.
+#
+# Source: `docs/STRATEGY_D_ML_DESIGN.md`
+# Trained: 2026-04-20 on 1.17M per-timestep rows from 2,193 NBA trades
+#   (research_d/ets_nba_v2.parquet)
+# Model C-index: Train 0.90 / Val 0.78 / Test 0.76
+# OOS backtest (440 trades):
+#   PnL:    baseline $39.31  →  learned $51.36 (+30.6%)
+#   Sharpe: baseline 5.92    →  learned 6.76   (+14%)
+#   Win R:  baseline 38.9%   →  learned 47.3%  (+8.4pp)
+#   Max DD: baseline 2.62    →  learned 2.51   (-4%)
+# Paired bootstrap (N=2000): P(learned > baseline) = 0.908 (passes §7 gate).
+# 95% CI on PnL diff: [-$5, +$30] — includes 0 (not formally significant
+# but directionally strong and asymmetric wins justify shadow deploy).
+#
+# Status: SHADOW — infrastructure wired in strategy_d_core.py but variant
+# not yet routed positions. Bump to `incubate` or `challenger` after
+# ≥4 weeks of live shadow signals confirm P(better) ≥ 0.75.
+#
+# DO NOT edit when tuning — create new challenger YAML instead.
+
+variant_id: ch_ml_exit_v1
+strategy: D
+status: shadow
+parent_variant: champion_v1
+notes: |
+  ML-driven adaptive exit (Cesta B). Shadow-only until real-time paper
+  trades confirm backtest edge. Do NOT promote past `incubate` without
+  CEO review of live shadow P(better) statistics.
+
+params:
+  # Entry filters — same as champion (no change)
+  MIN_EDGE: 0.16
+  MAX_EDGE: 0.25
+  MIN_PRICE: 0.20
+  MAX_PRICE: 0.65
+
+  # Exit logic — ML replaces fixed rule
+  EXIT_POLICY: "ml_hazard_v1"
+  EXIT_MODEL_PATH: "arbo/data/models/strategy_d_exit_v1.ubj"
+  EXIT_ML_THRESHOLD: 6658.3  # tuned on v2 val split quantiles
+
+  # Safety nets — preserved from champion (hard barriers still fire first)
+  GREEN_BOOK_DELTA: 0.17
+  STOP_LOSS_DELTA: 0.15
+  MAX_HOLD_FRACTION: 0.50
+  GAME_DURATION_HOURS: 2.5

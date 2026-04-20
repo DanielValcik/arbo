@@ -1107,6 +1107,400 @@ _(Add entries as discovered.)_
 
 Status: NBA live paper, UFC/EPL paper.
 
+### D7. v2 model — ROI + capital turnover breakdown (2026-04-20)
+
+**Test period:** 39 calendar days (Feb 12 → Mar 22 2026), 27 NBA
+trading days, 439 unique OOS trades, temperature-consistent regime.
+
+**Capital usage:**
+- Initial capital: $1,000 (per `strategy_params.py`)
+- Avg position size: $14.86 (fixed, does not scale with P&L)
+- Total notional traded: $6,524
+- **Turnover (39d): 6.5× initial capital**
+- **Annualized turnover: 61× / year**
+- **Annualized trade count: 4,109 / year**
+
+**ROI on $1,000 nominal capital:**
+
+| Metric | Baseline (fixed) | Learned (ML) | Δ |
+|---|---|---|---|
+| Absolute PnL (39d) | +$35.94 | +$47.99 | +$12.05 |
+| Period ROI (39d) | +3.59% | **+4.80%** | +1.21pp |
+| Annualized ROI (compound) | +39.2%/yr | **+55.1%/yr** | +15.9pp |
+| PnL per trade | $0.082 | $0.109 | +34% |
+| Edge per $ notional | 0.55% | **0.74%** | +0.19pp |
+
+**Economic interpretation:**
+- Strategy is **high-turnover / low-edge** — each trade extracts
+  0.5–0.7% of its notional size; 61× annual turnover compounds this
+  into 39–55% annual ROI.
+- ML does NOT increase trade count (entry signal unchanged).
+- ML improves per-trade edge by +34% (0.55% → 0.74% of notional).
+- At high turnover, this relatively small per-trade improvement
+  compounds to +15.9pp annualized ROI.
+
+**Versus original expectations (per D1):**
+
+| Source | Annualized ROI | Note |
+|---|---|---|
+| v4 sweep headline | ~100% | **Overfit** (DSR 93.5% borderline) |
+| DSR-deflated expectation | 60–70% | Per §7 Framework multiple-testing adj |
+| Test OOS baseline | **39.2%** | Below deflated — weaker test regime |
+| **Test OOS learned** | **55.1%** | Aligned with deflated expectation |
+
+**Capacity implications:**
+- At current $300 live allocation in `STRATEGY_ALLOCATIONS["D"]`:
+  - ~$18,000 annual notional turnover
+  - ~$165 / year gross profit at 0.55% edge
+  - ~$222 / year at 0.74% (learned)
+- Scaling capital linearly scales PnL until market liquidity limits
+  hit. At ~$15 trade size on NBA moneyline markets, no liquidity
+  ceiling in sight.
+
+**Lesson:** The +30.6% PnL lift in LEARNINGS D6 is not "30% more trades
+with same edge" — it's "same trades with 34% better per-trade edge,
+compounded over high turnover." The ML lift is structurally different
+from a trade-count boost. Think in terms of *edge per dollar turned
+over*, not just P&L total.
+
+---
+
+### D6. Exit-timing model v2 BEATS baseline (+30.6% PnL, P(better)=90.8%) on 440 OOS trades (2026-04-20)
+
+**What happened:** Fixed two bugs from v1 (terminal GB tick missing from
+ETS; threshold tune grid outside actual pred_log_t range), re-built ETS
+on FULL 28K-market scan, re-trained, re-evaluated with bootstrap CI.
+
+**v2 data scale:**
+- 2,193 trades (6× v1's 361)
+- 1,178,481 per-timestep rows (5.7× v1's 205,786)
+- Event rate 8.06% (consistent with v1's 6.5%)
+- 35.8 MB parquet
+
+**v2 model (XGBoost AFT Weibull, 362 rounds):**
+- Train C-index: 0.90
+- Val   C-index: 0.78
+- **Test  C-index: 0.76**  (v1 was 0.67 — +0.09 lift)
+- Top feature: `unrealized_edge` (gain 675 vs next #2 `sl_distance` 653)
+  — model learned that current unrealized P&L direction is the
+  dominant exit signal. Physical sense: "am I winning now?" matters
+  more than pre-entry statics.
+
+**v2 head-to-head (440 OOS test trades, threshold tuned on val):**
+
+| Metric | Baseline (fixed rule) | Learned | Δ |
+|---|---|---|---|
+| Total PnL | +$39.31 | +$51.36 | **+$12.05 (+30.6%)** |
+| Win rate | 38.9% | 47.3% | +8.4pp |
+| Sharpe / trade | 0.068 | 0.095 | +40% |
+| Max drawdown | 2.616 | 2.511 | -4% |
+| Avg hold ticks | 228 | 173 | -24% (faster turnover) |
+| Early exits | 0 | 112 | 25% of test trades |
+
+All primary metrics favor learned policy.
+
+**Statistical rigor (paired bootstrap, 2000 resamples):**
+- Point estimate: Δ = +$12.05
+- Bootstrap mean: +$12.33  /  std $9.18
+- **95% CI: [-$5.03, +$30.45]**  — includes 0 (not formally significant)
+- **P(learned beats baseline) = 90.8%**  — passes Framework §7 gate (≥0.75)
+- Per-trade sign test: 51/92 learned wins (excluding ties) → p=0.17 (not signif.)
+- **79% of trades are tied** (policies agree — both go to time_exit)
+- The **21% of trades where policies differ** drive all the lift:
+  learned-wins are bigger in magnitude than learned-losses (asymmetric
+  — exactly what we'd expect from a well-calibrated probability model)
+
+**Caveats:**
+1. 440 test trades → statistical power moderate; N=1000+ preferred
+2. Threshold selected from 10 quantile candidates = mild multiple-testing
+3. Test regime had 0 GB-exits under both policies → upward drift
+   dominated, not GB-hit dynamics
+4. Model tuned on single temporal split — CPCV would give more
+   robust uncertainty bounds
+
+**Decision:**
+- Architecture ✓, model ✓, policy ✓, stats ✓ (framework gate pass)
+- **Ship as SHADOW variant for 4-week real-time evaluation before live.**
+  Do NOT replace champion yet.
+- After 4 weeks of shadow signals: re-evaluate P(better) on live signals
+  and only then consider canary promotion.
+
+**Artifacts (local + VPS `/tmp/`):**
+- `research_d/data/ets_nba_v2.parquet` (34 MB)
+- `research_d/data/exit_model_nba_v2.ubj` (916 KB)
+- `research_d/data/eval_v2_results.json` — head-to-head
+- `research_d/data/bootstrap_v2.json` — CI
+
+**Lesson:**
+- **6× more data → +0.09 C-index lift** (v1 0.67 → v2 0.76). For small-N
+  research, "more data" beats "better features" in the first iteration.
+- **Asymmetric wins matter.** A policy that's mostly-neutral with
+  well-timed asymmetric wins can produce 30% PnL lift even with small
+  n_effective. Don't dismiss based on per-trade sign test alone.
+- **P(better) vs 95% CI dichotomy.** Passing P(better)≥0.75 but having
+  a 95% CI that touches zero is the canonical "probably works but not
+  yet bullet-proof" region. Shadow deploy, not live. Wait for more N.
+
+---
+
+### D5. Exit-timing survival model: strong signal (C-index 0.67) but naive policy underperforms baseline (2026-04-20)
+
+**What happened:** Full exit-timing ML pipeline built (design doc + 5
+scripts + 28 unit tests) and trained on VPS with 361 real NBA trades,
+205,786 per-timestep rows. XGBoost AFT with Weibull distribution,
+monotonic constraints, temporal split.
+
+**Training results:**
+- Train C-index: 0.94
+- Val   C-index: 0.71
+- **Test  C-index: 0.67** (target ≥0.60 passed)
+- Top features: `vol_5`, `vol_15`, `edge_at_entry`, `gb_distance`
+- Exactly what OU / Black-Scholes theory predicts (volatility + distance-to-barrier)
+
+**Head-to-head evaluation (73 test trades, 41K test ticks):**
+
+| Metric | Baseline (fixed) | Learned | Verdict |
+|---|---|---|---|
+| Total PnL | +$10.75 | **-$6.22** | ✗ loses |
+| Win rate | 0.44 | 0.63 | learned higher |
+| Avg hold ticks | 281 | 121 | learned faster |
+| GB exits (both) | 0 | 0 | **suspicious** |
+
+**Root-cause diagnostic (2 bugs found):**
+
+1. **ETS expansion skips the GB-hit tick.** `expand_trade` filters out
+   `t == gb_hit_idx` because `time_to_event = 0` is degenerate for
+   training. But `eval_exit_policy.py` walks the ETS rows — so the eval
+   simulator NEVER sees the actual GB-hit moment. Result: `gb_exits=0`
+   for both policies under eval, even for trades that hit GB in backtest.
+
+2. **`pred_log_t` scale runaway.** AFT Weibull objective yields
+   predictions in [33, 47456] on test set (mean 11K, p5=344). My
+   threshold range [1, 8] was entirely below the minimum → every
+   profitable tick triggered the "event is far" early-exit decision.
+   Tuning loop returned identical val PnL for all candidates (silent
+   degenerate).
+
+**Honest interpretation:**
+- Model has REAL predictive signal (C-index 0.67 → 34% lift over random
+  ranking)
+- Event rate shift: train=7.4%, val=7.8%, **test=2.3%** → test regime
+  much fewer GB trades, inflates "fixed rule holds to time_exit" baseline
+- Small-N test (73 trades) → PnL comparisons are high-variance; single
+  lucky big-winner dominates
+- **The model isn't the problem yet; the policy formulation + eval
+  semantics need fixes.**
+
+**Decision:** Do NOT promote model v1. Fix both bugs and re-run:
+1. Expand ETS to include terminal tick (event=1, tte=0 marker) OR
+   re-run eval using full trajectory from prepare.py evaluate()
+2. Threshold tune in the ACTUAL predicted distribution (use quantiles
+   of pred_log_t on val set, not arbitrary [1, 8])
+3. Consider alternative policy: "exit if P(event in next N ticks) <
+   threshold" using Weibull hazard explicitly, not raw log(T)
+4. Run on full NBA dataset (not limit 5000) — expect ~15K trades and
+   proper OOS sample size
+
+**Artifacts:** `research_d/data/ets_nba_v1.parquet` (5.5 MB),
+`exit_model_nba_v1.ubj` (821 KB), `eval_exit_policy_results.json`.
+Model weights kept for diagnostic use; not deployed.
+
+**Lesson:**
+- **C-index alone doesn't prove promotion-ready.** A model can rank
+  events correctly but still underperform baseline if policy
+  formulation is wrong.
+- **Eval correctness > model correctness.** Before comparing policies,
+  verify the simulator can observe the events it's supposed to react to.
+- **Policy thresholds must be tuned within the ACTUAL predicted
+  distribution.** AFT outputs are NOT on a standardized scale; always
+  inspect quantiles before choosing tuning grid.
+
+---
+
+### D4. Exit-timing ML pipeline shipped (design + 5 modules + 28 tests) (2026-04-20)
+
+**What happened:** Built complete infrastructure for learning exit
+timing from historical trajectories. Files:
+
+| File | LOC | Purpose |
+|---|---|---|
+| `docs/STRATEGY_D_ML_DESIGN.md` | 400 | Design doc (§§1-14) |
+| `research_d/prepare.py` (patched) | +60 | Opt-in `capture_trajectory` flag; readonly-DB fallback |
+| `research_d/exit_timing_features.py` | 270 | 28 features, monotonic constraints, no-lookahead |
+| `research_d/test_exit_timing_features.py` | 220 | 22 unit tests, all pass |
+| `research_d/build_exit_timing_set.py` | 320 | Trade trajectory → per-timestep rows + survival labels |
+| `research_d/test_expand_trade.py` | 190 | 6 integration tests, all pass |
+| `research_d/train_exit_model.py` | 280 | XGBoost AFT trainer, C-index, SHAP |
+| `research_d/eval_exit_policy.py` | 330 | Head-to-head baseline vs learned backtest |
+
+**Why:** Replace fixed `GREEN_BOOK_DELTA=0.17` + `MAX_HOLD=0.50` rules
+with a learned adaptive exit policy (first-passage-time hazard model).
+
+**Design principles (enforced by tests):**
+- No-lookahead: features at time t use only prices[0..t]. Verified by
+  `test_features_use_only_past`.
+- Side-aware: YES/NO trades have inverted semantics. Verified by
+  `test_features_no_side_profitable`, `test_features_no_side_losing`.
+- Zero-vol safety: `gb_distance_norm` capped when `vol_15 ≈ 0`. Verified
+  by `test_gb_distance_norm_handles_zero_vol`.
+- Monotonic constraints: gb_distance=+1, vol_15=-1, elapsed_frac=-1
+  aligned with physical intuition.
+
+**Integration path:** Will ship as challenger variant
+`arbo/config/variants/d/ch_ml_exit_v1.yaml` once policy beats baseline
+on OOS. `strategy_d_core.py::check_exits` dispatches on
+`EXIT_POLICY` param — zero impact on champion.
+
+**Nothing deployed.** Research only. Current champion (fixed rule)
+remains authoritative.
+
+---
+
+### D3b. PMD subscription downgraded; bid/ask + 1-min + historical >30d ALL blocked (2026-04-20)
+
+**What happened:** Probed PolymarketData.co API via `client.get_books()`
+and `client.get_prices()` with various resolutions. All returned 403
+Forbidden:
+
+| Endpoint | Response |
+|---|---|
+| `/books` (any res) | `"Your plan does not allow historical order books"` |
+| `/prices?resolution=1m` | `"Your plan does not allow 1m granularity. Minimum: 10m"` |
+| `/prices?resolution=10m/1h/6h/1d` | `"Your plan allows up to the last 30 days of historical data"` |
+
+**Why:** PMD subscription was Ultra tier when Pass 1+2 ran (March
+2026). Since then it was downgraded to a basic tier. Data already in
+the DB (17K price points per NBA token = 10-min resolution) is
+preserved, but we can't backfill bid/ask or anything older than 30 days.
+
+**Also corrects earlier misconception (D3 original entry):**
+- Earlier said "Pass 2 = 1-min" — actually it was 10-min too (math
+  checks out: 17K points / 4 months = 1 point per 10 min)
+- Pass 1 vs Pass 2 difference was probably just coverage extension,
+  not resolution upgrade
+- Model v2 was therefore trained on 10-min ticks, not 1-min as I
+  originally assumed. This doesn't affect model validity — "tick"
+  is simply a unit of observation.
+
+**Decision (CEO, 2026-04-20):** NOT upgrading to Ultra tier now.
+Cesta A (bid/ask pipeline) deferred indefinitely.
+
+**Alternative path (free):** Start capturing live Polymarket CLOB
+orderbook snapshots from WebSocket on arbo-dublin for NBA markets.
+Builds forward-captured dataset at zero API cost. Downside: weeks-
+to-months lag before enough data for re-training.
+
+**Lesson:**
+- **API tier == features available.** A downgrade silently removes
+  entire endpoint families (`/books`) — not just data freshness.
+  Record tier at time of data acquisition in metadata so future
+  analyses know what's feasible.
+- **Always probe endpoints before designing around them.** Easier to
+  discover a 403 in 5 minutes than waste a week of data pipeline
+  engineering.
+
+---
+
+### D3. NBA price data missing bid/ask + volume_1m (Pass 2 not run for NBA) (2026-04-20)
+
+**What happened:** While designing microstructure features for ML, sampled
+200 NBA tokens on arbo-download VPS DB (`/mnt/arbo-data/sports_backtest.sqlite`).
+Every price row has `bid`, `ask`, `volume_1m` = NULL.
+
+- NBA tokens: **0/200 (0%)** have bid/ask populated
+- NBA tokens: **0/200 (0%)** have volume_1m populated
+- Only the `price` field is populated, at ~10-min resolution
+- Average 17,410 price observations per NBA token (dense but price-only)
+
+**Why:** Per STRATEGY_D_DATA_SPEC.md §"Two download passes":
+- Pass 1 (10-min, price only): 150,348 markets — NBA included ✓
+- Pass 2 (1-min, bid/ask + volume): ~86,690 moneyline markets — **not applied to NBA**
+
+The Pass 2 download (PolymarketData.co API "1-minute bar" endpoint) was
+originally planned but not completed for NBA moneylines. Or the API
+returned price-only for NBA tokens.
+
+**Impact on ML redesign:**
+- NO orderbook imbalance features (spread, depth) for NBA
+- NO volume momentum features (volume_1m series)
+- Meta-labeler restricted to price-trajectory + team/rating features
+- Research paper "Net order imbalance from large trades strongly predicts
+  returns" (Ng et al. 2026) — cannot validate for NBA without this data
+
+**Paths forward (ranked by ROI):**
+1. Re-run Pass 2 download for NBA moneylines (research_d/download_polymarketdata.py). Cost: PolymarketData.co API quota. Time: hours.
+2. Pivot to **exit-timing model** using post-entry price trajectory (17K+ points per market — rich signal, no new data needed)
+3. Cross-market features: YES+NO price sum deviation, same-game player-prop consistency (doesn't need bid/ask)
+4. Pinnacle-Polymarket lag model (requires Pinnacle time-series — separate gap)
+
+**Decision (proposed):** Path 2 (exit-timing model) is highest-ROI immediate
+next step. Entry meta-labeler needs Path 1 (data re-download) before
+worth another attempt.
+
+**Tool used:** ad-hoc SQL sample on VPS via `ssh arbo-download` +
+`sqlite3 URI readonly mode`.
+
+---
+
+### D2. First-pass ML meta-labeler overfits; current feature set too thin (2026-04-20)
+
+**What happened:** Built complete meta-labeler pipeline (training-set
+builder → XGBoost trainer with Platt calibration) and trained on 2,013
+trades from VPS backtest (NBA only, wide_edge preset, limit=3000
+markets). Results:
+
+| Split | AUC | Brier |
+|---|---|---|
+| Train (1207) | 0.654 | 0.244 |
+| Val (402) | 0.554 | 0.247 |
+| Test (404) | **0.507** | 0.250 |
+
+Train → Test AUC gap = 0.147 (severe overfit). Test AUC ~0.50 means zero
+OOS predictive value. Baseline Brier (guess prior) = 0.249 — model
+matches baseline exactly on test. Calibration saved as Platt.
+
+**Why:** Current 21-feature set is almost entirely price/edge
+derivatives (model_prob, edge, logit_price, prob_confidence,
+ensemble_disagreement, etc.) with temporal features (day_of_week,
+month) and team-strength decomposition (elo_prob, pinnacle_prob). Top
+features by gain are entry_price, price_dist_50, logit_price,
+pinnacle_available — suggests model is memorizing price levels in the
+training window and can't generalize across regime shifts.
+
+**What's missing (tracked as follow-up):**
+- Orderbook microstructure: bid-ask spread at entry, depth at best,
+  volume_1m momentum, realized 1h volatility
+- Cross-market: related Polymarket markets (O/U, spread, player props)
+  for consistency checks
+- Schedule context: rest days, back-to-back flag, strength-of-schedule
+- Pinnacle-Polymarket lag: the "hidden gem" identified in the 2026-04-20
+  research — requires Pinnacle time-series beyond pre-game snapshots
+- Larger training set: 2K trades (with temporal 60/20/20 split = 400
+  test) is small. Full-scan on VPS DB (~28K candidate markets → ~15K
+  trades expected) should help.
+
+**Decision:** Architecture is sound — trainer, calibrator, monotonic
+constraints, temporal split all work as designed. Do NOT deploy this
+model in any form. Next steps:
+1. Expand to full training set (no `--limit`) on VPS
+2. Add microstructure features from 1-min bid/ask data
+3. Re-train, target Val AUC ≥ 0.58 before even considering shadow deploy
+4. Gate shadow deploy on CPCV validation (not just 60/20/20 split)
+
+**Tool:** `research_d/train_meta_labeler.py` + `build_training_set.py` +
+`compute_dsr.py`. All scripts accept `--limit` for fast iteration.
+
+**Artifacts:** `research_d/data/training_set_d_nba_v1.parquet`,
+`meta_labeler_d_nba_v1.*`. Not in git yet.
+
+**Lesson:** First-pass meta-labeler on thin feature set is expected to
+overfit. The pipeline validation matters more than the model quality
+here — we proved the architecture works end-to-end. Model quality
+follows from feature engineering, not from the ML algorithm. "Features,
+not models" — standard finance-ML wisdom.
+
+---
+
 ### D1. Sweep Sharpe 7.10 is borderline overfit (2026-04-20)
 
 **What happened:** Computed Deflated Sharpe Ratio (Bailey & López de Prado

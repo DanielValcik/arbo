@@ -330,6 +330,59 @@
 
 **Lesson**: Any evaluation pipeline that allows the same ground-truth outcome to label N>1 rows MUST dedupe before computing statistics. "N paired=1206" that bootstraps to P(better)=1.0 from 3 real markets is a statistical poltergeist.
 
+### [2026-04-20] D — Exit-timing survival ML model v2 PASSES promotion gate (P=0.908)
+
+**Observation**: After building complete exit-timing ML infrastructure (design doc + 6 modules + 28 unit tests), trained XGBoost Weibull AFT survival model on 1.17M per-timestep rows from 2,193 NBA trades (full-scan v4_winner preset on arbo-download VPS). Evaluated head-to-head vs fixed rule on 440 OOS test trades.
+
+**Data at decision time**:
+- Test N: 440 trades (N=1178 K rows)
+- Test C-index: 0.76 (vs 0.50 random; target ≥0.60)
+- Train/Val/Test C-index: 0.90 / 0.78 / 0.76 (reasonable gap)
+- Top features: unrealized_edge, sl_distance, gb_distance, edge_at_entry
+- Head-to-head PnL: Baseline +$39.31, Learned +$51.36 (**+$12.05 / +30.6%**)
+- Paired bootstrap (2000 resamples): mean diff +$12.33, 95% CI **[−$5.03, +$30.45]**
+- **P(learned > baseline) = 0.908** — passes Framework §7 promotion gate
+
+**Hypothesis**: Learned hazard model identifies ~21% of trades where fixed rule holds too long, takes profit earlier in those cases. Remaining 79% of trades: both policies converge to time_exit. Asymmetric win distribution (learned-wins bigger than learned-losses).
+
+**Framework gates checked**:
+- ✓ Step 2 min N (≥100 live/shadow for any change): 440 OOS trades — **exceeds threshold**
+- ✓ Step 8 P(better) ≥ 0.75: **0.908 PASS**
+- ⚠️ Step 8 95% CI excludes 0: CI includes 0 (−$5 to +$30) — NOT formally significant
+- ✓ Framework §11 (Project PARALLEL) infrastructure exists — can ship as shadow variant
+- ✗ Walk-forward / CPCV not run — only single temporal split used
+- ✗ No live signals yet — purely backtest-derived
+
+**Decision**: SHIP AS SHADOW VARIANT (`ch_ml_exit_v1.yaml`, status=shadow) for 4-week real-time evaluation. Do NOT replace champion yet. Re-evaluate P(better) weekly on live signals.
+
+**Evidence basis**:
+- Bootstrap P=0.908 ≥ Framework threshold 0.75 (passes automated promotion check)
+- 95% CI [−$5, +$30] is the "probably works, need more data" regime
+- All primary metrics favor learned: PnL +30.6%, Sharpe +40%, WR +8.4pp, DD −4%, hold time −24%
+- Model has clear physical interpretation (unrealized_edge + sl_distance + gb_distance dominate — matches OU/Black-Scholes theory)
+
+**Revert triggers armed** (for once shadow deploys):
+- Shadow-measured P(better) drops below 0.65 over 100 trades → pause
+- Any single-session DD > 20% in shadow → pause
+- `unrealized_edge` top-feature gain ratio drops below 50% of backtest — possible regime shift
+- Manual CEO override anytime
+
+**Outcome (updated 2026-04-20 initial)**:
+- Verdict: ONGOING — backtest validation complete, awaiting CEO decision on shadow deploy
+- Lesson preview: 6× more data moved C-index 0.67 → 0.76 and flipped the policy sign. First-pass ML iteration "doesn't work" often just means "not enough training data yet."
+
+**Artifacts**:
+- `research_d/data/ets_nba_v2.parquet` (34 MB, 1.17M rows)
+- `research_d/data/exit_model_nba_v2.ubj` (916 KB)
+- `research_d/data/eval_v2_results.json` — head-to-head metrics
+- `research_d/data/bootstrap_v2.json` — paired bootstrap CI
+- `docs/STRATEGY_D_ML_DESIGN.md` — design doc
+- `docs/STRATEGY_D_CESTA_A_PLAN.md` — parallel bid/ask pipeline plan
+
+**Nothing deployed.** Research + paper only. Champion rule (`strategy_d_nba.py`) unchanged.
+
+---
+
 ### [2026-04-20] D — DSR gate for ML redesign: BORDERLINE PASS
 
 **Observation**: CEO asked for ML innovation plan to turn Strategy D into profitable machine. Before touching any model code, Phase 0 gate: validate the 344-experiment sweep isn't overfit. Headline Sharpe 7.03 (memory) / 7.10 (actual TSV) would be too good to be true if it didn't survive deflation.
