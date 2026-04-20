@@ -4827,16 +4827,31 @@ class RDHOrchestrator:
                 msg="Service too young — skipping task-health check",
             )
         else:
-            stopped = [
+            stopped = sorted([
                 name
                 for name, ts in self._tasks.items()
                 if ts.permanent_stop and ts.enabled
-            ]
-            if stopped and "stopped_tasks" not in sent_today:
-                alerts.append(
-                    f":red_circle: Strategie permanentně zastaveny: {', '.join(stopped)}"
-                )
-                sent_today["stopped_tasks"] = today_key
+            ])
+            if stopped:
+                # Dedup using persistent alert_state so the same stopped
+                # set doesn't alert on every restart. Fingerprint = the
+                # set of stopped task names. Cooldown 24h; different set
+                # triggers a fresh alert.
+                from arbo.utils.alert_state import should_alert, record_alert
+                fingerprint = "|".join(stopped)
+                if should_alert("anomaly_stopped_tasks", fingerprint,
+                                cooldown_s=24 * 3600):
+                    # Human message: explain what "zastaveny" actually
+                    # means, and include the pragmatic fix (restart
+                    # arbo service).
+                    alerts.append(
+                        f":red_circle: Úlohy přestaly reagovat po 10 "
+                        f"pokusech o restart: *{', '.join(stopped)}*\n"
+                        f"_Ostatní strategie pokračují. Pro obnovu: "
+                        f"`sudo systemctl restart arbo` na VPS._"
+                    )
+                    sent_today["stopped_tasks"] = today_key
+                    record_alert("anomaly_stopped_tasks", fingerprint)
                 logger.warning("anomaly_stopped_tasks", tasks=stopped)
 
         if alerts:

@@ -287,6 +287,62 @@ or the framework is ceremony without safety.
 
 ---
 
+### G17. Runtime state in YAML must auto-commit, or `git pull` will wipe it
+
+**Observed 2026-04-20 12:01 UTC:** user's explicit canary choice
+(ch_short_fuse in incubate) was silently reverted during a deploy.
+Sequence:
+1. User approved ch_short_fuse via Slack → `promote_to_incubate` wrote
+   `status: incubate` into `ch_short_fuse.yaml` on VPS.
+2. User restarted arbo later to pick up unrelated code change.
+3. Deploy script did `git stash && git pull` — stash moved the YAML
+   mutation into a stash; pull restored `status: challenger` from git.
+4. On restart, watchdog saw no incubate variant → auto-approve path
+   picked ch_edge_tight (P=1.00, huge Sharpe delta). User's choice
+   replaced without asking.
+
+The YAMLs under `arbo/config/variants/<strategy>/*.yaml` serve double
+duty: **templates in git** AND **runtime state mutated by
+pool_manager**. Any deploy workflow that stashes local changes will
+silently discard runtime mutations.
+
+**Fix (commit `eb986c5`):** every `pool_manager` mutation
+(`promote_to_incubate`, `promote`, `revert_incubate_to_challenger`,
+`veto`, `commit`) now auto-commits + pushes the YAML change
+immediately after writing it. `git stash` has nothing to shed; the
+next deploy's `git pull` sees the mutation as already-committed
+state.
+
+Same commit also gates auto-approve on the drift monitor — if the
+top candidate is itself in the current drift firing set, downgrade
+to manual approval. Promoting an unstable variant bets on a signal
+that's shifting, which defeats the point of shadow-measured
+confidence.
+
+**Lesson:** any on-disk file that holds live state MUST be the
+single source of truth AND survive deploys. If it doubles as a
+template (default values for fresh environments), either:
+- Commit every mutation immediately (option chosen here — simple,
+  audit trail in git log), or
+- Separate runtime state from templates entirely (e.g.,
+  `variants/*.yaml` are templates; state lives in a dedicated
+  `/opt/arbo/state/` directory outside git).
+
+For this codebase, option A is better: the git history of YAML
+changes IS the audit trail of decisions, and small commits with
+clear messages ("pool(B2): incubate ch_short_fuse (20% canary) by
+daniel") make operator review trivial.
+
+Corollary bugs worth fixing in the same style:
+- Watchdog in-memory state (`_last_eval_ts`, `_promotion_posted`)
+  should persist across restarts — dedup already moved to
+  `alert_state.json` for the same reason.
+- Any `git stash` in deploy scripts is a red flag. Prefer:
+  `git fetch origin && git reset --hard origin/main` (if live
+  state is properly committed) over `git stash && git pull`.
+
+---
+
 ### G16. Drift alerts must be INTERPRETED, not just shown
 
 **Observed 2026-04-19 21:13 UTC:** operator received a drift alert
@@ -1051,7 +1107,45 @@ _(Add entries as discovered.)_
 
 Status: NBA live paper, UFC/EPL paper.
 
-_(Add entries as discovered.)_
+### D1. Sweep Sharpe 7.10 is borderline overfit (2026-04-20)
+
+**What happened:** Computed Deflated Sharpe Ratio (Bailey & López de Prado
+2014) on the full 344-experiment sweep history (v1+v2+v3+v4). Best
+observed Sharpe = 7.10 (experiment #23 in v4, config: min_edge=0.16,
+gb_delta=0.15, sl_delta=0.15, max_hold_frac=0.5).
+
+- V4 sweep alone (80 trials): DSR = 100% → clean pass **within the
+  refinement neighborhood**. E[max SR under null] only 1.93 because
+  intra-v4 Sharpe variance is tight (σ=0.79).
+- Combined v1-v4 (344 trials, honest view of search space): DSR = 93.5%
+  with skew=-0.5, xkurt=+2 assumption. Observed max 7.10 only +0.24
+  above E[max under null] = 6.86.
+- Only **0/344 configs** reach DSR ≥ 0.95, **6/344** reach ≥ 0.75.
+
+**Why:** Each sweep iteration was informed by the previous, so trials are
+not i.i.d. samples from a single null. Cumulative exploration inflated
+observed max Sharpe beyond what any single unbiased search would find.
+Sharpe histogram is right-skewed (huge cluster 4.0–7.0, thin tail at
+negative) → strategy probably has real edge, but the HEADLINE number is
+~50-60% selection bias.
+
+**Decision:** Proceed with ML work, but treat true Sharpe as ~3-5 range,
+not 7.0+. Meta-labeler should be validated against **deflated benchmark
+(E[max SR under null])**, not raw headline Sharpe. Live P&L targets
+should likewise use deflated expectation.
+
+**Still open:** PBO (Probability of Backtest Overfitting) requires
+per-trade return matrix which prepare.py doesn't currently emit. Tracked
+as a separate todo; DSR alone is enough to warrant the ~40% deflation on
+live-expectation headline.
+
+**Tool:** `research_d/compute_dsr.py` — run with `--all-sweeps` for honest
+view, or default (v4 only) for refinement-neighborhood check.
+
+**Lesson:** Never take headline backtest Sharpe at face value when the
+sweep was iterative. **Always report both "clean latest sweep" and
+"union of all trials ever run"** — the second number is the one that
+matters for live expectations.
 
 ---
 

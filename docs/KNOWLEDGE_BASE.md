@@ -140,6 +140,7 @@ P(better): 0.92
 | 🔄 CANARY REVERTED | Kanárek selhal v reálu | Nic — systém ho vrátil do shadow |
 | 📉/⚠️/🚨 B2 drift | Strategie se v aktuálním režimu chová jinak než historicky. Ikona podle severity. Text vysvětluje konkrétně co se stalo a co systém dělá. | Pokud je v textu "Co musíš udělat: Nic" → nic. Pokud navrhuje pauzu (severe), zvaž `B2_EXECUTION_MODE=stopped` |
 | 🤖 B2 Auto-Challenger generated | Gemini navrhl nový challenger | Nic — běží v shadow |
+| 🔴 Úlohy přestaly reagovat (anomálie) | Task dostal 10 restartů v řadě, systém to vzdal | `sudo systemctl restart arbo` na VPS. Dedup 24h — nevrací se ihned. |
 | 🌅 Ranní briefing | Denní souhrn v češtině | Přečíst si, pokud chceš |
 
 ## Denní briefing
