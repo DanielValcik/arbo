@@ -236,6 +236,12 @@ class PromotionEngine:
                 reject: str | None = None
                 if tier_reject:
                     reject = f"tier_3: {tier_reject}"
+                elif mean_ch <= 0:
+                    # Never promote a variant that loses money, even if
+                    # champion loses more. "Less bad" is not a promotion
+                    # signal — it means the whole strategy needs review,
+                    # not parameter shuffling.
+                    reject = f"challenger mean PnL ${mean_ch:.4f} ≤ 0 (negative EV)"
                 elif mean_ch <= mean_cp:
                     reject = "challenger mean PnL not above champion"
                 elif p_better < MIN_P_BETTER_CEO:
@@ -284,18 +290,29 @@ class PromotionEngine:
     async def _fetch_pnl_series(
         self, session: Any, variant_id: str, cutoff: datetime
     ) -> tuple[list[float], float | None]:
-        """Return (pnl_per_share_series_ordered_by_ts, win_rate_pct_or_None)."""
+        """Return (pnl_per_share_series_ordered_by_ts, win_rate_pct_or_None).
+
+        Deduplicates per (condition_id, direction): one market = one trade.
+        Without this, a market scanned every 60s over 8h produces 480 rows
+        sharing the same resolution outcome, inflating N by ~500× and
+        P(better) to spurious 1.0. Uses DISTINCT ON to pick the earliest
+        signal per market (the entry price we'd actually trade at).
+        """
         import sqlalchemy as sa
 
         r = await session.execute(
             sa.text("""
-                SELECT would_pnl_per_share
-                FROM shadow_variant_signals
-                WHERE strategy = :s
-                  AND variant_id = :v
-                  AND qualified = true
-                  AND would_pnl_per_share IS NOT NULL
-                  AND signal_ts >= :cutoff
+                SELECT would_pnl_per_share FROM (
+                    SELECT DISTINCT ON (condition_id, direction)
+                        condition_id, direction, signal_ts, would_pnl_per_share
+                    FROM shadow_variant_signals
+                    WHERE strategy = :s
+                      AND variant_id = :v
+                      AND qualified = true
+                      AND would_pnl_per_share IS NOT NULL
+                      AND signal_ts >= :cutoff
+                    ORDER BY condition_id, direction, signal_ts ASC
+                ) t
                 ORDER BY signal_ts ASC
             """),
             {"s": self.strategy, "v": variant_id, "cutoff": cutoff},
