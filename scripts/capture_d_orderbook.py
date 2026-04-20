@@ -36,7 +36,7 @@ import json
 import logging
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -121,6 +121,14 @@ async def _insert_snapshot(
     if bid is not None and ask is not None and mid and mid > 1e-6:
         spread_bps = (ask - bid) / mid * 10000
 
+    # Convert game_date string → date object for asyncpg binding
+    game_date_obj: date | None = None
+    if game_date:
+        try:
+            game_date_obj = datetime.strptime(game_date, "%Y-%m-%d").date()
+        except ValueError:
+            game_date_obj = None
+
     try:
         await session.execute(
             text("""
@@ -147,7 +155,7 @@ async def _insert_snapshot(
                 "mid": mid,
                 "spread_bps": spread_bps,
                 "neg_risk": neg_risk,
-                "game_date": game_date,
+                "game_date": game_date_obj,
                 "question": question,
             },
         )
