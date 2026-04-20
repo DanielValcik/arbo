@@ -922,6 +922,11 @@ class StrategyDCore:
 
     # ── Exit ──────────────────────────────────────────────────────────
 
+    # Hard max age: force-exit if position is older than this, even without
+    # a fresh orderbook price. Prevents positions from rotting in memory
+    # when orderbook returns no quotes (common for thin draw markets).
+    MAX_STALE_HOURS = 72  # 3 days — well past any game resolution
+
     def check_exits(self, current_prices: dict[str, float]) -> list[DPosition]:
         """Check all open positions for exit conditions."""
         exits: list[DPosition] = []
@@ -930,6 +935,24 @@ class StrategyDCore:
         for cid, pos in list(self._positions.items()):
             price = current_prices.get(pos.token_id)
             if price is None:
+                # Force-exit stale positions that never got a price update
+                hold_hours = (now - pos.entry_time) / 3600
+                if hold_hours >= self.MAX_STALE_HOURS:
+                    pos.exit_reason = "stale_max_age"
+                    pos.exit_price = pos.entry_price  # Flat exit (no P&L)
+                    pos.exit_time = now
+                    pos.close_price = pos.entry_price
+                    pos.pnl = 0.0
+                    pos.clv = 0.0
+                    exits.append(pos)
+                    del self._positions[cid]
+                    self._recent_exits[cid] = now
+                    self._persist_recent_exits()
+                    self._logger.info(
+                        "exit_stale", sport=self.SPORT_NAME,
+                        team_a=pos.team_a, team_b=pos.team_b,
+                        hold_h=f"{hold_hours:.0f}",
+                    )
                 continue
 
             pos.n_price_checks += 1
