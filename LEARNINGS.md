@@ -287,6 +287,45 @@ or the framework is ceremony without safety.
 
 ---
 
+### G18. Strategy runners must swallow transient errors, not let them accumulate
+
+**Observed 2026-04-21 04:10 UTC:** `strategy_B2` task hit
+`permanent_stop` — 3 errors in 10-min window. Strategy went silent
+for 2h; check_exits manager still ran but no new entries or exit
+decisions from the strategy's own poll loop. The alert fired at
+05:31 UTC (now human-friendly thanks to G-14), but the underlying
+bug was that **any exception** leaking from `_run_strategy_b2`
+counts toward the task-loop's permanent_stop threshold.
+
+Root cause: a series of Polymarket `/price` 404s on closed markets
+cascaded through `check_exits` → raised PolyApiException → bubbled up
+from `strategy_b2.poll_cycle` → caught by `_run_task_loop` as
+task_error. Three of those within 10 min killed the task.
+
+These are **transient external failures** (market resolved and is no
+longer served by CLOB). A disciplined strategy runner shrugs them off
+and tries again next cycle. The task-loop's accounting shouldn't
+treat them as "bug".
+
+**Fix (commit pending):** `_run_strategy_b2` now wraps its body in a
+try/except that swallows non-cancellation errors and logs a warning
+with traceback tail. The task-loop sees a clean return → no error
+count increment → no permanent_stop path.
+
+**Rule for future strategy runners:** any `_run_strategy_X` that calls
+external APIs (Polymarket, Binance, Gamma, etc.) must have a
+per-cycle exception boundary. Let `CancelledError` propagate
+(shutdown signal); everything else → warning log + return. If the
+failure is persistent, it will show up as a flat warning rate and
+the operator can investigate from logs. If it's transient, the
+system self-heals next cycle.
+
+Applies also to: `_run_strategy_c`, `_run_strategy_c2`,
+`_run_strategy_b3`, `_run_strategy_d_*`. These should be audited;
+most have partial try/except blocks but not a full-cycle one.
+
+---
+
 ### G17. Runtime state in YAML must auto-commit, or `git pull` will wipe it
 
 **Observed 2026-04-20 12:01 UTC:** user's explicit canary choice

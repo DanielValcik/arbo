@@ -2402,32 +2402,56 @@ class RDHOrchestrator:
 
         Gets crypto markets from discovery, scans with volatility model,
         applies quality gate, and executes trades.
+
+        Exception boundary: transient external failures (Polymarket
+        API 404s on closed markets, CLOB timeouts, asyncio cancel
+        mid-cycle) should NOT accumulate toward the task-loop's error
+        threshold — if three such failures land in 10 min, the task
+        hits permanent_stop and new entries freeze for hours until
+        the operator manually restarts. See LEARNINGS G-18 for the
+        2026-04-21 04:10 UTC incident.
+
+        Only re-raise CancelledError (orchestrator shutdown signal).
         """
         if self._strategy_b2 is None or self._discovery is None:
             return
 
-        markets = self._discovery.get_by_category("crypto")
-        if not markets:
-            return
+        try:
+            markets = self._discovery.get_by_category("crypto")
+            if not markets:
+                return
 
-        trades = await self._strategy_b2.poll_cycle(markets)
+            trades = await self._strategy_b2.poll_cycle(markets)
 
-        if trades:
-            await self._save_trades_to_db(trades)
-            for sig in trades:
-                logger.info(
-                    "b2_trade_executed",
-                    asset=sig.asset,
-                    strike=float(sig.strike),
-                    edge=f"{sig.edge:.3f}",
-                    exchange_price=f"${sig.current_exchange_price:.0f}",
-                )
-            await self._paper_engine.sync_positions_to_db()
+            if trades:
+                await self._save_trades_to_db(trades)
+                for sig in trades:
+                    logger.info(
+                        "b2_trade_executed",
+                        asset=sig.asset,
+                        strike=float(sig.strike),
+                        edge=f"{sig.edge:.3f}",
+                        exchange_price=f"${sig.current_exchange_price:.0f}",
+                    )
+                await self._paper_engine.sync_positions_to_db()
 
-            # Slack notification for LIVE fills only (dual or live mode).
-            # Matches B3/D policy: paper trades log but don't spam Slack.
-            if self._slack_bot and self._strategy_b2._execution_mode in ("dual", "live"):
-                await self._notify_b2_live_entries(trades)
+                # Slack notification for LIVE fills only (dual or live mode).
+                # Matches B3/D policy: paper trades log but don't spam Slack.
+                if self._slack_bot and self._strategy_b2._execution_mode in ("dual", "live"):
+                    await self._notify_b2_live_entries(trades)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            # Swallow — don't let transient external failures drive
+            # the task toward permanent_stop. Logged with traceback
+            # tail for debugging; if the same failure recurs across
+            # many cycles, the operator will see the pattern.
+            import traceback
+            logger.warning(
+                "b2_run_cycle_swallowed_error",
+                error=str(e)[:200],
+                tb_tail=traceback.format_exc()[-300:],
+            )
 
     # B2 has its own dedicated live channel (live-b2). Separates B2 fills
     # from the B3 live channel so each strategy's signal stream stays clean.
