@@ -1146,6 +1146,96 @@ _(Add entries as discovered.)_
 
 Status: NBA live paper, UFC/EPL paper.
 
+### D8. Shadow-exit logger shipped — live paired ML-vs-fixed evaluation (2026-04-21)
+
+**What happened:** Realized mid-session that `ch_ml_exit_v1.yaml` at
+status=shadow produces **zero live evidence** — shadow status means
+the variant sits in the pool but its ML decision is never queried.
+Four weeks of passive "shadow deploy" would accumulate NO data about
+whether the v2 ML exit model works in live market conditions.
+
+**Fix:** Built passive shadow-exit logger in
+`arbo/strategies/strategy_d_core.py`:
+- New class attrs: `SHADOW_EXIT_LOG_ENABLED`, `SHADOW_EXIT_MODEL_PATH`,
+  `SHADOW_EXIT_THRESHOLD` (all defaults inert on core)
+- NBA subclass (`strategy_d_nba.py`) overrides to enable + points at
+  `arbo/data/models/strategy_d_exit_v1.ubj`
+- At every `check_exits` tick (on every NBA position), ML model computes
+  a paired decision WITHOUT affecting real exit
+- Two log event types: `ml_first_exit` (first tick where ML says exit)
+  and `real_exit` (when fixed rule actually exits)
+- Dedup per (token_id, side) — at most 2 rows per trade
+- Async fire-and-forget DB insert (never blocks trading)
+- Exception handling: any shadow failure is logged as warning and
+  swallowed — telemetry MUST NOT affect trades
+
+**DB:** alembic migration 016 adds `shadow_exit_decisions` table with
+schema (strategy, variant_id, token_id, side, tick_ts, event_type,
+current_price, entry_price, unrealized_pnl_per_share, hold_minutes,
+ml_should_exit, ml_pred_log_t, ml_threshold, ml_reason, ml_model_path,
+real_exit_reason, real_exit_price, game_date, sport, team_a, team_b,
+created_at).
+
+**Why only NBA:** v1 model was trained exclusively on NBA data.
+Applying to UFC/EPL would produce spurious predictions and dilute the
+evaluation signal. UFC/EPL keep `SHADOW_EXIT_LOG_ENABLED=False`.
+
+**Testing:** 7/7 shadow logger tests pass verifying:
+- Disabled → 0 logger calls + exit behavior unchanged
+- Enabled → real_exit logged, ml_first_exit logged exactly once
+- ml_should_exit=True does NOT cause real exit (safety invariant)
+- Missing model path → silent fallback (no crash)
+- Dedup cleanup after real exit
+- Full D test suite: 44/44 pass.
+
+**Deploy:** commit `39ebd80`, migration 016 applied, arbo.service
+restarted without errors. DB table exists and accepts writes.
+
+**How to analyze (once data accumulates):**
+
+```sql
+-- P(better) proxy: for each trade, was ML's would-be exit better?
+WITH paired AS (
+  SELECT
+    token_id,
+    side,
+    MAX(CASE WHEN event_type='ml_first_exit' THEN current_price END) AS ml_would_exit_at,
+    MAX(CASE WHEN event_type='real_exit' THEN real_exit_price END) AS real_exit_px,
+    MAX(CASE WHEN event_type='real_exit' THEN current_price END) AS real_last_px,
+    MAX(CASE WHEN event_type='real_exit' THEN entry_price END) AS entry_px,
+    MAX(CASE WHEN event_type='real_exit' THEN unrealized_pnl_per_share END)
+      FILTER (WHERE event_type='ml_first_exit') AS ml_pnl_per_share,
+    MAX(unrealized_pnl_per_share) FILTER (WHERE event_type='real_exit') AS real_pnl_per_share
+  FROM shadow_exit_decisions
+  GROUP BY token_id, side
+)
+SELECT
+  COUNT(*) FILTER (WHERE ml_would_exit_at IS NOT NULL) AS ml_said_exit_trades,
+  COUNT(*) AS total_trades,
+  AVG(real_pnl_per_share) AS avg_real_pnl,
+  AVG(ml_pnl_per_share) FILTER (WHERE ml_pnl_per_share IS NOT NULL) AS avg_ml_pnl
+FROM paired;
+```
+
+**Expected timeline:**
+- D NBA paper trades: ~1-3 per active day
+- 4 weeks → ~30-50 paired rows → enough for preliminary P(better) bootstrap
+- 8 weeks → ~60-100 rows → statistically more stable
+
+**Lesson:**
+- **"Shadow deploy" is meaningless without active evaluation.** Just
+  putting a variant in the pool with `status: shadow` does not produce
+  evidence. Need an explicit telemetry path.
+- **Paired-sample designs beat solo measurement.** By logging BOTH
+  real and hypothetical-ML rows against the SAME positions, we control
+  for market regime/luck — any systematic difference attributable to
+  the exit rule.
+- **Always include a `real_exit` row per trade**, even when ML never
+  said exit. Otherwise "missing row" is ambiguous (did ML never fire,
+  or was the position never observed?).
+
+---
+
 ### D7. v2 model — ROI + capital turnover breakdown (2026-04-20)
 
 **Test period:** 39 calendar days (Feb 12 → Mar 22 2026), 27 NBA

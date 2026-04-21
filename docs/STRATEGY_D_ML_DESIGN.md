@@ -497,3 +497,121 @@ Per research findings and framework constraints:
 
 **Review this design.** Flag any concerns.
 If accepted → I proceed with Section 12 Day 1-2 (prepare.py + build_exit_timing_set.py + unit tests).
+
+---
+
+## 15. Shadow-Exit Logger (shipped 2026-04-21)
+
+Added after initial design — shipping model v2 as `status: shadow`
+variant would have produced zero live evidence, because shadow status
+skips the variant's decision path entirely. The logger closes that gap
+without changing trading behavior.
+
+### 15.1 Purpose
+
+For every open NBA Strategy D position, run the ML model (v1 = v2 in
+our current training pipeline; this section uses "v1" to match the
+shipped model filename) in parallel with the fixed champion rule and
+log paired decisions. After 4+ weeks of data, run paired-sample
+P(better) bootstrap on live positions to validate or reject v2 exit
+ahead of any canary promotion.
+
+### 15.2 Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ StrategyDNba.check_exits() — runs every 30-60s on each position  │
+└──────────┬───────────────────────────────────────────────────────┘
+           ↓
+    ┌──────────────────────┐
+    │ fixed rule evaluates │ ← actual exit decision (unchanged)
+    │ gb_hit / sl_hit /    │
+    │ time_exit            │
+    └──────────┬───────────┘
+               ↓
+    ┌────────────────────────────────┐
+    │ IF SHADOW_EXIT_LOG_ENABLED:    │
+    │   query shadow model in        │ ← PARALLEL, passive
+    │   parallel (not affecting exit)│
+    │   → (should_exit, pred_log_t)  │
+    └──────────┬─────────────────────┘
+               ↓
+    ┌─────────────────────────────────┐
+    │ IF ml_should_exit AND first time│
+    │   for this (token_id, side):    │ → event_type='ml_first_exit'
+    │   async INSERT to               │   (at most 1 per trade)
+    │   shadow_exit_decisions         │
+    └─────────────────────────────────┘
+               ↓
+    ┌──────────────────────────────────┐
+    │ IF real rule fires exit:         │
+    │   async INSERT real_exit row     │ → event_type='real_exit'
+    │   (pairs with any ml_first_exit) │   (exactly 1 per trade)
+    └──────────────────────────────────┘
+```
+
+### 15.3 Key invariants (enforced by tests)
+
+1. **Logger never changes exit decision.** Real rule rules.
+2. **Logger survives model load failure silently.** Telemetry cannot
+   affect trading.
+3. **Dedup per (token_id, side).** At most 2 rows per trade
+   (ml_first_exit + real_exit).
+4. **Async insert.** DB stall never blocks check_exits.
+
+### 15.4 Enabling / disabling
+
+```python
+# In strategy subclass (e.g. strategy_d_nba.py):
+SHADOW_EXIT_LOG_ENABLED = True
+SHADOW_EXIT_MODEL_PATH = "arbo/data/models/strategy_d_exit_v1.ubj"
+SHADOW_EXIT_THRESHOLD = 6658.3
+```
+
+Defaults on `StrategyDCore` are `False`/`None`/`6658.3` — zero cost
+when off. Currently enabled ONLY on NBA (v1 model trained on NBA
+only). Do NOT enable on UFC/EPL until we have sport-specific trained
+models.
+
+### 15.5 Schema (alembic 016)
+
+See `alembic/versions/016_shadow_exit_decisions.py`. Key columns:
+
+| Column | Type | Note |
+|---|---|---|
+| strategy | varchar(32) | D / D_UFC / D_EPL |
+| token_id, side | varchar(80) + varchar(8) | position identity |
+| tick_ts | timestamptz | when decision was computed |
+| event_type | varchar(20) | ml_first_exit \| real_exit |
+| ml_should_exit | boolean | model's decision |
+| ml_pred_log_t | numeric | AFT output |
+| ml_threshold | numeric | policy threshold (for reproducibility) |
+| real_exit_reason | varchar(32) | green_book / stop_loss / time_exit |
+| real_exit_price | numeric(6,4) | actual exit price (when event_type=real_exit) |
+
+### 15.6 Analysis query (P(better) proxy)
+
+See `LEARNINGS.md` D8 for full SQL. Core idea: for each (token_id,
+side) pair, group ml_first_exit + real_exit rows, compute hypothetical
+ML PnL vs real PnL, then paired-bootstrap.
+
+### 15.7 Promotion criteria (tentative, review when N≥50)
+
+- Paired P(learned > real) ≥ 0.75 on ≥ 50 paired trades
+- Rolling 30-day PnL(ML) > PnL(real) × 1.10
+- Max drawdown under ML ≤ 1.15 × max DD under real
+- Verified no systematic gaming of the threshold
+
+If all pass → propose canary promotion (status: shadow → incubate →
+challenger) per Project PARALLEL Phase 4 framework.
+
+### 15.8 Files
+
+| File | Purpose |
+|---|---|
+| `alembic/versions/016_shadow_exit_decisions.py` | DB schema |
+| `arbo/strategies/strategy_d_core.py` | `_get_shadow_exit_policy`, `_log_shadow_exit_decision`, `_shadow_insert_async` + hooks in `check_exits` |
+| `arbo/strategies/strategy_d_nba.py` | Enables shadow logging for NBA |
+| `arbo/tests/test_shadow_exit_logger.py` | 7 invariant tests |
+| `LEARNINGS.md` D8 | Narrative + SQL analysis query |
+

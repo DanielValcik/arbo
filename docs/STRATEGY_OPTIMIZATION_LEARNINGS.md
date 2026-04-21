@@ -341,6 +341,41 @@ consumers, not just the one that triggered the alert.
 
 **Lesson**: Any evaluation pipeline that allows the same ground-truth outcome to label N>1 rows MUST dedupe before computing statistics. "N paired=1206" that bootstraps to P(better)=1.0 from 3 real markets is a statistical poltergeist.
 
+### [2026-04-21] D — Shadow-exit logger shipped (paired ML vs fixed-rule telemetry)
+
+**Observation**: Realized that 2026-04-20 deploy of `ch_ml_exit_v1.yaml` at `status: shadow` produces ZERO live evidence — shadow status means variant is in pool but its decision is never queried. Four weeks of "shadow deploy" would accumulate no validation data.
+
+**Data at decision time**:
+- Committed ML infra (29800a5 et al.) + running orderbook capture (3586 snapshots collected, now dust-cleaned)
+- 0 rows in shadow_exit_decisions (table didn't exist)
+- 0 paired live samples of ML vs fixed-rule
+
+**Hypothesis**: If we add a passive telemetry layer that runs the ML model on every open NBA position WITHOUT changing behavior, we accumulate paired (ml_would_exit, real_exit) pairs. After N≥50 paired trades we can run P(better) bootstrap on LIVE data — much stronger evidence than backtest (LEARNINGS D6 P=0.908 was backtest-only).
+
+**Framework gates checked**:
+- ✓ Step 0 read learnings — scoped problem to "shadow doesn't evaluate anything"
+- ✓ Step 2 min N — zero impact on trading; any N acceptable before evaluation
+- ✓ No behavior change — passive telemetry, real exit unchanged (7 unit tests verify this invariant)
+- ✓ Paired sample design — controls for market regime/luck by pairing same positions
+- ✓ Async fire-and-forget DB insert — telemetry cannot stall trading
+- ✓ Exception-safe — any shadow error is logged + swallowed
+
+**Decision**: SHIP. Implement `SHADOW_EXIT_LOG_ENABLED` flag + `shadow_exit_decisions` table + parallel ML query in check_exits. Enable on NBA only (v1 model is NBA-trained). Commit `39ebd80`, migration 016, deployed 2026-04-21 15:36 UTC.
+
+**Evidence basis**: 7/7 shadow logger tests pass. Full D test suite 44/44. Deploy verified via `systemctl is-active arbo.service` and `alembic upgrade head` success.
+
+**Revert triggers armed**:
+- Shadow logger exception rate > 1% of tick calls → disable SHADOW_EXIT_LOG_ENABLED flag (single YAML change, no code revert)
+- DB insert failures spike (async backlog > 100 queued) → disable
+- Any suspicion that logger affects trading latency → disable immediately
+
+**Outcome (to update at N≥50 paired trades)**:
+- Measured effect: TBD (no D NBA positions open at deploy — all in cooldown)
+- Verdict: ONGOING
+- Lesson preview: paired-sample telemetry on live/paper data is MUCH cheaper than backtest + re-validation. Should be the default for any shadow variant going forward — Framework §11 should mandate shadow-telemetry for all status=shadow variants.
+
+---
+
 ### [2026-04-20] D — Exit-timing survival ML model v2 PASSES promotion gate (P=0.908)
 
 **Observation**: After building complete exit-timing ML infrastructure (design doc + 6 modules + 28 unit tests), trained XGBoost Weibull AFT survival model on 1.17M per-timestep rows from 2,193 NBA trades (full-scan v4_winner preset on arbo-download VPS). Evaluated head-to-head vs fixed rule on 440 OOS test trades.
