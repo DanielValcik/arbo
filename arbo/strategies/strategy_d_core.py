@@ -159,6 +159,17 @@ class StrategyDCore:
     # well past any NBA game).
     PRICE_HISTORY_MAXLEN: int = 300
 
+    # ── Shadow-exit telemetry (passive — never affects real exit) ─────
+    # When SHADOW_EXIT_LOG_ENABLED is True, every check_exits tick asks
+    # the ML model what it WOULD do and writes paired rows to the
+    # `shadow_exit_decisions` table (see alembic migration 016). Used
+    # for paired-sample P(better) analysis on live/paper positions
+    # without changing behavior. Only enable on sports the model was
+    # trained for (v1 = NBA only).
+    SHADOW_EXIT_LOG_ENABLED: bool = False
+    SHADOW_EXIT_MODEL_PATH: str | None = None  # if None, uses EXIT_MODEL_PATH
+    SHADOW_EXIT_THRESHOLD: float = 6658.3
+
     # Risk layer (for TradeRequest)
     RISK_LAYER: int = 9  # Sports
 
@@ -201,6 +212,20 @@ class StrategyDCore:
         # inactive.
         self._ml_exit_policy: Any | None = None
         self._ml_exit_policy_key: tuple[str | None, str | None, float] | None = None
+
+        # Shadow-exit telemetry state.
+        # `_shadow_ml_policy` — separate policy instance loaded when
+        # SHADOW_EXIT_LOG_ENABLED is True. Independent of EXIT_POLICY so
+        # we can passively evaluate ML on champion positions that have
+        # EXIT_POLICY=None.
+        # `_shadow_ml_first_logged` — set of (token_id, side) tuples that
+        # have already had an "ml_first_exit" row written. Prevents
+        # duplicate logging when ML keeps saying should_exit=True across
+        # many ticks. Resets on process restart (fine — post-restart
+        # re-logs are idempotent by virtue of timestamp differences).
+        self._shadow_ml_policy: Any | None = None
+        self._shadow_ml_first_logged: set[tuple[str, str]] = set()
+        self._shadow_log_init_warned: bool = False
         self._daily_pnl: float = 0.0
         # Cooldown per market: don't re-enter same condition_id for 4 hours
         # (one NBA game is 2.5h; by 4h any signal should be stale).
@@ -953,6 +978,192 @@ class StrategyDCore:
     # when orderbook returns no quotes (common for thin draw markets).
     MAX_STALE_HOURS = 72  # 3 days — well past any game resolution
 
+    def _get_shadow_exit_policy(self):
+        """Lazy-load the SHADOW exit policy (independent of EXIT_POLICY).
+
+        Returns ExitPolicyModel when SHADOW_EXIT_LOG_ENABLED is True on
+        the strategy subclass, else None. Loaded once per process and
+        cached; no runtime re-loading since the shadow model is a fixed
+        reference we're evaluating (not a live-promotable variant).
+        """
+        if not self.SHADOW_EXIT_LOG_ENABLED:
+            return None
+        if self._shadow_ml_policy is not None:
+            return self._shadow_ml_policy
+        model_path = self.SHADOW_EXIT_MODEL_PATH or self._p("EXIT_MODEL_PATH")
+        if not model_path:
+            if not self._shadow_log_init_warned:
+                self._logger.warning(
+                    "shadow_exit_log_no_model_path",
+                    sport=self.SPORT_NAME,
+                    note="SHADOW_EXIT_LOG_ENABLED=True but neither "
+                         "SHADOW_EXIT_MODEL_PATH nor EXIT_MODEL_PATH set",
+                )
+                self._shadow_log_init_warned = True
+            return None
+        try:
+            from arbo.models.strategy_d_exit import ExitPolicyModel
+            self._shadow_ml_policy = ExitPolicyModel(
+                model_path=model_path,
+                threshold_log_t=float(self.SHADOW_EXIT_THRESHOLD),
+            )
+            self._logger.info(
+                "shadow_exit_log_initialized",
+                sport=self.SPORT_NAME,
+                model_path=model_path,
+                threshold=self.SHADOW_EXIT_THRESHOLD,
+            )
+            return self._shadow_ml_policy
+        except Exception as e:
+            if not self._shadow_log_init_warned:
+                self._logger.warning(
+                    "shadow_exit_log_init_failed",
+                    err=str(e), sport=self.SPORT_NAME,
+                )
+                self._shadow_log_init_warned = True
+            return None
+
+    def _log_shadow_exit_decision(
+        self,
+        pos: DPosition,
+        event_type: str,
+        ml_decision,  # ExitPolicyDecision | None
+        real_exit_reason: str | None = None,
+        real_exit_price: float | None = None,
+        now_ts: float | None = None,
+        current_price: float | None = None,
+    ) -> None:
+        """Insert a row into shadow_exit_decisions. Never raises — all
+        exceptions swallowed and logged as warnings (telemetry must not
+        affect trading).
+
+        Args:
+            pos: The open position.
+            event_type: "ml_first_exit" or "real_exit".
+            ml_decision: ExitPolicyDecision from the policy at this tick
+                (may be None if model unavailable).
+            real_exit_reason: Set when event_type='real_exit'.
+            real_exit_price: Price at actual exit.
+            now_ts: Unix ts of the tick (falls back to time.time()).
+            current_price: Market price at this tick (for ml_first_exit
+                events where position hasn't exited yet).
+        """
+        if not self.SHADOW_EXIT_LOG_ENABLED:
+            return
+        try:
+            import asyncio
+            from datetime import datetime, timezone
+
+            ts = now_ts if now_ts is not None else time.time()
+            tick_dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            price_at_tick = current_price if current_price is not None else (
+                real_exit_price if real_exit_price is not None else pos.entry_price
+            )
+            unrealized = (
+                (price_at_tick - pos.entry_price)
+                if pos.side == "yes"
+                else (pos.entry_price - price_at_tick)
+            )
+            hold_minutes = (ts - pos.entry_time) / 60.0
+
+            # Build parameters (match migration 016 schema exactly)
+            variant_id = None
+            if isinstance(self._active_variant_params, dict):
+                variant_id = self._active_variant_params.get("__variant_id__")
+
+            params = {
+                "strategy": self.STRATEGY_NAME,
+                "variant_id": variant_id,
+                "token_id": pos.token_id,
+                "condition_id": pos.condition_id,
+                "side": pos.side,
+                "tick_ts": tick_dt,
+                "tick_idx": pos.n_price_checks,
+                "event_type": event_type,
+                "current_price": float(price_at_tick),
+                "entry_price": float(pos.entry_price),
+                "unrealized_pnl_per_share": float(unrealized),
+                "hold_minutes": float(hold_minutes),
+                "ml_should_exit": bool(ml_decision.should_exit) if ml_decision else False,
+                "ml_pred_log_t": (
+                    float(ml_decision.pred_log_t)
+                    if ml_decision is not None else None
+                ),
+                "ml_threshold": float(self.SHADOW_EXIT_THRESHOLD),
+                "ml_reason": (ml_decision.reason if ml_decision else "unavailable"),
+                "ml_model_path": (
+                    self.SHADOW_EXIT_MODEL_PATH or self._p("EXIT_MODEL_PATH")
+                ),
+                "real_exit_reason": real_exit_reason,
+                "real_exit_price": (
+                    float(real_exit_price) if real_exit_price is not None else None
+                ),
+                "game_date": self._parse_game_date(pos.game_date),
+                "sport": pos.sport,
+                "team_a": pos.team_a,
+                "team_b": pos.team_b,
+            }
+
+            # Fire-and-forget async task — never block check_exits.
+            loop = asyncio.get_event_loop()
+            loop.create_task(self._shadow_insert_async(params))
+        except Exception as e:
+            self._logger.warning(
+                "shadow_exit_log_schedule_failed",
+                err=str(e), sport=self.SPORT_NAME,
+                token=pos.token_id[:20],
+            )
+
+    @staticmethod
+    def _parse_game_date(s: str | None):
+        """Parse 'YYYY-MM-DD' → date. Returns None on failure."""
+        if not s:
+            return None
+        try:
+            from datetime import datetime
+            return datetime.strptime(s, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+
+    async def _shadow_insert_async(self, params: dict) -> None:
+        """Async insert to shadow_exit_decisions. Uses the shared
+        session factory — creates a short-lived session per row.
+        Errors are logged but never propagate.
+        """
+        try:
+            from sqlalchemy import text
+            from arbo.utils.db import get_session_factory
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    text("""
+                        INSERT INTO shadow_exit_decisions
+                          (strategy, variant_id, token_id, condition_id, side,
+                           tick_ts, tick_idx, event_type,
+                           current_price, entry_price, unrealized_pnl_per_share,
+                           hold_minutes, ml_should_exit, ml_pred_log_t,
+                           ml_threshold, ml_reason, ml_model_path,
+                           real_exit_reason, real_exit_price,
+                           game_date, sport, team_a, team_b)
+                        VALUES
+                          (:strategy, :variant_id, :token_id, :condition_id, :side,
+                           :tick_ts, :tick_idx, :event_type,
+                           :current_price, :entry_price, :unrealized_pnl_per_share,
+                           :hold_minutes, :ml_should_exit, :ml_pred_log_t,
+                           :ml_threshold, :ml_reason, :ml_model_path,
+                           :real_exit_reason, :real_exit_price,
+                           :game_date, :sport, :team_a, :team_b)
+                    """),
+                    params,
+                )
+                await session.commit()
+        except Exception as e:
+            self._logger.warning(
+                "shadow_exit_insert_failed",
+                err=str(e), strategy=self.STRATEGY_NAME,
+                token=params.get("token_id", "?")[:20],
+            )
+
     def _get_ml_exit_policy(self):
         """Lazy-load the ML exit policy if active variant requests it.
 
@@ -1087,6 +1298,54 @@ class StrategyDCore:
                         token=pos.token_id[:20],
                     )
 
+            # ── Shadow-exit telemetry (passive, never affects behavior) ──
+            # Independent of EXIT_POLICY — runs on EVERY position when
+            # SHADOW_EXIT_LOG_ENABLED=True (set by sport subclasses for
+            # sports the model was trained on, e.g. NBA for v1).
+            # Logs "ml_first_exit" when shadow model first says exit, and
+            # "real_exit" when the actual rule exits the position.
+            shadow_decision = None
+            if self.SHADOW_EXIT_LOG_ENABLED:
+                shadow_policy = self._get_shadow_exit_policy()
+                # If champion active ML (EXIT_POLICY) IS the same model, reuse
+                # its decision to save a second predict call.
+                if ml_policy is not None and ml_decision is not None:
+                    shadow_decision = ml_decision
+                elif shadow_policy is not None and not (gb_hit or sl_hit):
+                    try:
+                        trajectory = [(pos.entry_time, pos.entry_price)] + pos.price_history
+                        shadow_decision = shadow_policy.decide(
+                            trajectory=trajectory,
+                            entry_price=pos.entry_price,
+                            target=gb_target,
+                            stop_loss_price=sl_trigger,
+                            side=pos.side,
+                            model_prob=pos.model_prob,
+                            edge_at_entry=pos.edge,
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            "shadow_exit_decide_failed",
+                            err=str(e), sport=self.SPORT_NAME,
+                            token=pos.token_id[:20],
+                        )
+
+                # Dedup: log "ml_first_exit" at most once per (token_id, side)
+                # while position is open. Not an exit trigger — purely
+                # telemetry.
+                key = (pos.token_id, pos.side)
+                if (shadow_decision is not None
+                        and shadow_decision.should_exit
+                        and key not in self._shadow_ml_first_logged):
+                    self._log_shadow_exit_decision(
+                        pos=pos,
+                        event_type="ml_first_exit",
+                        ml_decision=shadow_decision,
+                        current_price=price,
+                        now_ts=now,
+                    )
+                    self._shadow_ml_first_logged.add(key)
+
             if gb_hit:
                 pos.exit_reason = "green_book"
                 pos.exit_price = price
@@ -1132,6 +1391,23 @@ class StrategyDCore:
             else:
                 pos.pnl = pos.shares * (pos.entry_price - pos.exit_price)
                 pos.clv = pos.entry_price - price
+
+            # Shadow-exit telemetry: pair the real exit with what ML said
+            # at this same tick (if shadow logger enabled). This gives
+            # the downstream paired-sample analysis one row per trade
+            # guaranteed, even when ML never said should_exit.
+            if self.SHADOW_EXIT_LOG_ENABLED:
+                self._log_shadow_exit_decision(
+                    pos=pos,
+                    event_type="real_exit",
+                    ml_decision=shadow_decision,  # may be None if model unavail
+                    real_exit_reason=pos.exit_reason,
+                    real_exit_price=pos.exit_price,
+                    current_price=price,
+                    now_ts=now,
+                )
+                # Cleanup dedup entry for this position
+                self._shadow_ml_first_logged.discard((pos.token_id, pos.side))
 
             exits.append(pos)
             del self._positions[cid]

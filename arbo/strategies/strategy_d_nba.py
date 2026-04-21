@@ -50,6 +50,16 @@ class StrategyDNba(StrategyDCore):
 
     RISK_LAYER = 9
 
+    # Shadow-exit telemetry — evaluates strategy_d_exit_v1 (NBA-trained)
+    # on every NBA position without affecting exit behavior. Logs paired
+    # "what would ML do" rows to shadow_exit_decisions table for later
+    # P(better) analysis. Safe: never changes trading.
+    # Disable anytime by setting to False (e.g. if model load errors
+    # become noisy in logs).
+    SHADOW_EXIT_LOG_ENABLED = True
+    SHADOW_EXIT_MODEL_PATH = "arbo/data/models/strategy_d_exit_v1.ubj"
+    SHADOW_EXIT_THRESHOLD = 6658.3
+
 
 # Backward-compat alias (used by main_rdh.py)
 StrategyD = StrategyDNba
