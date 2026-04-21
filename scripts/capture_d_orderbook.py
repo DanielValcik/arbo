@@ -91,6 +91,14 @@ async def _discover_nba_tokens(window_hours: float = 48.0) -> list[dict]:
 # ── Insert row ────────────────────────────────────────────────────────
 
 
+# Dust filter: skip inserts where bid-ask spread exceeds this fraction of mid.
+# Pre-game NBA orderbooks often show only market-maker dust orders at 0.01 and
+# 0.99 (spread > 90%) with no real trading. Those rows are useless for ML
+# training and waste DB storage. Real NBA liquidity typically appears within
+# 6-12h of tipoff with spread < 20% (bps < 2000).
+DUST_SPREAD_THRESHOLD = 0.50  # 50% = 5000 bps
+
+
 async def _insert_snapshot(
     session,
     token_id: str,
@@ -100,26 +108,61 @@ async def _insert_snapshot(
     game_date: str | None,
     question: str | None,
 ) -> bool:
-    """Write one orderbook snapshot to DB. Returns True on success."""
+    """Write one orderbook snapshot to DB. Returns True on success.
+
+    Computes true top-of-book as max(bids) / min(asks) rather than relying on
+    snapshot.best_bid/ask (which reflect the Polymarket CLOB response order
+    — bids ascending from dust, asks descending from dust — so index 0 is the
+    FAR side, not the best side).
+
+    Skips dust-only snapshots (spread > DUST_SPREAD_THRESHOLD of mid) —
+    these indicate a market with no real trading yet. Returns False so the
+    caller counts this as 'failed' (effectively 'filtered').
+    """
     from sqlalchemy import text
 
-    bid = float(snapshot.best_bid) if snapshot.best_bid is not None else None
-    ask = float(snapshot.best_ask) if snapshot.best_ask is not None else None
-    bid_size = None
-    ask_size = None
-    bids_json = None
-    asks_json = None
-    if snapshot.bids:
-        bid_size = float(snapshot.bids[0][1]) if snapshot.bids[0][1] is not None else None
-        bids_json = [[float(p), float(s)] for p, s in snapshot.bids[:5]]
-    if snapshot.asks:
-        ask_size = float(snapshot.asks[0][1]) if snapshot.asks[0][1] is not None else None
-        asks_json = [[float(p), float(s)] for p, s in snapshot.asks[:5]]
+    bids_raw = [(float(p), float(s)) for (p, s) in (snapshot.bids or [])
+                if p is not None and s is not None]
+    asks_raw = [(float(p), float(s)) for (p, s) in (snapshot.asks or [])
+                if p is not None and s is not None]
+
+    # True top-of-book: highest bid price, lowest ask price.
+    bid = ask = bid_size = ask_size = None
+    if bids_raw:
+        b = max(bids_raw, key=lambda x: x[0])
+        bid, bid_size = b[0], b[1]
+    if asks_raw:
+        a = min(asks_raw, key=lambda x: x[0])
+        ask, ask_size = a[0], a[1]
+
+    # Standard orderbook convention for JSON storage: bids descending
+    # (highest first), asks ascending (lowest first), top 5 levels each.
+    bids_json = (
+        [[p, s] for p, s in sorted(bids_raw, key=lambda x: -x[0])[:5]]
+        if bids_raw else None
+    )
+    asks_json = (
+        [[p, s] for p, s in sorted(asks_raw, key=lambda x: x[0])[:5]]
+        if asks_raw else None
+    )
 
     mid = (bid + ask) / 2 if (bid is not None and ask is not None) else None
     spread_bps = None
     if bid is not None and ask is not None and mid and mid > 1e-6:
         spread_bps = (ask - bid) / mid * 10000
+
+    # Dust filter — skip insert if spread exceeds threshold
+    if bid is not None and ask is not None:
+        raw_spread = ask - bid
+        if raw_spread > DUST_SPREAD_THRESHOLD:
+            logger.debug(
+                "dust_snapshot_skipped",
+                extra={
+                    "token_id": token_id[:20],
+                    "bid": bid, "ask": ask, "spread": raw_spread,
+                },
+            )
+            return False
 
     # Convert game_date string → date object for asyncpg binding
     game_date_obj: date | None = None
@@ -317,8 +360,9 @@ def main() -> None:
         help="Seconds between polls (default: 300 = 5 min)",
     )
     parser.add_argument(
-        "--window-hours", type=float, default=48.0,
-        help="Capture window before game start (default: 48h)",
+        "--window-hours", type=float, default=12.0,
+        help="Capture window before game start (default: 12h). NBA orderbooks "
+             "are mostly dust > 12h out; narrowing improves data density.",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
