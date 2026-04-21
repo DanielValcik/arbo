@@ -73,6 +73,14 @@ async def get_allocations(
             # Combined shadow + live wins/losses
             r = await session.execute(
                 sa.text("""
+                    WITH dedup AS (
+                        SELECT DISTINCT ON (condition_id, direction)
+                            qualified, would_pnl_per_share
+                        FROM shadow_variant_signals
+                        WHERE strategy = :s AND variant_id = :v
+                          AND signal_ts >= :c
+                        ORDER BY condition_id, direction, signal_ts ASC
+                    )
                     SELECT
                         COUNT(*) FILTER (
                             WHERE qualified AND would_pnl_per_share > 0
@@ -80,9 +88,7 @@ async def get_allocations(
                         COUNT(*) FILTER (
                             WHERE qualified AND would_pnl_per_share < 0
                         ) AS s_losses
-                    FROM shadow_variant_signals
-                    WHERE strategy = :s AND variant_id = :v
-                      AND signal_ts >= :c
+                    FROM dedup
                 """),
                 {"s": strategy, "v": v.variant_id, "c": cutoff},
             )

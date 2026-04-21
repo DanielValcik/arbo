@@ -183,6 +183,15 @@ class PerformanceAnalyzer:
 
         shadow = await session.execute(
             sa.text("""
+                WITH dedup AS (
+                    SELECT DISTINCT ON (condition_id, direction)
+                        qualified, resolution_outcome, would_pnl_per_share
+                    FROM shadow_variant_signals
+                    WHERE strategy = :s
+                      AND variant_id = :v
+                      AND signal_ts >= :cutoff
+                    ORDER BY condition_id, direction, signal_ts ASC
+                )
                 SELECT
                     COUNT(*) FILTER (WHERE qualified) AS n_qualified,
                     COUNT(*) FILTER (
@@ -194,10 +203,7 @@ class PerformanceAnalyzer:
                     COALESCE(SUM(would_pnl_per_share) FILTER (
                         WHERE qualified AND would_pnl_per_share IS NOT NULL
                     ), 0) AS s_pnl
-                FROM shadow_variant_signals
-                WHERE strategy = :s
-                  AND variant_id = :v
-                  AND signal_ts >= :cutoff
+                FROM dedup
             """),
             {"s": self.strategy, "v": variant.variant_id, "cutoff": cutoff},
         )

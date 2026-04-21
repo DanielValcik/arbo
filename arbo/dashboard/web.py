@@ -2704,6 +2704,14 @@ async def api_variants(
                 # Challengers have no paper_trades — their performance is
                 # inferred from counterfactual "would-have-filled" PnL.
                 shadow_stmt = sa.text("""
+                    WITH dedup AS (
+                        SELECT DISTINCT ON (condition_id, direction)
+                            qualified, resolution_outcome, would_pnl_per_share
+                        FROM shadow_variant_signals
+                        WHERE strategy = :strat
+                          AND variant_id = :vid
+                        ORDER BY condition_id, direction, signal_ts ASC
+                    )
                     SELECT
                         COUNT(*) AS n_signals,
                         COUNT(*) FILTER (WHERE qualified) AS n_qualified,
@@ -2719,9 +2727,7 @@ async def api_variants(
                         COALESCE(SUM(would_pnl_per_share) FILTER (
                             WHERE qualified AND would_pnl_per_share IS NOT NULL
                         ), 0) AS shadow_pnl_per_share
-                    FROM shadow_variant_signals
-                    WHERE strategy = :strat
-                      AND variant_id = :vid
+                    FROM dedup
                 """)
                 s_result = await session.execute(
                     shadow_stmt, {"strat": strategy, "vid": v.variant_id}

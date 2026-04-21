@@ -165,13 +165,19 @@ async def _retire_worst_challenger(strategy: str) -> str | None:
         for ch in challengers:
             r = await session.execute(
                 sa.text("""
+                    WITH dedup AS (
+                        SELECT DISTINCT ON (condition_id, direction)
+                            qualified, would_pnl_per_share
+                        FROM shadow_variant_signals
+                        WHERE strategy = :s AND variant_id = :v
+                        ORDER BY condition_id, direction, signal_ts ASC
+                    )
                     SELECT
                         COUNT(*) FILTER (WHERE qualified) AS n_qual,
                         COALESCE(SUM(would_pnl_per_share) FILTER (
                             WHERE qualified AND would_pnl_per_share IS NOT NULL
                         ), 0) AS pnl
-                    FROM shadow_variant_signals
-                    WHERE strategy = :s AND variant_id = :v
+                    FROM dedup
                 """),
                 {"s": strategy, "v": ch.variant_id},
             )

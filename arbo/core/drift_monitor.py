@@ -58,15 +58,23 @@ async def evaluate_strategy_drift(
     async with factory() as session:
         for v in active:
             # Use per-trade pnl_per_share as the signal (normalized)
+            # Dedupe per (condition_id, direction): one market = one sample.
+            # Raw table has 400× duplicates from periodic re-scans; PH stat
+            # on raw data explodes (seen 101+ on duplicated losing signal
+            # that was really 3 unique markets).
             r = await session.execute(
                 sa.text("""
-                    SELECT would_pnl_per_share
-                    FROM shadow_variant_signals
-                    WHERE strategy = :s
-                      AND variant_id = :v
-                      AND qualified = true
-                      AND would_pnl_per_share IS NOT NULL
-                      AND signal_ts >= :c
+                    SELECT would_pnl_per_share FROM (
+                        SELECT DISTINCT ON (condition_id, direction)
+                            condition_id, direction, signal_ts, would_pnl_per_share
+                        FROM shadow_variant_signals
+                        WHERE strategy = :s
+                          AND variant_id = :v
+                          AND qualified = true
+                          AND would_pnl_per_share IS NOT NULL
+                          AND signal_ts >= :c
+                        ORDER BY condition_id, direction, signal_ts ASC
+                    ) t
                     ORDER BY signal_ts ASC
                 """),
                 {"s": strategy, "v": v.variant_id, "c": cutoff},
