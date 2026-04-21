@@ -315,6 +315,17 @@
 - B3_15M: 4× inflation
 - B3: 1.3× (fast resolution, minimal dup)
 
+**Follow-up [2026-04-21]**: Next morning saw Page-Hinkley drift alert
+for D (PH=101.255, N=1657, mean=-0.0505 — all three variants identical).
+Root cause: my first fix plugged only `promotion_engine._fetch_pnl_series`.
+Four more readers of the same table were still reading raw rows:
+`drift_monitor`, `bandit_allocator` (MAB!), `pool_manager`, `performance_analyzer`,
+`dashboard/web.py`. Applied identical `DISTINCT ON (condition_id, direction)`
+dedup to all of them (commit 2f7b85e). Verified: drift PH dropped from
+101.255 → 0.0 on real N=5 markets. MAB was allocating capital on fake
+evidence — now fixed. Lesson: when fixing a data-layer bug, grep ALL
+consumers, not just the one that triggered the alert.
+
 **Evidence basis**: SQL count verified real unique markets; promotion engine test script confirmed 0 candidates post-fix. Shadow `would_pnl_per_share` formula only knows resolution outcome, not exit params → `ch_gb_loose`/`ch_sl_tight` were mathematically guaranteed to match champion. Promotion engine was incapable of evaluating exit-param changes.
 
 **Revert triggers armed**:
