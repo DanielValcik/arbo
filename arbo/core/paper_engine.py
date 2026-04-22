@@ -837,7 +837,8 @@ class PaperTradingEngine:
 
             factory = get_session_factory()
             async with factory() as session:
-                # Load positions
+                # Load positions from paper_positions (fast path — the mirror
+                # written by sync_positions_to_db on every buy/sell cycle).
                 result = await session.execute(select(PaperPositionDB))
                 db_positions = result.scalars().all()
                 for db_pos in db_positions:
@@ -861,10 +862,80 @@ class PaperTradingEngine:
                     )
                     self._positions[pos.token_id] = pos
 
+                # Safety-net: paper_positions is a FRAGILE mirror — it gets
+                # DELETE+INSERT re-written every sync. If sync ran while
+                # _positions was stale (after a restart that lost state, or
+                # during shutdown cleanup), paper_positions ends up short or
+                # empty and subsequent restarts compound the loss. resolve_market
+                # depends on _positions — a missing token = silent stuck-open
+                # paper_trades row. paper_trades is the authoritative trade log
+                # (WAL of every entry that ever happened), so we backfill from
+                # it for any open trades whose token is NOT in _positions.
+                # See: 2026-04-22 B2-13 incident (11 stuck trades 04-16 to 04-19).
+                from arbo.utils.db import PaperTrade as PaperTradeDB
+
+                known_tokens = set(self._positions.keys())
+                open_trades_result = await session.execute(
+                    select(PaperTradeDB)
+                    .where(PaperTradeDB.status == "open")
+                    .order_by(PaperTradeDB.placed_at)
+                )
+                open_trades = open_trades_result.scalars().all()
+                by_token: dict[str, list] = {}
+                for t in open_trades:
+                    if t.token_id in known_tokens:
+                        continue
+                    # Skip archived pre-reset rows (wallet was reset — no capital at stake).
+                    if t.notes and "pre_reset" in t.notes:
+                        continue
+                    # In dual mode: only backfill trades with a real CLOB fill
+                    # (filled/partial). Pure-paper rows have live_fill_status=None
+                    # and are also valid (paper sim only).
+                    td = t.trade_details or {}
+                    live_fill = td.get("live_fill_status")
+                    if live_fill is not None and live_fill not in ("filled", "partial"):
+                        continue
+                    by_token.setdefault(t.token_id, []).append(t)
+
+                for token_id, trades in by_token.items():
+                    total_size = Decimal("0")
+                    total_shares = Decimal("0")
+                    for t in trades:
+                        sz = Decimal(str(t.size))
+                        px = Decimal(str(t.price))
+                        total_size += sz
+                        if px > 0:
+                            total_shares += sz / px
+                    avg_price = (
+                        total_size / total_shares if total_shares > 0 else Decimal("0")
+                    )
+                    first = trades[0]
+                    pos = PaperPosition(
+                        market_condition_id=first.market_condition_id,
+                        token_id=token_id,
+                        side=first.side,
+                        avg_price=avg_price,
+                        size=total_size,
+                        shares=total_shares,
+                        layer=first.layer,
+                        strategy=first.strategy or "",
+                        opened_at=first.placed_at or datetime.now(UTC),
+                    )
+                    self._positions[token_id] = pos
+
+                if by_token:
+                    logger.warning(
+                        "paper_engine_backfilled_from_paper_trades",
+                        tokens=len(by_token),
+                        trades=sum(len(v) for v in by_token.values()),
+                        strategies=sorted({
+                            (t.strategy or "") for ts in by_token.values() for t in ts
+                        }),
+                        msg="paper_positions was missing rows — authoritative backfill from paper_trades",
+                    )
+
                 # Load trade_details for open positions (needed for METAR resolution)
                 if self._positions:
-                    from arbo.utils.db import PaperTrade as PaperTradeDB
-
                     token_ids = list(self._positions.keys())
                     td_result = await session.execute(
                         select(PaperTradeDB.token_id, PaperTradeDB.trade_details)

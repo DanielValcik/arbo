@@ -138,10 +138,16 @@ class TestLoadStateFromDb:
         snap_result = MagicMock()
         snap_result.scalars.return_value.first.return_value = mock_snap
 
+        # Backfill query: paper_trades WHERE status='open' — returns no extra rows.
+        backfill_result = MagicMock()
+        backfill_result.scalars.return_value.all.return_value = []
+
         # trade_details query returns empty result set
         td_result = MagicMock()
         td_result.__iter__ = MagicMock(return_value=iter([]))
-        mock_session.execute = AsyncMock(side_effect=[pos_result, td_result, snap_result])
+        mock_session.execute = AsyncMock(
+            side_effect=[pos_result, backfill_result, td_result, snap_result]
+        )
 
         with patch("arbo.utils.db.get_session_factory", return_value=mock_factory):
             await engine.load_state_from_db()
@@ -160,3 +166,144 @@ class TestLoadStateFromDb:
 
         # Engine still works with initial capital
         assert engine.balance == Decimal("2000")
+
+    @pytest.mark.asyncio
+    async def test_load_state_backfills_from_paper_trades_when_mirror_empty(
+        self, engine: PaperTradingEngine
+    ) -> None:
+        """If paper_positions mirror is empty but paper_trades has open rows,
+        backfill _positions from paper_trades (authoritative).
+
+        Regression guard for 2026-04-22 B2-13 incident: paper_positions wiped
+        by sync_positions_to_db mid-restart → resolve_market silently skipped
+        real-capital positions → stuck status='open' forever.
+        """
+        # paper_positions mirror is empty (the bug condition).
+        pos_result = MagicMock()
+        pos_result.scalars.return_value.all.return_value = []
+
+        # paper_trades has two open rows (one B2 live, one pure paper) plus
+        # a pre_reset row that MUST be skipped.
+        live_trade = MagicMock()
+        live_trade.token_id = "tok_live"
+        live_trade.market_condition_id = "cond_live"
+        live_trade.side = "BUY"
+        live_trade.price = Decimal("0.10")
+        live_trade.size = Decimal("2.50")
+        live_trade.layer = 0
+        live_trade.strategy = "B2"
+        live_trade.placed_at = datetime.now(UTC)
+        live_trade.notes = None
+        live_trade.trade_details = {"live_fill_status": "filled"}
+
+        paper_trade = MagicMock()
+        paper_trade.token_id = "tok_paper"
+        paper_trade.market_condition_id = "cond_paper"
+        paper_trade.side = "BUY"
+        paper_trade.price = Decimal("0.20")
+        paper_trade.size = Decimal("5.00")
+        paper_trade.layer = 0
+        paper_trade.strategy = "C"
+        paper_trade.placed_at = datetime.now(UTC)
+        paper_trade.notes = None
+        paper_trade.trade_details = None
+
+        archived_trade = MagicMock()
+        archived_trade.token_id = "tok_archived"
+        archived_trade.market_condition_id = "cond_archived"
+        archived_trade.side = "BUY"
+        archived_trade.price = Decimal("0.30")
+        archived_trade.size = Decimal("1.00")
+        archived_trade.layer = 0
+        archived_trade.strategy = "B2"
+        archived_trade.placed_at = datetime.now(UTC)
+        archived_trade.notes = "[pre_reset_2026-04-16_16:35]"
+        archived_trade.trade_details = {"live_fill_status": "filled"}
+
+        backfill_result = MagicMock()
+        backfill_result.scalars.return_value.all.return_value = [
+            live_trade,
+            paper_trade,
+            archived_trade,
+        ]
+
+        td_result = MagicMock()
+        td_result.__iter__ = MagicMock(return_value=iter([]))
+
+        snap_result = MagicMock()
+        snap_result.scalars.return_value.first.return_value = None
+
+        mock_session = AsyncMock()
+        mock_factory = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(
+            side_effect=[pos_result, backfill_result, td_result, snap_result]
+        )
+
+        with patch("arbo.utils.db.get_session_factory", return_value=mock_factory):
+            await engine.load_state_from_db()
+
+        assert "tok_live" in engine._positions
+        assert "tok_paper" in engine._positions
+        assert "tok_archived" not in engine._positions  # pre_reset filter
+        assert engine._positions["tok_live"].strategy == "B2"
+        assert engine._positions["tok_live"].size == Decimal("2.50")
+        # shares = size / price = 2.50 / 0.10 = 25
+        assert engine._positions["tok_live"].shares == Decimal("25")
+
+    @pytest.mark.asyncio
+    async def test_load_state_backfill_skips_tokens_already_in_mirror(
+        self, engine: PaperTradingEngine
+    ) -> None:
+        """Backfill must not override rows already loaded from paper_positions."""
+        mirror_pos = MagicMock()
+        mirror_pos.market_condition_id = "cond_1"
+        mirror_pos.token_id = "tok_shared"
+        mirror_pos.side = "BUY"
+        mirror_pos.avg_price = Decimal("0.50")
+        mirror_pos.size = Decimal("100.00")
+        mirror_pos.layer = 0
+        mirror_pos.strategy = "B3"
+        mirror_pos.current_price = None
+        mirror_pos.opened_at = datetime.now(UTC)
+
+        pos_result = MagicMock()
+        pos_result.scalars.return_value.all.return_value = [mirror_pos]
+
+        # paper_trades row for same token — should be skipped.
+        dup_trade = MagicMock()
+        dup_trade.token_id = "tok_shared"
+        dup_trade.market_condition_id = "cond_1"
+        dup_trade.side = "BUY"
+        dup_trade.price = Decimal("0.99")  # different → would override if used
+        dup_trade.size = Decimal("999.00")
+        dup_trade.layer = 0
+        dup_trade.strategy = "B3"
+        dup_trade.placed_at = datetime.now(UTC)
+        dup_trade.notes = None
+        dup_trade.trade_details = {"live_fill_status": "filled"}
+
+        backfill_result = MagicMock()
+        backfill_result.scalars.return_value.all.return_value = [dup_trade]
+
+        td_result = MagicMock()
+        td_result.__iter__ = MagicMock(return_value=iter([]))
+
+        snap_result = MagicMock()
+        snap_result.scalars.return_value.first.return_value = None
+
+        mock_session = AsyncMock()
+        mock_factory = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(
+            side_effect=[pos_result, backfill_result, td_result, snap_result]
+        )
+
+        with patch("arbo.utils.db.get_session_factory", return_value=mock_factory):
+            await engine.load_state_from_db()
+
+        # The mirror row wins — backfill is a fallback only.
+        assert engine._positions["tok_shared"].avg_price == Decimal("0.50")
+        assert engine._positions["tok_shared"].size == Decimal("100.00")
