@@ -279,21 +279,31 @@ def _evaluate_strategy(stats: dict, window_hours: int) -> tuple[str, list[str]]:
     verdict = "ok"
     notes: list[str] = []
 
-    # Bug detection: zero activity (placed AND resolved both 0) in window.
-    # Only fires for strategies that historically trade often enough that
-    # 12h of silence is genuinely anomalous — otherwise Poisson variance
-    # produces false positives on sparse-trading strategies.
+    # Activity gap detection. Grade by recency of last trade:
+    #   • <= 1.5d and zero window  → acute break (traded yesterday, gone today)
+    #   • >  1.5d and zero window  → chronic decline (filter too tight, market off)
+    # Only on strategies with a historical daily rate high enough that 12h
+    # silence is statistically anomalous (Poisson-variance safe).
     if (
         stats["window_trades"] == 0
         and stats["window_resolved"] == 0
         and stats["days_active"] > 1
         and stats["daily_trade_rate"] >= MIN_DAILY_RATE_FOR_ZERO_WINDOW_BUG
     ):
-        notes.append(
-            f"zadna aktivita za poslednich {window_hours}h "
-            f"(historicky ~{stats['daily_trade_rate']:.1f}/den) — system moznym problemem"
-        )
-        verdict = _escalate(verdict, "bug_detected")
+        days_quiet = stats["days_since_last_trade"] or 0
+        if days_quiet <= 1.5:
+            notes.append(
+                f"zadna aktivita za poslednich {window_hours}h "
+                f"(historicky ~{stats['daily_trade_rate']:.1f}/den) — "
+                f"akutni pokles, posledni trade pred {days_quiet:.1f}d"
+            )
+            verdict = _escalate(verdict, "bug_detected")
+        else:
+            notes.append(
+                f"tichy {days_quiet:.1f}d (historicky ~{stats['daily_trade_rate']:.1f}/den) — "
+                f"filtr moznym prisne nebo trh mimo rezim"
+            )
+            verdict = _escalate(verdict, "needs_attention")
 
     # Trade-rate check (only strategies with a baseline — we know what to expect)
     if (

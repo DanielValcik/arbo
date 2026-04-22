@@ -93,19 +93,35 @@ class TestEvaluateStrategy:
         assert v == "ok"
         assert notes == []
 
-    def test_active_zero_window_triggers_bug_on_high_frequency(self) -> None:
-        # High-frequency strategy (≥2/day) with zero window activity → real bug.
+    def test_acute_activity_gap_high_frequency_triggers_bug(self) -> None:
+        # Traded yesterday, silent today, high-freq strategy → real bug.
         v, notes = _evaluate_strategy(
             _stats(
                 window_trades=0,
                 window_resolved=0,
                 days_active=10,
                 daily_trade_rate=5.0,
+                days_since_last_trade=0.8,
             ),
             window_hours=12,
         )
         assert v == "bug_detected"
-        assert any("zadna aktivita" in n for n in notes)
+        assert any("akutni pokles" in n for n in notes)
+
+    def test_chronic_activity_gap_downgrades_to_attention(self) -> None:
+        # Silent for 3 days — not acute, downgrade to needs_attention.
+        v, notes = _evaluate_strategy(
+            _stats(
+                window_trades=0,
+                window_resolved=0,
+                days_active=10,
+                daily_trade_rate=5.0,
+                days_since_last_trade=3.0,
+            ),
+            window_hours=12,
+        )
+        assert v == "needs_attention"
+        assert any("tichy" in n for n in notes)
 
     def test_active_zero_window_ignored_on_low_frequency(self) -> None:
         # Low-frequency strategy (<2/day) with zero window activity is
