@@ -1725,6 +1725,13 @@ class RDHOrchestrator:
         # Auto-redeem resolved positions (gasless, every 10 min)
         task_defs.append(("auto_redeem", self._run_auto_redeem, 600))
 
+        # Position mirror divergence monitor: detects the class of bug
+        # described in LEARNINGS B2-16 (paper_trades.status='open' but
+        # paper_positions missing the row → silent stuck trade). Runs hourly.
+        task_defs.append(
+            ("position_divergence_check", self._run_position_divergence_check, 3600)
+        )
+
         for name, coro_factory, interval in task_defs:
             state = TaskState(name=name)
             self._tasks[name] = state
@@ -3483,6 +3490,144 @@ class RDHOrchestrator:
                 )
         except Exception as e:
             logger.warning("auto_redeem_task_error", error=str(e))
+
+    async def _run_position_divergence_check(self) -> None:
+        """Detect stuck-open paper_trades whose paper_positions mirror row is missing.
+
+        Surfaces the class of bug from LEARNINGS B2-16: `paper_positions` got
+        DELETE-wiped mid-sync while `paper_trades` (WAL) still shows the trade
+        as open. Without this check, the only signal is a silent dashboard
+        counter drift — the stuck row stays 'open' indefinitely and PnL
+        never lands in any counter.
+
+        Alert rules:
+          - WARN if any strategy has ≥1 open paper_trades row for a token
+            that's NOT in `paper_positions` AND the trade is older than 24h
+            (younger rows may just be between place_trade and first sync).
+          - Slack alert on top of the log so the operator sees it.
+        """
+        try:
+            from arbo.utils.db import PaperPosition, PaperTrade, get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                # paper_trades: open + has a real fill (or pure paper) + not
+                # pre_reset archived + older than 24h.
+                cutoff = datetime.now(UTC) - timedelta(hours=24)
+                open_rows = (
+                    await session.execute(
+                        sa.select(
+                            PaperTrade.id,
+                            PaperTrade.strategy,
+                            PaperTrade.token_id,
+                            PaperTrade.placed_at,
+                            PaperTrade.trade_details,
+                        )
+                        .where(PaperTrade.status == "open")
+                        .where(PaperTrade.placed_at < cutoff)
+                        .where(
+                            sa.or_(
+                                PaperTrade.notes.is_(None),
+                                ~PaperTrade.notes.ilike("%pre_reset%"),
+                            )
+                        )
+                    )
+                ).all()
+
+                mirror_tokens = set(
+                    (
+                        await session.execute(sa.select(PaperPosition.token_id))
+                    ).scalars().all()
+                )
+
+            orphans_by_strategy: dict[str, list[dict]] = {}
+            for row in open_rows:
+                trade_id, strategy, token_id, placed_at, td = row
+                if token_id in mirror_tokens:
+                    continue
+                # live_fill_status check: same logic as load_state_from_db backfill.
+                live_fill = (td or {}).get("live_fill_status")
+                if live_fill is not None and live_fill not in ("filled", "partial"):
+                    continue
+                orphans_by_strategy.setdefault(strategy or "unknown", []).append(
+                    {
+                        "id": trade_id,
+                        "token_id": token_id[:20],
+                        "placed_at": placed_at.isoformat() if placed_at else None,
+                        "age_h": int(
+                            (datetime.now(UTC) - placed_at).total_seconds() / 3600
+                        )
+                        if placed_at
+                        else 0,
+                    }
+                )
+
+            if not orphans_by_strategy:
+                logger.info("position_divergence_ok")
+                return
+
+            total = sum(len(v) for v in orphans_by_strategy.values())
+            logger.warning(
+                "position_divergence_detected",
+                total_orphans=total,
+                by_strategy={k: len(v) for k, v in orphans_by_strategy.items()},
+                oldest_ids={
+                    k: [o["id"] for o in sorted(v, key=lambda x: x["age_h"], reverse=True)[:3]]
+                    for k, v in orphans_by_strategy.items()
+                },
+            )
+
+            # AUTO-RECOVER: push orphans back into paper_engine._positions so
+            # the next resolution_check cycle can process them. Without this,
+            # the stuck trade stays stuck until next service restart.
+            backfilled = 0
+            if self._paper_engine is not None:
+                try:
+                    backfilled = await self._paper_engine.backfill_orphan_positions()
+                    logger.info(
+                        "position_divergence_auto_recovered",
+                        tokens_restored=backfilled,
+                    )
+                except Exception as recover_err:
+                    logger.warning(
+                        "position_divergence_auto_recover_error",
+                        error=str(recover_err),
+                    )
+
+            # Slack alert — dashboard-channel, operator-visible
+            if self._slack_bot is not None:
+                try:
+                    lines = [f":warning: *POSITION DIVERGENCE* — {total} orphan rows"]
+                    for strat, rows in orphans_by_strategy.items():
+                        oldest = max(r["age_h"] for r in rows)
+                        ids = ", ".join(str(r["id"]) for r in rows[:5])
+                        more = f" +{len(rows) - 5}" if len(rows) > 5 else ""
+                        lines.append(
+                            f"• *{strat}*: {len(rows)} rows (oldest {oldest}h) "
+                            f"ids=[{ids}{more}]"
+                        )
+                    auto_msg = (
+                        f"Auto-recovered {backfilled} tokens into paper_engine; "
+                        f"next resolution_check will process them. "
+                        if backfilled
+                        else ""
+                    )
+                    lines.append(
+                        "paper_trades.status='open' but paper_positions row missing. "
+                        + auto_msg
+                        + "If repeats: investigate sync_positions_to_db race."
+                    )
+                    await self._slack_bot._post(
+                        "C0APX4K8Z2N",
+                        text="\n".join(lines),
+                    )
+                except Exception as slack_err:
+                    logger.debug(
+                        "position_divergence_slack_error",
+                        error=str(slack_err),
+                    )
+        except Exception as e:
+            logger.warning("position_divergence_check_error", error=str(e))
 
     async def _resolve_b3_from_redeem(
         self,

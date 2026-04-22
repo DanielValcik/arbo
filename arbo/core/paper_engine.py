@@ -871,71 +871,13 @@ class PaperTradingEngine:
                 # paper_trades row. paper_trades is the authoritative trade log
                 # (WAL of every entry that ever happened), so we backfill from
                 # it for any open trades whose token is NOT in _positions.
-                # See: 2026-04-22 B2-13 incident (11 stuck trades 04-16 to 04-19).
-                from arbo.utils.db import PaperTrade as PaperTradeDB
-
-                known_tokens = set(self._positions.keys())
-                open_trades_result = await session.execute(
-                    select(PaperTradeDB)
-                    .where(PaperTradeDB.status == "open")
-                    .order_by(PaperTradeDB.placed_at)
-                )
-                open_trades = open_trades_result.scalars().all()
-                by_token: dict[str, list] = {}
-                for t in open_trades:
-                    if t.token_id in known_tokens:
-                        continue
-                    # Skip archived pre-reset rows (wallet was reset — no capital at stake).
-                    if t.notes and "pre_reset" in t.notes:
-                        continue
-                    # In dual mode: only backfill trades with a real CLOB fill
-                    # (filled/partial). Pure-paper rows have live_fill_status=None
-                    # and are also valid (paper sim only).
-                    td = t.trade_details or {}
-                    live_fill = td.get("live_fill_status")
-                    if live_fill is not None and live_fill not in ("filled", "partial"):
-                        continue
-                    by_token.setdefault(t.token_id, []).append(t)
-
-                for token_id, trades in by_token.items():
-                    total_size = Decimal("0")
-                    total_shares = Decimal("0")
-                    for t in trades:
-                        sz = Decimal(str(t.size))
-                        px = Decimal(str(t.price))
-                        total_size += sz
-                        if px > 0:
-                            total_shares += sz / px
-                    avg_price = (
-                        total_size / total_shares if total_shares > 0 else Decimal("0")
-                    )
-                    first = trades[0]
-                    pos = PaperPosition(
-                        market_condition_id=first.market_condition_id,
-                        token_id=token_id,
-                        side=first.side,
-                        avg_price=avg_price,
-                        size=total_size,
-                        shares=total_shares,
-                        layer=first.layer,
-                        strategy=first.strategy or "",
-                        opened_at=first.placed_at or datetime.now(UTC),
-                    )
-                    self._positions[token_id] = pos
-
-                if by_token:
-                    logger.warning(
-                        "paper_engine_backfilled_from_paper_trades",
-                        tokens=len(by_token),
-                        trades=sum(len(v) for v in by_token.values()),
-                        strategies=sorted({
-                            (t.strategy or "") for ts in by_token.values() for t in ts
-                        }),
-                        msg="paper_positions was missing rows — authoritative backfill from paper_trades",
-                    )
+                # See: 2026-04-22 B2-16 incident (14 stuck trades 04-16 to 04-19).
+                await self._backfill_positions_from_paper_trades(session)
 
                 # Load trade_details for open positions (needed for METAR resolution)
                 if self._positions:
+                    from arbo.utils.db import PaperTrade as PaperTradeDB
+
                     token_ids = list(self._positions.keys())
                     td_result = await session.execute(
                         select(PaperTradeDB.token_id, PaperTradeDB.trade_details)
@@ -992,6 +934,102 @@ class PaperTradingEngine:
 
         except (SQLAlchemyError, ImportError, ValueError, TypeError) as e:
             logger.warning("load_state_from_db_failed", error=str(e))
+
+    async def _backfill_positions_from_paper_trades(self, session) -> int:
+        """Backfill `_positions` from `paper_trades WHERE status='open'`.
+
+        Reusable safety-net: rebuilds `_positions` entries for any open trade
+        whose token isn't already tracked. Safe to call any time — on startup
+        (after paper_positions mirror load) OR mid-session (when the
+        divergence monitor detects orphans). Skips pre-reset archival rows
+        and not-filled live orphans. Returns count of tokens backfilled.
+
+        See: 2026-04-22 B2-16.
+        """
+        from sqlalchemy import select as _select
+
+        from arbo.utils.db import PaperTrade as PaperTradeDB
+
+        known_tokens = set(self._positions.keys())
+        open_trades_result = await session.execute(
+            _select(PaperTradeDB)
+            .where(PaperTradeDB.status == "open")
+            .order_by(PaperTradeDB.placed_at)
+        )
+        open_trades = open_trades_result.scalars().all()
+        by_token: dict[str, list] = {}
+        for t in open_trades:
+            if t.token_id in known_tokens:
+                continue
+            # Skip archived pre-reset rows (wallet was reset — no capital at stake).
+            if t.notes and "pre_reset" in t.notes:
+                continue
+            # In dual mode: only backfill trades with a real CLOB fill
+            # (filled/partial). Pure-paper rows have live_fill_status=None
+            # and are also valid (paper sim only).
+            td = t.trade_details or {}
+            live_fill = td.get("live_fill_status")
+            if live_fill is not None and live_fill not in ("filled", "partial"):
+                continue
+            by_token.setdefault(t.token_id, []).append(t)
+
+        for token_id, trades in by_token.items():
+            total_size = Decimal("0")
+            total_shares = Decimal("0")
+            for t in trades:
+                sz = Decimal(str(t.size))
+                px = Decimal(str(t.price))
+                total_size += sz
+                if px > 0:
+                    total_shares += sz / px
+            avg_price = (
+                total_size / total_shares if total_shares > 0 else Decimal("0")
+            )
+            first = trades[0]
+            pos = PaperPosition(
+                market_condition_id=first.market_condition_id,
+                token_id=token_id,
+                side=first.side,
+                avg_price=avg_price,
+                size=total_size,
+                shares=total_shares,
+                layer=first.layer,
+                strategy=first.strategy or "",
+                opened_at=first.placed_at or datetime.now(UTC),
+            )
+            self._positions[token_id] = pos
+
+        if by_token:
+            logger.warning(
+                "paper_engine_backfilled_from_paper_trades",
+                tokens=len(by_token),
+                trades=sum(len(v) for v in by_token.values()),
+                strategies=sorted({
+                    (t.strategy or "") for ts in by_token.values() for t in ts
+                }),
+                msg="paper_positions was missing rows — authoritative backfill from paper_trades",
+            )
+        return len(by_token)
+
+    async def backfill_orphan_positions(self) -> int:
+        """Public wrapper: open a session and backfill orphans. Safe mid-session.
+
+        Intended for the hourly divergence monitor in main_rdh:
+        when paper_trades has open rows not in paper_positions, pull them back
+        into `_positions` so the next resolution_check cycle can resolve them
+        instead of leaving them stuck forever.
+        """
+        try:
+            from sqlalchemy.exc import SQLAlchemyError
+
+            from arbo.utils.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                return await self._backfill_positions_from_paper_trades(session)
+        except (SQLAlchemyError, ImportError, ValueError, TypeError) as e:
+            logger.warning("backfill_orphan_positions_failed", error=str(e))
+            return 0
 
     def get_stats(self) -> dict[str, object]:
         """Get summary statistics."""
