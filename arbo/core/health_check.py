@@ -247,17 +247,43 @@ async def _collect_strategy_stats(
     }
 
 
+def _is_operator_stopped(strategy: str) -> bool:
+    """Check if strategy is explicitly stopped via .env (operator action).
+
+    Two conventions are in use in the codebase:
+      - `{STRATEGY}_EXECUTION_MODE=stopped` (B3, B3_15M, C2, D, D_UFC)
+      - `DISABLE_{STRATEGY}=1` (C, C2)
+
+    A stopped strategy is expected to be silent — the silence is NOT a bug,
+    so we shouldn't emit NEEDS_ATTENTION. The operator already knows.
+    """
+    import os as _os
+
+    mode = _os.environ.get(f"{strategy}_EXECUTION_MODE", "").lower()
+    if mode == "stopped":
+        return True
+    disable = _os.environ.get(f"DISABLE_{strategy}", "").strip().lower()
+    if disable in ("1", "true", "yes", "on"):
+        return True
+    return False
+
+
 def _evaluate_strategy(stats: dict, window_hours: int) -> tuple[str, list[str]]:
     """Produce per-strategy verdict + human notes.
 
     retired / never_traded → ok verdict, no notes (filtered out by caller).
     dormant → informational note, no verdict escalation (strategy paused).
     active → full checks (window activity, WR vs baseline, P&L trajectory).
+    Operator-stopped (EXECUTION_MODE=stopped or DISABLE_X=1) → ok, silent.
     """
     strategy = stats["strategy"]
     status = stats["status"]
 
     if status in ("retired", "never_traded"):
+        return "ok", []
+
+    # Operator-stopped strategies are expected to be silent. Don't flag them.
+    if _is_operator_stopped(strategy):
         return "ok", []
 
     baseline = STRATEGY_BASELINES.get(strategy)

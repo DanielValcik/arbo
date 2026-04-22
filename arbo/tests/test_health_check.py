@@ -123,6 +123,45 @@ class TestEvaluateStrategy:
         assert v == "needs_attention"
         assert any("tichy" in n for n in notes)
 
+    def test_operator_stopped_via_execution_mode_is_silent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # B3_EXECUTION_MODE=stopped in .env → don't alert even after days
+        # of silence. Operator explicitly stopped it.
+        monkeypatch.setenv("B3_EXECUTION_MODE", "stopped")
+        v, notes = _evaluate_strategy(
+            _stats(
+                strategy="B3",
+                window_trades=0,
+                window_resolved=0,
+                days_active=30,
+                daily_trade_rate=138.0,
+                days_since_last_trade=4.0,
+            ),
+            window_hours=12,
+        )
+        assert v == "ok"
+        assert notes == []
+
+    def test_operator_stopped_via_disable_flag_is_silent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Alternative convention: DISABLE_C=1.
+        monkeypatch.setenv("DISABLE_C", "1")
+        v, notes = _evaluate_strategy(
+            _stats(
+                strategy="C",
+                window_trades=0,
+                window_resolved=0,
+                days_active=30,
+                daily_trade_rate=5.0,
+                days_since_last_trade=4.0,
+            ),
+            window_hours=12,
+        )
+        assert v == "ok"
+        assert notes == []
+
     def test_active_zero_window_ignored_on_low_frequency(self) -> None:
         # Low-frequency strategy (<2/day) with zero window activity is
         # statistically expected — Poisson variance too high to flag.
