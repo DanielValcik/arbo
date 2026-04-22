@@ -287,6 +287,47 @@ or the framework is ceremony without safety.
 
 ---
 
+### G19. Single-strategy health checks spam when a strategy is intentionally disabled
+
+**Observed 2026-04-22:** operator disabled Strategy C (last paper trade
+2026-03-28). The 12h health-check scheduler kept firing
+`BUG_DETECTED: Zadna aktivita za poslednich 12 hodin` and
+`Win rate 58.2% se vyrazne lisi od backtestu (37.6%)` every 24h (dedup
+window). Both alerts were technically correct — the check only looked at
+Strategy C, so absence of C trades = absence of any trades. But they
+were meaningless: A/B/B2/B3/B3_15M/C2/D_EPL were all trading fine.
+
+Root cause: `arbo/core/health_check.py:run_health_check` hard-coded
+`PaperTrade.strategy == "C"` everywhere. No concept of
+"active vs retired strategy".
+
+**Fix (commit pending):** refactored to per-strategy evaluator. Behavior:
+- auto-discover strategies with trades in last 14d
+- classify each as `active` (≤3d since last trade), `dormant` (3-14d),
+  `retired` (>14d + no open positions)
+- `retired` / `never_traded` → silent, don't escalate overall verdict
+- `dormant` → informational note, still ok verdict
+- `active` → full checks (zero-activity, trade rate vs baseline, WR drift,
+  P&L trajectory). Baseline-dependent checks (WR, rate, P&L) only run
+  for strategies listed in `STRATEGY_BASELINES` (currently C, C2).
+- Dashboard-compat: Strategy C top-level keys in `report.metrics`
+  preserved so `/api/health-checks` timeline keeps working.
+
+**Rule for future health checks:** any "no activity" signal must
+distinguish *intentionally disabled* from *broken*. Use time-since-last-trade
++ open-positions as the classifier. When a strategy is gone, *be silent*,
+don't re-emit stale alarms. When a strategy that traded yesterday suddenly
+goes dark, *do alert* — that's a genuine bug.
+
+**How to remove a strategy from tracking:** just stop placing trades for
+14 days. The auto-discovery loop won't re-include it. To explicitly
+permanently retire it, remove from `STRATEGY_BASELINES` and rely on the
+discovery threshold. To add a brand-new strategy with baseline checks,
+add its entry to `STRATEGY_BASELINES` dict (requires a known
+`oos_wr` / `oos_daily_trades` / `oos_daily_pnl`).
+
+---
+
 ### G18. Strategy runners must swallow transient errors, not let them accumulate
 
 **Observed 2026-04-21 04:10 UTC:** `strategy_B2` task hit
