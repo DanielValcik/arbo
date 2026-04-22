@@ -95,13 +95,17 @@ MIN_COMPARISON_TRADES = 20  # Need at least this many for meaningful comparison
 WIN_RATE_WARNING_BAND = 0.15  # ±15pp from baseline before warning
 DAILY_TRADES_WARNING_LOW = 0.5  # Less than 0.5 trades/day = suspicious
 
-# Per-strategy tracking thresholds. Rationale in LEARNINGS.md (Global §G-17).
-# If a strategy hasn't traded in RETIRED_AFTER_DAYS, it's treated as intentionally
-# disabled — no verdict escalation, informational note only.
-# DORMANT_AFTER_DAYS covers the gap where a strategy paused but may return.
+# Per-strategy tracking thresholds. Rationale in LEARNINGS.md (Global §G-19).
+# Retirement is decided purely by time-since-last-placement — orphan open
+# positions from weeks ago don't mean the strategy is "still running".
 ACTIVITY_DISCOVERY_DAYS = 14  # strategies with trades in last N days are auto-tracked
-DORMANT_AFTER_DAYS = 3        # no trade >3d → dormant (informational, no bug)
+DORMANT_AFTER_DAYS = 7        # no trade >7d → dormant (weekend + market-cycle tolerant)
 RETIRED_AFTER_DAYS = 14       # no trade >14d → retired (excluded from overall verdict)
+
+# Zero-window bug detection only fires on strategies that historically trade
+# often enough that 12h of silence is statistically a real failure. At <2/day
+# a 12h zero-window has too much Poisson variance to flag reliably.
+MIN_DAILY_RATE_FOR_ZERO_WINDOW_BUG = 2.0
 
 # Strategies that have a backtest baseline — only these get WR / P&L-trajectory checks.
 # All other strategies get activity-only checks (is it still producing trades?).
@@ -206,10 +210,12 @@ async def _collect_strategy_stats(
     )
     daily_trade_rate = total_trades / days_active if days_active > 0 else 0
 
-    # Activity classification — drives verdict escalation logic
+    # Activity classification — decided on time since last *placement* only.
+    # Orphan unresolved positions from weeks ago do NOT mean the strategy is
+    # still running; the placement clock is what matters.
     if days_since_last_trade is None:
         status = "never_traded"
-    elif days_since_last_trade > RETIRED_AFTER_DAYS and open_positions == 0:
+    elif days_since_last_trade > RETIRED_AFTER_DAYS:
         status = "retired"
     elif days_since_last_trade > DORMANT_AFTER_DAYS:
         status = "dormant"
@@ -254,26 +260,38 @@ def _evaluate_strategy(stats: dict, window_hours: int) -> tuple[str, list[str]]:
     if status in ("retired", "never_traded"):
         return "ok", []
 
+    baseline = STRATEGY_BASELINES.get(strategy)
+
     if status == "dormant":
+        # Only baseline strategies get a dormancy note — they have known
+        # expected activity, so dormancy is informative. For strategies
+        # without a baseline, dormancy is indistinguishable from "this
+        # strategy naturally trades at low frequency" and would spam.
         days = stats["days_since_last_trade"]
-        return "ok", [
-            f"strategie neaktivní {days:.1f}d (posledni trade). "
-            f"Za >{RETIRED_AFTER_DAYS}d bude oznacena jako retired."
-        ]
+        if baseline:
+            return "ok", [
+                f"strategie neaktivní {days:.1f}d (posledni trade). "
+                f"Za >{RETIRED_AFTER_DAYS}d bude oznacena jako retired."
+            ]
+        return "ok", []
 
     # status == "active"
     verdict = "ok"
     notes: list[str] = []
-    baseline = STRATEGY_BASELINES.get(strategy)
 
-    # Bug detection: zero activity (placed AND resolved both 0) in window
+    # Bug detection: zero activity (placed AND resolved both 0) in window.
+    # Only fires for strategies that historically trade often enough that
+    # 12h of silence is genuinely anomalous — otherwise Poisson variance
+    # produces false positives on sparse-trading strategies.
     if (
         stats["window_trades"] == 0
         and stats["window_resolved"] == 0
         and stats["days_active"] > 1
+        and stats["daily_trade_rate"] >= MIN_DAILY_RATE_FOR_ZERO_WINDOW_BUG
     ):
         notes.append(
-            f"zadna aktivita za poslednich {window_hours}h — system moznym problemem"
+            f"zadna aktivita za poslednich {window_hours}h "
+            f"(historicky ~{stats['daily_trade_rate']:.1f}/den) — system moznym problemem"
         )
         verdict = _escalate(verdict, "bug_detected")
 

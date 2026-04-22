@@ -10,6 +10,7 @@ import pytest
 
 from arbo.core.health_check import (
     DORMANT_AFTER_DAYS,
+    MIN_DAILY_RATE_FOR_ZERO_WINDOW_BUG,
     RETIRED_AFTER_DAYS,
     STRATEGY_BASELINES,
     _escalate,
@@ -67,26 +68,61 @@ class TestEvaluateStrategy:
         assert v == "ok"
         assert notes == []
 
-    def test_dormant_notes_but_ok_verdict(self) -> None:
+    def test_dormant_baseline_strategy_notes_but_ok_verdict(self) -> None:
+        # Strategy C has a baseline → dormancy is notable.
         v, notes = _evaluate_strategy(
-            _stats(status="dormant", days_since_last_trade=5.2), window_hours=12
+            _stats(strategy="C", status="dormant", days_since_last_trade=8.2),
+            window_hours=12,
         )
         assert v == "ok"
         assert len(notes) == 1
-        assert "5.2" in notes[0]
+        assert "8.2" in notes[0]
+
+    def test_dormant_non_baseline_strategy_silent(self) -> None:
+        # Strategy A has no baseline → dormancy is silent (indistinguishable
+        # from "naturally low-frequency strategy").
+        v, notes = _evaluate_strategy(
+            _stats(strategy="A", status="dormant", days_since_last_trade=8.2),
+            window_hours=12,
+        )
+        assert v == "ok"
+        assert notes == []
 
     def test_active_healthy_c_no_warnings(self) -> None:
         v, notes = _evaluate_strategy(_stats(), window_hours=12)
         assert v == "ok"
         assert notes == []
 
-    def test_active_zero_window_triggers_bug(self) -> None:
+    def test_active_zero_window_triggers_bug_on_high_frequency(self) -> None:
+        # High-frequency strategy (≥2/day) with zero window activity → real bug.
         v, notes = _evaluate_strategy(
-            _stats(window_trades=0, window_resolved=0, days_active=10),
+            _stats(
+                window_trades=0,
+                window_resolved=0,
+                days_active=10,
+                daily_trade_rate=5.0,
+            ),
             window_hours=12,
         )
         assert v == "bug_detected"
         assert any("zadna aktivita" in n for n in notes)
+
+    def test_active_zero_window_ignored_on_low_frequency(self) -> None:
+        # Low-frequency strategy (<2/day) with zero window activity is
+        # statistically expected — Poisson variance too high to flag.
+        v, notes = _evaluate_strategy(
+            _stats(
+                window_trades=0,
+                window_resolved=0,
+                days_active=10,
+                daily_trade_rate=1.0,
+                total_wr=0.375,  # within baseline band to avoid WR warning
+                total_resolved=80,
+            ),
+            window_hours=12,
+        )
+        assert v == "ok"
+        assert notes == []
 
     def test_wr_drift_on_baseline_strategy(self) -> None:
         v, notes = _evaluate_strategy(
@@ -136,6 +172,9 @@ class TestEvaluateStrategy:
 class TestThresholdsSanity:
     def test_retired_threshold_gte_dormant(self) -> None:
         assert RETIRED_AFTER_DAYS >= DORMANT_AFTER_DAYS
+
+    def test_min_daily_rate_positive(self) -> None:
+        assert MIN_DAILY_RATE_FOR_ZERO_WINDOW_BUG > 0
 
 
 if __name__ == "__main__":
