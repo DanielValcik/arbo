@@ -524,6 +524,85 @@ First production day is a chaotic bug hunt; see entries below.
 
 ### Bugs & Fixes (chronological, 2026-04-16)
 
+#### B2-16. Silent stuck-open paper_trades after paper_positions wipe (2026-04-22)
+**What:** Dashboard showed "Žádné otevřené pozice" (0 open) for B2 while
+DB had 14 `paper_trades.status='open'` rows for B2 — 11 archived
+`[pre_reset_2026-04-16]` (correctly excluded) and 3 legitimate post-dual
+positions with `live_fill_status='filled'` from 04-17 / 04-18 / 04-19.
+Trade 5332 (BTC $80k April 21) market resolved NO at 04-21 EOD, became
+`redeemable=True` on-chain with `realizedPnl=-0.6996` visible via
+data-api — but `paper_trades.status` stayed `'open'` and `actual_pnl`
+stayed NULL indefinitely. Dashboard B2 counters excluded this $2.73 loss
+from the -$0.33 live total.
+
+**Why:**
+1. `paper_positions` is a fragile DB mirror — `sync_positions_to_db()`
+   (paper_engine.py:663) `DELETE`s all rows then re-`INSERT`s from
+   `self._positions` on every buy/sell event. If sync runs while
+   `_positions` is stale (e.g., during shutdown cleanup or right after
+   a restart that failed to load some tokens), `paper_positions` ends up
+   truncated.
+2. Apr 21 06:06:38 systemd restart (graceful SIGTERM → Stopped → Started
+   at 06:07:05): pre-restart `positions=35` loaded OK, post-restart
+   `positions=2` — 33 lost. Between the two restarts, a sync wrote the
+   depleted state.
+3. `_run_resolution_checker` iterates `paper_engine.open_positions()` to
+   detect market resolutions. For tokens missing from `_positions`, the
+   token is silently skipped — `resolve_market()` never called, so
+   `paper_trades.status` is never updated and `paper_engine.resolve_market`
+   never posts PnL to `_balance`, `_per_strategy_realized_pnl`, or
+   risk_manager. The position is invisible until the wallet is manually
+   reconciled.
+4. Dashboard `/api/positions` reads `paper_positions` (the mirror), not
+   `paper_trades` (the WAL) — same stale state as `_positions`.
+5. B2 never wrote its own rows into `paper_positions` via strategy-level
+   sync, unlike B3/B3_15M/D_EPL, so the B2 branch of the mirror was
+   uniquely fragile: no independent recovery path.
+
+**Fix:**
+- `load_state_from_db` (paper_engine.py:828) now does a second-pass
+  backfill: any `paper_trades WHERE status='open'` token NOT in
+  `_positions` after the mirror load is rebuilt from the trade log
+  (weighted-avg price, summed size/shares). Skips `[pre_reset]`-tagged
+  archival rows and `live_fill_status NOT IN (filled, partial)` orphans.
+  Logs `paper_engine_backfilled_from_paper_trades` WARNING with token
+  count + strategy list on every non-empty backfill.
+- Regression tests: `test_load_state_backfills_from_paper_trades_when_mirror_empty`,
+  `test_load_state_backfill_skips_tokens_already_in_mirror`.
+- Manual DB patch for stuck trade 5332: `status='lost'`,
+  `actual_pnl=-2.73`, `exit_reason='auto_redeemed_lost'`. Commit `e99ac2e`.
+- Post-deploy verification: first restart logged
+  `paper_engine_backfilled tokens=47 strategies=[A, B, B2, C, D_EPL]`,
+  positions recovered 2→44. Trade 5432 (BTC $78k) immediately exited
+  via edge_lost for +$2.69.
+
+**Lesson:**
+1. A delete-and-rewrite mirror is fragile. If the authoritative source
+   of truth is elsewhere (here: `paper_trades` is an append-only WAL),
+   the mirror should be treated as a cache with a fallback recovery
+   path, not as primary state.
+2. When a shutdown handler writes state, it must not corrupt that state
+   on partial execution. sync_positions_to_db's unconditional DELETE
+   means even one partial-state sync wipes history. Guard the DELETE
+   against "suspiciously small" `_positions` (e.g., skip if count
+   dropped ≥50% in one call without corresponding resolve events).
+3. Dashboards that read `paper_positions` will hide bugs like this.
+   Cross-reference against `paper_trades WHERE status='open'` in the
+   same card — a divergence is always worth surfacing.
+4. When adding a new strategy to the RDH pipeline, audit whether it
+   writes to `paper_positions` through the shared engine AND has its
+   own state mirror (B3 does, B2 didn't). Either pattern is OK; mixing
+   is where subtle bugs hide.
+
+**Known follow-ups (not yet shipped):**
+- Reconciliation daemon: hourly check for `paper_trades.open > 48h` and
+  cross-verify against Polymarket Gamma API resolution. Patch stale
+  rows automatically.
+- Divergence alert: Slack warning when `COUNT(paper_trades.open)` for
+  any strategy differs from `COUNT(paper_positions)` for that strategy.
+- `sync_positions_to_db` guard: log+skip-delete if `_positions` is
+  empty while `paper_positions` is non-trivial.
+
 #### B2-1. Paper entry used LOW side → spread inflation
 **What:** Paper `clob_price = min(raw_bid, raw_ask)` = low side = paper
 earned the spread that live pays. First 11 live trades showed +$0.02-0.04
