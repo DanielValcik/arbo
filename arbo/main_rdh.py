@@ -1703,9 +1703,15 @@ class RDHOrchestrator:
             task_defs.append(("C2_exit_monitor", self._run_c2_exit_check, 60))  # exit check every 60s
         elif self._strategy_c2 is not None:
             logger.info("strategy_c2_disabled", reason="DISABLE_C2 env set")
-        if self._strategy_b2 is not None:
+        # B2 (crypto price edge) can be disabled via DISABLE_B2=1 — mirrors
+        # the DISABLE_C2 pattern. Used when the strategy is intentionally
+        # paused; without this gate the task registers and may permanent_stop
+        # on transient errors, producing noisy "tasks stopped" alerts.
+        if self._strategy_b2 is not None and not _os_c.getenv("DISABLE_B2"):
             task_defs.append(("strategy_B2", self._run_strategy_b2, 60))        # entry scan every 60s (faster)
             task_defs.append(("B2_exit_monitor", self._run_b2_exit_check, 30))  # exit check every 30s
+        elif self._strategy_b2 is not None:
+            logger.info("strategy_b2_disabled", reason="DISABLE_B2 env set")
         if self._strategy_b3 is not None:
             task_defs.append(("strategy_B3", self._run_strategy_b3, 5))         # entry scan every 5s (faster signal detection)
             task_defs.append(("B3_exit_monitor", self._run_b3_exit_check, 10))  # exit check every 10s (fast exits)
