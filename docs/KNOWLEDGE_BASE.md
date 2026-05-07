@@ -140,7 +140,7 @@ P(better): 0.92
 | 🔄 CANARY REVERTED | Kanárek selhal v reálu | Nic — systém ho vrátil do shadow |
 | 📉/⚠️/🚨 B2 drift | Strategie se v aktuálním režimu chová jinak než historicky. Ikona podle severity. Text vysvětluje konkrétně co se stalo a co systém dělá. | Pokud je v textu "Co musíš udělat: Nic" → nic. Pokud navrhuje pauzu (severe), zvaž `B2_EXECUTION_MODE=stopped` |
 | 🤖 B2 Auto-Challenger generated | Gemini navrhl nový challenger | Nic — běží v shadow |
-| 🔴 Úlohy přestaly reagovat (anomálie) | Task dostal 10 restartů v řadě, systém to vzdal | `sudo systemctl restart arbo` na VPS. Dedup 24h — nevrací se ihned. |
+| 🔴 Úlohy přestaly reagovat (anomálie) | Task dostal 10 restartů v řadě, systém to vzdal | `sudo systemctl restart arbo` na VPS. Dedup 24h — nevrací se ihned. **Nezahrnuje strategie, které jsi sám zastavil přes `.env`** (`{S}_EXECUTION_MODE=stopped` nebo `DISABLE_{S}=1`). |
 | 🌅 Ranní briefing | Denní souhrn v češtině | Přečíst si, pokud chceš |
 
 ## Denní briefing
@@ -159,7 +159,7 @@ Každý den **v 07:00 UTC** (09:00 místního času) dostaneš jednu zprávu v `
 - **B2 přestane obchodovat:** zkontroluj Slack za emergency shutdown alertem. Pokud nic, ping mě (Claude), projdeme spolu logy.
 - **Divná zpráva ve Slacku:** je to pravděpodobně popsaný scénář výše. Kdybys nerozuměl, zeptej se.
 - **Chceš něco změnit:** neuprav to sám v YAML souborech — projdeme spolu co by se změnilo. Systém je propojený, jedna změna může ovlivnit víc věcí.
-- **Okamžité vypnutí:** `B2_EXECUTION_MODE=stopped` v `.env` + restart arbo. Existující pozice resolvují normálně, nové se nezakládají.
+- **Okamžité vypnutí strategie:** v `/opt/arbo/.env` přidej buď `{S}_EXECUTION_MODE=stopped` (B3, B3_15M, C2, D, D_UFC) nebo `DISABLE_{S}=1` (B2, C, C2) + `sudo systemctl restart arbo`. Existující pozice se doresolvují normálně, nové vstupy se nezakládají, **anomaly check ani health digest tě o stopnuté strategii nebudou spamovat**.
 
 ## Metriky kde najdeš co
 

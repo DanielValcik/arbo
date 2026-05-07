@@ -43,6 +43,60 @@ Each entry should be a self-contained learning. Include:
 
 ## Global lessons (system-wide)
 
+### G20. Anomaly check needed the same operator-stop silence as health_check (and B2 had no stop gate at all)
+
+**Observed 2026-05-07:** operator disabled B2/B3/C2 via env flags, but
+`_check_anomalies` in `arbo/main_rdh.py` kept firing daily Slack alerts:
+`Anomalie detekovana: Zadna aktivita za poslednich 24 hodin /
+Strategie zastaveny: strategy_C2, C2_exit_monitor, strategy_B2, ...`.
+Two distinct bugs collapsed into one symptom:
+
+1. **Anomaly check ignored operator-stopped flags.** `d929e37` taught
+   `health_check` to silence operator-stopped strategies (`{S}_EXECUTION_MODE=stopped`
+   or `DISABLE_{S}=1`), but `_check_anomalies` was never updated. So
+   tasks of operator-stopped strategies still surfaced in
+   "stopped tasks" alerts whenever they hit `permanent_stop`, and
+   "no activity 24h" fired even when every trading strategy was
+   intentionally paused.
+2. **B2 had no stop gate.** `DISABLE_C / DISABLE_C2` skip task
+   registration entirely. B2 had no equivalent — `strategy_B2 +
+   B2_exit_monitor` were registered unconditionally and would
+   `permanent_stop` on transient errors (a550b0e was a partial
+   mitigation, but errors still accumulated). Operator believed B2
+   was stopped because it hadn't been trading; in reality it was
+   broken-but-running and producing the alerts.
+
+**Fix:**
+- 4d86ffa — `_strategy_code_from_task()` maps task → strategy code;
+  `_check_anomalies` skips operator-stopped tasks from "stopped"
+  list and skips "no activity" entirely when every trading strategy
+  is operator-stopped. Mirrors `d929e37`'s rule for `health_check`.
+- 6827faa — added `DISABLE_B2=1` gate to mirror `DISABLE_C2` so B2
+  task registration can be cleanly skipped, eliminating the
+  permanent_stop class of alert at the source.
+
+**Rule:** every operator-visible silence rule (health_check, anomaly
+check, drift, daily digest) MUST share the same definition of
+"intentionally stopped". Right now `_is_operator_stopped` in
+`arbo/core/health_check.py` is the canonical helper — every new
+notification path imports it instead of reinventing. Every strategy
+that supports paper/dual/live modes also needs a `DISABLE_{S}` env
+gate at the task registration site (not just an `EXECUTION_MODE=stopped`
+early-exit inside the strategy run loop), so `permanent_stop` from
+errors can't masquerade as anomaly.
+
+**Operational footnote — VPS wedge during deploy:** while shipping the
+fix the Dublin Lightsail instance was unreachable on SSH (port 22 +
+443 timeout, AWS browser SSH `UPSTREAM_ERROR [515]`) but Slack
+outbound continued — classic kernel/network-stack wedge. Resolved
+by `aws lightsail reboot-instance --instance-name arbo-dublin
+--region eu-west-1`. Static IP held, systemd auto-started arbo,
+PnL/positions restored from PostgreSQL (B3: 305 trades $48.35,
+B3_15M: 21 trades $19.79). Lesson: keep AWS CLI credentials
+ready locally — when SSH is wedged, the API path is the only way back.
+
+---
+
 ### G1. Paper ≠ Live without explicit parity
 Paper engines that compute PnL from `min(bid, ask)` on entry and `max(bid, ask)` on exit **earn the spread** — live taker pays the opposite sides. Without `PAPER_MATCH_LIVE=True` and correct high/low mapping, paper systematically inflates PnL by the spread (typically 2-4¢/share on Polymarket crypto markets).
 
