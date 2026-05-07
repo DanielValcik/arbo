@@ -24,6 +24,7 @@ from decimal import Decimal
 from typing import Any
 
 from arbo.config.settings import get_config
+from arbo.core.health_check import _is_operator_stopped
 from arbo.utils.logger import get_logger
 
 logger = get_logger("rdh_orchestrator")
@@ -50,6 +51,20 @@ class TaskState:
 # Error thresholds
 _ERROR_WINDOW_S = 600  # 10 minutes
 _ERROR_THRESHOLD = 3
+
+
+def _strategy_code_from_task(name: str) -> str | None:
+    """Map a task name to its strategy code (B2, B3, C2, ...).
+
+    Returns None for infrastructure tasks (auto_redeem, position_divergence_check,
+    *_cl_recorder, B3_15m_shadow, D_balance_refresh) that don't belong to a single
+    strategy and should never be silenced via operator-stopped flags.
+    """
+    if name.startswith("strategy_"):
+        return name.removeprefix("strategy_")
+    if name.endswith("_exit_monitor"):
+        return name.removesuffix("_exit_monitor")
+    return None
 
 
 class RDHOrchestrator:
@@ -4945,9 +4960,25 @@ class RDHOrchestrator:
         if sent_today.get("_date") != today_key:
             sent_today = {"_date": today_key}
 
+        # Strategies the operator has explicitly stopped via env are expected
+        # to be silent — they should not contribute to "no activity" or
+        # "tasks stopped" alerts. Mirrors the silence applied to health_check
+        # in d929e37.
+        trading_strategies = {
+            code
+            for name in self._tasks
+            if (code := _strategy_code_from_task(name)) is not None
+        }
+        all_strategies_operator_stopped = (
+            bool(trading_strategies)
+            and all(_is_operator_stopped(s) for s in trading_strategies)
+        )
+
         async with factory() as session:
-            # 1. No activity in 24h (no new trades AND no resolutions)
-            if "no_trades" not in sent_today:
+            # 1. No activity in 24h (no new trades AND no resolutions).
+            # Skipped when every trading strategy is operator-stopped: the
+            # silence is expected, not an anomaly.
+            if "no_trades" not in sent_today and not all_strategies_operator_stopped:
                 result = await session.execute(
                     text(
                         "SELECT count(*) FROM paper_trades "
@@ -4996,10 +5027,17 @@ class RDHOrchestrator:
                 msg="Service too young — skipping task-health check",
             )
         else:
+            # Operator-stopped strategies are expected to be silent — exclude
+            # their tasks from the alert. The same silencing rule that
+            # d929e37 applied to health_check.
             stopped = sorted([
                 name
                 for name, ts in self._tasks.items()
                 if ts.permanent_stop and ts.enabled
+                and not (
+                    (code := _strategy_code_from_task(name)) is not None
+                    and _is_operator_stopped(code)
+                )
             ])
             if stopped:
                 # Dedup using persistent alert_state so the same stopped
