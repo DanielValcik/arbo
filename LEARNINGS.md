@@ -43,6 +43,58 @@ Each entry should be a self-contained learning. Include:
 
 ## Global lessons (system-wide)
 
+### G21. A second arbo instance on a "data" VPS shared the production Slack token and spammed alerts for 2+ weeks
+
+**Observed 2026-05-08 (follow-up to G20):** even after deploying the anomaly
+silence fix on Dublin (commits 4d86ffa + 6827faa) and verifying
+`anomaly_check_ok` on every cycle there, the operator kept receiving Slack
+alerts at non-standard times (5:26 AM, 8:25 AM CEST). Logs on Dublin showed
+zero `anomaly_alerts_sent` events all day — the alerts were genuinely not
+coming from production.
+
+Root cause: a second `arbo.service` was running on `arbo-download`
+(13.41.250.48, London) — the VPS we'd been treating as data-collection only.
+It had been deployed there on 2026-04-22 in `--mode paper` and had been
+emitting anomaly alerts every ~3h since 2026-04-25. Both VPSs ship the
+production Slack bot token in their respective `/opt/arbo/.env`, so each
+arbo process posts to the same channel.
+
+The London instance was at commit `ee3abb4` — predates `5c6c4b2`'s
+wording change AND the operator-stop silence — and its `.env` had no
+`DISABLE_B2 / DISABLE_C2 / B3_EXECUTION_MODE=stopped` flags, so it
+faithfully kept firing the daily `Strategie zastaveny: strategy_C2,
+C2_exit_monitor, strategy_B2, ...` notification. The user reasonably
+attributed every alert to Dublin and we wasted hours convincing ourselves
+Dublin's silence wasn't holding when, in fact, Dublin was clean.
+
+**Detection (in retrospect):** the alert text included `strategy_B2` /
+`strategy_C2` task names, but on Dublin those tasks aren't even
+*registered* (DISABLE flags skip task creation entirely). So the alert
+literally couldn't have come from Dublin's task list. That tell was
+sitting in the data the whole time — search for the alert source by
+checking which hosts have those task names registered, not just by
+re-reading Dublin's logs.
+
+**Fix applied:**
+- `sudo systemctl stop arbo.service` on arbo-download
+- `sudo systemctl disable arbo.service` (no auto-start on reboot)
+- Documented in `MEMORY.md` so we don't lose track again
+
+**Rule for future:** any non-production host with a populated `.env` that
+contains the production Slack bot token WILL post to production Slack the
+moment its local arbo emits a notification. Going forward:
+
+1. Non-production VPSs MUST either (a) use a sandbox Slack workspace/token,
+   or (b) gate `slack_bot.send_message()` by hostname/role check at runtime.
+2. Operator-stop silence (G20) does **not** help here — the silence is
+   per-process, so an out-of-date or misconfigured process emits regardless
+   of what the canonical deployment does.
+3. When debugging duplicate alerts, the first question is "which VPS
+   actually sent this?" — check `journalctl -u arbo` on every VPS that
+   carries the bot token, not just production.
+
+---
+
 ### G20. Anomaly check needed the same operator-stop silence as health_check (and B2 had no stop gate at all)
 
 **Observed 2026-05-07:** operator disabled B2/B3/C2 via env flags, but
