@@ -159,7 +159,11 @@ Každý den **v 07:00 UTC** (09:00 místního času) dostaneš jednu zprávu v `
 - **B2 přestane obchodovat:** zkontroluj Slack za emergency shutdown alertem. Pokud nic, ping mě (Claude), projdeme spolu logy.
 - **Divná zpráva ve Slacku:** je to pravděpodobně popsaný scénář výše. Kdybys nerozuměl, zeptej se.
 - **Chceš něco změnit:** neuprav to sám v YAML souborech — projdeme spolu co by se změnilo. Systém je propojený, jedna změna může ovlivnit víc věcí.
-- **Okamžité vypnutí strategie:** v `/opt/arbo/.env` přidej buď `{S}_EXECUTION_MODE=stopped` (B3, B3_15M, C2, D, D_UFC) nebo `DISABLE_{S}=1` (B2, C, C2) + `sudo systemctl restart arbo`. Existující pozice se doresolvují normálně, nové vstupy se nezakládají, **anomaly check ani health digest tě o stopnuté strategii nebudou spamovat**.
+- **Okamžité vypnutí strategie:** v `/opt/arbo/.env` přidej + `sudo systemctl restart arbo`:
+  - `{S}_EXECUTION_MODE=stopped` pro **B3, B3_15M** — strategie běží dál a doresolvuje existující pozice, jen nezakládá nové vstupy.
+  - `DISABLE_{S}=1` pro **B2, C, C2, D, D_UFC, D_EPL** — strategie se vůbec nenastartuje (žádné skenování, žádné obchody). Pozor: D/D_UFC/D_EPL **musí** přes `DISABLE` — `EXECUTION_MODE=stopped` u nich nefunguje (dál by skenovaly a posílaly falešné notifikace).
+
+  V obou případech tě **anomaly check ani health digest o stopnuté strategii nebudou spamovat**.
 
 ## Metriky kde najdeš co
 

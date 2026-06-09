@@ -650,6 +650,15 @@ class RDHOrchestrator:
 
         from arbo.strategies.strategy_d_nba import StrategyDNba
 
+        # Hard pause: DISABLE_D=1 skips init entirely (mirrors DISABLE_C/C2/B2).
+        # Unlike D_EXECUTION_MODE=stopped — which D does NOT honor and would
+        # still scan + emit phantom entry notifications — this guarantees the
+        # strategy never registers a task, scans, or trades. Re-enable by
+        # unsetting DISABLE_D.
+        if os.getenv("DISABLE_D"):
+            logger.info("strategy_d_disabled", reason="DISABLE_D env set")
+            return None
+
         execution_mode = os.getenv("D_EXECUTION_MODE", "paper")
         live_executor = None
 
@@ -695,6 +704,11 @@ class RDHOrchestrator:
 
         from arbo.strategies.strategy_d_ufc import StrategyDUfc
 
+        # Hard pause: DISABLE_D_UFC=1 skips init entirely (see _init_strategy_d).
+        if os.getenv("DISABLE_D_UFC"):
+            logger.info("strategy_d_ufc_disabled", reason="DISABLE_D_UFC env set")
+            return None
+
         execution_mode = os.getenv("D_UFC_EXECUTION_MODE", "paper")
         live_executor = None
         if execution_mode == "live":
@@ -738,6 +752,11 @@ class RDHOrchestrator:
         from pathlib import Path
 
         from arbo.strategies.strategy_d_epl import StrategyDEpl
+
+        # Hard pause: DISABLE_D_EPL=1 skips init entirely (see _init_strategy_d).
+        if os.getenv("DISABLE_D_EPL"):
+            logger.info("strategy_d_epl_disabled", reason="DISABLE_D_EPL env set")
+            return None
 
         execution_mode = os.getenv("D_EPL_EXECUTION_MODE", "paper")
         live_executor = None

@@ -43,6 +43,44 @@ Each entry should be a self-contained learning. Include:
 
 ## Global lessons (system-wide)
 
+### G22. `EXECUTION_MODE=stopped` is a no-op for D/D_UFC/D_EPL — they need a real `DISABLE_D*` init gate
+
+**Observed 2026-06-09 (follow-up to G20/G21):** operator reported the
+"Zadna aktivita za poslednich 24 hodin" anomaly still firing (~2×/day, 14×
+in 7 days) and wanted everything paused for a week. Root cause: the global
+no-activity alert is suppressed only when *every* registered trading
+strategy is `_is_operator_stopped`. On prod, B3/B3_15M were `stopped` and
+B2/C/C2 were `DISABLE`d, but **D (live!), D_UFC, D_EPL** were still
+registered and not silenced — so `all_strategies_operator_stopped` was
+False and the alert kept firing. The whole portfolio had been dormant since
+2026-05-11 (off-season), so the D variants were the only thing keeping the
+alert alive.
+
+The trap: `_is_operator_stopped` recognizes `D_EXECUTION_MODE=stopped`, so
+setting it *looks* like it would both silence the alert AND stop trading.
+But D variants **do not honor `stopped`** — unlike B3/B3_15M which early-
+return in their scan loop, `_run_strategy_d` always scans, and
+`execute_entry` returns a non-None `DPosition` even when both
+`paper_engine` and `live_executor` are None (the case under `stopped`). That
+non-None return makes `_run_strategy_d` fire a Slack **entry notification
+for a phantom trade**. So `stopped` would silence the anomaly but
+re-introduce per-"trade" spam the moment an NBA/UFC/EPL market appeared —
+and D was `live`, a real-money risk while the operator was away.
+
+**Fix (commit <pending>):** added `DISABLE_D` / `DISABLE_D_UFC` /
+`DISABLE_D_EPL` init gates that `return None` before the strategy object is
+built — mirroring the existing `DISABLE_C/C2/B2` pattern. None object →
+no task registered → no scan → no trade → not counted in
+`trading_strategies` → anomaly auto-suppressed. Set all three in
+`/opt/arbo/.env` + restart. Corrected KNOWLEDGE_BASE.md §"Okamžité vypnutí
+strategie" which wrongly listed D/D_UFC under the `EXECUTION_MODE=stopped`
+convention.
+
+**Lesson:** "the env var is *recognized* by the silence check" ≠ "the
+strategy *acts* on it." A stop flag must be honored in the strategy's own
+hot path, not just by the alert-suppression helper. When adding a new
+strategy, give it a real `DISABLE_{CODE}` init gate from day one.
+
 ### G21. A second arbo instance on a "data" VPS shared the production Slack token and spammed alerts for 2+ weeks
 
 **Observed 2026-05-08 (follow-up to G20):** even after deploying the anomaly
